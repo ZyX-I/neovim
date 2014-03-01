@@ -492,7 +492,8 @@ char_u *get_special_key_name(int c, int modifiers)
  */
 int 
 trans_special (
-    char_u **srcp,
+    const char_u **srcp,
+    size_t src_len,
     char_u *dst,
     int keycode             /* prefer key code, e.g. K_DEL instead of DEL */
 )
@@ -501,7 +502,7 @@ trans_special (
   int key;
   int dlen = 0;
 
-  key = find_special_key(srcp, &modifiers, keycode, FALSE);
+  key = find_special_key(srcp, src_len, &modifiers, keycode, FALSE);
   if (key == 0)
     return 0;
 
@@ -533,21 +534,26 @@ trans_special (
  */
 int 
 find_special_key (
-    char_u **srcp,
+    const char_u **srcp,
+    size_t src_len,
     int *modp,
     int keycode,                 /* prefer key code, e.g. K_DEL instead of DEL */
     int keep_x_key              /* don't translate xHome to Home key */
 )
 {
-  char_u      *last_dash;
-  char_u      *end_of_name;
-  char_u      *src;
-  char_u      *bp;
+  const char_u *last_dash;
+  const char_u *end_of_name;
+  const char_u *src;
+  const char_u *bp;
+  const char_u *const end = *srcp + src_len - 1;
   int modifiers;
   int bit;
   int key;
   unsigned long n;
   int l;
+
+  if (src_len == 0)
+    return 0;
 
   src = *srcp;
   if (src[0] != '<')
@@ -555,28 +561,28 @@ find_special_key (
 
   /* Find end of modifier list */
   last_dash = src;
-  for (bp = src + 1; *bp == '-' || vim_isIDc(*bp); bp++) {
+  for (bp = src + 1; bp <= end && (*bp == '-' || vim_isIDc(*bp)); bp++) {
     if (*bp == '-') {
       last_dash = bp;
-      if (bp[1] != NUL) {
+      if (bp + 1 <= end) {
         if (has_mbyte)
-          l = mb_ptr2len(bp + 1);
+          l = mb_ptr2len_len(bp + 1, end - bp + 1);
         else
           l = 1;
-        if (bp[l + 1] == '>')
+        if (end - bp > l && bp[l + 1] == '>')
           bp += l;              /* anything accepted, like <C-?> */
       }
     }
-    if (bp[0] == 't' && bp[1] == '_' && bp[2] && bp[3])
+    if (end - bp > 3 && bp[0] == 't' && bp[1] == '_')
       bp += 3;          /* skip t_xx, xx may be '-' or '>' */
-    else if (STRNICMP(bp, "char-", 5) == 0) {
+    else if (end - bp > 4 && STRNICMP(bp, "char-", 5) == 0) {
       vim_str2nr(bp + 5, NULL, &l, TRUE, TRUE, NULL, NULL);
       bp += l + 5;
       break;
     }
   }
 
-  if (*bp == '>') {     /* found matching '>' */
+  if (bp <= end && *bp == '>') {     /* found matching '>' */
     end_of_name = bp + 1;
 
     /* Which modifiers are given? */
@@ -705,7 +711,7 @@ int find_special_key_in_table(int c)
  * termcap name.
  * Return the key code, or 0 if not found.
  */
-int get_special_key_code(char_u *name)
+int get_special_key_code(const char_u *name)
 {
   char_u  *table_name;
   char_u string[3];

@@ -97,6 +97,58 @@ cstr = ffi.typeof 'char[?]'
 to_cstr = (string) ->
   cstr (string.len string) + 1, string
 
+-- cimport './src/os_unix.h'
+ffi.cdef('void mch_early_init(void);')
+-- cimport './src/eval.h'
+ffi.cdef('void eval_init(void);')
+-- cimport './src/main.h'
+ffi.cdef('void allocate_generic_buffers(void);')
+-- cimport './src/window.h'
+ffi.cdef('int win_alloc_first(void);')
+-- cimport './src/ops.h'
+ffi.cdef('void init_yank(void);')
+-- cimport './src/misc1.h'
+ffi.cdef('void init_homedir(void);')
+-- cimport './src/option.h'
+ffi.cdef('void set_init_1(void);')
+-- cimport './src/ex_cmds2.h'
+ffi.cdef('void set_lang_var(void);')
+-- cimport './src/mbyte.h'
+ffi.cdef('char_u *mb_init(void);')
+-- cimport './src/normal.h'
+ffi.cdef('void init_normal_cmds(void);')
+
+export garray_defined
+
+if not garray_defined
+  -- FIXME Required by os/users and cmd-parser
+  ffi.cdef [[
+  typedef struct growarray {
+    int ga_len;
+    int ga_maxlen;
+    int ga_itemsize;
+    int ga_growsize;
+    void    *ga_data;
+  } garray_T;
+  ]]
+  garray_defined = true
+
+export vim_initialized
+
+if not vim_initialized
+  libnvim.mch_early_init()
+  libnvim.mb_init()
+  libnvim.eval_init()
+  libnvim.init_normal_cmds()
+  libnvim.allocate_generic_buffers()
+  libnvim.win_alloc_first()
+  libnvim.init_yank()
+  libnvim.init_homedir()
+  libnvim.set_init_1()
+  libnvim.set_lang_var()
+
+  vim_initialized = true
+
 return {
   cimport: cimport
   cppimport: cppimport

@@ -4127,39 +4127,43 @@ int check_termcode(int max_offset, char_u *buf, int bufsize, int *buflen)
  */
 char_u *
 replace_termcodes (
-    char_u *from,
+    const char_u *from,
+    size_t from_len,
     char_u **bufp,
     int from_part,
-    int do_lt,                      /* also translate <lt> */
-    int special                    /* always accept <key> notation */
+    int do_lt,                     /* also translate <lt> */
+    int special,                   /* always accept <key> notation */
+    int cpo_flags                  /* relevant flags from p_cpo option */
 )
 {
   int i;
   int slen;
   int key;
   int dlen = 0;
-  char_u      *src;
+  const char_u *src;
+  const char_u *const end = from + from_len - 1;
   int do_backslash;             /* backslash is a special character */
   int do_special;               /* recognize <> key codes */
   int do_key_code;              /* recognize raw key codes */
   char_u      *result;          /* buffer for resulting string */
 
-  do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
-  do_special = (vim_strchr(p_cpo, CPO_SPECI) == NULL) || special;
-  do_key_code = (vim_strchr(p_cpo, CPO_KEYCODE) == NULL);
+  do_backslash = !(cpo_flags&FLAG_CPO_BSLASH);
+  do_special = !(cpo_flags&FLAG_CPO_SPECI) || special;
+  do_key_code = !(cpo_flags&FLAG_CPO_KEYCODE);
 
   /*
    * Allocate space for the translation.  Worst case a single character is
    * replaced by 6 bytes (shifted special key), plus a NUL at the end.
    */
-  result = xmalloc(STRLEN(from) * 6 + 1);
+  result = xmalloc(from_len * 6 + 1);
 
   src = from;
 
   /*
    * Check for #n at start only: function key n
    */
-  if (from_part && src[0] == '#' && VIM_ISDIGIT(src[1])) {  /* function key */
+  if (from_part && from_len > 1 && src[0] == '#' && VIM_ISDIGIT(src[1])) {
+    /* function key */
     result[dlen++] = K_SPECIAL;
     result[dlen++] = 'k';
     if (src[1] == '0')
@@ -4172,17 +4176,18 @@ replace_termcodes (
   /*
    * Copy each byte from *from to result[dlen]
    */
-  while (*src != NUL) {
+  while (src <= end) {
     /*
      * If 'cpoptions' does not contain '<', check for special key codes,
      * like "<C-S-LeftMouse>"
      */
-    if (do_special && (do_lt || STRNCMP(src, "<lt>", 4) != 0)) {
+    if (do_special && (do_lt || (
+                (end - src) > 3 && STRNCMP(src, "<lt>", 4) != 0))) {
       /*
        * Replace <SID> by K_SNR <script-nr> _.
        * (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14)
        */
-      if (STRNICMP(src, "<SID>", 5) == 0) {
+      if (end - src > 4 && STRNICMP(src, "<SID>", 5) == 0) {
         if (current_SID <= 0)
           EMSG(_(e_usingsid));
         else {
@@ -4197,7 +4202,7 @@ replace_termcodes (
         }
       }
 
-      slen = trans_special(&src, result + dlen, TRUE);
+      slen = trans_special(&src, end - src + 1, result + dlen, TRUE);
       if (slen) {
         dlen += slen;
         continue;
@@ -4211,7 +4216,7 @@ replace_termcodes (
      * it could be a character in the file.
      */
     if (do_key_code) {
-      i = find_term_bykeys(src);
+      i = find_term_bykeys(src, end - src + 1);
       if (i >= 0) {
         result[dlen++] = K_SPECIAL;
         result[dlen++] = termcodes[i].name[0];
@@ -4230,10 +4235,10 @@ replace_termcodes (
        * Replace <LocalLeader> by the value of "maplocalleader".
        * If "mapleader" or "maplocalleader" isn't set use a backslash.
        */
-      if (STRNICMP(src, "<Leader>", 8) == 0) {
+      if (end - src > 7 && STRNICMP(src, "<Leader>", 8) == 0) {
         len = 8;
         p = get_var_value((char_u *)"g:mapleader");
-      } else if (STRNICMP(src, "<LocalLeader>", 13) == 0)   {
+      } else if (end - src > 12 && STRNICMP(src, "<LocalLeader>", 13) == 0) {
         len = 13;
         p = get_var_value((char_u *)"g:maplocalleader");
       } else {
@@ -4262,7 +4267,7 @@ replace_termcodes (
     key = *src;
     if (key == Ctrl_V || (do_backslash && key == '\\')) {
       ++src;                                    /* skip CTRL-V or backslash */
-      if (*src == NUL) {
+      if (src > end) {
         if (from_part)
           result[dlen++] = key;
         break;
@@ -4270,7 +4275,7 @@ replace_termcodes (
     }
 
     /* skip multibyte char correctly */
-    for (i = (*mb_ptr2len)(src); i > 0; --i) {
+    for (i = (*mb_ptr2len_len)(src, end - src + 1); i > 0; --i) {
       /*
        * If the character is K_SPECIAL, replace it with K_SPECIAL
        * KS_SPECIAL KE_FILLER.
@@ -4293,13 +4298,12 @@ replace_termcodes (
 }
 
 /*
- * Find a termcode with keys 'src' (must be NUL terminated).
+ * Find a termcode with keys 'src'.
  * Return the index in termcodes[], or -1 if not found.
  */
-int find_term_bykeys(char_u *src)
+int find_term_bykeys(const char_u *src, int slen)
 {
   int i;
-  int slen = (int)STRLEN(src);
 
   for (i = 0; i < tc_len; ++i) {
     if (slen == termcodes[i].len
@@ -4567,7 +4571,7 @@ static void got_code_from_term(char_u *code, int len)
         }
       } else {
         /* First delete any existing entry with the same code. */
-        i = find_term_bykeys(str);
+        i = find_term_bykeys(str, STRLEN(str));
         if (i >= 0)
           del_termcode_idx(i);
         add_termcode(name, str, ATC_FROM_TERM);
@@ -4636,7 +4640,8 @@ static void check_for_codes_from_term(void)
 char_u *
 translate_mapping (
     char_u *str,
-    int expmap              /* TRUE when expanding mappings on command-line */
+    int expmap,             /* TRUE when expanding mappings on command-line */
+    int cpo_flags           /* if true do not use p_cpo option */
 )
 {
   garray_T ga;
@@ -4648,9 +4653,9 @@ translate_mapping (
 
   ga_init(&ga, 1, 40);
 
-  cpo_bslash = (vim_strchr(p_cpo, CPO_BSLASH) != NULL);
-  cpo_special = (vim_strchr(p_cpo, CPO_SPECI) != NULL);
-  cpo_keycode = (vim_strchr(p_cpo, CPO_KEYCODE) == NULL);
+  cpo_bslash = !(cpo_flags&FLAG_CPO_BSLASH);
+  cpo_special = !(cpo_flags&FLAG_CPO_SPECI);
+  cpo_keycode = !(cpo_flags&FLAG_CPO_KEYCODE);
 
   for (; *str; ++str) {
     c = *str;

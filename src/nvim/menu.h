@@ -26,6 +26,8 @@
 /* Start a menu name with this to not include it on the main menu bar */
 #define MNU_HIDDEN_CHAR         ']'
 
+#define MENUDEPTH   10          /* maximum depth of menus */
+
 typedef struct VimMenu vimmenu_T;
 
 struct VimMenu {

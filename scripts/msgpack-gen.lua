@@ -33,8 +33,8 @@ c_proto = Ct(
   )
 grammar = Ct((c_proto + c_comment + c_preproc + ws) ^ 1)
 
--- we need at least 2 arguments since the last one is the output file
-assert(#arg >= 1)
+-- we need at least 3 arguments since two last ones are for output files
+assert(#arg >= 2)
 -- api metadata
 api = {
   functions = {},
@@ -45,10 +45,11 @@ api = {
 -- generated file)
 headers = {}
 -- output file(dispatch function + metadata serialized with msgpack)
-outputf = arg[#arg]
+dispatch_outputf = arg[#arg - 1]
+lua_c_bindings_outputf = arg[#arg]
 
 -- read each input file, parse and append to the api metadata
-for i = 1, #arg - 1 do
+for i = 1, #arg - 2 do
   local full_path = arg[i]
   local parts = {}
   for part in string.gmatch(full_path, '[^/]+') do
@@ -82,53 +83,73 @@ for i = 1, #arg - 1 do
 end
 
 
+write_shifted_output = function(output, str)
+  str = str:gsub('\n  ', '\n')
+  str = str:gsub('^  ', '')
+  str = str:gsub(' +$', '')
+  output:write(str)
+end
+
 -- start building the output
-output = io.open(outputf, 'wb')
+dispatch_output = io.open(dispatch_outputf, 'wb')
+lua_c_bindings_output = io.open(lua_c_bindings_outputf, 'wb')
 
-output:write([[
-#include <stdbool.h>
-#include <stdint.h>
-#include <assert.h>
-#include <msgpack.h>
-
-#include "nvim/os/msgpack_rpc.h"
-#include "nvim/os/msgpack_rpc_helpers.h"
-#include "nvim/api/private/helpers.h"
-]])
-
-for i = 1, #headers do
-  if headers[i]:sub(-12) ~= '.generated.h' then
-    output:write('\n#include "nvim/'..headers[i]..'"')
+include_headers = function(output, headers)
+  for i = 1, #headers do
+    if headers[i]:sub(-12) ~= '.generated.h' then
+      output:write('\n#include "nvim/'..headers[i]..'"')
+    end
   end
 end
 
-output:write([[
+generate_dispatch_includes = function(output, headers)
+  write_shifted_output(output, [[
+  #include <stdbool.h>
+  #include <stdint.h>
+  #include <assert.h>
+  #include <msgpack.h>
 
+  #include "nvim/os/msgpack_rpc.h"
+  #include "nvim/os/msgpack_rpc_helpers.h"
+  #include "nvim/api/private/helpers.h"
+  ]])
 
-const uint8_t msgpack_metadata[] = {
-
-]])
--- serialize the API metadata using msgpack and embed into the resulting
--- binary for easy querying by clients
-packed = msgpack.pack(api)
-for i = 1, #packed do
-  output:write(string.byte(packed, i)..', ')
-  if i % 10 == 0 then
-    output:write('\n  ')
-  end
+  include_headers(output, headers)
 end
-output:write([[
-};
-const unsigned int msgpack_metadata_size = sizeof(msgpack_metadata);
 
-]])
+generate_dispatch_msgpack_metadata = function(output)
+  write_shifted_output(output, [[
 
--- start the handler functions. First handler (method_id=0) is reserved for
--- querying the metadata, usually it is the first function called by clients.
--- Visit each function metadata to build the handler function with code
--- generated for validating arguments and calling to the real API.
-for i = 1, #api.functions do
-  local fn = api.functions[i]
+
+  const uint8_t msgpack_metadata[] = {
+
+  ]])
+  -- serialize the API metadata using msgpack and embed into the resulting
+  -- binary for easy querying by clients
+  packed = msgpack.pack(api)
+  for i = 1, #packed do
+    output:write(string.byte(packed, i)..', ')
+    if i % 10 == 0 then
+      output:write('\n  ')
+    end
+  end
+  -- start the dispatch function. number 0 is reserved for querying the metadata,
+  -- usually it is the first function called by clients.
+  write_shifted_output(output, [[
+  };
+  const unsigned int msgpack_metadata_size = sizeof(msgpack_metadata);
+
+  ]])
+end
+
+generate_dispatch_header = function(output, headers)
+  generate_dispatch_includes(output, headers)
+  generate_dispatch_msgpack_metadata(output)
+end
+
+-- Visit each function metadata to build the case label with code generated
+-- for validating arguments and calling to the real API
+generate_dispatch_fn = function(output, fn)
   local args = {}
 
   output:write('static Object handle_'..fn.name..'(uint64_t channel_id, msgpack_object *req, Error *error)')
@@ -137,7 +158,7 @@ for i = 1, #api.functions do
   for j = 1, #fn.parameters do
     local param = fn.parameters[j]
     local converted = 'arg_'..j
-    output:write('\n  '..param[1]..' '..converted..' msgpack_rpc_init_'..string.lower(param[1])..';')
+    output:write('\n      '..param[1]..' '..converted..' msgpack_rpc_init_'..string.lower(param[1])..';')
   end
   output:write('\n')
   output:write('\n  if (req->via.array.ptr[3].via.array.size != '..#fn.parameters..') {')
@@ -153,17 +174,17 @@ for i = 1, #api.functions do
     arg = '(req->via.array.ptr[3].via.array.ptr + '..(j - 1)..')'
     converted = 'arg_'..j
     convert_arg = 'msgpack_rpc_to_'..string.lower(param[1])
-    output:write('\n  if (!'..convert_arg..'('..arg..', &'..converted..')) {')
-    output:write('\n    snprintf(error->msg, sizeof(error->msg), "Wrong type for argument '..j..', expecting '..param[1]..'");')
-    output:write('\n    error->set = true;')
+    output:write('\n      if (!'..convert_arg..'('..arg..', &'..converted..')) {')
+    output:write('\n        snprintf(error->msg, sizeof(error->msg), "Wrong type for argument '..j..', expecting '..param[1]..'");')
+    output:write('\n        error->set = true;')
     output:write('\n    goto cleanup;')
-    output:write('\n  }\n')
+    output:write('\n      }\n')
     args[#args + 1] = converted
   end
 
   -- function call
   local call_args = table.concat(args, ', ')
-  output:write('\n  ')
+  output:write('\n      ')
   if fn.return_type ~= 'void' then
     -- has a return value, prefix the call with a declaration
     output:write(fn.return_type..' rv = ')
@@ -191,9 +212,9 @@ for i = 1, #api.functions do
       output:write('error);\n')
     end
     -- and check for the error
-    output:write('\n  if (error->set) {')
+    output:write('\n      if (error->set) {')
     output:write('\n    goto cleanup;')
-    output:write('\n  }\n')
+    output:write('\n      }\n')
   else
     output:write(');\n')
   end
@@ -207,7 +228,7 @@ for i = 1, #api.functions do
 
   for j = 1, #fn.parameters do
     local param = fn.parameters[j]
-    output:write('\n  msgpack_rpc_free_'..string.lower(param[1])..'(arg_'..j..');')
+    output:write('\n      msgpack_rpc_free_'..string.lower(param[1])..'(arg_'..j..');')
   end
   if fn.return_type ~= 'void' then
     output:write('\n  return ret;\n}\n\n');
@@ -216,42 +237,150 @@ for i = 1, #api.functions do
   end
 end
 
-output:write([[
-static Object handle_missing_method(uint64_t channel_id,
-                                    msgpack_object *req,
-                                    Error *error)
-{
-  snprintf(error->msg, sizeof(error->msg), "Invalid function id");
-  error->set = true;
-  return NIL;
-}
+generate_dispatch_footer = function(output)
+  write_shifted_output(output, [[
+  static Object handle_missing_method(uint64_t channel_id,
+                                      msgpack_object *req,
+                                      Error *error)
+  {
+    snprintf(error->msg, sizeof(error->msg), "Invalid function id");
+    error->set = true;
+    return NIL;
+  }
 
-]])
+  ]])
 
--- Generate the table of handler functions indexed by method id
-output:write([[
-static const rpc_method_handler_fn rpc_method_handlers[] = {
-  [0] = (rpc_method_handler_fn)NULL]])
+  -- Generate the table of handler functions indexed by method id
+  write_shifted_output(output, [[
+  static const rpc_method_handler_fn rpc_method_handlers[] = {
+    [0] = (rpc_method_handler_fn)NULL]])
 
+  for i = 1, #api.functions do
+    local fn = api.functions[i]
+    output:write(',\n  ['..i..'] = handle_'..fn.name..'')
+  end
+  output:write('\n};\n\n')
+
+  write_shifted_output(output, [[
+  Object msgpack_rpc_dispatch(uint64_t channel_id,
+                              uint64_t method_id,
+                              msgpack_object *req,
+                              Error *error)
+  {
+  ]])
+  output:write('\n  // method_id=0 is specially handled')
+  output:write('\n  assert(method_id > 0);')
+  output:write('\n');
+  output:write('\n  rpc_method_handler_fn handler = (method_id <= '..#api.functions..') ?')
+  output:write('\n    rpc_method_handlers[method_id] : handle_missing_method;')
+  output:write('\n  return handler(channel_id, req, error);')
+  output:write('\n}\n')
+end
+
+generate_lua_c_bindings_header = function(output, headers)
+  write_shifted_output(output, [[
+  #include <lua.h>
+  #include <lualib.h>
+  #include <lauxlib.h>
+
+  #include "nvim/func_attr.h"
+  #include "nvim/api/private/defs.h"
+  #include "nvim/viml/executor/converter.h"
+  ]])
+  include_headers(output, headers)
+  output:write('\n')
+  -- FIXME Replace channel_id with something more sensible
+  output:write('\n#define channel_id 0\n')
+end
+
+lua_c_functions = {}
+
+generate_lua_c_bindings_fn = function(output, fn)
+  lua_c_function_name = ('nlua_msgpack_%s'):format(fn.name)
+  write_shifted_output(output, string.format([[
+
+  static int %s(lua_State *lstate)
+  {
+    Error err = {.set = false};
+  ]], lua_c_function_name))
+  lua_c_functions[#lua_c_functions + 1] = {
+    binding=lua_c_function_name,
+    api=fn.name
+  }
+  cparams = ''
+  for j, param in ipairs(fn.parameters) do
+    cparam = string.format('arg%u', j)
+    write_shifted_output(output, string.format([[
+    %s %s = nlua_pop_%s(lstate, &err);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    ]], param[1], cparam, param[1]))
+    cparams = cparams .. cparam .. ', '
+  end
+  if fn.receives_channel_id then
+    cparams = 'channel_id, ' .. cparams
+  end
+  if fn.can_fail then
+    cparams = cparams .. '&err'
+  else
+    cparams = cparams:gsub(', $', '')
+  end
+  if fn.return_type ~= 'void' then
+    write_shifted_output(output, string.format([[
+    %s ret = %s(%s);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    nlua_push_%s(lstate, ret);
+    return 1;
+    ]], fn.return_type, fn.name, cparams, fn.return_type))
+  else
+    write_shifted_output(output, string.format([[
+    %s(%s);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    return 0;
+    ]], fn.name, cparams))
+  end
+  write_shifted_output(output, [[
+  }
+  ]])
+end
+
+generate_lua_c_bindings_footer = function(output)
+  write_shifted_output(output, string.format([[
+  void nlua_add_api_functions(lua_State *lstate)
+    FUNC_ATTR_NONNULL_ALL
+  {
+    lua_createtable(lstate, 0, %u);
+  ]], #lua_c_functions))
+  for _, func in ipairs(lua_c_functions) do
+    write_shifted_output(output, string.format([[
+    lua_pushcfunction(lstate, &%s);
+    lua_setfield(lstate, -2, "%s");
+    ]], func.binding, func.api))
+  end
+  write_shifted_output(output, [[
+    lua_setfield(lstate, -2, "api");
+  }
+  ]])
+end
+
+generate_dispatch_header(dispatch_output, headers)
+generate_lua_c_bindings_header(lua_c_bindings_output, headers)
 for i = 1, #api.functions do
   local fn = api.functions[i]
-  output:write(',\n  ['..i..'] = handle_'..fn.name..'')
+
+  generate_dispatch_fn(dispatch_output, fn)
+  generate_lua_c_bindings_fn(lua_c_bindings_output, fn)
 end
-output:write('\n};\n\n')
+generate_dispatch_footer(dispatch_output)
+generate_lua_c_bindings_footer(lua_c_bindings_output)
 
-output:write([[
-Object msgpack_rpc_dispatch(uint64_t channel_id,
-                            uint64_t method_id,
-                            msgpack_object *req,
-                            Error *error)
-{
-]])
-output:write('\n  // method_id=0 is specially handled')
-output:write('\n  assert(method_id > 0);')
-output:write('\n');
-output:write('\n  rpc_method_handler_fn handler = (method_id <= '..#api.functions..') ?')
-output:write('\n    rpc_method_handlers[method_id] : handle_missing_method;')
-output:write('\n  return handler(channel_id, req, error);')
-output:write('\n}\n')
-
-output:close()
+dispatch_output:close()
+lua_c_bindings_output:close()

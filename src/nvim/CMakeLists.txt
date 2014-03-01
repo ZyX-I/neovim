@@ -1,24 +1,35 @@
 include(CheckLibraryExists)
 
 set(GENERATED_DIR ${PROJECT_BINARY_DIR}/src/nvim/auto)
-set(DISPATCH_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/msgpack-gen.lua)
+set(MSGPACK_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/msgpack-gen.lua)
 file(GLOB API_HEADERS api/*.h)
 set(MSGPACK_RPC_HEADER ${PROJECT_SOURCE_DIR}/src/nvim/os/msgpack_rpc.h)
 set(MSGPACK_DISPATCH ${GENERATED_DIR}/msgpack_dispatch.c)
+set(MSGPACK_LUA_C_BINDINGS ${GENERATED_DIR}/msgpack_lua_c_bindings.c)
 set(HEADER_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/gendeclarations.lua)
 set(GENERATED_INCLUDES_DIR ${PROJECT_BINARY_DIR}/include)
+set(VIM_MODULE_FILE ${GENERATED_DIR}/viml/executor/vim_module.generated.c)
+set(VIM_MODULE_SOURCE ${PROJECT_SOURCE_DIR}/src/nvim/viml/executor/vim.lua)
+set(VIM_MODULE_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/generate_vim_module.lua)
 
 include_directories(${GENERATED_DIR})
 include_directories(${GENERATED_INCLUDES_DIR})
 
 file(MAKE_DIRECTORY ${GENERATED_DIR})
-file(MAKE_DIRECTORY ${GENERATED_DIR}/os)
-file(MAKE_DIRECTORY ${GENERATED_DIR}/api)
-file(MAKE_DIRECTORY ${GENERATED_DIR}/api/private)
 file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR})
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/os)
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/api)
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/api/private)
+foreach(subdir os
+               api
+               api/private
+               viml
+               viml/parser
+               viml/dumpers
+               viml/printer
+               viml/testhelpers
+               viml/translator
+               viml/executor)
+  file(MAKE_DIRECTORY ${GENERATED_DIR}/${subdir})
+  file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/${subdir})
+endforeach()
 
 file( GLOB NEOVIM_SOURCES *.c )
 
@@ -32,8 +43,12 @@ endforeach()
 list(REMOVE_ITEM NEOVIM_SOURCES ${to_remove})
 
 file( GLOB OS_SOURCES os/*.c )
+file( GLOB VIML_SOURCES viml/*/*.c )
+file( GLOB VIML_CH_SOURCES viml/*/*.c.h)
 file( GLOB API_SOURCES api/*.c )
 file( GLOB API_PRIV_SOURCES api/private/*.c )
+
+list(APPEND VIML_SOURCES "${PROJECT_SOURCE_DIR}/src/nvim/viml/viml.c")
 
 set(CONV_SRCS
   api.c
@@ -95,7 +110,9 @@ foreach(sfile ${NEOVIM_SOURCES}
               "${PROJECT_SOURCE_DIR}/src/nvim/regexp_nfa.c"
               ${OS_SOURCES}
               ${API_SOURCES}
-              ${API_PRIV_SOURCES})
+              ${API_PRIV_SOURCES}
+              ${VIML_SOURCES}
+              ${VIML_CH_SOURCES})
   get_filename_component(full_d ${sfile} PATH)
   file(RELATIVE_PATH d "${PROJECT_SOURCE_DIR}/src/nvim" "${full_d}")
   get_filename_component(f ${sfile} NAME)
@@ -104,32 +121,53 @@ foreach(sfile ${NEOVIM_SOURCES}
     set(f "${d}/${f}")
     set(r "${d}/${r}")
   endif()
-  set(gf1 "${GENERATED_DIR}/${r}.c.generated.h")
-  set(gf2 "${GENERATED_INCLUDES_DIR}/${r}.h.generated.h")
+  set(gfs)
+  if (${sfile} MATCHES "\\.c\\.h$")
+    set(f "${f}.c")
+    set(r "${r}.c")
+    set(gf1 "${GENERATED_DIR}/${r}.h.generated.h")
+    list(APPEND gfs "${gf1}")
+    set(gf2 "none")
+  else()
+    set(gf1 "${GENERATED_DIR}/${r}.c.generated.h")
+    set(gf2 "${GENERATED_INCLUDES_DIR}/${r}.h.generated.h")
+    list(APPEND gfs "${gf1}")
+    list(APPEND gfs "${gf2}")
+  endif()
   add_custom_command(
-    OUTPUT "${gf1}" "${gf2}"
+    OUTPUT ${gfs}
     COMMAND "${LUA_PRG}" "${HEADER_GENERATOR}"
                              "${sfile}" "${gf1}" "${gf2}"
                              "${CMAKE_C_COMPILER} ${gen_cflags} -E"
     DEPENDS "${HEADER_GENERATOR}" "${sfile}"
     )
-  list(APPEND NEOVIM_GENERATED_SOURCES "${gf1}")
-  list(APPEND NEOVIM_GENERATED_SOURCES "${gf2}")
+  list(APPEND NEOVIM_GENERATED_SOURCES ${gfs})
   if(${d} MATCHES "^api$" AND NOT ${f} MATCHES "^api/helpers.c$")
     list(APPEND API_HEADERS ${gf2})
   endif()
 endforeach()
 
-add_custom_command(OUTPUT ${MSGPACK_DISPATCH}
-  COMMAND ${LUA_PRG} ${DISPATCH_GENERATOR} ${API_HEADERS} ${MSGPACK_DISPATCH}
+add_custom_command(OUTPUT ${VIM_MODULE_FILE}
+  COMMAND ${LUA_PRG} ${VIM_MODULE_GENERATOR}
+                                        ${VIM_MODULE_SOURCE} ${VIM_MODULE_FILE}
+  DEPENDS
+    ${VIM_MODULE_GENERATOR}
+    ${VIM_MODULE_SOURCE}
+)
+
+add_custom_command(OUTPUT ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
+  COMMAND ${LUA_PRG} ${MSGPACK_GENERATOR} ${API_HEADERS}
+                     ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
   DEPENDS
     ${API_HEADERS}
     ${MSGPACK_RPC_HEADER}
-    ${DISPATCH_GENERATOR}
-    )
+    ${MSGPACK_GENERATOR}
+)
 
 list(APPEND NEOVIM_SOURCES "${PROJECT_BINARY_DIR}/config/auto/pathdef.c")
 list(APPEND NEOVIM_SOURCES "${MSGPACK_DISPATCH}")
+list(APPEND VIML_SOURCES "${MSGPACK_LUA_C_BINDINGS}")
+list(APPEND VIML_SOURCES "${VIM_MODULE_FILE}")
 
 # Our dependencies come first.
 
@@ -154,9 +192,13 @@ endif()
 list(APPEND NVIM_LINK_LIBRARIES
     ${LIBUV_LIBRARIES}
     ${MSGPACK_LIBRARIES}
-    ${LUAJIT_LIBRARIES}
     m
     ${CMAKE_THREAD_LIBS_INIT})
+
+list(APPEND NVIM_TEST_LINK_LIBRARIES
+    ${NVIM_LINK_LIBRARIES}
+    ${NVIM_LUA_LIBRARIES}
+    )
 
 if(NOT DEFINED ENV{SKIP_EXEC})
   add_executable(nvim ${NEOVIM_GENERATED_SOURCES} ${NEOVIM_SOURCES}
@@ -167,6 +209,7 @@ endif()
 
 if(NOT DEFINED ENV{SKIP_UNITTEST})
   add_library(nvim-test MODULE EXCLUDE_FROM_ALL ${NEOVIM_GENERATED_SOURCES}
-    ${NEOVIM_SOURCES} ${OS_SOURCES} ${API_SOURCES} ${API_PRIV_SOURCES})
-  target_link_libraries(nvim-test ${NVIM_LINK_LIBRARIES})
+    ${NEOVIM_SOURCES} ${OS_SOURCES} ${API_SOURCES} ${API_PRIV_SOURCES}
+    ${VIML_SOURCES})
+  target_link_libraries(nvim-test ${NVIM_TEST_LINK_LIBRARIES})
 endif()

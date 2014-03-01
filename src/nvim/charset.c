@@ -1719,10 +1719,10 @@ int vim_isblankline(char_u *lbuf)
 /// @param dohex recognize hex number
 /// @param nptr Returns the signed result.
 /// @param unptr Returns the unsigned result.
-void vim_str2nr(char_u *start, int *hexp, int *len, int dooct, int dohex,
+void vim_str2nr(const char_u *start, int *hexp, int *len, int dooct, int dohex,
                 long *nptr, unsigned long *unptr)
 {
-  char_u *ptr = start;
+  const char_u *ptr = start;
   int hex = 0; // default is decimal
   int negative = FALSE;
   unsigned long un = 0;

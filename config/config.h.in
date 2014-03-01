@@ -88,6 +88,7 @@
 #define HAVE_UTIME_H 1
 #define HAVE_UTIMES 1
 #cmakedefine HAVE_WORKING_LIBINTL
+#cmakedefine HAVE_LUAJIT
 #define RETSIGTYPE void
 #define SIGRETURN return
 #define SYS_SELECT_WITH_SYS_TIME 1

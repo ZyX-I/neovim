@@ -28,6 +28,7 @@
 #define TAB             '\011'
 #define NL              '\012'
 #define NL_STR          (char_u *)"\012"
+#define VTAB            '\013'
 #define FF              '\014'
 #define CAR             '\015'  /* CR is used by Mac OS X */
 #define ESC             '\033'

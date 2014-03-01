@@ -32,6 +32,7 @@
 
 #define IN_OPTION_C
 #include <errno.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <string.h>
@@ -4421,7 +4422,8 @@ did_set_string_option (
   /* 'pastetoggle': translate key codes like in a mapping */
   else if (varp == &p_pt) {
     if (*p_pt) {
-      (void)replace_termcodes(p_pt, &p, TRUE, TRUE, FALSE);
+      (void)replace_termcodes(p_pt, STRLEN(p_pt), &p, TRUE, TRUE, FALSE,
+                              CPO_TO_CPO_FLAGS);
       if (p != NULL) {
         if (new_value_alloced)
           free_string_option(p_pt);
@@ -5698,15 +5700,15 @@ static void check_redraw(long_u flags)
 }
 
 /*
- * Find index for option 'arg'.
+ * Find index for option 'arg' that has given length.
  * Return -1 if not found.
  */
-static int findoption(char_u *arg)
+static int findoption_len(const char_u *const arg, const size_t len)
 {
   int opt_idx;
-  char            *s, *p;
-  static short quick_tab[27] = {0, 0};          /* quick access table */
-  int is_term_opt;
+  char *s, *p;
+  static short quick_tab[27] = {0, 0}; /* quick access table */
+  bool is_term_opt;
 
   /*
    * For first call: Initialize the quick-access table.
@@ -5726,26 +5728,30 @@ static int findoption(char_u *arg)
     }
   }
 
+  assert(len > 0);
+
   /*
    * Check for name starting with an illegal character.
    */
   if (arg[0] < 'a' || arg[0] > 'z')
     return -1;
 
-  is_term_opt = (arg[0] == 't' && arg[1] == '_');
+  is_term_opt = (len > 2 && arg[0] == 't' && arg[1] == '_');
   if (is_term_opt)
     opt_idx = quick_tab[26];
   else
     opt_idx = quick_tab[CharOrdLow(arg[0])];
+  // Match full name
   for (; (s = options[opt_idx].fullname) != NULL; opt_idx++) {
-    if (STRCMP(arg, s) == 0)                        /* match full name */
+    if (STRNCMP(arg, s, len) == 0 && s[len] == NUL)
       break;
   }
   if (s == NULL && !is_term_opt) {
     opt_idx = quick_tab[CharOrdLow(arg[0])];
+    // Match short name
     for (; options[opt_idx].fullname != NULL; opt_idx++) {
       s = options[opt_idx].shortname;
-      if (s != NULL && STRCMP(arg, s) == 0)         /* match short name */
+      if (s != NULL && STRNCMP(arg, s, len) == 0 && s[len] == NUL)
         break;
       s = NULL;
     }
@@ -5753,6 +5759,15 @@ static int findoption(char_u *arg)
   if (s == NULL)
     opt_idx = -1;
   return opt_idx;
+}
+
+/*
+ * Find index for option 'arg'.
+ * Return -1 if not found.
+ */
+static int findoption(char_u *arg)
+{
+  return findoption_len(arg, STRLEN(arg));
 }
 
 /*
@@ -6033,7 +6048,7 @@ char_u *get_encoding_default(void)
 /*
  * Translate a string like "t_xx", "<t_xx>" or "<S-Tab>" to a key number.
  */
-static int find_key_option(char_u *arg)
+static int find_key_option(const char_u *arg)
 {
   int key;
   int modifiers;
@@ -6047,7 +6062,7 @@ static int find_key_option(char_u *arg)
   else {
     --arg;                          /* put arg at the '<' */
     modifiers = 0;
-    key = find_special_key(&arg, &modifiers, TRUE, TRUE);
+    key = find_special_key(&arg, STRLEN(arg), &modifiers, TRUE, TRUE);
     if (modifiers)                  /* can't handle modifiers here */
       key = 0;
   }
@@ -8142,4 +8157,75 @@ void find_mps_values(int *initc, int *findc, int *backwards, int switchit)
     if (*ptr == ',')
       ++ptr;
   }
+}
+
+/// Return option properties
+///
+/// Currently only returns the locality and type of the option. Returned flags:
+///
+/// GOP_GLOBAL
+/// :   This flag is set if option has global value.
+///
+/// GOP_BUFFER_LOCAL
+/// :   This flag is set if option is buffer-local.
+///
+/// GOP_WINDOW_LOCAL
+/// :   This flag is set if option is window-local.
+///
+/// GOP_DISABLED
+/// :   This flag is set if option is disabled in this version of neovim.
+///
+/// GOP_BOOLEAN
+/// :   This flag is set if option has boolean value.
+///
+/// GOP_NUMERIC
+/// :   This flag is set if option has numeric value.
+///
+/// GOP_STRING
+/// :   This flag is set if option has string value.
+///
+/// If no flags are set (== returned zero) then option was not found.
+///
+/// @param[in]  name  Option that will be searched for.
+///
+/// @return Flag value.
+uint_least8_t get_option_properties(const char_u *const name, const size_t len)
+{
+  uint_least8_t flags = 0;
+  int idx = findoption_len(name, len);
+
+  if (idx == -1)
+    return flags;
+
+  const struct vimoption *const p = options + idx;
+
+  if (p->indir == PV_NONE) {
+    flags |= GOP_GLOBAL;
+  } else {
+    if (p->indir & PV_BOTH)
+      flags |= GOP_GLOBAL;
+    if (p->indir & PV_WIN)
+      flags |= GOP_WINDOW_LOCAL;
+    if (p->indir & PV_BUF)
+      flags |= GOP_BUFFER_LOCAL;
+    if (p->var != VAR_WIN && p->var != NULL)
+      // All buffer-local options really have global value, no matter what 
+      // p->indir tells. This is just a saner variant then adding GOP_GLOBAL in 
+      // one "if" with GOP_BUFFER_LOCAL.
+      flags |= GOP_GLOBAL;
+  }
+  if (p->var == NULL)
+    flags |= GOP_DISABLED;
+
+  if (p->flags & P_BOOL)
+    flags |= GOP_BOOLEAN;
+  else if (p->flags & P_NUM)
+    flags |= GOP_NUMERIC;
+  else if (p->flags & P_STRING)
+    flags |= GOP_STRING;
+  else
+    // Option may only be boolean, string or numeric
+    assert(FALSE);
+
+  return flags;
 }
