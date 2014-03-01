@@ -187,7 +187,7 @@ static int parse_name(char_u **arg,
     if (**arg != '}') {
       // FIXME Proper error message
       error->message = "missing closing curly brace";
-      error->position = s;
+      error->position = *arg;
       return FAIL;
     }
     ++(*arg);
@@ -233,7 +233,7 @@ static int parse_list(char_u **arg,
 
   if (**arg != ']') {
     error->message = N_("E697: Missing end of List");
-    error->position = s;
+    error->position = *arg;
     return FAIL;
   }
 
@@ -533,7 +533,7 @@ static int parse_subscript(char_u **arg,
   // Check for the ']'.
   if (**arg != ']') {
     error->message = N_("E111: Missing ']'");
-    error->position = s;
+    error->position = *arg;
     return FAIL;
   }
   *arg = skipwhite(*arg + 1); // skip the ']'
@@ -1139,7 +1139,7 @@ static int parse1(char_u **arg,
       return FAIL;
 
     // Check for the ":".
-    if ((*arg)[0] != ':') {
+    if (**arg != ':') {
       error->message = N_("E109: Missing ':' after '?'");
       error->position = *arg;
       return FAIL;
