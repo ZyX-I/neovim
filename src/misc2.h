@@ -106,5 +106,12 @@ char_u *read_string __ARGS((FILE *fd, int cnt));
 int put_bytes __ARGS((FILE *fd, long_u nr, int len));
 void put_time __ARGS((FILE *fd, time_t the_time));
 int has_non_ascii __ARGS((char_u *s));
-/* vim: set ft=c : */
+
+#define ALLOC_NEW(type, number) \
+    ((type*) alloc(sizeof(type) * number))
+#define ALLOC_CLEAR_NEW(type, number) \
+    ((type*) alloc_clear(sizeof(type) * number))
+#define ALLOC_CHECK_NEW(type, number) \
+    ((type*) alloc_clear(sizeof(type) * number))
+
 #endif /* NEOVIM_MISC2_H */
