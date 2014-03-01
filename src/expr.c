@@ -119,7 +119,10 @@ static int parse_name(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  UP_NODE(kTypeVariableName, error, node, top_node, next_node)
+  if ((top_node = node_alloc(kTypeVariableName, error)) == NULL)
+    return FAIL;
+  next_node = &(top_node->subnode);
+  *node = top_node;
 
   s = *arg;
   if (   (*arg)[0] == K_SPECIAL
@@ -167,9 +170,9 @@ static int parse_name(char_u **arg,
       next_node = &((*next_node)->next_subnode);
     }
 
+    s = *arg;
     ++(*arg);
     *arg = skipwhite(*arg);
-    s = *arg;
 
     VALUE_NODE(kTypeCurlyName, error, next_node, s, NULL)
 
