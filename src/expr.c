@@ -461,7 +461,7 @@ static int parse_func_call(char_u **arg,
     argp = skipwhite(argp + 1); // skip the '(' or ','
     if (*argp == ')' || *argp == ',' || *argp == NUL)
       break;
-    if (parse1(arg, next_node, error) == FAIL)
+    if (parse1(&argp, next_node, error) == FAIL)
       return FAIL;
     next_node = &((*next_node)->next_subnode);
     ++argcount;
@@ -472,7 +472,7 @@ static int parse_func_call(char_u **arg,
   if (*argp != ')') {
     // FIXME Proper error message
     error->message = "expected closing parenthesis";
-    error->position = s;
+    error->position = argp;
     return FAIL;
   }
 
