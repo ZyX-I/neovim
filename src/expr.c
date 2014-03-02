@@ -455,8 +455,11 @@ static int parse_dot_subscript(char_u **arg,
   }
   if (e == s + 1)
     return OK;
-  // XXX Workaround for concat ambiguity
+  // XXX Workaround for concat ambiguity: s.g:var
   if ((e - s) == 2 && *e == ':' && IS_SCOPE_CHAR(s[1]))
+    return OK;
+  // XXX Workaround for concat ambiguity: s:autoload#var
+  if (*e == AUTOLOAD_CHAR)
     return OK;
   if ((top_node = node_alloc(kTypeConcatOrSubscript, error)) == NULL)
     return FAIL;
