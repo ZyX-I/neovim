@@ -1,5 +1,8 @@
 #ifndef NEOVIM_MISC2_H
 #define NEOVIM_MISC2_H
+
+#include "vim.h"
+
 /* misc2.c */
 int virtual_active(void);
 int getviscol(void);
