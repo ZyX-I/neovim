@@ -8,7 +8,7 @@ local libnvim = ffi.load('./build/src/libnvim-test.so')
 -- library pointer
 local cimport = function(path)
   if path then
-    local pipe = io.popen('cpp -P ' .. path)
+    local pipe = io.popen('cpp -P -E ' .. path)
     local header = pipe:read("*a")
     pipe:close()
     ffi.cdef(header)
