@@ -228,7 +228,6 @@ static int parse_list(char_u **arg,
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
-  char_u *s = *arg;
 
   UP_NODE(kTypeList, error, node, top_node, next_node)
 
@@ -484,7 +483,6 @@ static int parse_func_call(char_u **arg,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   char_u *argp;
-  char_u *s;
   int argcount = 0;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
@@ -493,7 +491,6 @@ static int parse_func_call(char_u **arg,
 
   // Get the arguments.
   argp = *arg;
-  s = argp;
   while (argcount < MAX_FUNC_ARGS) {
     argp = skipwhite(argp + 1); // skip the '(' or ','
     if (*argp == ')' || *argp == ',' || *argp == NUL)
@@ -529,7 +526,6 @@ static int parse_subscript(char_u **arg,
                            ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char_u *s = *arg;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
@@ -1182,7 +1178,7 @@ static int parse1(char_u **arg,
   return OK;
 }
 
-static ExpressionNode *parse0(char_u *arg)
+ExpressionNode *parse0(char_u *arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *result = NULL;
