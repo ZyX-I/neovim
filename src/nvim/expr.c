@@ -158,6 +158,9 @@ static int parse_name(char_u **arg,
 
     p = find_id_end(arg);
 
+    if (p == NULL && len)
+      p = *arg - 1;
+
     if (**arg != '{') {
       if (p == NULL) {
         // FIXME Proper error message
@@ -175,7 +178,8 @@ static int parse_name(char_u **arg,
     (*next_node)->children = parse1_node;
     next_node = &((*next_node)->next);
     *arg = parse1_arg + 1;
-    p = NULL;
+    s = *arg;
+    p = find_id_end(arg);
   }
 
   while (**arg == '{') {
@@ -203,6 +207,11 @@ static int parse_name(char_u **arg,
     next_node = &((*next_node)->next);
     s = *arg;
     p = find_id_end(arg);
+  }
+
+  if (p != NULL) {
+    VALUE_NODE(kTypeIdentifier, error, next_node, s, p)
+    next_node = &((*next_node)->next);
   }
 
   return OK;
