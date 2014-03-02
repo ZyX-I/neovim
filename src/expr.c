@@ -962,7 +962,7 @@ static int parse4(char_u **arg,
         type = kTypeGreater;
         len = 1;
       } else {
-        type = kTypeGreaterThenOrEqualTo;
+        type = kTypeGreaterThanOrEqualTo;
       }
       break;
     }
@@ -971,7 +971,7 @@ static int parse4(char_u **arg,
         type = kTypeLess;
         len = 1;
       } else {
-        type = kTypeLessThenOrEqualTo;
+        type = kTypeLessThanOrEqualTo;
       }
       break;
     }
@@ -1234,14 +1234,14 @@ static void print_node(int indent, ExpressionNode *node)
     case kTypeGreater: {
       if (name == NULL) name = "kTypeGreater";
     }
-    case kTypeGreaterThenOrEqualTo: {
-      if (name == NULL) name = "kTypeGreaterThenOrEqualTo";
+    case kTypeGreaterThanOrEqualTo: {
+      if (name == NULL) name = "kTypeGreaterThanOrEqualTo";
     }
     case kTypeLess: {
       if (name == NULL) name = "kTypeLess";
     }
-    case kTypeLessThenOrEqualTo: {
-      if (name == NULL) name = "kTypeLessThenOrEqualTo";
+    case kTypeLessThanOrEqualTo: {
+      if (name == NULL) name = "kTypeLessThanOrEqualTo";
     }
     case kTypeEquals: {
       if (name == NULL) name = "kTypeEquals";
