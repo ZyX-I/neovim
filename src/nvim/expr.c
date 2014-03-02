@@ -451,11 +451,13 @@ static int parse_dot_subscript(char_u **arg,
                                ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char_u *s;
+  char_u *s = *arg;
   char_u *e;
   ExpressionNode *top_node = NULL;
 
-  s = *arg;
+  // It cannot be subscript if previous character is "\"" or "'"
+  if (s[-1] == '"' || s[-1] == '\'')
+    return OK;
   for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; ++e) {
   }
   if (e == s + 1)
