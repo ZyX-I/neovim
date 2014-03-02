@@ -757,7 +757,11 @@ static int parse7(char_u **arg,
       ++*arg;
       if (**arg != NUL)
         ++*arg;
-      VALUE_NODE(kTypeRegister, error, node, s, *arg - 1)
+      // XXX Sigil is included: `:echo @` does the same as `:echo @"`
+      // But Vim does not bother itself checking whether next character is 
+      // a valid register name so you cannot just use `@` in place of `@"` 
+      // everywhere: only at the end of string.
+      VALUE_NODE(kTypeRegister, error, node, s, s + 1)
       break;
     }
 
