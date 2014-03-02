@@ -112,6 +112,6 @@ int has_non_ascii __ARGS((char_u *s));
 #define ALLOC_CLEAR_NEW(type, number) \
     ((type*) alloc_clear(sizeof(type) * number))
 #define ALLOC_CHECK_NEW(type, number) \
-    ((type*) alloc_clear(sizeof(type) * number))
+    ((type*) alloc_check(sizeof(type) * number))
 
 #endif /* NEOVIM_MISC2_H */
