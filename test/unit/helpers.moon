@@ -7,17 +7,11 @@ libnvim = ffi.load './build/src/libnvim-test.so'
 -- This helper function normalizes headers, passes to ffi and returns the
 -- library pointer
 cimport = (path) ->
-  -- Can't parse some of vim types, perhaps need to define those before
-  -- automatically importing to ffi
-
-  -- header_file = io.open path, 'rb'
-  -- header = header_file\read '*a'
-  -- header_file.close!
-  -- header = string.gsub header, '#include[^\n]*\n', ''
-  -- header = string.gsub header, '#ifndef[^\n]*\n', ''
-  -- header = string.gsub header, '#define[^\n]*\n', ''
-  -- header = string.gsub header, '#endif[^\n]*\n', ''
-  -- ffi.cdef header
+  if path
+    pipe = io.popen('cpp -P ' .. path)
+    header = pipe\read('*a')
+    pipe\close()
+    ffi.cdef(header)
 
   return libnvim
 
