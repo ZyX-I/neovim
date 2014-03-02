@@ -1,5 +1,8 @@
 #ifndef NEOVIM_MISC1_H
 #define NEOVIM_MISC1_H
+
+#include "vim.h"
+
 /* misc1.c */
 int get_indent __ARGS((void));
 int get_indent_lnum __ARGS((linenr_T lnum));
