@@ -59,7 +59,7 @@ node_to_string = function(node, err)
   local case_suffix = case_compare_strategy[tonumber(node.ignore_case)]
   local func = type .. case_suffix
   local result = func
-  if (err.message ~= nil) then
+  if (err and err.message ~= nil) then
     result = 'error(' .. ffi.string(err.message) .. ')'
     return result
   end
@@ -81,11 +81,17 @@ node_to_string = function(node, err)
   return result
 end
 
+local size = ffi.sizeof('ExpressionParserError')
+local size2 = ffi.sizeof('ExpressionParserError[1]')
+ffi.cdef('void *malloc(size_t size)')
+local _e = ffi.C.malloc(size)
+_err = ffi.cast('ExpressionParserError*', _e)
+
 describe('parse0', function()
   local parse0 = function(str)
-    local err = ffi.new('ExpressionParserError', {})
     local s = cstr(string.len(str), str)
-    return ffi.gc(expr.parse0_err(s, err), expr.free_node), err
+    return ffi.gc(expr.parse0_err(s, _err), expr.free_node), _err
+    -- return ffi.gc(expr.parse0(s), expr.free_node), nil
   end
   local p0 = function(str)
     local parsed, err = parse0(str)
@@ -193,6 +199,58 @@ describe('parse0', function()
   end)
   it('parses abc.g:v', function()
     eq('..(var[+abc+], var[+g:v+])', p0('abc.g:v'))
+  end)
+  it('parses 1.2.3.4', function()
+    eq('.[+4+](.[+3+](.[+2+](N[+1+])))', p0('1.2.3.4'))
+  end)
+  it('parses "abc".def', function()
+    eq('..("[+"abc"+], var[+def+])', p0('"abc".def'))
+  end)
+  it('parses 1 . 2 . 3 . 4', function()
+    eq('..(N[+1+], N[+2+], N[+3+], N[+4+])', p0('1 . 2 . 3 . 4'))
+  end)
+  it('parses 1. 2. 3. 4', function()
+    eq('..(N[+1+], N[+2+], N[+3+], N[+4+])', p0('1. 2. 3. 4'))
+  end)
+  it('parses 1 .2 .3 .4', function()
+    eq('..(N[+1+], N[+2+], N[+3+], N[+4+])', p0('1 .2 .3 .4'))
+  end)
+  it('parses a && b && c', function()
+    eq('&&(var[+a+], var[+b+], var[+c+])', p0('a && b && c'))
+  end)
+  it('parses a || b || c', function()
+    eq('||(var[+a+], var[+b+], var[+c+])', p0('a || b || c'))
+  end)
+  it('parses a || b && c || d', function()
+    eq('||(var[+a+], &&(var[+b+], var[+c+]), var[+d+])', p0('a || b && c || d'))
+  end)
+  it('parses a && b || c && d', function()
+    eq('||(&&(var[+a+], var[+b+]), &&(var[+c+], var[+d+]))',
+       p0('a && b || c && d'))
+  end)
+  it('parses a && (b || c) && d', function()
+    eq('&&(var[+a+], expr[!(!](||(var[+b+], var[+c+])), var[+d+])',
+       p0('a && (b || c) && d'))
+  end)
+  it('parses a + b + c*d/e/f  - g % h .i', function()
+    eq('..(-(+(var[+a+], ' ..
+              'var[+b+], ' ..
+              '/(*(var[+c+], ' ..
+                  'var[+d+]), ' ..
+                'var[+e+], ' ..
+                'var[+f+])), ' ..
+            '%(var[+g+], var[+h+])), ' ..
+          'var[+i+])',
+       p0('a + b + c*d/e/f  - g % h .i'))
+  end)
+  it('parses !+-!!++a', function()
+    eq('!(+!(-!(!(!(+!(+!(var[+a+])))))))', p0('!+-!!++a'))
+  end)
+  it('parses (abc)', function()
+    eq('expr[!(!](var[+abc+])', p0('(abc)'))
+  end)
+  it('parses [1, 2 , 3 ,4]', function()
+    eq('[](N[+1+], N[+2+], N[+3+], N[+4+])', p0('[1, 2 , 3 ,4]'))
   end)
 
   -- SEGV!!!
