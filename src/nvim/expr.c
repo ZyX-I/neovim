@@ -115,7 +115,9 @@ static int get_fname_script_len(char_u *p)
  */
 static int parse_name(char_u **arg,
                       ExpressionNode **node,
-                      ExpressionParserError *error)
+                      ExpressionParserError *error,
+                      ExpressionNode *parse1_node,
+                      char_u *parse1_arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int len;
@@ -129,48 +131,55 @@ static int parse_name(char_u **arg,
   next_node = &(top_node->children);
   *node = top_node;
 
-  s = *arg;
-  if (   (*arg)[0] == K_SPECIAL
-      && (*arg)[1] == KS_EXTRA
-      && (*arg)[2] == (int)KE_SNR) {
-    // hard coded <SNR>, already translated
-    *arg += 3;
-    if ((p = find_id_end(arg)) == NULL) {
-      // FIXME Proper error message
-      error->message = "expected variable name";
-      error->position = *arg;
-      return FAIL;
+  if (parse1_node == NULL) {
+    s = *arg;
+    if (   (*arg)[0] == K_SPECIAL
+        && (*arg)[1] == KS_EXTRA
+        && (*arg)[2] == (int)KE_SNR) {
+      // hard coded <SNR>, already translated
+      *arg += 3;
+      if ((p = find_id_end(arg)) == NULL) {
+        // FIXME Proper error message
+        error->message = "expected variable name";
+        error->position = *arg;
+        return FAIL;
+      }
+      (*node)->type = kTypeSimpleVariableName;
+      (*node)->position = s;
+      (*node)->end_position = p;
+      return OK;
     }
-    (*node)->type = kTypeSimpleVariableName;
-    (*node)->position = s;
-    (*node)->end_position = p;
-    return OK;
-  }
 
-  len = get_fname_script_len(*arg);
-  if (len > 0) {
-    // literal "<SID>", "s:" or "<SNR>"
-    *arg += len;
-  }
-
-  p = find_id_end(arg);
-
-  if (**arg != '{') {
-    if (p == NULL) {
-      // FIXME Proper error message
-      error->message = "expected variable name";
-      error->position = *arg;
-      return FAIL;
+    len = get_fname_script_len(*arg);
+    if (len > 0) {
+      // literal "<SID>", "s:" or "<SNR>"
+      *arg += len;
     }
-    (*node)->type = kTypeSimpleVariableName;
-    (*node)->position = s;
-    (*node)->end_position = p;
-    return OK;
+
+    p = find_id_end(arg);
+
+    if (**arg != '{') {
+      if (p == NULL) {
+        // FIXME Proper error message
+        error->message = "expected variable name";
+        error->position = *arg;
+        return FAIL;
+      }
+      (*node)->type = kTypeSimpleVariableName;
+      (*node)->position = s;
+      (*node)->end_position = p;
+      return OK;
+    }
+  } else {
+    VALUE_NODE(kTypeCurlyName, error, next_node, *arg, NULL);
+    (*next_node)->children = parse1_node;
+    next_node = &((*next_node)->next);
+    *arg = parse1_arg + 1;
+    p = NULL;
   }
 
   while (**arg == '{') {
-    if (p != NULL)
-    {
+    if (p != NULL) {
       VALUE_NODE(kTypeIdentifier, error, next_node, s, p)
       next_node = &((*next_node)->next);
     }
@@ -248,36 +257,42 @@ static int parse_list(char_u **arg,
  */
 static int parse_dictionary(char_u **arg,
                             ExpressionNode **node,
-                            ExpressionParserError *error)
+                            ExpressionParserError *error,
+                            ExpressionNode **parse1_node,
+                            char_u **parse1_arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionNode *new_node = NULL;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
   char_u *start = skipwhite(*arg + 1);
 
+  *parse1_node = NULL;
+
   // First check if it's not a curly-braces thing: {expr}.
   // But {} is an empty Dictionary.
   if (*start != '}') {
-    char_u *new_arg = start;
-    if (parse1(&new_arg, &new_node, error) == FAIL) {
-      free_node(new_node);
+    *parse1_arg = start;
+    if (parse1(parse1_arg, parse1_node, error) == FAIL) {
+      free_node(*parse1_node);
       return FAIL;
     }
-    if (*new_arg == '}') {
-      // FIXME Make it more efficient: reuse the results
-      free_node(new_node);
+    if (**parse1_arg == '}')
       return NOTDONE;
-    }
   }
 
-  UP_NODE(kTypeDictionary, error, node, top_node, next_node)
+  if ((top_node = node_alloc(kTypeVariableName, error)) == NULL) {
+    free_node(*parse1_node);
+    return FAIL;
+  }
+  next_node = &(top_node->children);
+  *node = top_node;
 
   *arg = start;
   while (**arg != '}' && **arg != NUL) {
-    if (new_node != NULL) {
-      *next_node = new_node;
-      new_node = NULL;
+    if (*parse1_node != NULL) {
+      *next_node = *parse1_node;
+      *parse1_node = NULL;
+      *arg = *parse1_arg;
     }
     else if (parse1(arg, next_node, error) == FAIL) {
       return FAIL;
@@ -610,6 +625,8 @@ static int parse7(char_u **arg,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionType type = kTypeUnknown;
+  ExpressionNode *parse1_node = NULL;
+  char_u *parse1_arg;
   char_u *s, *e;
   char_u *start_leader, *end_leader;
   int ret = OK;
@@ -716,7 +733,7 @@ static int parse7(char_u **arg,
 
     // Dictionary: {key: val, key: val}
     case '{': {
-      ret = parse_dictionary(arg, node, error);
+      ret = parse_dictionary(arg, node, error, &parse1_node, &parse1_arg);
       break;
     }
 
@@ -767,7 +784,7 @@ static int parse7(char_u **arg,
   if (ret == NOTDONE) {
     // Must be a variable or function name.
     // Can also be a curly-braces kind of name: {expr}.
-    ret = parse_name(arg, node, error);
+    ret = parse_name(arg, node, error, parse1_node, parse1_arg);
   }
 
   *arg = skipwhite(*arg);
