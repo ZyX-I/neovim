@@ -252,6 +252,12 @@ describe('parse0', function()
   it('parses [1, 2 , 3 ,4]', function()
     eq('[](N[+1+], N[+2+], N[+3+], N[+4+])', p0('[1, 2 , 3 ,4]'))
   end)
+  it('parses {1:2, v : c, (10): abc}', function()
+    eq('{}(N[+1+], N[+2+], ' ..
+          'var[+v+], var[+c+], ' ..
+          'expr[!(!](N[+10+]), var[+abc+])',
+       p0('{1:2, v : c, (10): abc}'))
+  end)
 
   -- SEGV!!!
   -- it('fails to parse <', function()
