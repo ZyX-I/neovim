@@ -15,9 +15,9 @@ typedef enum {
   kTypeLogicalOr,             // ||
   kTypeLogicalAnd,            // &&
   kTypeGreater,               // >
-  kTypeGreaterThenOrEqualTo,  // >=
+  kTypeGreaterThanOrEqualTo,  // >=
   kTypeLess,                  // <
-  kTypeLessThenOrEqualTo,     // <=
+  kTypeLessThanOrEqualTo,     // <=
   kTypeEquals,                // ==
   kTypeNotEquals,             // !=
   kTypeIdentical,             // is
