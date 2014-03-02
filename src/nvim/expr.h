@@ -86,9 +86,9 @@ typedef struct expression_node {
   // Only valid for operators, subscripts (except for kTypeConcatOrSubscript) 
   // and complex value nodes: represents operator arguments, nodes inside 
   // a list, …
-  struct expression_node *subnode;
+  struct expression_node *children;
   // Subnodes are arranged in a linked list.
-  struct expression_node *next_subnode;
+  struct expression_node *next;
 } ExpressionNode;
 
 typedef struct error {

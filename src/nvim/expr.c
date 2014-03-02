@@ -25,8 +25,8 @@
   { \
     if ((top_node = node_alloc(type, error)) == NULL) \
       return FAIL; \
-    next_node = &((*old_top_node)->next_subnode); \
-    top_node->subnode = *old_top_node; \
+    next_node = &((*old_top_node)->next); \
+    top_node->children = *old_top_node; \
     *old_top_node = top_node; \
   }
 
@@ -59,8 +59,8 @@ static void free_node(ExpressionNode *node)
   if (node == NULL)
     return;
 
-  free_node(node->subnode);
-  free_node(node->next_subnode);
+  free_node(node->children);
+  free_node(node->next);
   vim_free(node);
 }
 
@@ -126,7 +126,7 @@ static int parse_name(char_u **arg,
 
   if ((top_node = node_alloc(kTypeVariableName, error)) == NULL)
     return FAIL;
-  next_node = &(top_node->subnode);
+  next_node = &(top_node->children);
   *node = top_node;
 
   s = *arg;
@@ -172,7 +172,7 @@ static int parse_name(char_u **arg,
     if (p != NULL)
     {
       VALUE_NODE(kTypeIdentifier, error, next_node, s, p)
-      next_node = &((*next_node)->next_subnode);
+      next_node = &((*next_node)->next);
     }
 
     s = *arg;
@@ -181,7 +181,7 @@ static int parse_name(char_u **arg,
 
     VALUE_NODE(kTypeCurlyName, error, next_node, s, NULL)
 
-    if ((parse1(arg, &((*next_node)->subnode), error)) == FAIL)
+    if ((parse1(arg, &((*next_node)->children), error)) == FAIL)
       return FAIL;
 
     if (**arg != '}') {
@@ -191,7 +191,7 @@ static int parse_name(char_u **arg,
       return FAIL;
     }
     ++(*arg);
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
     s = *arg;
     p = find_id_end(arg);
   }
@@ -219,7 +219,7 @@ static int parse_list(char_u **arg,
     if (parse1(arg, next_node, error) == FAIL)
       return FAIL;
 
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
 
     if (**arg == ']')
       break;
@@ -283,7 +283,7 @@ static int parse_dictionary(char_u **arg,
       return FAIL;
     }
 
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
 
     if (**arg != ':') {
       error->message = N_("E720: Missing colon in Dictionary");
@@ -295,7 +295,7 @@ static int parse_dictionary(char_u **arg,
     if (parse1(arg, next_node, error) == FAIL)
       return FAIL;
 
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
 
     if (**arg == '}')
       break;
@@ -442,7 +442,7 @@ static int parse_dot_subscript(char_u **arg,
     return OK;
   if ((top_node = node_alloc(kTypeConcatOrSubscript, error)) == NULL)
     return FAIL;
-  top_node->subnode = *node;
+  top_node->children = *node;
   top_node->position = s;
   top_node->end_position = e - 1;
   *node = top_node;
@@ -476,7 +476,7 @@ static int parse_func_call(char_u **arg,
       break;
     if (parse1(&argp, next_node, error) == FAIL)
       return FAIL;
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
     ++argcount;
     if (*argp != ',')
       break;
@@ -515,7 +515,7 @@ static int parse_subscript(char_u **arg,
   *arg = skipwhite(*arg + 1); // skip the '['
   if (**arg == ':') {
     VALUE_NODE(kTypeEmptySubscript, error, next_node, *arg, NULL)
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
   }
   else if (parse1(arg, next_node, error) == FAIL) {
     return FAIL;
@@ -746,7 +746,7 @@ static int parse7(char_u **arg,
     case '(': {
       VALUE_NODE(kTypeExpression, error, node, *arg, NULL)
       *arg = skipwhite(*arg + 1);
-      ret = parse1(arg, &((*node)->subnode), error);
+      ret = parse1(arg, &((*node)->children), error);
       if (**arg == ')') {
         ++(*arg);
       }
@@ -800,7 +800,7 @@ static int parse7(char_u **arg,
       }
       if ((top_node = node_alloc(type, error)) == NULL)
         return FAIL;
-      top_node->subnode = *node;
+      top_node->children = *node;
       *node = top_node;
     }
   }
@@ -859,7 +859,7 @@ static int parse6(char_u **arg,
     if (top_node == NULL || top_node->type != type)
       UP_NODE(type, error, node, top_node, next_node)
     else
-      next_node = &((*next_node)->next_subnode);
+      next_node = &((*next_node)->next);
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
@@ -919,7 +919,7 @@ static int parse5(char_u **arg,
     if (top_node == NULL || top_node->type != type)
       UP_NODE(type, error, node, top_node, next_node)
     else
-      next_node = &((*next_node)->next_subnode);
+      next_node = &((*next_node)->next);
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
@@ -1025,7 +1025,7 @@ static int parse4(char_u **arg,
     // nothing appended: use kCCStrategyUseOption (default)
 
     // Get the second variable.
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
     *arg = skipwhite(p + len);
     if (parse5(arg, next_node, error) == FAIL)
       return FAIL;
@@ -1065,7 +1065,7 @@ static int parse3(char_u **arg,
     *arg = skipwhite(*arg + 2);
     if (parse4(arg, next_node, error) == FAIL)
       return FAIL;
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
   }
 
   return OK;
@@ -1101,7 +1101,7 @@ static int parse2(char_u **arg,
     *arg = skipwhite(*arg + 2);
     if (parse3(arg, next_node, error) == FAIL)
       return FAIL;
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
   }
 
   return OK;
@@ -1145,7 +1145,7 @@ static int parse1(char_u **arg,
       return FAIL;
     }
 
-    next_node = &((*next_node)->next_subnode);
+    next_node = &((*next_node)->next);
 
     // Get the third variable.
     *arg = skipwhite(*arg + 1);
@@ -1320,13 +1320,13 @@ static void print_node(int indent, ExpressionNode *node)
                "",
                (int) (node->end_position - node->position + 1),
                node->position);
-      if (node->subnode != NULL)
+      if (node->children != NULL)
       {
         printf("%*sSubnodes:\n", indent + 2, "");
-        print_node(indent + 4, node->subnode);
+        print_node(indent + 4, node->children);
       }
-      if (node->next_subnode != NULL)
-        print_node(indent, node->next_subnode);
+      if (node->next != NULL)
+        print_node(indent, node->next);
       break;
     }
   }
