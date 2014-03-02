@@ -7,8 +7,6 @@ cstr = ffi.typeof 'char[?]'
 
 describe 'misc1 function', ->
   describe 'fullpathcmp', ->
-    ffi.cdef 'int fullpathcmp(char *s1, char *s2, int checkname);'
-
     fullpathcmp = (s1, s2, cn) ->
       s1 = cstr (string.len s1) + 1, s1
       s2 = cstr (string.len s2) + 1, s2
