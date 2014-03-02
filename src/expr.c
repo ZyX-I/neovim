@@ -995,15 +995,15 @@ static int parse4(char_u **arg,
 
     // extra question mark appended: ignore case
     if (p[len] == '?') {
-      top_node->ignore_case = kOperatorIgnoreCase;
+      top_node->ignore_case = kCCStrategyIgnoreCase;
       ++len;
     }
     // extra '#' appended: match case
     else if (p[len] == '#') {
-      top_node->ignore_case = kOperatorMatchCase;
+      top_node->ignore_case = kCCStrategyMatchCase;
       ++len;
     }
-    // nothing appended: use kOperatorUseOption (default)
+    // nothing appended: use kCCStrategyUseOption (default)
 
     // Get the second variable.
     next_node = &((*next_node)->next_subnode);
