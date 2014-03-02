@@ -65,14 +65,14 @@ typedef enum {
 } ExpressionType;
 
 // Defines whether to ignore case:
-//    ==   kOperatorUseOption
-//    ==#  kOperatorMatchCase
-//    ==?  kOperatorIgnoreCase
+//    ==   kCCStrategyUseOption
+//    ==#  kCCStrategyMatchCase
+//    ==?  kCCStrategyIgnoreCase
 typedef enum {
-  kOperatorUseOption = 0, // 0 for alloc_clear
-  kOperatorMatchCase,
-  kOperatorIgnoreCase,
-} OperatorType;
+  kCCStrategyUseOption = 0, // 0 for alloc_clear
+  kCCStrategyMatchCase,
+  kCCStrategyIgnoreCase,
+} CaseCompareStrategy;
 
 typedef struct expression_node {
   ExpressionType type;
@@ -82,7 +82,7 @@ typedef struct expression_node {
   char_u *end_position;
   // Only valid for kType(Greater|Less)*, kType[Not]Matches, kType[Not]Equals: 
   // determines whether case should be ignored
-  OperatorType ignore_case;
+  CaseCompareStrategy ignore_case;
   // Only valid for operators, subscripts (except for kTypeConcatOrSubscript) 
   // and complex value nodes: represents operator arguments, nodes inside 
   // a list, …
