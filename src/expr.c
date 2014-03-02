@@ -27,6 +27,14 @@
     *old_top_node = top_node; \
   }
 
+#define TOP_NODE(type, error, old_top_node, top_node, next_node) \
+  { \
+    if ((top_node = node_alloc(type, error)) == NULL) \
+      return FAIL; \
+    next_node = &(top_node->children); \
+    *old_top_node = top_node; \
+  }
+
 #define VALUE_NODE(type, error, node, pos, end_pos) \
   { \
     if ((*node = node_alloc(type, error)) == NULL) \
@@ -123,10 +131,7 @@ static int parse_name(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  if ((top_node = node_alloc(kTypeVariableName, error)) == NULL)
-    return FAIL;
-  next_node = &(top_node->children);
-  *node = top_node;
+  TOP_NODE(kTypeVariableName, error, node, top_node, next_node)
 
   if (parse1_node == NULL) {
     s = *arg;
@@ -225,7 +230,7 @@ static int parse_list(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  UP_NODE(kTypeList, error, node, top_node, next_node)
+  TOP_NODE(kTypeList, error, node, top_node, next_node)
 
   *arg = skipwhite(*arg + 1);
   while (**arg != ']' && **arg != NUL) {
