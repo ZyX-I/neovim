@@ -96,4 +96,6 @@ typedef struct error {
   char_u *position;
 } ExpressionParserError;
 
+ExpressionNode *parse0(char_u *arg);
+
 #endif // NEOVIM_EXPR_H_
