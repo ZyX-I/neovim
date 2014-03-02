@@ -53,7 +53,7 @@ static ExpressionNode *node_alloc(ExpressionType type,
   return node;
 }
 
-static void free_node(ExpressionNode *node)
+void free_node(ExpressionNode *node)
 {
   if (node == NULL)
     return;
@@ -1028,7 +1028,6 @@ static int parse4(char_u **arg,
     // nothing appended: use kCCStrategyUseOption (default)
 
     // Get the second variable.
-    next_node = &((*next_node)->next);
     *arg = skipwhite(p + len);
     if (parse5(arg, next_node, error) == FAIL)
       return FAIL;
