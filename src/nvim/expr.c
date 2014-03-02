@@ -1055,35 +1055,53 @@ static int parse4(char_u **arg,
   return OK;
 }
 
+static int parse3(char_u **arg, ExpressionNode **node,
+                  ExpressionParserError *error);
+
 /*
- * Handle second level expression:
- *	expr3 && expr3 && expr3	    logical AND
+ * Handle second and third level expressions:
+ *	expr3 && expr3 && expr3	    logical AND (level==3)
+ *	expr2 || expr2 || expr2	    logical OR  (level==2)
  *
  * "arg" must point to the first non-white of the expression.
  * "arg" is advanced to the next non-white after the recognized expression.
  *
  * Return OK or FAIL.
  */
-static int parse3(char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error)
+static int parse23(char_u **arg,
+                   ExpressionNode **node,
+                   ExpressionParserError *error,
+                   int level)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
+  ExpressionType type;
+  char_u c;
+  int (*parse_next)(char_u **, ExpressionNode **, ExpressionParserError *);
+
+  if (level == 2) {
+    type = kTypeLogicalOr;
+    parse_next = &parse3;
+    c = '|';
+  } else {
+    type = kTypeLogicalAnd;
+    parse_next = &parse4;
+    c = '&';
+  }
 
   // Get the first variable.
-  if (parse4(arg, node, error) == FAIL)
+  if (parse_next(arg, node, error) == FAIL)
     return FAIL;
 
   // Repeat until there is no following "&&".
-  while ((*arg)[0] == '&' && (*arg)[1] == '&') {
+  while ((*arg)[0] == c && (*arg)[1] == c) {
     if (top_node == NULL)
-      UP_NODE(kTypeLogicalOr, error, node, top_node, next_node)
+      UP_NODE(type, error, node, top_node, next_node)
 
     // Get the second variable.
     *arg = skipwhite(*arg + 2);
-    if (parse4(arg, next_node, error) == FAIL)
+    if (parse_next(arg, next_node, error) == FAIL)
       return FAIL;
     next_node = &((*next_node)->next);
   }
@@ -1091,40 +1109,19 @@ static int parse3(char_u **arg,
   return OK;
 }
 
-/*
- * Handle first level expression:
- *	expr2 || expr2 || expr2	    logical OR
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Return OK or FAIL.
- */
-static int parse2(char_u **arg,
+static int parse3(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionNode *top_node = NULL;
-  ExpressionNode **next_node = node;
+  return parse23(arg, node, error, 3);
+}
 
-  // Get the first variable.
-  if (parse3(arg, node, error) == FAIL)
-    return FAIL;
-
-  // Repeat until there is no following "||".
-  while ((*arg)[0] == '|' && (*arg)[1] == '|') {
-    if (top_node == NULL)
-      UP_NODE(kTypeLogicalAnd, error, node, top_node, next_node)
-
-    // Get the second variable.
-    *arg = skipwhite(*arg + 2);
-    if (parse3(arg, next_node, error) == FAIL)
-      return FAIL;
-    next_node = &((*next_node)->next);
-  }
-
-  return OK;
+static int parse2(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error)
+{
+  return parse23(arg, node, error, 2);
 }
 
 /*
