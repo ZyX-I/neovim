@@ -4,3 +4,4 @@
 eval "$(luarocks path)"
 
 busted --pattern=.moon ./test
+busted --pattern=.lua ./test
