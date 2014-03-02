@@ -385,6 +385,7 @@ static int parse_option(char_u **arg,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   char_u *option_end;
+  char_u *s = *arg;
 
   if ((option_end = find_option_end(arg)) == NULL) {
     error->message = N_("E112: Option name missing");
@@ -392,9 +393,7 @@ static int parse_option(char_u **arg,
     return FAIL;
   }
 
-  VALUE_NODE(kTypeOption, error, node, *arg, option_end)
-
-  *arg = option_end;
+  VALUE_NODE(kTypeOption, error, node, s + 1, option_end)
   return OK;
 }
 
@@ -436,7 +435,7 @@ static int parse_environment_variable(char_u **arg,
   if (e == NULL)
     e = s;
 
-  VALUE_NODE(kTypeEnvironmentVariable, error, node, s, e)
+  VALUE_NODE(kTypeEnvironmentVariable, error, node, s + 1, e)
 
   return OK;
 }
@@ -466,7 +465,7 @@ static int parse_dot_subscript(char_u **arg,
   if ((top_node = node_alloc(kTypeConcatOrSubscript, error)) == NULL)
     return FAIL;
   top_node->children = *node;
-  top_node->position = s;
+  top_node->position = s + 1;
   top_node->end_position = e - 1;
   *node = top_node;
   *arg = e;
