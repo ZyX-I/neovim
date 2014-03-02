@@ -295,7 +295,7 @@ static int parse_dictionary(char_u **arg,
       return NOTDONE;
   }
 
-  if ((top_node = node_alloc(kTypeVariableName, error)) == NULL) {
+  if ((top_node = node_alloc(kTypeDictionary, error)) == NULL) {
     free_node(*parse1_node);
     return FAIL;
   }
