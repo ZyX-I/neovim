@@ -1,4 +1,6 @@
 // vim: ts=8 sts=2 sw=2 tw=80
+//
+// Copyright 2014 Nikolay Pavlov
 
 #ifndef NEOVIM_EXPR_H_
 #define NEOVIM_EXPR_H_
@@ -69,7 +71,7 @@ typedef enum {
 //    ==#  kCCStrategyMatchCase
 //    ==?  kCCStrategyIgnoreCase
 typedef enum {
-  kCCStrategyUseOption = 0, // 0 for alloc_clear
+  kCCStrategyUseOption = 0,  // 0 for alloc_clear
   kCCStrategyMatchCase,
   kCCStrategyIgnoreCase,
 } CaseCompareStrategy;
@@ -100,4 +102,4 @@ typedef struct error {
 # include "expr.h.generated.h"
 #endif
 
-#endif // NEOVIM_EXPR_H_
+#endif  // NEOVIM_EXPR_H_

@@ -5,6 +5,8 @@
 // Do ":help uganda"  in Vim to read copying and usage conditions.
 // Do ":help credits" in Vim to see a list of people who contributed.
 // See README.txt for an overview of the Vim source code.
+//
+// Copyright 2014 Nikolay Pavlov
 
 // expr.c: Expression parsing
 
@@ -85,9 +87,9 @@ static char_u *find_id_end(char_u **arg)
   char_u *p;
 
   // Find the end of the name.
-  for (p = *arg; isnamechar(*p); ++p)
-    ;
-  if (p == *arg) // no name found
+  for (p = *arg; isnamechar(*p); ++p) {
+  }
+  if (p == *arg)  // no name found
     return NULL;
   *arg = p;
   return p - 1;
@@ -301,8 +303,7 @@ static int parse_dictionary(char_u **arg,
       *next_node = *parse1_node;
       *parse1_node = NULL;
       *arg = *parse1_arg;
-    }
-    else if (parse1(arg, next_node, error) == FAIL) {
+    } else if (parse1(arg, next_node, error) == FAIL) {
       return FAIL;
     }
 
@@ -407,8 +408,8 @@ static char_u *find_env_end(char_u **arg)
 {
   char_u *p;
 
-  for (p = *arg; vim_isIDc(*p); ++p)
-    ;
+  for (p = *arg; vim_isIDc(*p); ++p) {
+  }
   if (p == *arg)            /* no name found */
     return NULL;
 
@@ -455,8 +456,8 @@ static int parse_dot_subscript(char_u **arg,
   ExpressionNode *top_node = NULL;
 
   s = *arg;
-  for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; ++e)
-    ;
+  for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; ++e) {
+  }
   if (e == s + 1)
     return OK;
   // XXX Workaround for concat ambiguity
@@ -491,7 +492,7 @@ static int parse_func_call(char_u **arg,
   // Get the arguments.
   argp = *arg;
   while (argcount < MAX_FUNC_ARGS) {
-    argp = skipwhite(argp + 1); // skip the '(' or ','
+    argp = skipwhite(argp + 1);  // skip the '(' or ','
     if (*argp == ')' || *argp == ',' || *argp == NUL)
       break;
     if (parse1(&argp, next_node, error) == FAIL)
@@ -531,7 +532,7 @@ static int parse_subscript(char_u **arg,
   UP_NODE(kTypeSubscript, error, node, top_node, next_node)
 
   // Get the (first) variable from inside the [].
-  *arg = skipwhite(*arg + 1); // skip the '['
+  *arg = skipwhite(*arg + 1);  // skip the '['
   if (**arg == ':')
     VALUE_NODE(kTypeEmptySubscript, error, next_node, *arg, NULL)
   else if (parse1(arg, next_node, error) == FAIL)
@@ -553,7 +554,7 @@ static int parse_subscript(char_u **arg,
     error->position = *arg;
     return FAIL;
   }
-  *arg = skipwhite(*arg + 1); // skip the ']'
+  *arg = skipwhite(*arg + 1);  // skip the ']'
 
   return OK;
 }
@@ -772,8 +773,7 @@ static int parse7(char_u **arg,
       ret = parse1(arg, &((*node)->children), error);
       if (**arg == ')') {
         ++(*arg);
-      }
-      else if (ret == OK) {
+      } else if (ret == OK) {
         error->message = N_("E110: Missing ')'");
         error->position = *arg;
         ret = FAIL;
@@ -1039,9 +1039,8 @@ static int parse4(char_u **arg,
     if (p[len] == '?') {
       top_node->ignore_case = kCCStrategyIgnoreCase;
       ++len;
-    }
     // extra '#' appended: match case
-    else if (p[len] == '#') {
+    } else if (p[len] == '#') {
       top_node->ignore_case = kCCStrategyMatchCase;
       ++len;
     }
@@ -1051,7 +1050,6 @@ static int parse4(char_u **arg,
     *arg = skipwhite(p + len);
     if (parse5(arg, next_node, error) == FAIL)
       return FAIL;
-
   }
 
   return OK;
