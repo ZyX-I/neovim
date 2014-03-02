@@ -533,13 +533,11 @@ static int parse_subscript(char_u **arg,
 
   // Get the (first) variable from inside the [].
   *arg = skipwhite(*arg + 1); // skip the '['
-  if (**arg == ':') {
+  if (**arg == ':')
     VALUE_NODE(kTypeEmptySubscript, error, next_node, *arg, NULL)
-    next_node = &((*next_node)->next);
-  }
-  else if (parse1(arg, next_node, error) == FAIL) {
+  else if (parse1(arg, next_node, error) == FAIL)
     return FAIL;
-  }
+  next_node = &((*next_node)->next);
 
   // Get the second variable from inside the [:].
   if (**arg == ':') {
