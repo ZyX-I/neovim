@@ -45,7 +45,7 @@ local expression_type = {
   'index',
   '.',
   'call',
-  'emptyindex',
+  'empty',
 }
 
 local case_compare_strategy = {
@@ -320,6 +320,21 @@ describe('parse0', function()
   -- it('parses call (def)', function()
     -- eq('call(var[+call+], var[+def+])', p0('call (def)'))
   -- end)
+  it('parses [][1]', function()
+    eq('index([], N[+1+])', p0('[][1]'))
+  end)
+  it('parses [][1:]', function()
+    eq('index([], N[+1+], empty[!]!])', p0('[][1:]'))
+  end)
+  it('parses [][:1]', function()
+    eq('index([], empty[!:!], N[+1+])', p0('[][:1]'))
+  end)
+  it('parses [][:]', function()
+    eq('index([], empty[!:!], empty[!]!])', p0('[][:]'))
+  end)
+  it('parses [][i1 : i2]', function()
+    eq('index([], var[+i1+], var[+i2+])', p0('[][i1 : i2]'))
+  end)
 
   -- SEGV!!!
   -- it('fails to parse <', function()
