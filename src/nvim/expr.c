@@ -605,6 +605,64 @@ static int handle_subscript(char_u **arg,
   return OK;
 }
 
+void find_nr_end(char_u **arg,
+                 ExpressionType *type,
+                 int dooct,             // recognize octal number
+                 int dohex)             // recognize hex number
+{
+  char_u          *ptr = *arg;
+  int n;
+
+  *type = kTypeDecimalNumber;
+
+  if (ptr[0] == '-')
+    ++ptr;
+
+  // Recognize hex and octal.
+  if (ptr[0] == '0' && ptr[1] != '8' && ptr[1] != '9') {
+    if (dohex && (ptr[1] == 'x' || ptr[1] == 'X') && vim_isxdigit(ptr[2])) {
+      *type = kTypeHexNumber;
+      ptr += 2;  // hexadecimal
+    }
+    else {
+      *type = kTypeDecimalNumber;
+      if (dooct) {
+        // Don't interpret "0", "08" or "0129" as octal.
+        for (n = 1; VIM_ISDIGIT(ptr[n]); ++n) {
+          if (ptr[n] > '7') {
+            *type = kTypeDecimalNumber;  // can't be octal
+            break;
+          }
+          if (ptr[n] >= '0')
+            *type = kTypeOctalNumber;  // assume octal
+        }
+      }
+    }
+  }
+  switch (*type) {
+    case kTypeDecimalNumber: {
+      while (VIM_ISDIGIT(*ptr))
+        ++ptr;
+      break;
+    }
+    case kTypeOctalNumber: {
+      while ('0' <= *ptr && *ptr <= '7')
+        ++ptr;
+      break;
+    }
+    case kTypeHexNumber: {
+      while (vim_isxdigit(*ptr))
+        ++ptr;
+      break;
+    }
+    default: {
+      assert (FALSE);
+    }
+  }
+
+  *arg = ptr;
+}
+
 /*
  * Handle sixth level expression:
  *  number		number constant
@@ -667,7 +725,7 @@ static int parse7(char_u **arg,
       s = *arg;
       p = skipdigits(*arg + 1);
       e = p - 1;
-      type = kTypeNumber;
+      type = kTypeDecimalNumber;
 
       /* We accept a float when the format matches
        * "[0-9]\+\.[0-9]\+\([eE][+-]\?[0-9]\+\)\?".  This is very
@@ -682,17 +740,23 @@ static int parse7(char_u **arg,
           if (*p == '-' || *p == '+')
             ++p;
           if (!VIM_ISDIGIT(*p))
-            type = kTypeNumber;
+            type = kTypeDecimalNumber;
           else
             p = skipdigits(p + 1);
         }
         if (ASCII_ISALPHA(*p) || *p == '.')
-          type = kTypeNumber;
-        if (type != kTypeNumber)
+          type = kTypeDecimalNumber;
+        if (type != kTypeDecimalNumber)
           e = p - 1;
       }
+      if (type == kTypeFloat) {
+        *arg = e + 1;
+      }
+      else {
+        find_nr_end(arg, &type, TRUE, TRUE);
+        e = *arg - 1;
+      }
       VALUE_NODE(type, error, node, s, e)
-      *arg = e + 1;
       break;
     }
 

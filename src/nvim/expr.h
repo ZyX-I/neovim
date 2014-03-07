@@ -39,7 +39,9 @@ typedef enum {
   kTypePlus,                  // +
 
   // Simple value nodes
-  kTypeNumber,                // 0
+  kTypeDecimalNumber,         // 0
+  kTypeOctalNumber,           // 0123
+  kTypeHexNumber,             // 0x1C
   kTypeFloat,                 // 0.0, 0.0e0
   kTypeDoubleQuotedString,    // "abc"
   kTypeSingleQuotedString,    // 'abc'
