@@ -20,8 +20,14 @@ static void print_node(int indent, ExpressionNode *node)
     case kTypeConcatOrSubscript: {
       if (name == NULL) name = "kTypeConcatOrSubscript";
     }
-    case kTypeNumber: {
-      if (name == NULL) name = "kTypeNumber";
+    case kTypeDecimalNumber: {
+      if (name == NULL) name = "kTypeDecimalNumber";
+    }
+    case kTypeOctalNumber: {
+      if (name == NULL) name = "kTypeOctalNumber";
+    }
+    case kTypeHexNumber: {
+      if (name == NULL) name = "kTypeHexNumber";
     }
     case kTypeFloat: {
       if (name == NULL) name = "kTypeFloat";
@@ -235,5 +241,19 @@ int vim_strnicmp(char *s1, char *s2, size_t len)
   }
   return 0;                                 /* strings match */
 }
-#endif // COMPILE_TEST_VERSION
 
+/*
+ * Variant of isxdigit() that can handle characters > 0x100.
+ * We don't use isxdigit() here, because on some systems it also considers
+ * superscript 1 to be a digit.
+ */
+int vim_isxdigit(int c)
+{
+  return (c >= '0' && c <= '9')
+         || (c >= 'a' && c <= 'f')
+         || (c >= 'A' && c <= 'F');
+}
+#endif  // COMPILE_TEST_VERSION
+int abc() {
+  return 0;
+}

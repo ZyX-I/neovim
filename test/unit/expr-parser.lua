@@ -29,6 +29,8 @@ local expression_type = {
   '-!',
   '+!',
   'N',
+  'O',
+  'X',
   'F',
   '"',
   '\'',
@@ -105,6 +107,27 @@ describe('parse0', function()
   end)
   it('parses number 110', function()
     eq('N[+110+]', p0('110'))
+  end)
+  it('parses number 01900', function()
+    eq('N[+01900+]', p0('01900'))
+  end)
+  it('parses octal number 010', function()
+    eq('O[+010+]', p0('010'))
+  end)
+  it('parses octal number 0000015', function()
+    eq('O[+0000015+]', p0('0000015'))
+  end)
+  it('parses hex number 0x1C', function()
+    eq('X[+0x1C+]', p0('0x1C'))
+  end)
+  it('parses hex number 0X1C', function()
+    eq('X[+0X1C+]', p0('0X1C'))
+  end)
+  it('parses hex number 0X1c', function()
+    eq('X[+0X1c+]', p0('0X1c'))
+  end)
+  it('parses hex number 0x1c', function()
+    eq('X[+0x1c+]', p0('0x1c'))
   end)
   it('parses float 0.0', function()
     eq('F[+0.0+]', p0('0.0'))
