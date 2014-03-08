@@ -92,8 +92,8 @@ _err = ffi.cast('ExpressionParserError*', _e)
 describe('parse0', function()
   local parse0 = function(str)
     local s = cstr(string.len(str), str)
-    return ffi.gc(expr.parse0_err(s, _err), expr.free_node), _err
-    -- return ffi.gc(expr.parse0(s), expr.free_node), nil
+    return ffi.gc(expr.parse0_err(s, _err), expr.free_expr), _err
+    -- return ffi.gc(expr.parse0(s), expr.free_expr), nil
   end
   local p0 = function(str)
     local parsed, err = parse0(str)

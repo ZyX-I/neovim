@@ -102,6 +102,6 @@ typedef struct error {
 
 ExpressionNode *parse0_err(char_u *arg, ExpressionParserError *error);
 ExpressionNode *parse0(char_u *arg);
-void free_node(ExpressionNode *node);
+void free_expr(ExpressionNode *node);
 
 #endif  // NEOVIM_EXPR_H_
