@@ -64,13 +64,13 @@ static ExpressionNode *node_alloc(ExpressionType type,
   return node;
 }
 
-void free_node(ExpressionNode *node)
+void free_expr(ExpressionNode *node)
 {
   if (node == NULL)
     return;
 
-  free_node(node->children);
-  free_node(node->next);
+  free_expr(node->children);
+  free_expr(node->next);
   vim_free(node);
 }
 
@@ -288,7 +288,7 @@ static int parse_dictionary(char_u **arg,
   if (*start != '}') {
     *parse1_arg = start;
     if (parse1(parse1_arg, parse1_node, error) == FAIL) {
-      free_node(*parse1_node);
+      free_expr(*parse1_node);
       return FAIL;
     }
     if (**parse1_arg == '}')
@@ -296,7 +296,7 @@ static int parse_dictionary(char_u **arg,
   }
 
   if ((top_node = node_alloc(kTypeDictionary, error)) == NULL) {
-    free_node(*parse1_node);
+    free_expr(*parse1_node);
     return FAIL;
   }
   next_node = &(top_node->children);
@@ -1258,7 +1258,7 @@ ExpressionNode *parse0_err(char_u *arg, ExpressionParserError *error)
 
   p = skipwhite(arg);
   if (parse1(&p, &result, error) == FAIL) {
-    free_node(result);
+    free_expr(result);
     return NULL;
   }
 
