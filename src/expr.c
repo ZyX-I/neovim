@@ -20,7 +20,7 @@
 
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = node_alloc(type, error)) == NULL) \
+    if ((top_node = expr_alloc(type, error)) == NULL) \
       return FAIL; \
     next_node = &((*old_top_node)->next); \
     top_node->children = *old_top_node; \
@@ -29,7 +29,7 @@
 
 #define TOP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = node_alloc(type, error)) == NULL) \
+    if ((top_node = expr_alloc(type, error)) == NULL) \
       return FAIL; \
     next_node = &(top_node->children); \
     *old_top_node = top_node; \
@@ -37,7 +37,7 @@
 
 #define VALUE_NODE(type, error, node, pos, end_pos) \
   { \
-    if ((*node = node_alloc(type, error)) == NULL) \
+    if ((*node = expr_alloc(type, error)) == NULL) \
       return FAIL; \
     (*node)->position = pos; \
     (*node)->end_position = end_pos; \
@@ -51,7 +51,7 @@ static int parse1(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
 
-static ExpressionNode *node_alloc(ExpressionType type,
+static ExpressionNode *expr_alloc(ExpressionType type,
                                   ExpressionParserError *error)
 {
   ExpressionNode *node;
@@ -288,7 +288,7 @@ static int parse_dictionary(char_u **arg,
       return NOTDONE;
   }
 
-  if ((top_node = node_alloc(kTypeDictionary, error)) == NULL) {
+  if ((top_node = expr_alloc(kTypeDictionary, error)) == NULL) {
     free_expr(*parse1_node);
     return FAIL;
   }
@@ -461,7 +461,7 @@ static int parse_dot_subscript(char_u **arg,
   // XXX Workaround for concat ambiguity: s:autoload#var
   if (*e == AUTOLOAD_CHAR)
     return OK;
-  if ((top_node = node_alloc(kTypeConcatOrSubscript, error)) == NULL)
+  if ((top_node = expr_alloc(kTypeConcatOrSubscript, error)) == NULL)
     return FAIL;
   top_node->children = *node;
   top_node->position = s + 1;
@@ -877,7 +877,7 @@ static int parse7(char_u **arg,
           break;
         }
       }
-      if ((top_node = node_alloc(type, error)) == NULL)
+      if ((top_node = expr_alloc(type, error)) == NULL)
         return FAIL;
       top_node->children = *node;
       *node = top_node;
