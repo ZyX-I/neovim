@@ -608,8 +608,7 @@ void find_nr_end(char_u **arg,
     if (dohex && (ptr[1] == 'x' || ptr[1] == 'X') && vim_isxdigit(ptr[2])) {
       *type = kTypeHexNumber;
       ptr += 2;  // hexadecimal
-    }
-    else {
+    } else {
       *type = kTypeDecimalNumber;
       if (dooct) {
         // Don't interpret "0", "08" or "0129" as octal.
@@ -641,7 +640,7 @@ void find_nr_end(char_u **arg,
       break;
     }
     default: {
-      assert (FALSE);
+      assert(FALSE);
     }
   }
 
@@ -735,8 +734,7 @@ static int parse7(char_u **arg,
       }
       if (type == kTypeFloat) {
         *arg = e + 1;
-      }
-      else {
+      } else {
         find_nr_end(arg, &type, TRUE, TRUE);
         e = *arg - 1;
       }

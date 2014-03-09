@@ -2,8 +2,8 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_EXPR_H_
-#define NEOVIM_EXPR_H_
+#ifndef NEOVIM_EXPR_H
+#define NEOVIM_EXPR_H
 
 #include "types.h"
 
@@ -104,4 +104,4 @@ ExpressionNode *parse0_err(char_u *arg, ExpressionParserError *error);
 ExpressionNode *parse0(char_u *arg);
 void free_expr(ExpressionNode *node);
 
-#endif  // NEOVIM_EXPR_H_
+#endif  // NEOVIM_EXPR_H
