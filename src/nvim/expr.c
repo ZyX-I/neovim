@@ -1127,9 +1127,6 @@ static int parse4(char_u **arg,
   return OK;
 }
 
-static int parse3(char_u **arg, ExpressionNode **node,
-                  ExpressionParserError *error);
-
 /*
  * Handle second and third level expressions:
  *	expr3 && expr3 && expr3	    logical AND (level==3)

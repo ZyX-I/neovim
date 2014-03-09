@@ -12,8 +12,9 @@
 # undef DO_DECLARE_EXCMD
 #endif
 #include <stdint.h>
-#include "ex_cmds_defs.h"
-#include "types.h"
+#include "nvim/ex_cmds_defs.h"
+#include "nvim/types.h"
+#include "nvim/expr.h"
 
 
 // :argadd/:argd
@@ -64,7 +65,7 @@ typedef struct command_node {
       int *numbers;
       char_u ch;
       char_u *str;
-      char_u **lines;
+      char_u **strs;
       Pattern *pat;
       Glob *glob;
       Regex *reg;
@@ -73,16 +74,18 @@ typedef struct command_node {
       MenuItem *menu_item;
       Address *address;
       CmdComplete *complete;
-      struct {
+      ExpressionNode *expr;
+      struct command_subargs {
         unsigned type;
         size_t num_args;
         struct command_argument *args;
-      } *args;
+      } args;
     } arg;
-  } *args;
+  } args[1];
 } CommandNode;
 
 typedef struct command_argument CommandArg;
+typedef struct command_subargs  CommandSubArgs;
 
 typedef struct {
   int nl_in_cmd;  // Allow commands like :normal to accept nl as their part
@@ -96,5 +99,9 @@ typedef struct {
 } CommandParserError;
 
 typedef char_u *(*line_getter)(int, void *, int);
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "cmd.h.generated.h"
+#endif
 
 #endif  // NEOVIM_CMD_H

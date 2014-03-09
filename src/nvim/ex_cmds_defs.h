@@ -69,7 +69,7 @@
 #define WORD1   (EXTRA | NOSPC) /* one extra word allowed */
 #define FILE1   (FILES | NOSPC) /* 1 file allowed, defaults to current file */
 
-#ifndef DO_DECLARE_EXCMD
+#if !defined(DO_DECLARE_EXCMD) && !defined(DO_DECLARE_EXCMD_NOFUNC)
 typedef struct exarg exarg_T;
 #endif
 
@@ -84,19 +84,29 @@ typedef struct exarg exarg_T;
 #ifdef EX
 # undef EX          /* just in case */
 #endif
-#ifdef DO_DECLARE_EXCMD
-# define EX(idx, name, func, last_arg, args, flags) \
-    {(char_u *)name, \
-     func, \
-     (long_u)(flags), \
-     last_arg + 1, \
-     (CommandArgType[]) args}
+#if defined(DO_DECLARE_EXCMD) || defined(DO_DECLARE_EXCMD_NOFUNC)
+# ifdef DO_DECLARE_EXCMD_NOFUNC
+#  define EX(idx, name, func, last_arg, args, flags) \
+     {(char_u *)name, \
+      (long_u)(flags), \
+      last_arg + 1, \
+      (CommandArgType[]) args}
+# else
+#  define EX(idx, name, func, last_arg, args, flags) \
+     {(char_u *)name, \
+      func, \
+      (long_u)(flags), \
+      last_arg + 1, \
+      (CommandArgType[]) args}
+# endif
 
 typedef void (*ex_func_T)(exarg_T *eap);
 
 static struct cmdname {
   char_u      *cmd_name;      // name of the command
+# ifndef DO_DECLARE_EXCMD_NOFUNC
   ex_func_T cmd_func;         // function for this command
+# endif
   long_u cmd_argt;            // flags declared above
   size_t num_args;            // number of arguments
   CommandArgType *arg_types;  // argument types
@@ -1606,7 +1616,7 @@ enum CMD_index
      ARG_S_FLAGS, ARGS_S,
      RANGE|WHOLEFOLD|EXTRA|CMDWIN|MODIFY),
 
-#ifndef DO_DECLARE_EXCMD
+#if !defined(DO_DECLARE_EXCMD) && !defined(DO_DECLARE_EXCMD_NOFUNC)
   CMD_SIZE,             /* MUST be after all real commands! */
   CMD_USER = -1,        /* User-defined command */
   CMD_USER_BUF = -2     /* User-defined command local to buffer */
@@ -1615,7 +1625,7 @@ enum CMD_index
 
 #define USER_CMDIDX(idx) ((int)(idx) < 0)
 
-#ifndef DO_DECLARE_EXCMD
+#if !defined(DO_DECLARE_EXCMD) && !defined(DO_DECLARE_EXCMD_NOFUNC)
 typedef enum CMD_index cmdidx_T;
 
 /*
