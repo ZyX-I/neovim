@@ -35,6 +35,7 @@
 #include "message.h"
 #include "misc2.h"
 #include "garray.h"
+#include "keymap.h"
 #include "move.h"
 #include "normal.h"
 #include "option.h"
@@ -44,6 +45,7 @@
 #include "syntax.h"
 #include "ui.h"
 #include "window.h"
+#include "os/os.h"
 
 #ifdef HAVE_TGETENT
 # ifdef HAVE_TERMIOS_H
@@ -2020,7 +2022,7 @@ void termcapinit(char_u *name)
   term = name;
 
   if (term == NULL)
-    term = mch_getenv((char_u *)"TERM");
+    term = (char_u *)mch_getenv("TERM");
   if (term == NULL || *term == NUL)
     term = DEFAULT_TERM;
   set_string_option_direct((char_u *)"term", -1, term, OPT_FREE, 0);

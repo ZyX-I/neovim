@@ -53,6 +53,8 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "keymap.h"
+#include "crypt.h"
 #include "garray.h"
 #include "move.h"
 #include "normal.h"
@@ -65,6 +67,7 @@
 #include "ui.h"
 #include "undo.h"
 #include "window.h"
+#include "os/os.h"
 
 /*
  * The options that are local to a window or buffer have "indir" set to one of
@@ -1410,11 +1413,7 @@ static struct vimoption
   {"shellxquote", "sxq",  P_STRING|P_VI_DEF|P_SECURE,
    (char_u *)&p_sxq, PV_NONE,
    {
-#if defined(UNIX) && defined(USE_SYSTEM) && !defined(__EMX__)
-     (char_u *)"\"",
-#else
      (char_u *)"",
-#endif
      (char_u *)0L
    } SCRIPTID_INIT},
   {"shellxescape", "sxe", P_STRING|P_VI_DEF|P_SECURE,
@@ -1963,7 +1962,7 @@ void set_init_1(void)          {
   p_cp = TRUE;
 
   /* Use POSIX compatibility when $VIM_POSIX is set. */
-  if (mch_getenv((char_u *)"VIM_POSIX") != NULL) {
+  if (mch_getenv("VIM_POSIX") != NULL) {
     set_string_default("cpo", (char_u *)CPO_ALL);
     set_string_default("shm", (char_u *)"A");
   }
@@ -1972,7 +1971,7 @@ void set_init_1(void)          {
    * Find default value for 'shell' option.
    * Don't use it if it is empty.
    */
-  if (((p = mch_getenv((char_u *)"SHELL")) != NULL && *p != NUL)
+  if (((p = (char_u *)mch_getenv("SHELL")) != NULL && *p != NUL)
       )
     set_string_default("sh", p);
 
@@ -2172,7 +2171,7 @@ void set_init_1(void)          {
    * NOTE: mlterm's author is being asked to 'set' a variable
    *       instead of an environment variable due to inheritance.
    */
-  if (mch_getenv((char_u *)"MLTERM") != NULL)
+  if (mch_getenv("MLTERM") != NULL)
     set_option_value((char_u *)"tbidi", 1L, NULL, 0);
 
   /* Parse default for 'fillchars'. */
@@ -2449,7 +2448,7 @@ static char_u *term_bg_default(void)                     {
       || STRCMP(T_NAME, "screen.linux") == 0
       || STRCMP(T_NAME, "cygwin") == 0
       || STRCMP(T_NAME, "putty") == 0
-      || ((p = mch_getenv((char_u *)"COLORFGBG")) != NULL
+      || ((p = (char_u *)mch_getenv("COLORFGBG")) != NULL
           && (p = vim_strrchr(p, ';')) != NULL
           && ((p[1] >= '0' && p[1] <= '6') || p[1] == '8')
           && p[2] == NUL))

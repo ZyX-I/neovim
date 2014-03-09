@@ -92,12 +92,14 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "crypt.h"
 #include "garray.h"
 #include "option.h"
 #include "os_unix.h"
 #include "quickfix.h"
 #include "screen.h"
 #include "sha256.h"
+#include "os/os.h"
 
 static long get_undolevel(void);
 static void u_unch_branch(u_header_T *uhp);

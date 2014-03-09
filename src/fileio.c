@@ -31,6 +31,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "crypt.h"
 #include "garray.h"
 #include "move.h"
 #include "option.h"
@@ -4769,7 +4770,7 @@ void shorten_fnames(int force)
         && !path_with_url(buf->b_fname)
         && (force
             || buf->b_sfname == NULL
-            || mch_is_full_name(buf->b_sfname))) {
+            || mch_is_absolute_path(buf->b_sfname))) {
       vim_free(buf->b_sfname);
       buf->b_sfname = NULL;
       p = shorten_fname(buf->b_ffname, dirname);

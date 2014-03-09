@@ -45,11 +45,6 @@
 #include "undo.h"
 #include "window.h"
 #include "os/os.h"
-
-#ifdef HAVE_CRT_EXTERNS_H
-#include <crt_externs.h>
-#endif
-
 static char_u *vim_version_dir(char_u *vimdir);
 static char_u *remove_tail(char_u *p, char_u *pend, char_u *name);
 static void init_users(void);
@@ -2727,7 +2722,7 @@ void init_homedir(void)          {
   vim_free(homedir);
   homedir = NULL;
 
-  var = mch_getenv((char_u *)"HOME");
+  var = (char_u *)mch_getenv("HOME");
 
   if (var != NULL && *var == NUL)       /* empty is same as not set */
     var = NULL;
@@ -3052,7 +3047,7 @@ char_u *vim_getenv(char_u *name, int *mustfree)
   int vimruntime;
 
 
-  p = mch_getenv(name);
+  p = (char_u *)mch_getenv((char *)name);
   if (p != NULL && *p == NUL)       /* empty is the same as not set */
     p = NULL;
 
@@ -3073,7 +3068,7 @@ char_u *vim_getenv(char_u *name, int *mustfree)
       && *default_vimruntime_dir == NUL
 #endif
       ) {
-    p = mch_getenv((char_u *)"VIM");
+    p = (char_u *)mch_getenv("VIM");
     if (p != NULL && *p == NUL)             /* empty is the same as not set */
       p = NULL;
     if (p != NULL) {
@@ -3081,7 +3076,7 @@ char_u *vim_getenv(char_u *name, int *mustfree)
       if (p != NULL)
         *mustfree = TRUE;
       else
-        p = mch_getenv((char_u *)"VIM");
+        p = (char_u *)mch_getenv("VIM");
 
     }
   }
@@ -3223,21 +3218,7 @@ static char_u *remove_tail(char_u *p, char_u *pend, char_u *name)
  */
 void vim_setenv(char_u *name, char_u *val)
 {
-#ifdef HAVE_SETENV
   mch_setenv((char *)name, (char *)val, 1);
-#else
-  char_u      *envbuf;
-
-  /*
-   * Putenv does not copy the string, it has to remain
-   * valid.  The allocated memory will never be freed.
-   */
-  envbuf = alloc((unsigned)(STRLEN(name) + STRLEN(val) + 2));
-  if (envbuf != NULL) {
-    sprintf((char *)envbuf, "%s=%s", name, val);
-    putenv((char *)envbuf);
-  }
-#endif
   /*
    * When setting $VIMRUNTIME adjust the directory to find message
    * translations to $VIMRUNTIME/lang.
@@ -3258,35 +3239,17 @@ void vim_setenv(char_u *name, char_u *val)
  */
 char_u *get_env_name(expand_T *xp, int idx)
 {
-# if defined(AMIGA) || defined(__MRC__) || defined(__SC__)
-  /*
-   * No environ[] on the Amiga and on the Mac (using MPW).
-   */
-  return NULL;
-# else
-# if !defined(__WIN32__) && !defined(HAVE__NSGETENVIRON)
-  /* Borland C++ 5.2 has this in a header file. */
-  extern char         **environ;
-# else
-  char **environ = *_NSGetEnviron();
-# endif
 # define ENVNAMELEN 100
+  // this static buffer is needed to avoid a memory leak in ExpandGeneric
   static char_u name[ENVNAMELEN];
-  char_u              *str;
-  int n;
-
-  str = (char_u *)environ[idx];
-  if (str == NULL)
+  char *envname = mch_getenvname_at_index(idx);
+  if (envname) {
+    vim_strncpy(name, (char_u *)envname, ENVNAMELEN - 1);
+    vim_free(envname);
+    return name;
+  } else {
     return NULL;
-
-  for (n = 0; n < ENVNAMELEN - 1; ++n) {
-    if (str[n] == '=' || str[n] == NUL)
-      break;
-    name[n] = str[n];
   }
-  name[n] = NUL;
-  return name;
-# endif
 }
 
 /*
@@ -3396,7 +3359,7 @@ home_replace (
   if (homedir != NULL)
     dirlen = STRLEN(homedir);
 
-  homedir_env_orig = homedir_env = mch_getenv((char_u *)"HOME");
+  homedir_env_orig = homedir_env = (char_u *)mch_getenv("HOME");
   /* Empty is the same as not set. */
   if (homedir_env != NULL && *homedir_env == NUL)
     homedir_env = NULL;
@@ -7945,7 +7908,7 @@ static void expand_path_option(char_u *curdir, garray_T *gap)
     else if (path_with_url(buf))
       /* URL can't be used here */
       continue;
-    else if (!mch_is_full_name(buf)) {
+    else if (!mch_is_absolute_path(buf)) {
       /* Expand relative path to their full path equivalent */
       len = (int)STRLEN(curdir);
       if (len + (int)STRLEN(buf) + 3 > MAXPATHL)
@@ -8086,7 +8049,7 @@ static void uniquefy_paths(garray_T *gap, char_u *pattern)
         break;
       }
 
-    if (mch_is_full_name(path)) {
+    if (mch_is_absolute_path(path)) {
       /*
        * Last resort: shorten relative to curdir if possible.
        * 'possible' means:
@@ -8375,7 +8338,7 @@ gen_expand_wildcards (
        */
       if (mch_has_exp_wildcard(p)) {
         if ((flags & EW_PATH)
-            && !mch_is_full_name(p)
+            && !mch_is_absolute_path(p)
             && !(p[0] == '.'
                  && (vim_ispathsep(p[1])
                      || (p[1] == '.' && vim_ispathsep(p[2]))))

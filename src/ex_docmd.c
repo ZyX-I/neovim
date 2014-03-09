@@ -37,6 +37,8 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "keymap.h"
+#include "crypt.h"
 #include "file_search.h"
 #include "garray.h"
 #include "move.h"

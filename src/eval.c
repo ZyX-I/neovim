@@ -34,6 +34,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "keymap.h"
 #include "file_search.h"
 #include "garray.h"
 #include "move.h"
@@ -4514,7 +4515,7 @@ eval7 (
          * get_func_tv, but it's needed in handle_subscript() to parse
          * what follows. So set it here. */
         if (rettv->v_type == VAR_UNKNOWN && !evaluate && **arg == '(') {
-          rettv->vval.v_string = vim_strsave((char_u *)"");
+          rettv->vval.v_string = (char_u *)"";
           rettv->v_type = VAR_FUNC;
         }
 
@@ -8551,7 +8552,7 @@ static void f_exists(typval_T *argvars, typval_T *rettv)
   p = get_tv_string(&argvars[0]);
   if (*p == '$') {                      /* environment variable */
     /* first try "normal" environment variables (fast) */
-    if (mch_getenv(p + 1) != NULL)
+    if (mch_getenv((char *)(p + 1)) != NULL)
       n = TRUE;
     else {
       /* try expanding things like $VIM and ${HOME} */
@@ -10243,7 +10244,7 @@ static void f_has(typval_T *argvars, typval_T *rettv)
     "find_in_path",
     "float",
     "folding",
-#if !defined(USE_SYSTEM) && defined(UNIX)
+#if defined(UNIX)
     "fork",
 #endif
     "gettext",
@@ -10299,7 +10300,7 @@ static void f_has(typval_T *argvars, typval_T *rettv)
     "statusline",
     "spell",
     "syntax",
-#if defined(USE_SYSTEM) || !defined(UNIX)
+#if !defined(UNIX)
     "system",
 #endif
     "tag_binary",
@@ -12467,7 +12468,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
           q[-1] = NUL;
           q = gettail(p);
         }
-        if (q > p && !mch_is_full_name(buf)) {
+        if (q > p && !mch_is_absolute_path(buf)) {
           /* symlink is relative to directory of argument */
           cpy = alloc((unsigned)(STRLEN(p) + STRLEN(buf) + 1));
           if (cpy != NULL) {

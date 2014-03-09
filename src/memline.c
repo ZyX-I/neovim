@@ -55,6 +55,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "crypt.h"
 #include "option.h"
 #include "os_unix.h"
 #include "screen.h"
@@ -3381,7 +3382,7 @@ int resolve_symlink(char_u *fname, char_u *buf)
      * portion of the filename (if any) and the path the symlink
      * points to.
      */
-    if (mch_is_full_name(buf))
+    if (mch_is_absolute_path(buf))
       STRCPY(tmp, buf);
     else {
       char_u *tail;

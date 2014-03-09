@@ -23,12 +23,14 @@
 #include "mbyte.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "keymap.h"
 #include "garray.h"
 #include "ops.h"
 #include "option.h"
 #include "screen.h"
 #include "term.h"
 #include "ui.h"
+#include "os/os.h"
 
 #if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
 # include <math.h>
@@ -735,11 +737,11 @@ int delete_first_msg(void)         {
 void ex_messages(exarg_T *eap)
 {
   struct msg_hist *p;
-  char_u          *s;
+  const char      *s;
 
   msg_hist_off = TRUE;
 
-  s = mch_getenv((char_u *)"LANG");
+  s = mch_getenv("LANG");
   if (s != NULL && *s != NUL)
     msg_attr((char_u *)
         _("Messages maintainer: Bram Moolenaar <Bram@vim.org>"),

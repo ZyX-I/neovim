@@ -3,5 +3,8 @@
 (cd "$pkgroot/build" && make) || exit 1
 eval "$(luarocks path)"
 
-busted --pattern=.moon ./test
-busted --pattern=.lua ./test
+if [ -z "$BUSTED_OUTPUT_TYPE" ]; then
+    export BUSTED_OUTPUT_TYPE="utf_terminal"
+fi
+busted --pattern=.moon -o $BUSTED_OUTPUT_TYPE ./test
+busted --pattern=.lua  -o $BUSTED_OUTPUT_TYPE ./test
