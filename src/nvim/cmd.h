@@ -2,8 +2,8 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_CMD_H_
-#define NEOVIM_CMD_H_
+#ifndef NEOVIM_CMD_H
+#define NEOVIM_CMD_H
 
 #ifdef DO_DECLARE_EXCMD
 # undef DO_DECLARE_EXCMD
@@ -11,9 +11,9 @@
 #ifdef DO_DECLARE_EXCMD
 # undef DO_DECLARE_EXCMD
 #endif
+#include <stdint.h>
 #include "ex_cmds_defs.h"
 #include "types.h"
-#include <stdint.h>
 
 
 // :argadd/:argd
@@ -63,7 +63,7 @@ typedef struct command_node {
       int number;
       int *numbers;
       char_u ch;
-      char_u *string;
+      char_u *str;
       char_u **lines;
       Pattern *pat;
       Glob *glob;
@@ -97,4 +97,4 @@ typedef struct {
 
 typedef char_u *(*line_getter)(int, void *, int);
 
-#endif  // NEOVIM_CMD_H_
+#endif  // NEOVIM_CMD_H

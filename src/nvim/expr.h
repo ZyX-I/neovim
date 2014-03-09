@@ -2,8 +2,8 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_EXPR_H_
-#define NEOVIM_EXPR_H_
+#ifndef NEOVIM_EXPR_H
+#define NEOVIM_EXPR_H
 
 #include "nvim/types.h"
 
@@ -104,4 +104,4 @@ typedef struct error {
 # include "expr.h.generated.h"
 #endif
 
-#endif  // NEOVIM_EXPR_H_
+#endif  // NEOVIM_EXPR_H
