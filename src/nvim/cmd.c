@@ -118,7 +118,7 @@ static void free_range_data(Range *range)
 
 static void free_cmd_arg(CommandArg *arg, CommandArgType type)
 {
-  switch(type) {
+  switch (type) {
     case kArgCommand: {
       free_cmd(arg->arg.cmd);
       break;
@@ -167,7 +167,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       char_u *s = *(arg->arg.strs);
       while (s != NULL) {
         vim_free(s);
-        ++s;
+        s++;
       }
       vim_free(arg->arg.strs);
       break;
@@ -226,7 +226,7 @@ static int checkforcmd(char_u **pp, /* start of command */
 {
   int i;
 
-  for (i = 0; cmd[i] != NUL; ++i)
+  for (i = 0; cmd[i] != NUL; i++)
     if (((char_u *)cmd)[i] != (*pp)[i])
       break;
 
@@ -250,11 +250,11 @@ static int get_pattern(char_u **pp, CommandParserError *error, Regex **target)
     if (*p == '\\' && p[1] != NUL)
       p += 2;
     else
-      ++p;
+      p++;
   }
 
   if (*p != NUL)
-    ++p;
+    p++;
 
   if ((*target = vim_strnsave(s, p - s)) == NULL)
     return FAIL;
@@ -281,17 +281,17 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
   switch (*p) {
     case '.': {
       address->type = kAddrCurrent;
-      ++p;
+      p++;
       break;
     }
     case '$': {
       address->type = kAddrEnd;
-      ++p;
+      p++;
       break;
     }
     case '\'': {
       address->type = kAddrMark;
-      ++p;
+      p++;
       if (*p == NUL) {
         // FIXME proper message
         error->message = (char_u *)"expected mark name, but got nothing";
@@ -299,13 +299,13 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
         return FAIL;
       }
       address->data.mark = *p;
-      ++p;
+      p++;
       break;
     }
     case '/':
     case '?': {
       char_u c = *p;
-      ++p;
+      p++;
       if (c == '/')
         address->type = kAddrForwardSearch;
       else
@@ -315,7 +315,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
       break;
     }
     case '\\': {
-      ++p;
+      p++;
       switch (*p) {
         case '&': {
           address->type = kAddrSubstituteSearch;
@@ -396,7 +396,7 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
     }
   }
   if (type != kAddressFollowupMissing) {
-    ++p;
+    p++;
     if ((fw = address_followup_alloc(type)) == NULL)
       return FAIL;
     if (type == kAddressFollowupForwardPattern ||
@@ -464,7 +464,7 @@ static int parse_one_cmd(char_u **pp,
     // 1. skip comment lines and leading white space and colons
     p = *pp;
     while (*p == ' ' || *p == '\t' || *p == ':')
-      ++p;
+      p++;
     // FIXME investigate WTF was this:
     // in ex mode, an empty line works like :+
     if (*p == NUL /*&& exmode_active && getline_equal(…)*/)
@@ -473,7 +473,7 @@ static int parse_one_cmd(char_u **pp,
     if (*p == '"') {
       if ((*next_node = cmd_alloc(kCmdComment)) == NULL)
         return FAIL;
-      ++p;
+      p++;
       len = STRLEN(p);
       (*next_node)->args[0].arg.str = vim_strnsave(p, len);
       *pp = p + len;
