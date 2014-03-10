@@ -6,28 +6,31 @@
 #define NEOVIM_CMD_ARG_CONSTANTS_H_
 
 typedef enum {
-  kArgCommand,      // :vertical {cmd}, :bufdo {cmd}, :e +{cmd}
-  kArgExpression,   // :let a={expr}
-  kArgExpressions,  // :echo {expr1}[ {expr2}]
-  kArgFlags,        // :map {<nowait><expr><buffer><silent><unique>}
-  kArgNumber,       // :sign place {id} line={lnum} name=name buffer={nr}
-  kArgNumbers,      // :dig e: {num1} a: {num2}
-  kArgString,       // :sign place 10 line=11 name={name} buffer=1
+  kArgCommand,       // :vertical {cmd}, :bufdo {cmd}, :e +{cmd}
+  kArgExpression,    // :let a={expr}
+  kArgExpressions,   // :echo {expr1}[ {expr2}]
+  kArgFlags,         // :map {<nowait><expr><buffer><silent><unique>}
+  kArgNumber,        // :sign place {id} line={lnum} name=name buffer={nr}
+  kArgNumbers,       // :dig e: {num1} a: {num2}
+  kArgString,        // :sign place 10 line=11 name={name} buffer=1
   // Note the difference: you cannot use backtics in :autocmd, but can in :e
-  kArgPattern,      // :autocmd BufEnter {pattern} :echo 'HERE'
-  kArgGlob,         // :e {glob}
-  kArgRegex,        // :s/{reg}/\="abc"/g
-  kArgReplacement,  // :s/.*/{repl}/g
-  kArgLines,        // :py << EOF\n{str}\n{str2}EOF, :append\n{str}\n.
-  kArgStrings,      // :cscope add cscope.out /usr/local/vim {str1}[ {str2}]
-  kArgAssignLhs,    // :let {lhs} = [1, 2]
-  kArgMenuName,     // :amenu File.Edit :browse edit<CR>
-  kArgAuEvent,      // :doau {event}
-  kArgAuEvents,     // :au {event1}[,{event2}] * :echo 'HERE'
-  kArgAddress,      // :copy {address}
-  kArgCmdComplete,  // :command -complete={complete}
-  kArgArgs,         // for commands with subcommands
-  kArgChar,         // :mark {char}
+  kArgPattern,       // :autocmd BufEnter {pattern} :echo 'HERE'
+  kArgGlob,          // :e {glob}
+  kArgRegex,         // :s/{reg}/\="abc"/g
+  kArgReplacement,   // :s/.*/{repl}/g
+  kArgLines,         // :py << EOF\n{str}\n{str2}EOF, :append\n{str}\n.
+  kArgStrings,       // :cscope add cscope.out /usr/local/vim {str1}[ {str2}]
+  kArgAssignLhs,     // :let {lhs} = [1, 2]
+  kArgMenuName,      // :amenu File.Edit :browse edit<CR>
+  kArgAuEvent,       // :doau {event}
+  kArgAuEvents,      // :au {event1}[,{event2}] * :echo 'HERE'
+  kArgAddress,       // :copy {address}
+  kArgCmdComplete,   // :command -complete={complete}
+  kArgArgs,          // for commands with subcommands
+  kArgChar,          // :mark {char}
+  kArgLine,          // line number: used for syntax errors
+  kArgColumn,        // column number: used for syntax errors
+  kArgStaticString,  // non-freeable string: used for syntax errors
 } CommandArgType;
 
 #define ARGS_NO       {0}
@@ -89,6 +92,7 @@ typedef enum {
 #define ARGS_WINSIZE  {kArgFlags, kArgFlags}
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_WQA      {kArgFlags, kArgString}
+#define ARGS_ERROR    {kArgLine, kArgColumn, kArgStaticString, kArgString}
 
 // ++opt flags
 #define FLAG_OPT_FF_MASK    0x03
@@ -509,5 +513,11 @@ typedef enum {
 // :wqall
 #define ARG_WQA_OPT        0
 #define ARG_WQA_ENC        1
+
+// syntax error
+#define ARG_ERROR_LINE     0
+#define ARG_ERROR_COLUMN   1
+#define ARG_ERROR_MESSAGE  2
+#define ARG_ERROR_LINESTR  3
 
 #endif  // NEOVIM_CMD_ARG_CONSTANTS_H_

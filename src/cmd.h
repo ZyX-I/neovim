@@ -12,7 +12,7 @@
 # undef DO_DECLARE_EXCMD
 #endif
 #include <stdint.h>
-#include "ex_cmds_defs.h"
+#include "cmd_def.h"
 #include "types.h"
 #include "expr.h"
 
@@ -20,17 +20,58 @@
 // :argadd/:argd
 #define ARG_NAME_FILES     0
 
-typedef cmdidx_T CommandType;
-
 // FIXME
-typedef char_u * Pattern;
-typedef char_u * Glob;
-typedef char_u * Regex;
-typedef char_u * Address;
+typedef char_u Pattern;
+typedef char_u Glob;
+typedef char_u Regex;
 typedef int AuEvent;
 typedef int CmdCompleteType;
 
-typedef Address* Range[2];
+typedef enum {
+  kAddrMissing = 0,             // No address
+  kAddrFixed,                   // Fixed line: 1, 10, …
+  kAddrEnd,                     // End of file: $
+  kAddrCurrent,                 // Current line: .
+  kAddrMark,                    // Mark: 't, 'T
+  kAddrForwardSearch,           // Forward search: /pattern/
+  kAddrBackwardSearch,          // Backward search: ?pattern?
+  kAddrForwardPreviousSearch,   // Forward search with old pattern: \/
+  kAddrBackwardPreviousSearch,  // Backward search with old pattern: \?
+  kAddrSubstituteSearch,        // Search with old substitute pattern: \&
+} AddressType;
+
+typedef struct {
+  AddressType type;
+  union {
+    Regex *regex;
+    char_u mark;
+    linenr_T line;
+  } data;
+} Address;
+
+typedef enum {
+  kAddressFollowupMissing = 0,      // No folowup
+  kAddressFollowupForwardPattern,   // 10/abc/
+  kAddressFollowupBackwardPattern,  // 10/abc/
+  kAddressFollowupShift,            // /abc/+10
+} AddressFollowupType;
+
+typedef struct address_followup {
+  AddressFollowupType type;
+  union {
+    int shift;
+    Regex *regex;
+  } data;
+  struct address_followup *next;
+} AddressFollowup;
+
+typedef struct {
+  Address start;
+  Address end;
+  AddressFollowup *start_followups;
+  AddressFollowup *end_followups;
+  int setpos;                        // , vs ;
+} Range;
 
 typedef struct menu_item {
   char_u *name;               // NULL for :unmenu *
@@ -47,7 +88,7 @@ typedef struct command_node {
   CommandType type;
   struct command_node *next;
   size_t num_args;
-  Range *range;               // sometimes used for count
+  Range range;               // sometimes used for count
   union {
     int count;
     int bufnr;
@@ -55,9 +96,8 @@ typedef struct command_node {
   } arg;
   int bang;                   // :cmd!
   struct command_argument {
-    CommandArgType type;
     union {
-      struct command_node *command;
+      struct command_node *cmd;
       // least32 is essential to hold 24-bit color and additional 4 flag bits 
       // for :hi guifg/guibg/guisp
       uint_least32_t flags;
@@ -78,8 +118,11 @@ typedef struct command_node {
       struct command_subargs {
         unsigned type;
         size_t num_args;
+        CommandArgType *types;
         struct command_argument *args;
       } args;
+      linenr_T line;
+      colnr_T col;
     } arg;
   } args[1];
 } CommandNode;
@@ -92,9 +135,7 @@ typedef struct {
 } CommandParserOptions;
 
 typedef struct {
-  char_u *file;
-  size_t linenr;
-  size_t offset;
+  char_u *position;
   char_u *message;
 } CommandParserError;
 
