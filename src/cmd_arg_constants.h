@@ -28,9 +28,7 @@ typedef enum {
   kArgCmdComplete,   // :command -complete={complete}
   kArgArgs,          // for commands with subcommands
   kArgChar,          // :mark {char}
-  kArgLine,          // line number: used for syntax errors
-  kArgColumn,        // column number: used for syntax errors
-  kArgStaticString,  // non-freeable string: used for syntax errors
+  kArgPosition,      // error position
 } CommandArgType;
 
 #define ARGS_NO       {0}
@@ -92,7 +90,7 @@ typedef enum {
 #define ARGS_WINSIZE  {kArgFlags, kArgFlags}
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_WQA      {kArgFlags, kArgString}
-#define ARGS_ERROR    {kArgLine, kArgColumn, kArgStaticString, kArgString}
+#define ARGS_ERROR    {kArgPosition, kArgString}
 
 // ++opt flags
 #define FLAG_OPT_FF_MASK    0x03
@@ -515,9 +513,7 @@ typedef enum {
 #define ARG_WQA_ENC        1
 
 // syntax error
-#define ARG_ERROR_LINE     0
-#define ARG_ERROR_COLUMN   1
-#define ARG_ERROR_MESSAGE  2
-#define ARG_ERROR_LINESTR  3
+#define ARG_ERROR_POSITION 0
+#define ARG_ERROR_LINESTR  1
 
 #endif  // NEOVIM_CMD_ARG_CONSTANTS_H_
