@@ -5,13 +5,10 @@
 #ifndef NEOVIM_CMD_H
 #define NEOVIM_CMD_H
 
-#ifdef DO_DECLARE_EXCMD
-# undef DO_DECLARE_EXCMD
-#endif
-#ifdef DO_DECLARE_EXCMD
-# undef DO_DECLARE_EXCMD
-#endif
 #include <stdint.h>
+#ifdef DO_DECLARE_EXCMD
+# undef DO_DECLARE_EXCMD
+#endif
 #include "cmd_def.h"
 #include "types.h"
 #include "expr.h"
@@ -86,6 +83,7 @@ typedef struct {
 
 typedef struct command_node {
   CommandType type;
+  char_u *name;              // Only valid for user commands
   struct command_node *next;
   size_t num_args;
   Range range;               // sometimes used for count
@@ -142,5 +140,11 @@ typedef struct {
 typedef char_u *(*line_getter)(int, void *, int);
 
 void free_cmd(CommandNode *);
+
+typedef int (*args_parser)(char_u **,
+                           CommandNode *,
+                           CommandParserError *,
+                           int,
+                           int);
 
 #endif  // NEOVIM_CMD_H
