@@ -455,19 +455,19 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   if (error->message != NULL) {
-    char_u *line;
+    char_u *linestr;
 
-    if ((line = vim_strsave(s)) == NULL)
+    if ((linestr = vim_strsave(s)) == NULL)
       return FAIL;
     if ((*node = cmd_alloc(kCmdSyntaxError)) == NULL) {
-      vim_free(line);
+      vim_free(linestr);
       return FAIL;
     }
     (*node)->args[ARG_ERROR_LINE].arg.line = line;
     (*node)->args[ARG_ERROR_COLUMN].arg.col =
         col + ((colnr_T) (error->position - s));
     (*node)->args[ARG_ERROR_MESSAGE].arg.str = error->message;
-    (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
+    (*node)->args[ARG_ERROR_LINESTR].arg.str = linestr;
   }
   return OK;
 }
@@ -476,7 +476,7 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
  * Check if *p is a separator between Ex commands.
  * Return NULL if it isn't, (p + 1) if it is.
  */
-char_u *check_nextcmd(char_u *p)
+static char_u *check_nextcmd(char_u *p)
 {
   p = skipwhite(p);
   if (*p == '|' || *p == '\n')
@@ -546,13 +546,13 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
     }
 
     if (ASCII_ISLOWER(**pp))
-      cmdidx = cmdidxs[*pp - 'a'];
+      cmdidx = cmdidxs[(int)(**pp - 'a')];
     else
       cmdidx = cmdidxs[26];
 
     for (; (int)cmdidx < (int)kCmdSIZE;
          cmdidx = (CommandType)((int)cmdidx + 1))
-      if (STRNCMP(CMDDEF(cmdidx).name, (char *)(*p), (size_t)len) == 0)
+      if (STRNCMP(CMDDEF(cmdidx).name, (char *) p, (size_t) len) == 0)
         break;
 
     // Look for a user defined command as a last resort.
@@ -565,10 +565,10 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
       if ((*name = vim_strnsave(*pp, p - *pp)) == NULL)
         return FAIL;
       *type = kCmdUSER;
-    } else if (p == eap->cmd) {
+    } else if (p == *pp) {
       *type = kCmdUnknown;
       // FIXME proper message
-      error->message = "failed to find command";
+      error->message = (char_u *) "failed to find command";
       error->position = *pp;
       return FAIL;
     } else {
@@ -743,7 +743,7 @@ static int parse_one_cmd(char_u **pp,
     }
     if (*p == ';' || *p == ',') {
       range.setpos = (*p == ';');
-      free_range_data(range, TRUE);
+      free_range_data(&range, TRUE);
       range.start = range.end;
       range.start_followups = range.end_followups;
       range.end.type = kAddrMissing;
@@ -819,7 +819,7 @@ static int parse_one_cmd(char_u **pp,
     }
   }
 
-  if (range.start != kAddrMissing || range.end != kAddrMissing) {
+  if (range.start.type != kAddrMissing || range.end.type != kAddrMissing) {
     if (!(type == kCmdUSER || CMDDEF(type).flags & RANGE)) {
       error.message = e_norange;
       error.position = range_start;
