@@ -53,11 +53,15 @@ static CommandNode *cmd_alloc(CommandType type)
 {
   // XXX May allocate less space then needed to hold the whole struct: less by 
   // one size of CommandArg.
-  size_t size = sizeof(CommandNode)
-              + (sizeof(CommandArg) * (CMDDEF(type).num_args));
-  CommandNode *node = (CommandNode *) alloc_clear(size);
+  size_t size = sizeof(CommandNode) - sizeof(CommandArg);
+  CommandNode *node;
 
-  if (node != NULL)
+  if (type == kCmdUSER)
+    size++;
+  else if (type != kCmdUnknown)
+    size += sizeof(CommandArg) * CMDDEF(type).num_args;
+
+  if ((node = (CommandNode *) alloc_clear(size)) != NULL)
     node->type = type;
 
   return node;
@@ -238,7 +242,9 @@ void free_cmd(CommandNode *node)
   if (node == NULL)
     return;
 
-  if (node->type != kCmdUnknown)
+  if (node->type == kCmdUSER)
+    free_cmd_arg(&(node->args[0]), kArgString);
+  else if (node->type != kCmdUnknown)
     for (i = 0; i < numargs; i++)
       free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
 
@@ -589,6 +595,7 @@ static int parse_one_cmd(char_u **pp,
   int bang = FALSE;
   size_t len;
   size_t i;
+  args_parser parser = NULL;
 
   memset(&range, 0, sizeof(Range));
   memset(&error, 0, sizeof(CommandParserError));
@@ -827,11 +834,23 @@ static int parse_one_cmd(char_u **pp,
   (*next_node)->range = range;
   (*next_node)->name = name;
 
-  if (CMDDEF(type).parse(&p, *next_node, flags, position, fgetline, cookie)
-      == FAIL) {
-    free_cmd(*next_node);
-    *next_node = NULL;
-    return FAIL;
+  if (type == kCmdUSER) {
+    len = STRLEN(p);
+    if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
+      return FAIL;
+    *pp = p + len;
+    return OK;
+  } else {
+    parser = CMDDEF(type).parse;
+
+    if (parser != NULL) {
+      if (parser(&p, *next_node, flags, position, fgetline, cookie)
+          == FAIL) {
+        free_cmd(*next_node);
+        *next_node = NULL;
+        return FAIL;
+      }
+    }
   }
 
   *pp = p;
