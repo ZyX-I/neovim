@@ -92,7 +92,7 @@ static char_u *find_id_end(char_u **arg)
   char_u *p;
 
   // Find the end of the name.
-  for (p = *arg; isnamechar(*p); ++p) {
+  for (p = *arg; isnamechar(*p); p++) {
   }
   if (p == *arg)  // no name found
     return NULL;
@@ -191,7 +191,7 @@ static int parse_name(char_u **arg,
     }
 
     s = *arg;
-    ++(*arg);
+    (*arg)++;
     *arg = skipwhite(*arg);
 
     VALUE_NODE(kTypeCurlyName, error, next_node, s, NULL)
@@ -205,7 +205,7 @@ static int parse_name(char_u **arg,
       error->position = *arg;
       return FAIL;
     }
-    ++(*arg);
+    (*arg)++;
     next_node = &((*next_node)->next);
     s = *arg;
     p = find_id_end(arg);
@@ -351,7 +351,7 @@ static char_u *find_option_end(char_u **arg)
 {
   char_u      *p = *arg;
 
-  ++p;
+  p++;
   if (*p == 'g' && p[1] == ':')
     p += 2;
   else if (*p == 'l' && p[1] == ':')
@@ -364,7 +364,7 @@ static char_u *find_option_end(char_u **arg)
     p += 4;
   else
     while (ASCII_ISALPHA(*p))
-      ++p;
+      p++;
 
   *arg = p;
 
@@ -403,7 +403,7 @@ static char_u *find_env_end(char_u **arg)
 {
   char_u *p;
 
-  for (p = *arg; vim_isIDc(*p); ++p) {
+  for (p = *arg; vim_isIDc(*p); p++) {
   }
   if (p == *arg)            /* no name found */
     return NULL;
@@ -425,7 +425,7 @@ static int parse_environment_variable(char_u **arg,
   char_u *s = *arg;
   char_u *e;
 
-  ++(*arg);
+  (*arg)++;
   e = find_env_end(arg);
   if (e == NULL)
     e = s;
@@ -451,7 +451,7 @@ static int parse_dot_subscript(char_u **arg,
   // It cannot be subscript if previous character is "\"" or "'"
   if (s[-1] == '"' || s[-1] == '\'')
     return OK;
-  for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; ++e) {
+  for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; e++) {
   }
   if (e == s + 1)
     return OK;
@@ -495,7 +495,7 @@ static int parse_func_call(char_u **arg,
     if (parse1(&argp, next_node, error) == FAIL)
       return FAIL;
     next_node = &((*next_node)->next);
-    ++argcount;
+    argcount++;
     if (*argp != ',')
       break;
   }
@@ -507,7 +507,7 @@ static int parse_func_call(char_u **arg,
     return FAIL;
   }
 
-  ++argp;
+  argp++;
 
   *arg = skipwhite(argp);
   return OK;
@@ -601,7 +601,7 @@ void find_nr_end(char_u **arg,
   *type = kTypeDecimalNumber;
 
   if (ptr[0] == '-')
-    ++ptr;
+    ptr++;
 
   // Recognize hex and octal.
   if (ptr[0] == '0' && ptr[1] != '8' && ptr[1] != '9') {
@@ -612,7 +612,7 @@ void find_nr_end(char_u **arg,
       *type = kTypeDecimalNumber;
       if (dooct) {
         // Don't interpret "0", "08" or "0129" as octal.
-        for (n = 1; VIM_ISDIGIT(ptr[n]); ++n) {
+        for (n = 1; VIM_ISDIGIT(ptr[n]); n++) {
           if (ptr[n] > '7') {
             *type = kTypeDecimalNumber;  // can't be octal
             break;
@@ -626,17 +626,17 @@ void find_nr_end(char_u **arg,
   switch (*type) {
     case kTypeDecimalNumber: {
       while (VIM_ISDIGIT(*ptr))
-        ++ptr;
+        ptr++;
       break;
     }
     case kTypeOctalNumber: {
       while ('0' <= *ptr && *ptr <= '7')
-        ++ptr;
+        ptr++;
       break;
     }
     case kTypeHexNumber: {
       while (vim_isxdigit(*ptr))
-        ++ptr;
+        ptr++;
       break;
     }
     default: {
@@ -719,9 +719,9 @@ static int parse7(char_u **arg,
         type = kTypeFloat;
         p = skipdigits(p + 2);
         if (*p == 'e' || *p == 'E') {
-          ++p;
+          p++;
           if (*p == '-' || *p == '+')
-            ++p;
+            p++;
           if (!VIM_ISDIGIT(*p))
             type = kTypeDecimalNumber;
           else
@@ -756,12 +756,12 @@ static int parse7(char_u **arg,
           if (*p == '\\' && p[1] != NUL)
             p += 2;
           else
-            ++p;
+            p++;
         }
       } else {
         while (*p != '\'' && *p != NUL)
         {
-          ++p;
+          p++;
           if (*p == '\'' && p[1] == '\'')
             p += 2;
         }
@@ -772,7 +772,7 @@ static int parse7(char_u **arg,
         error->position = s;
         return FAIL;
       }
-      ++p;
+      p++;
 
       if (*s == '"')
         type = kTypeDoubleQuotedString;
@@ -828,7 +828,7 @@ static int parse7(char_u **arg,
       *arg = skipwhite(*arg + 1);
       ret = parse1(arg, &((*node)->children), error);
       if (**arg == ')') {
-        ++(*arg);
+        (*arg)++;
       } else if (ret == OK) {
         error->message = N_("E110: Missing ')'");
         error->position = *arg;
@@ -1091,11 +1091,11 @@ static int parse4(char_u **arg,
     // extra question mark appended: ignore case
     if (p[len] == '?') {
       top_node->ignore_case = kCCStrategyIgnoreCase;
-      ++len;
+      len++;
     // extra '#' appended: match case
     } else if (p[len] == '#') {
       top_node->ignore_case = kCCStrategyMatchCase;
-      ++len;
+      len++;
     }
     // nothing appended: use kCCStrategyUseOption (default)
 
