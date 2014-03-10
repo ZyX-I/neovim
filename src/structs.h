@@ -8,29 +8,12 @@
 
 // for garray_T
 #include "garray.h"
+// for pos_T and lpos_T
+#include "pos.h"
 
 /*
  * This file contains various definitions of structures that are used by Vim
  */
-
-/*
- * position in file or buffer
- */
-typedef struct {
-  linenr_T lnum;        /* line number */
-  colnr_T col;          /* column number */
-  colnr_T coladd;
-} pos_T;
-
-# define INIT_POS_T(l, c, ca) {l, c, ca}
-
-/*
- * Same, but without coladd.
- */
-typedef struct {
-  linenr_T lnum;        /* line number */
-  colnr_T col;          /* column number */
-} lpos_T;
 
 typedef struct window_S win_T;
 typedef struct wininfo_S wininfo_T;
@@ -39,7 +22,7 @@ typedef int scid_T;                             /* script ID */
 typedef struct file_buffer buf_T;       /* forward declaration */
 
 /*
- * This is here because regexp_defs.h needs pos_T and below regprog_T is used.
+ * This is here because regexp_defs.h needs win_T and regprog_T is used below.
  */
 #include "regexp_defs.h"
 
@@ -1739,115 +1722,7 @@ struct window_S {
    * In a non-location list window, w_llist_ref is NULL.
    */
   qf_info_T   *w_llist_ref;
-
-
-
-
-
-
-
 };
-
-/*
- * Arguments for operators.
- */
-typedef struct oparg_S {
-  int op_type;                  /* current pending operator type */
-  int regname;                  /* register to use for the operator */
-  int motion_type;              /* type of the current cursor motion */
-  int motion_force;             /* force motion type: 'v', 'V' or CTRL-V */
-  int use_reg_one;              /* TRUE if delete uses reg 1 even when not
-                                   linewise */
-  int inclusive;                /* TRUE if char motion is inclusive (only
-                                   valid when motion_type is MCHAR */
-  int end_adjusted;             /* backuped b_op_end one char (only used by
-                                   do_format()) */
-  pos_T start;                  /* start of the operator */
-  pos_T end;                    /* end of the operator */
-  pos_T cursor_start;           /* cursor position before motion for "gw" */
-
-  long line_count;              /* number of lines from op_start to op_end
-                                   (inclusive) */
-  int empty;                    /* op_start and op_end the same (only used by
-                                   do_change()) */
-  int is_VIsual;                /* operator on Visual area */
-  int block_mode;               /* current operator is Visual block mode */
-  colnr_T start_vcol;           /* start col for block mode operator */
-  colnr_T end_vcol;             /* end col for block mode operator */
-  long prev_opcount;            /* ca.opcount saved for K_CURSORHOLD */
-  long prev_count0;             /* ca.count0 saved for K_CURSORHOLD */
-} oparg_T;
-
-/*
- * Arguments for Normal mode commands.
- */
-typedef struct cmdarg_S {
-  oparg_T     *oap;             /* Operator arguments */
-  int prechar;                  /* prefix character (optional, always 'g') */
-  int cmdchar;                  /* command character */
-  int nchar;                    /* next command character (optional) */
-  int ncharC1;                  /* first composing character (optional) */
-  int ncharC2;                  /* second composing character (optional) */
-  int extra_char;               /* yet another character (optional) */
-  long opcount;                 /* count before an operator */
-  long count0;                  /* count before command, default 0 */
-  long count1;                  /* count before command, default 1 */
-  int arg;                      /* extra argument from nv_cmds[] */
-  int retval;                   /* return: CA_* values */
-  char_u      *searchbuf;       /* return: pointer to search pattern or NULL */
-} cmdarg_T;
-
-/* values for retval: */
-#define CA_COMMAND_BUSY     1   /* skip restarting edit() once */
-#define CA_NO_ADJ_OP_END    2   /* don't adjust operator end */
-
-#ifdef CURSOR_SHAPE
-/*
- * struct to store values from 'guicursor' and 'mouseshape'
- */
-/* Indexes in shape_table[] */
-#define SHAPE_IDX_N     0       /* Normal mode */
-#define SHAPE_IDX_V     1       /* Visual mode */
-#define SHAPE_IDX_I     2       /* Insert mode */
-#define SHAPE_IDX_R     3       /* Replace mode */
-#define SHAPE_IDX_C     4       /* Command line Normal mode */
-#define SHAPE_IDX_CI    5       /* Command line Insert mode */
-#define SHAPE_IDX_CR    6       /* Command line Replace mode */
-#define SHAPE_IDX_O     7       /* Operator-pending mode */
-#define SHAPE_IDX_VE    8       /* Visual mode with 'selection' exclusive */
-#define SHAPE_IDX_CLINE 9       /* On command line */
-#define SHAPE_IDX_STATUS 10     /* A status line */
-#define SHAPE_IDX_SDRAG 11      /* dragging a status line */
-#define SHAPE_IDX_VSEP  12      /* A vertical separator line */
-#define SHAPE_IDX_VDRAG 13      /* dragging a vertical separator line */
-#define SHAPE_IDX_MORE  14      /* Hit-return or More */
-#define SHAPE_IDX_MOREL 15      /* Hit-return or More in last line */
-#define SHAPE_IDX_SM    16      /* showing matching paren */
-#define SHAPE_IDX_COUNT 17
-
-#define SHAPE_BLOCK     0       /* block cursor */
-#define SHAPE_HOR       1       /* horizontal bar cursor */
-#define SHAPE_VER       2       /* vertical bar cursor */
-
-#define MSHAPE_NUMBERED 1000    /* offset for shapes identified by number */
-#define MSHAPE_HIDE     1       /* hide mouse pointer */
-
-#define SHAPE_MOUSE     1       /* used for mouse pointer shape */
-#define SHAPE_CURSOR    2       /* used for text cursor shape */
-
-typedef struct cursor_entry {
-  int shape;                    /* one of the SHAPE_ defines */
-  int mshape;                   /* one of the MSHAPE defines */
-  int percentage;               /* percentage of cell for bar */
-  long blinkwait;               /* blinking, wait time before blinking starts */
-  long blinkon;                 /* blinking, on time */
-  long blinkoff;                /* blinking, off time */
-  int id;                       /* highlight group ID */
-  int id_lm;                    /* highlight group ID for :lmap mode */
-  char        *name;            /* mode name (fixed) */
-  char used_for;                /* SHAPE_MOUSE and/or SHAPE_CURSOR */
-} cursorentry_T;
-#endif /* CURSOR_SHAPE */
 
 /*
  * Struct to save values in before executing autocommands for a buffer that is

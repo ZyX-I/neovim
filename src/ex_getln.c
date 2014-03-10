@@ -33,6 +33,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "cursor_shape.h"
 #include "keymap.h"
 #include "garray.h"
 #include "move.h"
@@ -46,6 +47,7 @@
 #include "tag.h"
 #include "term.h"
 #include "window.h"
+#include "ui.h"
 #include "os/os.h"
 
 /*
@@ -292,9 +294,7 @@ getcmdline (
 #endif
 
   setmouse();
-#ifdef CURSOR_SHAPE
   ui_cursor_shape();            /* may show different cursor shape */
-#endif
 
   /* When inside an autocommand for writing "exiting" may be set and
   * terminal mode set to cooked.  Need to set raw mode here then. */
@@ -864,9 +864,8 @@ getcmdline (
         beep_flush();
       else
         ccline.overstrike = !ccline.overstrike;
-#ifdef CURSOR_SHAPE
+
       ui_cursor_shape();                /* may show different cursor shape */
-#endif
       goto cmdline_not_changed;
 
     case Ctrl_HAT:
@@ -906,9 +905,7 @@ getcmdline (
         else
           set_imsearch_global();
       }
-#ifdef CURSOR_SHAPE
       ui_cursor_shape();                /* may show different cursor shape */
-#endif
       /* Show/unshow value of 'keymap' in status lines later. */
       status_redraw_curbuf();
       goto cmdline_not_changed;
@@ -1561,9 +1558,7 @@ returncmd:
   im_set_active(FALSE);
 #endif
   setmouse();
-#ifdef CURSOR_SHAPE
   ui_cursor_shape();            /* may show different cursor shape */
-#endif
 
   {
     char_u *p = ccline.cmdbuff;
@@ -1965,8 +1960,6 @@ redraw:
   return (char_u *)line_ga.ga_data;
 }
 
-# if defined(MCH_CURSOR_SHAPE) || defined(FEAT_GUI) \
-  || defined(FEAT_MOUSESHAPE) || defined(PROTO)
 /*
  * Return TRUE if ccline.overstrike is on.
  */
@@ -1980,10 +1973,6 @@ int cmdline_overstrike(void)         {
 int cmdline_at_end(void)         {
   return ccline.cmdpos >= ccline.cmdlen;
 }
-
-#endif
-
-
 
 /*
  * Allocate a new command line buffer.
