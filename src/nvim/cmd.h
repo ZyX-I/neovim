@@ -43,7 +43,7 @@ typedef struct {
   union {
     Regex *regex;
     char_u mark;
-    linenr_T line;
+    linenr_T lnr;
   } data;
 } Address;
 
@@ -81,6 +81,12 @@ typedef struct {
   CmdCompleteType type;
   char_u *arg;
 } CmdComplete;
+
+typedef struct {
+  linenr_T lnr;
+  colnr_T col;
+  char_u *fname;
+} CommandPosition;
 
 typedef struct command_node {
   CommandType type;
@@ -120,8 +126,7 @@ typedef struct command_node {
         CommandArgType *types;
         struct command_argument *args;
       } args;
-      linenr_T line;
-      colnr_T col;
+      CommandPosition position;
     } arg;
   } args[1];
 } CommandNode;
@@ -146,8 +151,13 @@ typedef char_u *(*line_getter)(int, void *, int);
 
 typedef int (*args_parser)(char_u **,
                            CommandNode *,
-                           CommandParserError *,
-                           int,
-                           int);
+                           uint_least8_t,
+                           CommandPosition *,
+                           line_getter,
+                           void *);
+
+/* flags for parse_one_cmd */
+#define FLAG_POC_SOURCING  0x01
+#define FLAG_POC_EXMODE    0x02
 
 #endif  // NEOVIM_CMD_H

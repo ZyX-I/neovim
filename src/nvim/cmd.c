@@ -163,13 +163,14 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       free_expr(arg->arg.expr);
       break;
     }
-    case kArgStaticString:
-    case kArgLine:
-    case kArgColumn:
     case kArgFlags:
     case kArgNumber:
     case kArgAuEvent:
     case kArgChar: {
+      break;
+    }
+    case kArgPosition: {
+      vim_free(arg->arg.position.fname);
       break;
     }
     case kArgNumbers: {
@@ -384,7 +385,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
     case '8':
     case '9': {
       address->type = kAddrFixed;
-      address->data.line = getdigits(pp);
+      address->data.lnr = getdigits(pp);
       break;
     }
     default: {
@@ -451,23 +452,22 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
 }
 
 static int create_error_node(CommandNode **node, CommandParserError *error,
-                             linenr_T line, colnr_T col, char_u *s)
+                             CommandPosition *position, char_u *s)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   if (error->message != NULL) {
-    char_u *linestr;
+    char_u *line;
 
-    if ((linestr = vim_strsave(s)) == NULL)
+    if ((line = vim_strsave(s)) == NULL)
       return FAIL;
     if ((*node = cmd_alloc(kCmdSyntaxError)) == NULL) {
-      vim_free(linestr);
+      vim_free(line);
       return FAIL;
     }
-    (*node)->args[ARG_ERROR_LINE].arg.line = line;
-    (*node)->args[ARG_ERROR_COLUMN].arg.col =
-        col + ((colnr_T) (error->position - s));
-    (*node)->args[ARG_ERROR_MESSAGE].arg.str = error->message;
-    (*node)->args[ARG_ERROR_LINESTR].arg.str = linestr;
+    (*node)->args[ARG_ERROR_POSITION].arg.position = *position;
+    (*node)->args[ARG_ERROR_POSITION].arg.position.fname =
+        vim_strsave(position->fname);
+    (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
   }
   return OK;
 }
@@ -477,6 +477,7 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
  * Return NULL if it isn't, (p + 1) if it is.
  */
 static char_u *check_nextcmd(char_u *p)
+  FUNC_ATTR_CONST
 {
   p = skipwhite(p);
   if (*p == '|' || *p == '\n')
@@ -493,6 +494,7 @@ static char_u *check_nextcmd(char_u *p)
  */
 static int find_command(char_u **pp, CommandType *type, char_u **name,
                         CommandParserError *error)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   size_t len;
   char_u *p;
@@ -583,10 +585,8 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
 
 static int parse_one_cmd(char_u **pp,
                          CommandNode **node,
-                         int sourcing,
-                         int exmode_active,
-                         linenr_T line,
-                         colnr_T col,
+                         uint_least8_t flags,
+                         CommandPosition *position,
                          line_getter fgetline,
                          void *cookie)
   FUNC_ATTR_NONNULL_ALL
@@ -714,12 +714,12 @@ static int parse_one_cmd(char_u **pp,
     if (range_start == NULL)
       range_start = p;
     if (get_address(&p, &range.end, &error) == FAIL) {
-      create_error_node(next_node, &error, line, col, s);
+      create_error_node(next_node, &error, position, s);
       free_range_data(&range, FALSE);
       return FAIL;
     }
     if (get_address_followups(&p, &error, &range.end_followups) == FAIL) {
-      create_error_node(next_node, &error, line, col, s);
+      create_error_node(next_node, &error, position, s);
       free_range_data(&range, FALSE);
       return FAIL;
     }
@@ -730,7 +730,7 @@ static int parse_one_cmd(char_u **pp,
     } else if (range.end.type == kAddrMissing) {
       if (*p == '%') {
         range.start.type = kAddrFixed;
-        range.start.data.line = 1;
+        range.start.data.lnr = 1;
         range.end.type = kAddrEnd;
         break;
       } else if (*p == '*' && vim_strchr(p_cpo, CPO_STAR) == NULL) {
@@ -801,7 +801,7 @@ static int parse_one_cmd(char_u **pp,
 
   if (find_command(&p, &type, &name, &error) == FAIL) {
     free_range_data(&range, FALSE);
-    create_error_node(next_node, &error, line, col, s);
+    create_error_node(next_node, &error, position, s);
     return FAIL;
   }
 
@@ -814,7 +814,7 @@ static int parse_one_cmd(char_u **pp,
     } else {
       error.message = e_nobang;
       error.position = p;
-      create_error_node(next_node, &error, line, col, s);
+      create_error_node(next_node, &error, position, s);
       return FAIL;
     }
   }
@@ -823,7 +823,7 @@ static int parse_one_cmd(char_u **pp,
     if (!(type == kCmdUSER || CMDDEF(type).flags & RANGE)) {
       error.message = e_norange;
       error.position = range_start;
-      create_error_node(next_node, &error, line, col, s);
+      create_error_node(next_node, &error, position, s);
       return FAIL;
     }
   }
@@ -841,6 +841,13 @@ static int parse_one_cmd(char_u **pp,
   (*next_node)->range = range;
   (*next_node)->name = name;
 
+  if (CMDDEF(type).parse(&p, *next_node, flags, position, fgetline, cookie)
+      == FAIL) {
+    free_cmd(*next_node);
+    *next_node = NULL;
+    return FAIL;
+  }
+
   *pp = p;
   return OK;
 }
@@ -848,5 +855,5 @@ static int parse_one_cmd(char_u **pp,
 // FIXME
 void happy()
 {
-  parse_one_cmd(NULL, NULL, 0, 0, 0, 0, NULL, NULL);
+  parse_one_cmd(NULL, NULL, 0, NULL, NULL, NULL);
 }
