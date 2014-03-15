@@ -55,7 +55,6 @@ case_compare_strategy = {
   '?',
 }
 
-export node_to_string
 node_to_string = (node, err, offset) ->
   type = expression_type[tonumber(node.type)]
   case_suffix = case_compare_strategy[tonumber(node.ignore_case)]
