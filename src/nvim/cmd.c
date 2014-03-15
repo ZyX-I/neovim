@@ -392,7 +392,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
     case '8':
     case '9': {
       address->type = kAddrFixed;
-      address->data.lnr = getdigits(pp);
+      address->data.lnr = getdigits(&p);
       break;
     }
     default: {
@@ -561,7 +561,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
 
     for (; (int)cmdidx < (int)kCmdSIZE;
          cmdidx = (CommandType)((int)cmdidx + 1))
-      if (STRNCMP(CMDDEF(cmdidx).name, (char *) p, (size_t) len) == 0)
+      if (STRNCMP(CMDDEF(cmdidx).name, (char *) (*pp), (size_t) len) == 0)
         break;
 
     // Look for a user defined command as a last resort.
@@ -633,7 +633,7 @@ int parse_one_cmd(char_u **pp,
     while (*p == ' ' || *p == '\t' || *p == ':')
       p++;
     // in ex mode, an empty line works like :+ (switch to next line)
-    if (*p == NUL && exmode_active) {
+    if (*p == NUL && flags&FLAG_POC_EXMODE) {
       AddressFollowup *fw;
       if ((*next_node = cmd_alloc(kCmdHashbangComment)) == NULL)
         return FAIL;
@@ -756,6 +756,7 @@ int parse_one_cmd(char_u **pp,
       range.start_followups = range.end_followups;
       range.end.type = kAddrMissing;
       range.end_followups = NULL;
+      p++;
     } else {
       break;
     }
@@ -778,7 +779,7 @@ int parse_one_cmd(char_u **pp,
      * ":3|..."	prints line 3
      * ":|"		prints current line
      */
-    if (*p == '|' || (exmode_active && range.end.type != kAddrMissing)) {
+    if (*p == '|' || (flags&FLAG_POC_EXMODE && range.end.type != kAddrMissing)) {
       if ((*next_node = cmd_alloc(kCmdPrint)) == NULL) {
         free_range_data(&range, FALSE);
         return FAIL;
