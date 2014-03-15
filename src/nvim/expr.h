@@ -8,7 +8,7 @@
 #include "nvim/types.h"
 
 typedef enum {
-  kTypeUnknown,
+  kTypeUnknown = 0,
 
   // Ternary operators
   kTypeTernaryConditional,    // ? :
@@ -99,6 +99,12 @@ typedef struct error {
   char *message;
   char_u *position;
 } ExpressionParserError;
+
+typedef struct {
+  ExpressionNode *node;
+  ExpressionParserError error;
+  char_u *end;
+} TestExprResult;
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "expr.h.generated.h"

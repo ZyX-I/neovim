@@ -1242,23 +1242,20 @@ static int parse1(char_u **arg,
   return OK;
 }
 
-ExpressionNode *parse0_err(char_u *arg, ExpressionParserError *error)
+ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *result = NULL;
-  char_u *p = arg;
 
   error->message = NULL;
   error->position = NULL;
 
-  p = skipwhite(arg);
-  if (parse1(&p, &result, error) == FAIL) {
+  *arg = skipwhite(*arg);
+  if (parse1(arg, &result, error) == FAIL) {
     free_expr(result);
     return NULL;
   }
 
-  // Set error->position to p for testing
-  error->position = p;
   return result;
 }
 
@@ -1267,13 +1264,33 @@ ExpressionNode *parse0(char_u *arg)
 {
   ExpressionNode *result;
   ExpressionParserError error;
+  char_u *p = arg;
 
-  if ((result = parse0_err(arg, &error)) == NULL) {
+  if ((result = parse0_err(&p, &error)) == NULL) {
     // FIXME print error properly
     puts((char *) error.message);
     puts((char *) error.position);
     return NULL;
   }
+
+  return result;
+}
+
+void free_test_expr_result(TestExprResult *result)
+{
+  free_expr(result->node);
+  vim_free(result);
+}
+
+TestExprResult *parse0_test(char_u *arg)
+{
+  TestExprResult *result;
+
+  if ((result = ALLOC_CLEAR_NEW(TestExprResult, 1)) == NULL)
+    return NULL;
+
+  result->end = arg;
+  result->node = parse0_err(&(result->end), &(result->error));
 
   return result;
 }
