@@ -9,10 +9,17 @@
 #ifdef DO_DECLARE_EXCMD
 # undef DO_DECLARE_EXCMD
 #endif
+<<<<<<< HEAD:src/nvim/cmd.h
 #include <stdint.h>
 #include "nvim/cmd_def.h"
 #include "nvim/types.h"
 #include "nvim/expr.h"
+=======
+#include "cmd_def.h"
+#include "types.h"
+#include "expr.h"
+#include "vim.h"
+>>>>>>> 5e1964f... Export parse_one_cmd:src/cmd.h
 
 
 // :argadd/:argd
@@ -145,10 +152,6 @@ typedef struct {
 
 typedef char_u *(*line_getter)(int, void *, int);
 
-#ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "cmd.h.generated.h"
-#endif
-
 typedef int (*args_parser)(char_u **,
                            CommandNode *,
                            uint_least8_t,
@@ -159,5 +162,9 @@ typedef int (*args_parser)(char_u **,
 /* flags for parse_one_cmd */
 #define FLAG_POC_SOURCING  0x01
 #define FLAG_POC_EXMODE    0x02
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "cmd.h.generated.h"
+#endif
 
 #endif  // NEOVIM_CMD_H
