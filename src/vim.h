@@ -9,6 +9,8 @@
 #ifndef NEOVIM_VIM_H
 # define NEOVIM_VIM_H
 
+#include <string.h>
+
 #include "types.h"
 
 /* Included when ported to cmake */
