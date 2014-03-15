@@ -3,8 +3,23 @@ ffi = require 'ffi'
 -- load neovim shared library
 libnvim = ffi.load './build/src/libnvim-test.so'
 
+export imported = {}
+
 cimport = (path) ->
-  if path
+  if path and not imported[path]
+    imported[path] = true
+
+    -- pipe = io.popen('cpp -M -E ' .. path)
+    -- deps = pipe\read('*a')
+    -- pipe\close()
+
+    -- idx = string.find(deps, ' ')
+    -- deps = string.sub(deps, idx + 1)
+    -- deps = string.gsub(deps, '%s*\\%s*', ' ') .. ' '
+    -- idx = string.find(deps, ' ')
+    -- while idx
+      -- imported[path]
+
     pipe = io.popen('cpp -P -E ' .. path)
     header = pipe\read('*a')
     pipe\close()
@@ -34,3 +49,5 @@ return {
   cstr: cstr
   to_cstr: to_cstr
 }
+
+-- vim: sw=2 sts=2 et tw=80
