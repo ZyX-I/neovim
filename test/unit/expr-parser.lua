@@ -56,7 +56,7 @@ local case_compare_strategy = {
   '?',
 }
 
-node_to_string = function(node, err)
+node_to_string = function(node, err, offset)
   local type = expression_type[tonumber(node.type)]
   local case_suffix = case_compare_strategy[tonumber(node.ignore_case)]
   local func = type .. case_suffix
@@ -75,29 +75,23 @@ node_to_string = function(node, err)
     end
   end
   if (node.children ~= nil) then
-    result = (result .. '(' .. node_to_string(node.children, err) .. ')')
+    result = (result .. '(' .. node_to_string(node.children, nil, nil) .. ')')
   end
   if (node.next ~= nil) then
-    result = result .. ', ' .. node_to_string(node.next, err)
+    result = result .. ', ' .. node_to_string(node.next, nil, nil)
   end
   return result
 end
 
-local size = ffi.sizeof('ExpressionParserError')
-local size2 = ffi.sizeof('ExpressionParserError[1]')
-ffi.cdef('void *malloc(size_t size)')
-local _e = ffi.C.malloc(size)
-_err = ffi.cast('ExpressionParserError*', _e)
-
 describe('parse0', function()
-  local parse0 = function(str)
-    local s = cstr(string.len(str), str)
-    return ffi.gc(expr.parse0_err(s, _err), expr.free_expr), _err
-    -- return ffi.gc(expr.parse0(s), expr.free_expr), nil
-  end
   local p0 = function(str)
-    local parsed, err = parse0(str)
-    return node_to_string(parsed, err)
+    local s = cstr(string.len(str), str)
+    local parsed = ffi.gc(expr.parse0_test(s), expr.free_test_expr_result)
+    local offset = parsed['end'] - s
+    return node_to_string(parsed.node, parsed.error, offset)
+    -- local parsed = ffi.gc(expr.parse0(s), expr.free_expr)
+    -- local offset = parsed['end'] - s
+    -- return node_to_string(parsed.node, parsed.error, offset)
   end
   it('parses number 0', function()
     eq('N[+0+]', p0('0'))
@@ -368,4 +362,4 @@ describe('parse0', function()
   -- end)
 end)
 
--- vim: sw=2 sts=2 tw=80
+-- vim: sw=2 sts=2 et tw=80

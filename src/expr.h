@@ -8,7 +8,7 @@
 #include "types.h"
 
 typedef enum {
-  kTypeUnknown,
+  kTypeUnknown = 0,
 
   // Ternary operators
   kTypeTernaryConditional,    // ? :
@@ -100,8 +100,16 @@ typedef struct error {
   char_u *position;
 } ExpressionParserError;
 
-ExpressionNode *parse0_err(char_u *arg, ExpressionParserError *error);
+typedef struct {
+  ExpressionNode *node;
+  ExpressionParserError error;
+  char_u *end;
+} TestExprResult;
+
+ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error);
 ExpressionNode *parse0(char_u *arg);
 void free_expr(ExpressionNode *node);
+void free_test_expr_result(TestExprResult *result);
+TestExprResult *parse0_test(char_u *arg);
 
 #endif  // NEOVIM_EXPR_H
