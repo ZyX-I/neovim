@@ -343,7 +343,7 @@ int ml_open(buf_T *buf)
     b0p->b0_dirty = buf->b_changed ? B0_DIRTY : 0;
     b0p->b0_flags = get_fileformat(buf) + 1;
     set_b0_fname(b0p, buf);
-    (void)get_user_name(b0p->b0_uname, B0_UNAME_SIZE);
+    (void)mch_get_user_name((char *)b0p->b0_uname, B0_UNAME_SIZE);
     b0p->b0_uname[B0_UNAME_SIZE - 1] = NUL;
     mch_get_host_name(b0p->b0_hname, B0_HNAME_SIZE);
     b0p->b0_hname[B0_HNAME_SIZE - 1] = NUL;
@@ -833,8 +833,7 @@ static void set_b0_fname(ZERO_BL *b0p, buf_T *buf)
   if (buf->b_ffname == NULL)
     b0p->b0_fname[0] = NUL;
   else {
-    size_t flen, ulen;
-    char_u uname[B0_UNAME_SIZE];
+    char uname[B0_UNAME_SIZE];
 
     /*
      * For a file under the home directory of the current user, we try to
@@ -846,13 +845,14 @@ static void set_b0_fname(ZERO_BL *b0p, buf_T *buf)
     home_replace(NULL, buf->b_ffname, b0p->b0_fname,
         B0_FNAME_SIZE_CRYPT, TRUE);
     if (b0p->b0_fname[0] == '~') {
-      flen = STRLEN(b0p->b0_fname);
       /* If there is no user name or it is too long, don't use "~/" */
-      if (get_user_name(uname, B0_UNAME_SIZE) == FAIL
-          || (ulen = STRLEN(uname)) + flen > B0_FNAME_SIZE_CRYPT - 1)
+      int retval = mch_get_user_name(uname, B0_UNAME_SIZE);
+      size_t ulen = STRLEN(uname);
+      size_t flen = STRLEN(b0p->b0_fname);
+      if (retval == FAIL || ulen + flen > B0_FNAME_SIZE_CRYPT - 1) {
         vim_strncpy(b0p->b0_fname, buf->b_ffname,
             B0_FNAME_SIZE_CRYPT - 1);
-      else {
+      } else {
         mch_memmove(b0p->b0_fname + ulen + 1, b0p->b0_fname + 1, flen);
         mch_memmove(b0p->b0_fname + 1, uname, ulen);
       }
@@ -1739,7 +1739,7 @@ static time_t swapfile_info(char_u *fname)
   time_t x = (time_t)0;
   char            *p;
 #ifdef UNIX
-  char_u uname[B0_UNAME_SIZE];
+  char uname[B0_UNAME_SIZE];
 #endif
 
   /* print the swap file date */
@@ -1748,7 +1748,7 @@ static time_t swapfile_info(char_u *fname)
     /* print name of owner of the file */
     if (mch_get_uname(st.st_uid, uname, B0_UNAME_SIZE) == OK) {
       MSG_PUTS(_("          owned by: "));
-      msg_outtrans(uname);
+      msg_outtrans((char_u *)uname);
       MSG_PUTS(_("   dated: "));
     } else
 #endif
@@ -3636,7 +3636,7 @@ findswapname (
    * check below for a 8.3 file name is used.
    */
   if (!(buf->b_p_sn || buf->b_shortname) && buf_fname != NULL
-      && mch_getperm(buf_fname) < 0)
+      && !os_file_exists(buf_fname))
     dummyfd = mch_fopen((char *)buf_fname, "w");
 #endif
 
@@ -3753,7 +3753,7 @@ findswapname (
     /*
      * check if the swapfile already exists
      */
-    if (mch_getperm(fname) < 0) {       /* it does not exist */
+    if (!os_file_exists(fname)) {       /* it does not exist */
 #ifdef HAVE_LSTAT
       struct stat sb;
 
@@ -3961,7 +3961,7 @@ findswapname (
             }
 
             /* If the file was deleted this fname can be used. */
-            if (mch_getperm(fname) < 0)
+            if (!os_file_exists(fname))
               break;
           } else
 #endif

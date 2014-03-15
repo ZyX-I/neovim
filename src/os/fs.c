@@ -13,10 +13,10 @@
 
 #include <uv.h>
 
-#include "os.h"
-#include "../message.h"
-#include "../misc1.h"
-#include "../misc2.h"
+#include "os/os.h"
+#include "message.h"
+#include "misc1.h"
+#include "misc2.h"
 
 int mch_chdir(char *path) {
   if (p_verbose >= 5) {
@@ -33,10 +33,12 @@ int mch_chdir(char *path) {
  */
 int mch_dirname(char_u *buf, int len)
 {
+  assert(buf && len);
+
   int errno;
-  if ((errno = uv_cwd((char *) buf, len)) != 0) {
-      STRCPY(buf, uv_strerror(errno));
-      return FAIL;
+  if ((errno = uv_cwd((char *)buf, len)) != 0) {
+    vim_strncpy(buf, (char_u *)uv_strerror(errno), len - 1);
+    return FAIL;
   }
   return OK;
 }
@@ -175,13 +177,8 @@ int mch_is_absolute_path(const char_u *fname)
  */
 int mch_isdir(const char_u *name)
 {
-  uv_fs_t request;
-  int result = uv_fs_stat(uv_default_loop(), &request, (const char*) name, NULL);
-  uint64_t mode = request.statbuf.st_mode;
-
-  uv_fs_req_cleanup(&request);
-
-  if (0 != result) {
+  long mode = mch_getperm(name);
+  if (mode < 0) {
     return FALSE;
   }
 
@@ -217,12 +214,9 @@ int mch_can_exe(const char_u *name)
  */
 static int is_executable(const char_u *name)
 {
-  uv_fs_t request;
-  int result = uv_fs_stat(uv_default_loop(), &request, (const char*) name, NULL);
-  uint64_t mode = request.statbuf.st_mode;
-  uv_fs_req_cleanup(&request);
+  long mode = mch_getperm(name);
 
-  if (result != 0) {
+  if (mode < 0) {
     return FALSE;
   }
 
@@ -285,3 +279,56 @@ static int is_executable_in_path(const char_u *name)
   assert(false);
   return FALSE;
 }
+
+/*
+ * Get file permissions for 'name'.
+ * Returns -1 when it doesn't exist.
+ */
+long mch_getperm(const char_u *name)
+{
+  uv_fs_t request;
+  int result = uv_fs_stat(uv_default_loop(), &request, (const char*) name, NULL);
+  uint64_t mode = request.statbuf.st_mode;
+  uv_fs_req_cleanup(&request);
+
+  if (result != 0) {
+    return -1;
+  } else {
+    return (long) mode;
+  }
+}
+
+/*
+ * Set file permission for 'name' to 'perm'.
+ * Returns FAIL for failure, OK otherwise.
+ */
+int mch_setperm(const char_u *name, int perm)
+{
+  uv_fs_t request;
+  int result = uv_fs_chmod(uv_default_loop(), &request,
+                           (const char*)name, perm, NULL);
+  uv_fs_req_cleanup(&request);
+
+  if (result != 0) {
+    return FAIL;
+  } else {
+    return OK;
+  }
+}
+
+/*
+ * return TRUE if "name" exists.
+ */
+int os_file_exists(char_u *name)
+{
+  uv_fs_t request;
+  int result = uv_fs_stat(uv_default_loop(), &request, (const char*) name, NULL);
+  uv_fs_req_cleanup(&request);
+
+  if (result != 0) {
+    return FALSE;
+  } else {
+    return TRUE;
+  }
+}
+

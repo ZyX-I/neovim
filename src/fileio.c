@@ -3324,12 +3324,12 @@ nobackup:
            * delete an existing one, try to use another name.
            * Change one character, just before the extension.
            */
-          if (!p_bk && mch_getperm(backup) >= 0) {
+          if (!p_bk && os_file_exists(backup)) {
             p = backup + STRLEN(backup) - 1 - STRLEN(backup_ext);
             if (p < backup)             /* empty file name ??? */
               p = backup;
             *p = 'z';
-            while (*p > 'a' && mch_getperm(backup) >= 0)
+            while (*p > 'a' && os_file_exists(backup))
               --*p;
             /* They all exist??? Must be something wrong! */
             if (*p == 'a') {
@@ -3652,7 +3652,7 @@ restore_backup:
      */
     ptr = ml_get_buf(buf, lnum, FALSE) - 1;
     if (write_undo_file)
-      sha256_update(&sha_ctx, ptr + 1, (UINT32_T)(STRLEN(ptr + 1) + 1));
+      sha256_update(&sha_ctx, ptr + 1, (uint32_t)(STRLEN(ptr + 1) + 1));
     while ((c = *++ptr) != NUL) {
       if (c == NL)
         *s = NUL;                       /* replace newlines with NULs */
@@ -5497,7 +5497,7 @@ buf_check_timestamp (
     }
 
   } else if ((buf->b_flags & BF_NEW) && !(buf->b_flags & BF_NEW_W)
-             && vim_fexists(buf->b_ffname)) {
+             && os_file_exists(buf->b_ffname)) {
     retval = 1;
     mesg = _("W13: Warning: File \"%s\" has been created after editing started");
     buf->b_flags |= BF_NEW_W;

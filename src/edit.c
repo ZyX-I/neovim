@@ -23,6 +23,7 @@
 #include "fold.h"
 #include "getchar.h"
 #include "indent.h"
+#include "indent_c.h"
 #include "main.h"
 #include "mbyte.h"
 #include "memline.h"
@@ -6975,13 +6976,6 @@ ins_esc (
   static int disabled_redraw = FALSE;
 
   check_spell_redraw();
-# if defined(ESC_CHG_TO_ENG_MODE)
-  hangul_input_state_set(0);
-# endif
-  if (composing_hangul) {
-    push_raw_key(composing_hangul_buffer, 2);
-    composing_hangul = 0;
-  }
 
   temp = curwin->w_cursor.col;
   if (disabled_redraw) {

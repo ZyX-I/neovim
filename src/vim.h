@@ -43,19 +43,6 @@ Error: configure did not run properly.Check auto/config.log.
  * doesn't work well and avoiding it keeps the binary backward compatible.
  */
 
-/* We may need to define the uint32_t on non-Unix system, but using the same
- * identifier causes conflicts.  Therefore use UINT32_T. */
-# define UINT32_TYPEDEF uint32_t
-#endif
-
-#if !defined(UINT32_TYPEDEF)
-# if defined(uint32_t)  /* this doesn't catch typedefs, unfortunately */
-#  define UINT32_TYPEDEF uint32_t
-# else
-/* Fall back to assuming unsigned int is 32 bit.  If this is wrong then the
- * test in blowfish.c will fail. */
-#  define UINT32_TYPEDEF unsigned int
-# endif
 #endif
 
 /* user ID of root is usually zero, but not for everybody */
@@ -151,9 +138,6 @@ typedef unsigned long u8char_T;     /* long should be 32 bits or more */
 
 #include <assert.h>
 
-#ifdef HAVE_STDINT_H
-# include <stdint.h>
-#endif
 #ifdef HAVE_INTTYPES_H
 # include <inttypes.h>
 #endif
@@ -941,10 +925,6 @@ typedef enum {
 #endif
 
 #define MAYBE   2           /* sometimes used for a variant on TRUE */
-
-#ifndef UINT32_T
-typedef UINT32_TYPEDEF UINT32_T;
-#endif
 
 /*
  * Operator IDs; The order must correspond to opchars[] in ops.c!

@@ -27,6 +27,7 @@
 #include "getchar.h"
 #include "hashtab.h"
 #include "if_cscope.h"
+#include "indent_c.h"
 #include "indent.h"
 #include "mark.h"
 #include "mbyte.h"
@@ -4275,7 +4276,7 @@ eval6 (
         else if (op == '/') {
           /* We rely on the floating point library to handle divide
            * by zero to result in "inf" and not a crash. */
-          f1 = f1 / f2;
+          f1 = f2 != 0 ? f1 / f2 : INFINITY;
         } else   {
           EMSG(_("E804: Cannot use '%' with Float"));
           return FAIL;
@@ -10246,7 +10247,6 @@ static void f_has(typval_T *argvars, typval_T *rettv)
     "fork",
 #endif
     "gettext",
-    "hangul_input",
 #if defined(HAVE_ICONV_H) && defined(USE_ICONV)
     "iconv",
 #endif

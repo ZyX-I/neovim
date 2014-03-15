@@ -27,6 +27,9 @@ cimport = (path) ->
 
   return libnvim
 
+cppimport = (path) ->
+  return cimport './test/includes/post/' .. path
+
 cimport './src/types.h'
 
 -- take a pointer to a C-allocated string and return an interned
@@ -42,8 +45,10 @@ to_cstr = (string) ->
 
 return {
   cimport: cimport
+  cppimport: cppimport
   internalize: internalize
   eq: (expected, actual) -> assert.are.same expected, actual
+  neq: (expected, actual) -> assert.are_not.same expected, actual
   ffi: ffi
   lib: libnvim
   cstr: cstr

@@ -1078,34 +1078,6 @@ int vim_is_fastterm(char_u *name)
 }
 
 /*
- * Insert user name in s[len].
- * Return OK if a name found.
- */
-int mch_get_user_name(char_u *s, int len)
-{
-  return mch_get_uname(getuid(), s, len);
-}
-
-/*
- * Insert user name for "uid" in s[len].
- * Return OK if a name found.
- */
-int mch_get_uname(uid_t uid, char_u *s, int len)
-{
-#if defined(HAVE_PWD_H) && defined(HAVE_GETPWUID)
-  struct passwd   *pw;
-
-  if ((pw = getpwuid(uid)) != NULL
-      && pw->pw_name != NULL && *(pw->pw_name) != NUL) {
-    vim_strncpy(s, (char_u *)pw->pw_name, len - 1);
-    return OK;
-  }
-#endif
-  sprintf((char *)s, "%d", (int)uid);       /* assumes s is long enough */
-  return FAIL;                              /* a number is not a name */
-}
-
-/*
  * Insert host name is s[len].
  */
 
@@ -1195,38 +1167,6 @@ int len;              /* buffer size, only used when name gets longer */
   }
 }
 #endif
-
-/*
- * Get file permissions for 'name'.
- * Returns -1 when it doesn't exist.
- */
-long mch_getperm(char_u *name)
-{
-  struct stat statb;
-
-  /* Keep the #ifdef outside of stat(), it may be a macro. */
-  if (stat((char *)name, &statb))
-    return -1;
-#ifdef __INTERIX
-  /* The top bit makes the value negative, which means the file doesn't
-   * exist.  Remove the bit, we don't use it. */
-  return statb.st_mode & ~S_ADDACE;
-#else
-  return statb.st_mode;
-#endif
-}
-
-/*
- * set file permission for 'name' to 'perm'
- *
- * return FAIL for failure, OK otherwise
- */
-int mch_setperm(char_u *name, long perm)
-{
-  return chmod((char *)
-      name,
-      (mode_t)perm) == 0 ? OK : FAIL;
-}
 
 #if defined(HAVE_ACL) || defined(PROTO)
 # ifdef HAVE_SYS_ACL_H
@@ -3123,7 +3063,7 @@ int flags;                      /* EW_* flags */
    */
   for (j = 0, i = 0; i < *num_file; ++i) {
     /* Require the files to exist.	Helps when using /bin/sh */
-    if (!(flags & EW_NOTFOUND) && mch_getperm((*file)[i]) < 0)
+    if (!(flags & EW_NOTFOUND) && !os_file_exists((*file)[i]))
       continue;
 
     /* check if this entry should be included */
