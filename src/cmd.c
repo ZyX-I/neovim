@@ -576,12 +576,12 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
   return OK;
 }
 
-static int parse_one_cmd(char_u **pp,
-                         CommandNode **node,
-                         uint_least8_t flags,
-                         CommandPosition *position,
-                         line_getter fgetline,
-                         void *cookie)
+int parse_one_cmd(char_u **pp,
+                  CommandNode **node,
+                  uint_least8_t flags,
+                  CommandPosition *position,
+                  line_getter fgetline,
+                  void *cookie)
 {
   CommandNode **next_node = node;
   CommandParserError error;
@@ -855,10 +855,4 @@ static int parse_one_cmd(char_u **pp,
 
   *pp = p;
   return OK;
-}
-
-// FIXME
-void happy()
-{
-  parse_one_cmd(NULL, NULL, 0, NULL, NULL, NULL);
 }

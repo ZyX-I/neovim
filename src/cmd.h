@@ -12,6 +12,7 @@
 #include "cmd_def.h"
 #include "types.h"
 #include "expr.h"
+#include "vim.h"
 
 
 // :argadd/:argd
@@ -144,8 +145,6 @@ typedef struct {
 
 typedef char_u *(*line_getter)(int, void *, int);
 
-void free_cmd(CommandNode *);
-
 typedef int (*args_parser)(char_u **,
                            CommandNode *,
                            uint_least8_t,
@@ -156,5 +155,13 @@ typedef int (*args_parser)(char_u **,
 /* flags for parse_one_cmd */
 #define FLAG_POC_SOURCING  0x01
 #define FLAG_POC_EXMODE    0x02
+
+void free_cmd(CommandNode *);
+int parse_one_cmd(char_u **pp,
+                  CommandNode **node,
+                  uint_least8_t flags,
+                  CommandPosition *position,
+                  line_getter fgetline,
+                  void *cookie);
 
 #endif  // NEOVIM_CMD_H
