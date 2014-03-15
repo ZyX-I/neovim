@@ -871,3 +871,37 @@ int parse_one_cmd(char_u **pp,
   *pp = p;
   return OK;
 }
+
+char_u *fgetline_test(int c, char_u **arg, int indent)
+{
+  size_t len = 0;
+  char_u *result;
+
+  while ((*arg)[len] != '\n')
+    len++;
+
+  result = vim_strnsave(*arg, len);
+
+  *arg += len + 1;
+
+  return result;
+}
+
+CommandNode *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
+{
+  char_u **pp;
+  char_u *p;
+  char_u *line;
+  CommandNode *node;
+  CommandPosition position = {1, 1, (char_u *) "<test input>"};
+
+  pp = &arg;
+  line = fgetline_test(0, pp, 0);
+  p = line;
+  if ((parse_one_cmd(&p, &node, flags, &position, (line_getter) fgetline_test,
+                     pp)) == FAIL)
+    ;
+  vim_free(line);
+
+  return node;
+}

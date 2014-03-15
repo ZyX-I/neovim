@@ -99,7 +99,6 @@ typedef struct command_node {
   CommandType type;
   char_u *name;              // Only valid for user commands
   struct command_node *next;
-  size_t num_args;
   Range range;               // sometimes used for count
   union {
     int count;
