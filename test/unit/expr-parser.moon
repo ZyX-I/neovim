@@ -284,6 +284,9 @@ describe 'parse0', ->
   it 'parses [][i1 : i2]', ->
     eqn 'index([], var[+i1+], var[+i2+])', '[][i1 : i2]'
 
+  it 'partially parses (abc)(def) (ghi)', ->
+    eqn 'call(expr[!(!](var[+abc+]), var[+def+])', '(abc)(def) (ghi)', 11
+
   -- SEGV!!!
   -- it 'fails to parse <', ->
     -- eqn 'error', '<'
