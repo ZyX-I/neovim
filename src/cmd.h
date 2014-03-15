@@ -92,7 +92,6 @@ typedef struct command_node {
   CommandType type;
   char_u *name;              // Only valid for user commands
   struct command_node *next;
-  size_t num_args;
   Range range;               // sometimes used for count
   union {
     int count;
@@ -163,5 +162,6 @@ int parse_one_cmd(char_u **pp,
                   CommandPosition *position,
                   line_getter fgetline,
                   void *cookie);
+CommandNode *parse_one_cmd_test(char_u *arg, uint_least8_t flags);
 
 #endif  // NEOVIM_CMD_H
