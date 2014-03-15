@@ -8,6 +8,7 @@
 #ifndef NVIM_VIM_H
 # define NVIM_VIM_H
 
+#include <string.h>
 #include "nvim/memory.h"// for xstrlcpy
 #include "nvim/types.h"
 
