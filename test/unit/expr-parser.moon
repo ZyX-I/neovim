@@ -4,6 +4,7 @@ expr = cimport('./src/expr.h')
 cstr = ffi.typeof('char[?]')
 
 expression_type = {
+  [0]: 'Unknown',
   '?:',
   '||',
   '&&',
@@ -47,13 +48,12 @@ expression_type = {
   'call',
   'empty',
 }
-expression_type[0] = 'Unknown'
 
 case_compare_strategy = {
+  [0]: '',
   '#',
   '?',
 }
-case_compare_strategy[0] = ''
 
 export node_to_string
 node_to_string = (node, err, offset) ->
