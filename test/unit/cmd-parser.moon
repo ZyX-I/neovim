@@ -9,196 +9,259 @@ p1ct = (str, flags=0) ->
     error('parse_one_cmd_test returned nil')
   return ffi.string(result)
 
-eqn = (expected_result, cmd, count=0) ->
+eqn = (expected_result, cmd, offset=nil) ->
   result = p1ct cmd
   eq expected_result, result
 
+itn = (expected_result, cmd, offset=nil) ->
+  it 'parses ' .. cmd, ->
+    eqn expected_result, cmd, offset
+
 describe 'parse_one_cmd', ->
   describe 'no commands', ->
-    it 'parses 1,2|', ->
-      eqn '1,2print', '1,2|'
-    it 'parses 1', ->
-      eqn '1', '1'
-    it 'parses 1,2', ->
-      eqn '1,2', '1,2'
+    itn '1,2print', '1,2|'
+    itn '1', '1'
+    itn '1,2', '1,2'
 
   describe 'modifier commands', ->
-    it 'parses bel 9join', ->
-      eqn 'belowright 9join', 'bel 9join'
-    it 'parses aboveleft join', ->
-      eqn 'aboveleft join', 'aboveleft join'
-    it 'parses abo join', ->
-      eqn 'aboveleft join', 'abo join'
-    it 'parses bel join', ->
-      eqn 'belowright join', 'bel join'
-    it 'parses bo join', ->
-      eqn 'botright join', 'bo join'
-    it 'parses bro join', ->
-      eqn 'browse join', 'bro join'
-    it 'parses conf join', ->
-      eqn 'confirm join', 'conf join'
-    it 'parses hid join', ->
-      eqn 'hide join', 'hid join'
-    it 'parses keepa join', ->
-      eqn 'keepalt join', 'keepa join'
-    it 'parses keepp join', ->
-      eqn 'keeppatterns join', 'keepp join'
-    it 'parses keepj join', ->
-      eqn 'keepjumps join', 'keepj join'
-    it 'parses keepm join', ->
-      eqn 'keepmarks join', 'keepm join'
-    it 'parses lefta join', ->
-      eqn 'leftabove join', 'lefta join'
-    it 'parses loc   join', ->
-      eqn 'lockmarks join', 'loc   j'
-    it 'parses noa   join', ->
-      eqn 'noautocmd join', 'noa   j'
-    it 'parses rightb join', ->
-      eqn 'rightbelow join', 'rightb join'
-    it 'parses san   j', ->
-      eqn 'sandbox join', 'san   j'
-    it 'parses sil   j', ->
-      eqn 'silent join', 'sil   j'
-    it 'parses sil!  j', ->
-      eqn 'silent! join', 'sil!   j'
-    it 'parses tab j', ->
-      eqn 'tab join', 'tab j'
-    it 'parses 5tab j', ->
-      eqn 'tab 5 join', '5tab j'
-    it 'parses to j', ->
-      eqn 'topleft join', 'to j'
-    it 'parses uns j', ->
-      eqn 'unsilent join', 'uns j'
-    it 'parses verb j', ->
-      eqn 'verbose join', 'verb j'
-    it 'parses 1verb j', ->
-      eqn 'verbose 1 join', '1verb j'
-    it 'parses vert j', ->
-      eqn 'vertical join', 'vert j'
+    itn 'belowright 9join', 'bel 9join'
+    itn 'aboveleft join', 'aboveleft join'
+    itn 'aboveleft join', 'abo join'
+    itn 'belowright join', 'bel join'
+    itn 'botright join', 'bo join'
+    itn 'browse join', 'bro join'
+    itn 'confirm join', 'conf join'
+    itn 'hide join', 'hid join'
+    itn 'keepalt join', 'keepa join'
+    itn 'keeppatterns join', 'keepp join'
+    itn 'keepjumps join', 'keepj join'
+    itn 'keepmarks join', 'keepm join'
+    itn 'leftabove join', 'lefta join'
+    itn 'lockmarks join', 'loc   j'
+    itn 'noautocmd join', 'noa   j'
+    itn 'rightbelow join', 'rightb join'
+    itn 'sandbox join', 'san   j'
+    itn 'silent join', 'sil   j'
+    itn 'silent! join', 'sil!   j'
+    itn 'tab join', 'tab j'
+    itn 'tab 5 join', '5tab j'
+    itn 'topleft join', 'to j'
+    itn 'unsilent join', 'uns j'
+    itn 'verbose join', 'verb j'
+    itn 'verbose 1 join', '1verb j'
+    itn 'vertical join', 'vert j'
 
   describe 'ranges', ->
-    it 'parses :1,2join', ->
-      eqn '1,2join', ':1,2join'
-    it 'parses :1,2join!', ->
-      eqn '1,2join!', ':::::::1,2join!'
-    it 'parses :1,2,3,4join!', ->
-      eqn '1,2,3,4join!', ':::::::1,2,3,4join!'
-    it 'parses :1      join!', ->
-      eqn '1join!', ':1      join!'
-    it 'parses :%join', ->
-      eqn '1,$join', ':%join'
+    itn '1,2join', ':1,2join'
+    itn '1,2join!', ':::::::1,2join!'
+    itn '1,2,3,4join!', ':::::::1,2,3,4join!'
+    itn '1join!', ':1      join!'
+    itn '1,$join', ':%join'
     -- TODO: requires &p_cpo option to be initialized
-    -- it 'parses :*join', ->
-      -- eqn '\'<,\'>join', ':*join'
-    it 'parses :1+1;7+1+2+3join', ->
-      eqn '1+1;7+1+2+3join', ':1+1;7+1+2+3join'
+    -- itn '\'<,\'>join', ':*join'
+    itn '1+1;7+1+2+3join', ':1+1;7+1+2+3join'
 
   describe 'count and exflags', ->
-    it 'parses :join #', ->
-      eqn 'join #', ':join #'
-    it 'parses :join 5 #', ->
-      eqn 'join 5 #', ':join 5 #'
-    it 'parses :join#', ->
-      eqn 'join #', ':join#'
-    it 'parses :join5#', ->
-      eqn 'join 5 #', ':join5#'
-    it 'parses :j#', ->
-      eqn 'join #', ':j#'
-    it 'parses :num#', ->
-      eqn 'number #', ':num#'
-    it 'parses :p l', ->
-      eqn 'print l', ':p l'
-    it 'parses :##', ->
-      eqn '# #', ':##'
-    it 'parses :#l', ->
-      eqn '# l', ':#l'
-    it 'parses :=l', ->
-      eqn '= l', ':=l'
-    it 'parses :>l', ->
-      eqn '> l', ':>l'
-    it 'parses :num5#', ->
-      eqn 'number 5 #', ':num5#'
-    it 'parses :p 5l', ->
-      eqn 'print 5 l', ':p 5l'
-    it 'parses :#1#', ->
-      eqn '# 1 #', ':#1#'
-    it 'parses :>3l', ->
-      eqn '> 3 l', ':>3l'
-    it 'parses :<3', ->
-      eqn '< 3', ':<3'
+    itn 'join #', ':join #'
+    itn 'join 5 #', ':join 5 #'
+    itn 'join #', ':join#'
+    itn 'join 5 #', ':join5#'
+    itn 'join #', ':j#'
+    itn 'number #', ':num#'
+    itn 'print l', ':p l'
+    itn '# #', ':##'
+    itn '# l', ':#l'
+    itn '= l', ':=l'
+    itn '> l', ':>l'
+    itn 'number 5 #', ':num5#'
+    itn 'print 5 l', ':p 5l'
+    itn '# 1 #', ':#1#'
+    itn '> 3 l', ':>3l'
+    itn '< 3', ':<3'
 
   describe 'NOFUNC commands', ->
-    it 'parses intro', ->
-      eqn 'intro', 'intro'
-    it 'parses :intro', ->
-      eqn 'intro', ':intro'
-    it 'parses :<', ->
-      eqn '<', ':<'
-    it 'parses :all', ->
-      eqn 'all', ':all'
-    it 'parses :5all', ->
-      eqn '5all', ':5all'
-    it 'parses :all5', ->
-      eqn 'all 5', ':all5'
-    it 'parses :al5', ->
-      eqn 'all 5', ':al5'
-    it 'parses :ascii', ->
-      eqn 'ascii', ':ascii'
-    it 'parses :bN', ->
-      eqn 'bNext', ':bNext'
-    it 'parses :bN5', ->
-      eqn 'bNext 5', ':bNext5'
-    it 'parses :ba', ->
-      eqn 'ball', ':ba'
-    it 'parses :bf', ->
-      eqn 'bfirst', ':bf'
-    it 'parses :bl', ->
-      eqn 'blast', ':bl'
-    it 'parses :bm!', ->
-      eqn 'bmodified!', ':bm!'
-    it 'parses :bn', ->
-      eqn 'bnext', ':bn'
-    it 'parses :bp5', ->
-      eqn 'bprevious 5', ':bp5'
-    it 'parses :br', ->
-      eqn 'brewind', ':br'
-    it 'parses :brea', ->
-      eqn 'break', ':brea'
-    it 'parses :breakl', ->
-      eqn 'breaklist', ':breakl'
-    it 'parses :buffers', ->
-      eqn 'buffers', ':buffers'
-    it 'parses :cN', ->
-      eqn 'cNext', ':cN'
-    it 'parses :X', ->
-      eqn 'X', ':X'
-    it 'parses :xa', ->
-      eqn 'xall', ':xa'
-    it 'parses :wa', ->
-      eqn 'wall', ':wa'
-    it 'parses :viu', ->
-      eqn 'viusage', ':viu'
-    it 'parses :ver', ->
-      eqn 'version', ':ver'
-    it 'parses :unh', ->
-      eqn 'unhide', ':unh'
-    it 'parses :undol', ->
-      eqn 'undolist', ':undol'
-    it 'parses :undoj', ->
-      eqn 'undojoin', ':undoj'
-    it 'parses :undo', ->
-      eqn 'undo 5', ':u5'
-    it 'parses :try', ->
-      eqn 'try', ':try'
-    it 'parses :tr', ->
-      eqn 'trewind', ':tr'
-    it 'parses :tp', ->
-      eqn 'tprevious', ':tp'
-    it 'parses :tn', ->
-      eqn 'tnext', ':tn'
-    it 'parses :tl', ->
-      eqn 'tlast', ':tl'
-    it 'parses :tf', ->
-      eqn 'tfirst', ':tf'
+    itn 'intro', 'intro'
+    itn 'intro', ':intro'
+    itn '<', ':<'
+    itn 'all', ':all'
+    itn '5all', ':5all'
+    itn 'all 5', ':all5'
+    itn 'all 5', ':al5'
+    itn 'ascii', ':ascii'
+    itn 'bNext', ':bN'
+    itn 'bNext 5', ':bN5'
+    itn 'ball', ':ba'
+    itn 'bfirst', ':bf'
+    itn 'blast', ':bl'
+    itn 'bmodified!', ':bm!'
+    itn 'bnext', ':bn'
+    itn 'bprevious 5', ':bp5'
+    itn 'brewind', ':br'
+    itn 'break', ':brea'
+    itn 'breaklist', ':breakl'
+    itn 'buffers', ':buffers'
+    itn 'cNext', ':cN'
+    itn 'X', ':X'
+    itn 'xall', ':xa'
+    itn 'wall', ':wa'
+    itn 'viusage', ':viu'
+    itn 'version', ':ver'
+    itn 'unhide', ':unh'
+    itn 'undolist', ':undol'
+    itn 'undojoin', ':undoj'
+    itn 'undo 5', ':u5'
+    itn 'try', ':try'
+    itn 'trewind', ':tr'
+    itn 'tprevious', ':tp'
+    itn 'tnext', ':tn'
+    itn 'tlast', ':tl'
+    itn 'tfirst', ':tf'
+    itn 'tabs', ':tabs'
+    itn 'tabrewind', ':tabr'
+    itn 'tabNext', ':tabN'
+    itn '5tabNext', ':5tabN'
+    itn '5tabprevious', ':5tabp'
+    itn 'tabonly!', ':tabo!'
+    itn '5tabnext', ':5tabn'
+    itn 'tablast', ':tabl'
+    itn 'tabfirst', ':tabfir'
+    itn 'tabclose! 1', ':tabc!1'
+    itn '1tabclose!', ':1tabc!'
+    itn 'tags', ':tags'
+    itn '5tNext!', ':5tN!'
+    itn 'syncbind', ':syncbind'
+    itn 'swapname', ':sw'
+    itn 'suspend!', ':sus!'
+    itn 'sunhide 5', ':sun5'
+    itn 'stopinsert', ':stopi'
+    itn 'startreplace!', ':startr!'
+    itn 'startgreplace!', ':startg!'
+    itn 'startinsert!', ':star!'
+    itn 'stop!', ':st!'
+    itn 'spellrepall', ':spellr'
+    itn 'spellinfo', ':spelli'
+    itn 'spelldump!', ':spelld!'
+    itn 'shell', ':sh'
+    itn 'scriptnames', ':scrip'
+    itn 'sbrewind', ':sbr'
+    itn 'sbprevious', ':sbp'
+    itn 'sbnext', ':sbn'
+    itn 'sbmodified 5', ':sbm 5'
+    itn 'sblast', ':sbl'
+    itn 'sbfirst', ':sbf'
+    itn 'sball 5', ':sba5'
+    itn '5sball', ':5sba'
+    itn 'sbNext 5', ':sbN5'
+    itn '5sbNext', ':5sbN'
+    itn 'sall! 5', ':sal!5'
+    itn '5sall!', ':5sal!'
+    itn 'redrawstatus!', ':redraws!'
+    itn 'redraw!', ':redr!'
+    itn 'redo', ':red'
+    itn 'pwd', ':pw'
+    itn '5ptrewind!', ':5ptr!'
+    itn '5ptprevious!', ':5ptp!'
+    itn '5ptnext!', ':5ptn!'
+    itn 'ptlast!', ':ptl!'
+    itn '5ptfirst!', ':5ptf!'
+    itn '5ptNext!', ':5ptN!'
+    itn 'preserve', ':pre'
+    itn '5ppop!', ':5pp!'
+    itn '5pop!', ':5po!'
+    itn 'pclose!', ':pc!'
+    itn 'options', ':opt'
+    itn 'only!', ':on!'
+    itn 'oldfiles', ':ol'
+    itn 'nohlsearch', ':noh'
+    itn 'nbclose', ':nbc'
+    itn 'messages', ':mes'
+    itn 'ls!', ':ls!'
+    itn 'lwindow 5', ':lw 5'
+    itn '5lwindow', ':5lw'
+    itn 'cwindow 5', ':cw 5'
+    itn '5cwindow', ':5cw'
+    itn 'lrewind 5', ':lr 5'
+    itn '5lrewind', ':5lr'
+    itn 'crewind 5', ':cr 5'
+    itn '5crewind', ':5cr'
+    itn 'lpfile 5', ':lpf 5'
+    itn '5lpfile', ':5lpf'
+    itn 'cpfile 5', ':cpf 5'
+    itn '5cpfile', ':5cpf'
+    itn 'lNfile 5', ':lNf 5'
+    itn '5lNfile', ':5lNf'
+    itn 'cNfile 5', ':cNf 5'
+    itn '5cNfile', ':5cNf'
+    itn 'lprevious 5', ':lp 5'
+    itn '5lprevious', ':5lp'
+    itn 'cprevious 5', ':cp 5'
+    itn '5cprevious', ':5cp'
+    itn 'lNext 5', ':lN 5'
+    itn '5lNext', ':5lN'
+    itn 'cNext 5', ':cN 5'
+    itn '5cNext', ':5cN'
+    itn 'lopen 5', ':lop 5'
+    itn '5lopen', ':5lop'
+    itn 'copen 5', ':cope 5'
+    itn '5copen', ':5cope'
+    itn 'lolder 5', ':lol 5'
+    itn '5lolder', ':5lol'
+    itn 'colder 5', ':col 5'
+    itn '5colder', ':5col'
+    itn 'lnewer 5', ':lnew 5'
+    itn '5lnewer', ':5lnew'
+    itn 'cnewer 5', ':cnew 5'
+    itn '5cnewer', ':5cnew'
+    itn '5lnfile!', '5lnf!'
+    itn 'lnfile! 5', 'lnf! 5'
+    itn '5cnfile!', '5cnf!'
+    itn 'cnfile! 5', 'cnf! 5'
+    itn '5lnext!', '5lne!'
+    itn 'lnext! 5', 'lne! 5'
+    itn '5cnext!', '5cn!'
+    itn 'cnext! 5', 'cn! 5'
+    itn '5llast!', '5lla!'
+    itn 'llast! 5', 'lla! 5'
+    itn '5clast!', '5cla!'
+    itn 'clast! 5', 'cla! 5'
+    itn '5ll!', '5ll!'
+    itn 'll! 5', 'll! 5'
+    itn '5cc!', '5cc!'
+    itn 'cc! 5', 'cc! 5'
+    itn 'lfirst 5', ':lfir 5'
+    itn '5lfirst', ':5lfir'
+    itn 'cfirst 5', ':cfir 5'
+    itn '5cfirst', ':5cfir'
+    itn 'lclose 5', ':lcl 5'
+    itn '5lclose', ':5lcl'
+    itn 'cclose 5', ':ccl 5'
+    itn '5cclose', ':5ccl'
+    itn 'jumps', ':ju'
+    itn 'helpfind', ':helpf'
+    itn '5goto 1', ':5go1'
+    itn '5,1foldopen!', ':5,1foldo!'
+    itn '5,1foldclose!', ':5,1foldc!'
+    itn '5,1fold', ':5,1fold'
+    itn 'fixdel', 'fixdel'
+    itn 'finish', 'fini'
+    itn 'finally', 'fina'
+    itn 'files!', 'files!'
+    itn 'exusage', 'exu'
+    itn 'endif', 'end'
+    itn 'endfunction', 'endf'
+    itn 'endfor', 'endfo'
+    itn 'endtry', 'endt'
+    itn 'endwhile', 'endw'
+    itn 'else', 'el'
+    itn 'diffthis', 'difft'
+    itn 'diffoff!', 'diffo!'
+    itn 'diffupdate!', 'diffu!'
+    itn '0debuggreedy', '0debugg'
+    itn 'cquit!', 'cq!'
+    itn 'continue', 'con'
+    itn 'comclear', 'comc'
+    itn 'close!', 'clo!'
+    itn 'checkpath!', 'che!'
+    itn 'changes', ':changes'
 
 -- vim: sw=2 sts=2 et tw=80
