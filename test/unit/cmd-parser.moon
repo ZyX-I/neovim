@@ -109,5 +109,35 @@ describe 'parse_one_cmd', ->
     eqn 'buffers', ':buffers'
   it 'parses :cN', ->
     eqn 'cNext', ':cN'
+  it 'parses :X', ->
+    eqn 'X', ':X'
+  it 'parses :xa', ->
+    eqn 'xall', ':xa'
+  it 'parses :wa', ->
+    eqn 'wall', ':wa'
+  it 'parses :viu', ->
+    eqn 'viusage', ':viu'
+  it 'parses :ver', ->
+    eqn 'version', ':ver'
+  it 'parses :unh', ->
+    eqn 'unhide', ':unh'
+  it 'parses :undol', ->
+    eqn 'undolist', ':undol'
+  it 'parses :undoj', ->
+    eqn 'undojoin', ':undoj'
+  it 'parses :undo', ->
+    eqn 'undo 5', ':u5'
+  it 'parses :try', ->
+    eqn 'try', ':try'
+  it 'parses :tr', ->
+    eqn 'trewind', ':tr'
+  it 'parses :tp', ->
+    eqn 'tprevious', ':tp'
+  it 'parses :tn', ->
+    eqn 'tnext', ':tn'
+  it 'parses :tl', ->
+    eqn 'tlast', ':tl'
+  it 'parses :tf', ->
+    eqn 'tfirst', ':tf'
 
 -- vim: sw=2 sts=2 et tw=80
