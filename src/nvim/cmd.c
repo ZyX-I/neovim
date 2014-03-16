@@ -901,6 +901,40 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->range = range;
   (*next_node)->name = name;
 
+  if (CMDDEF(type).flags & COUNT) {
+    if (VIM_ISDIGIT(*p)) {
+      (*next_node)->cnt_type = kCntCount;
+      (*next_node)->cnt.count = getdigits(&p);
+      p = skipwhite(p);
+    }
+  }
+
+  if (CMDDEF(type).flags & EXFLAGS) {
+    for (;;) {
+      switch (*p) {
+        case 'l': {
+          (*next_node)->exflags |= FLAG_EX_LIST;
+          p++;
+          continue;
+        }
+        case '#': {
+          (*next_node)->exflags |= FLAG_EX_LNR;
+          p++;
+          continue;
+        }
+        case 'p': {
+          (*next_node)->exflags |= FLAG_EX_PRINT;
+          p++;
+          continue;
+        }
+        default: {
+          break;
+        }
+      }
+      break;
+    }
+  }
+
   if (type == kCmdUSER) {
     len = STRLEN(p);
     if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
@@ -929,7 +963,7 @@ static char_u *fgetline_test(int c, char_u **arg, int indent)
   size_t len = 0;
   char_u *result;
 
-  while ((*arg)[len] != '\n')
+  while ((*arg)[len] != '\n' && (*arg)[len] != '\0')
     len++;
 
   result = vim_strnsave(*arg, len);
@@ -1213,6 +1247,34 @@ static size_t node_repr_len(CommandNode *node)
   if (node->bang)
     len++;
 
+  switch (node->cnt_type) {
+    case kCntMissing: {
+      break;
+    }
+    case kCntCount:
+    case kCntBuffer: {
+      len += 1 + unumber_repr_len((uintmax_t) node->cnt.count);
+      break;
+    }
+    case kCntReg: {
+      len += 2;
+      break;
+    }
+    case kCntExprReg: {
+      // FIXME
+      break;
+    }
+  }
+
+  if (node->exflags)
+    len++;
+  if (node->exflags & FLAG_EX_LIST)
+    len++;
+  if (node->exflags & FLAG_EX_LNR)
+    len++;
+  if (node->exflags & FLAG_EX_PRINT)
+    len++;
+
   return len;
 }
 
@@ -1238,6 +1300,36 @@ static void node_repr(CommandNode *node, char **pp)
 
   if (node->bang)
     *p++ = '!';
+
+  switch (node->cnt_type) {
+    case kCntMissing: {
+      break;
+    }
+    case kCntCount:
+    case kCntBuffer: {
+      *p++ = ' ';
+      unumber_repr((uintmax_t) node->cnt.count, &p);
+      break;
+    }
+    case kCntReg: {
+      *p++ = ' ';
+      *p++ = node->cnt.reg;
+      break;
+    }
+    case kCntExprReg: {
+      // FIXME
+      break;
+    }
+  }
+
+  if (node->exflags)
+    *p++ = ' ';
+  if (node->exflags & FLAG_EX_LIST)
+    *p++ = 'l';
+  if (node->exflags & FLAG_EX_LNR)
+    *p++ = '#';
+  if (node->exflags & FLAG_EX_PRINT)
+    *p++ = 'p';
 
   *pp = p;
 }
