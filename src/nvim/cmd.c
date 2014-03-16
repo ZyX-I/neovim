@@ -692,30 +692,36 @@ int parse_one_cmd(char_u **pp,
     /* } */
 
     // 2. handle command modifiers.
-    for (i = 0; i < (size_t) kCmdSIZE; i++) {
-      if (CMDDEF(i).flags & ISMODIFIER) {
-        size_t common_len;
-        if (i > 0) {
-          char_u *name = CMDDEF(i).name;
-          char_u *prev_name = CMDDEF(i - 1).name;
-          common_len = 0;
-          // FIXME: Precompute and record this in cmddefs
-          while (name[common_len] == prev_name[common_len])
-            common_len++;
-        } else {
-          common_len = 1;
-        }
-        if (checkforcmd(&p, CMDDEF(i).name, common_len)) {
-          type = (CommandType) i;
+    if (ASCII_ISALPHA(*p)) {
+      for (i = cmdidxs[(int) *p]; i < (size_t) kCmdSIZE; i++) {
+        if (*(CMDDEF(i).name) != *p)
           break;
+        if (CMDDEF(i).flags & ISMODIFIER) {
+          size_t common_len;
+          if (i > 0) {
+            char_u *name = CMDDEF(i).name;
+            char_u *prev_name = CMDDEF(i - 1).name;
+            common_len = 0;
+            // FIXME: Precompute and record this in cmddefs
+            while (name[common_len] == prev_name[common_len])
+              common_len++;
+          } else {
+            common_len = 1;
+          }
+          if (checkforcmd(&p, CMDDEF(i).name, common_len)) {
+            type = (CommandType) i;
+            break;
+          }
         }
       }
-    }
-    if (type != kCmdUnknown) {
-      if ((*next_node = cmd_alloc(type)) == NULL)
-        return FAIL;
-      next_node = &((*next_node)->args[0].arg.cmd);
-      type = kCmdUnknown;
+      if (type != kCmdUnknown) {
+        if ((*next_node = cmd_alloc(type)) == NULL)
+          return FAIL;
+        next_node = &((*next_node)->args[0].arg.cmd);
+        type = kCmdUnknown;
+      } else {
+        break;
+      }
     } else {
       break;
     }
