@@ -264,4 +264,24 @@ describe 'parse_one_cmd', ->
     itn 'checkpath!', 'che!'
     itn 'changes', ':changes'
 
+  describe 'append/insert/change commands', ->
+    itn 'append\n.', 'a'
+    itn 'insert\n.', 'i'
+    itn 'change\n.', 'c'
+    itn 'append!\n.', 'a!'
+    itn 'insert!\n.', 'i!'
+    itn 'change!\n.', 'c!'
+    itn '1,2append!\n.', '1,2a!'
+    itn '1,2insert!\n.', '1,2i!'
+    itn '1,2change!\n.', '1,2c!'
+    itn 'append\nabc\n.', 'a\nabc\n.'
+    itn 'insert\nabc\n.', 'i\nabc\n.'
+    itn 'change\nabc\n.', 'c\nabc\n.'
+    itn 'append\n  abc\n.', 'a\n  abc\n.'
+    itn 'insert\n  abc\n.', 'i\n  abc\n.'
+    itn 'change\n  abc\n.', 'c\n  abc\n.'
+    itn 'append\n  abc\n.', 'a\n  abc\n  .'
+    itn 'insert\n  abc\n.', 'i\n  abc\n  .'
+    itn 'change\n  abc\n.', 'c\n  abc\n  .'
+
 -- vim: sw=2 sts=2 et tw=80

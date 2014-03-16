@@ -9,13 +9,78 @@
 #include "types.h"
 #include "cmd.h"
 #include "expr.h"
+#include "misc2.h"
+#include "charset.h"
+#include "globals.h"
+#include "garray.h"
+
+static int parse_append(char_u **, CommandNode *, uint_least8_t,
+                        CommandPosition *, line_getter, void *);
+
 #include "cmd_def.h"
 #define DO_DECLARE_EXCMD
 #include "cmd_def.h"
 #undef DO_DECLARE_EXCMD
-#include "misc2.h"
-#include "charset.h"
-#include "globals.h"
+
+static int get_vcol(char_u **pp)
+{
+  int vcol = 0;
+  char_u *p = *pp;
+
+  for (;;) {
+    switch (*p++) {
+      case ' ': {
+        vcol++;
+        continue;
+      }
+      case TAB: {
+        vcol += 8 - vcol % 8;
+        continue;
+      }
+      default: {
+        break;
+      }
+    }
+    break;
+  }
+
+  *pp = p - 1;
+  return vcol;
+}
+
+static int parse_append(char_u **pp, CommandNode *node, uint_least8_t flags,
+                        CommandPosition *position, line_getter fgetline,
+                        void *cookie)
+{
+  garray_T *strs = &(node->args[ARG_APPEND_LINES].arg.strs);
+  char_u *next_line;
+  char_u *first_nonblank;
+  int vcol = -1;
+  int cur_vcol = -1;
+
+  ga_init2(strs, (int) sizeof(char_u *), 3);
+
+  while ((next_line = fgetline(':', cookie, vcol == -1 ? 0 : vcol)) != NULL) {
+    first_nonblank = next_line;
+    if (vcol == -1) {
+      vcol = get_vcol(&first_nonblank);
+    } else {
+      cur_vcol = get_vcol(&first_nonblank);
+    }
+    if (first_nonblank[0] == '.' && first_nonblank[1] == NUL
+        && cur_vcol <= vcol) {
+      vim_free(next_line);
+      break;
+    }
+    if (ga_grow(strs, 1) == FAIL) {
+      ga_clear_strings(strs);
+      return FAIL;
+    }
+    ((char_u **)(strs->ga_data))[strs->ga_len++] = next_line;
+  }
+
+  return OK;
+}
 
 // Table used to quickly search for a command, based on its first character.
 static CommandType cmdidxs[27] =
@@ -206,12 +271,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     }
     case kArgLines:
     case kArgStrings: {
-      char_u *s = *(arg->arg.strs);
-      while (s != NULL) {
-        vim_free(s);
-        s++;
-      }
-      vim_free(arg->arg.strs);
+      ga_clear_strings(&(arg->arg.strs));
       break;
     }
     case kArgMenuName: {
@@ -639,7 +699,7 @@ int parse_one_cmd(char_u **pp,
   for (;;) {
     char_u *pstart;
     // 1. skip comment lines and leading white space and colons
-    while (*p == ' ' || *p == '\t' || *p == ':')
+    while (*p == ' ' || *p == TAB || *p == ':')
       p++;
     // in ex mode, an empty line works like :+ (switch to next line)
     if (*p == NUL && flags&FLAG_POC_EXMODE) {
@@ -825,7 +885,7 @@ int parse_one_cmd(char_u **pp,
   // 4. parse command
 
   // Skip ':' and any white space
-  while (*p == ' ' || *p == '\t' || *p == ':')
+  while (*p == ' ' || *p == TAB || *p == ':')
     p++;
 
   /*
@@ -961,12 +1021,14 @@ int parse_one_cmd(char_u **pp,
     parser = CMDDEF(type).parse;
 
     if (parser != NULL) {
-      if (parser(&p, *next_node, flags, position, fgetline, cookie)
+      int ret;
+      if ((ret = parser(&p, *next_node, flags, position, fgetline, cookie))
           == FAIL) {
         free_cmd(*next_node);
         *next_node = NULL;
         return FAIL;
       }
+      return ret;
     }
   }
 
@@ -979,12 +1041,18 @@ static char_u *fgetline_test(int c, char_u **arg, int indent)
   size_t len = 0;
   char_u *result;
 
+  if (**arg == '\0')
+    return NULL;
+
   while ((*arg)[len] != '\n' && (*arg)[len] != '\0')
     len++;
 
   result = vim_strnsave(*arg, len);
 
-  *arg += len + 1;
+  if ((*arg)[len] == '\0')
+    *arg += len;
+  else
+    *arg += len + 1;
 
   return result;
 }
@@ -1294,8 +1362,18 @@ static size_t node_repr_len(CommandNode *node)
   if (node->exflags & FLAG_EX_PRINT)
     len++;
 
-  if (CMDDEF(node->type).flags & ISMODIFIER)
+  if (CMDDEF(node->type).flags & ISMODIFIER) {
     len += node_repr_len(node->args[0].arg.cmd) + 1;
+  } else if (CMDDEF(node->type).parse == &parse_append) {
+    garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
+    int i = ga->ga_len;
+
+    while (i--) {
+      len += 1 + STRLEN(((char_u **)ga->ga_data)[i]);
+    }
+
+    len += 2;
+  }
 
   return len;
 }
@@ -1359,6 +1437,19 @@ static void node_repr(CommandNode *node, char **pp)
   if (CMDDEF(node->type).flags & ISMODIFIER) {
     *p++ = ' ';
     node_repr(node->args[0].arg.cmd, &p);
+  } else if (CMDDEF(node->type).parse == &parse_append) {
+    garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
+    int ga_len = ga->ga_len;
+    int i;
+
+    for (i = 0; i < ga_len ; i++) {
+      *p++ = '\n';
+      len = STRLEN(((char_u **)ga->ga_data)[i]);
+      memcpy(p, ((char_u **)ga->ga_data)[i], len);
+      p += len;
+    }
+    *p++ = '\n';
+    *p++ = '.';
   }
 
   *pp = p;

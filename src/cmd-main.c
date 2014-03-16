@@ -55,6 +55,21 @@ char_u *alloc_clear(unsigned size)
   return res;
 }
 
+void *vim_memset(void *src, int c, size_t n)
+{
+  return memset(src, c, n);
+}
+
+void mch_memmove(void *dest, void *src, size_t n)
+{
+  memmove(dest, src, n);
+}
+
+char_u *alloc(unsigned size)
+{
+  return malloc(size);
+}
+
 void vim_free(void *v)
 {
   free(v);
