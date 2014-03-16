@@ -244,11 +244,13 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
 
 void free_cmd(CommandNode *node)
 {
-  size_t numargs = CMDDEF(node->type).num_args;
+  size_t numargs;
   size_t i;
 
   if (node == NULL)
     return;
+
+  numargs = CMDDEF(node->type).num_args;
 
   if (node->type == kCmdUSER)
     free_cmd_arg(&(node->args[0]), kArgString);
@@ -633,9 +635,9 @@ int parse_one_cmd(char_u **pp,
     return OK;
   }
 
+  p = *pp;
   for (;;) {
     // 1. skip comment lines and leading white space and colons
-    p = *pp;
     while (*p == ' ' || *p == '\t' || *p == ':')
       p++;
     // in ex mode, an empty line works like :+ (switch to next line)
@@ -677,23 +679,19 @@ int parse_one_cmd(char_u **pp,
     /* } */
 
     // 2. handle command modifiers.
-    if (ASCII_ISALPHA(*p)) {
-      for (i = cmdidxs[(int) *p]; i < (size_t) kCmdSIZE; i++) {
-        if (*(CMDDEF(i).name) != *p)
-          break;
+    if (ASCII_ISLOWER(*p)) {
+      for (i = cmdidxs[(int) (*p - 'a')]; *(CMDDEF(i).name) == *p; i++) {
         if (CMDDEF(i).flags & ISMODIFIER) {
-          size_t common_len;
+          size_t common_len = 0;
           if (i > 0) {
             char_u *name = CMDDEF(i).name;
             char_u *prev_name = CMDDEF(i - 1).name;
-            common_len = 0;
+            common_len++;
             // FIXME: Precompute and record this in cmddefs
             while (name[common_len] == prev_name[common_len])
               common_len++;
-          } else {
-            common_len = 1;
           }
-          if (checkforcmd(&p, CMDDEF(i).name, common_len)) {
+          if (checkforcmd(&p, CMDDEF(i).name, common_len + 1)) {
             type = (CommandType) i;
             break;
           }
@@ -1230,6 +1228,9 @@ static size_t node_repr_len(CommandNode *node)
 {
   size_t len = 0;
 
+  if (node == NULL)
+    return 0;
+
   len += range_repr_len(&(node->range));
 
   if (node->type == kCmdUSER)
@@ -1270,6 +1271,9 @@ static size_t node_repr_len(CommandNode *node)
   if (node->exflags & FLAG_EX_PRINT)
     len++;
 
+  if (CMDDEF(node->type).flags & ISMODIFIER)
+    len += node_repr_len(node->args[0].arg.cmd) + 1;
+
   return len;
 }
 
@@ -1278,6 +1282,9 @@ static void node_repr(CommandNode *node, char **pp)
   char *p = *pp;
   size_t len = 0;
   char_u *name;
+
+  if (node == NULL)
+    return;
 
   range_repr(&(node->range), &p);
 
@@ -1325,6 +1332,11 @@ static void node_repr(CommandNode *node, char **pp)
     *p++ = '#';
   if (node->exflags & FLAG_EX_PRINT)
     *p++ = 'p';
+
+  if (CMDDEF(node->type).flags & ISMODIFIER) {
+    *p++ = ' ';
+    node_repr(node->args[0].arg.cmd, &p);
+  }
 
   *pp = p;
 }

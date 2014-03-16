@@ -18,6 +18,28 @@ describe 'parse_one_cmd', ->
     eqn '1,2print', '1,2|'
   it 'parses 1', ->
     eqn '1', '1'
+  it 'parses aboveleft join', ->
+    eqn 'aboveleft join', 'aboveleft join'
+  it 'parses abo join', ->
+    eqn 'aboveleft join', 'abo join'
+  it 'parses bel join', ->
+    eqn 'belowright join', 'bel join'
+  it 'parses bot join', ->
+    eqn 'botright join', 'bot join'
+  it 'parses bro join', ->
+    eqn 'browse join', 'bro join'
+  it 'parses conf join', ->
+    eqn 'confirm join', 'conf join'
+  it 'parses hid join', ->
+    eqn 'hide join', 'hid join'
+  it 'parses keepa join', ->
+    eqn 'keepalt join', 'keepa join'
+  it 'parses keepp join', ->
+    eqn 'keeppatterns join', 'keepp join'
+  it 'parses keepj join', ->
+    eqn 'keepjumps join', 'keepj join'
+  it 'parses keepm join', ->
+    eqn 'keepmarks join', 'keepm join'
   it 'parses 1,2', ->
     eqn '1,2', '1,2'
   it 'parses intro', ->
