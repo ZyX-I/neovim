@@ -22,5 +22,7 @@ describe 'parse_one_cmd', ->
     eqn '1,2join', ':1,2join'
   it 'parses :1,2join!', ->
     eqn '1,2join!', ':::::::1,2join!'
+  it 'parses :1,2,3,4join!', ->
+    eqn '1,2,3,4join!', ':::::::1,2,3,4join!'
 
 -- vim: sw=2 sts=2 et tw=80

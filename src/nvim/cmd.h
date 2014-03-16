@@ -63,12 +63,11 @@ typedef struct address_followup {
   struct address_followup *next;
 } AddressFollowup;
 
-typedef struct {
-  Address start;
-  Address end;
-  AddressFollowup *start_followups;
-  AddressFollowup *end_followups;
-  int setpos;                        // , vs ;
+typedef struct range {
+  Address address;
+  AddressFollowup *followups;
+  int setpos;                // , vs ;
+  struct range *next;
 } Range;
 
 typedef struct menu_item {

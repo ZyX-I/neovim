@@ -142,17 +142,25 @@ static void free_address_followup(AddressFollowup *followup)
   vim_free(followup);
 }
 
-static void free_range_data(Range *range, int onlystart)
+static void free_range(Range *range);
+
+static void free_range_data(Range *range)
 {
   if (range == NULL)
     return;
 
-  free_address_data(&(range->start));
-  free_address_followup(range->start_followups);
-  if (!onlystart) {
-    free_address_data(&(range->end));
-    free_address_followup(range->end_followups);
-  }
+  free_address_data(&(range->address));
+  free_address_followup(range->followups);
+  free_range(range->next);
+}
+
+static void free_range(Range *range)
+{
+  if (range == NULL)
+    return;
+
+  free_range_data(range);
+  vim_free(range);
 }
 
 static void free_cmd_arg(CommandArg *arg, CommandArgType type)
@@ -254,7 +262,7 @@ void free_cmd(CommandNode *node)
     for (i = 0; i < numargs; i++)
       free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
 
-  free_range_data(&(node->range), FALSE);
+  free_range_data(&(node->range));
   vim_free(node->name);
   vim_free(node);
 }
@@ -601,6 +609,7 @@ int parse_one_cmd(char_u **pp,
   CommandParserError error;
   CommandType type = kCmdUnknown;
   Range range;
+  Range current_range;
   char_u *p;
   char_u *s = *pp;
   char_u *nextcmd = NULL;
@@ -612,6 +621,7 @@ int parse_one_cmd(char_u **pp,
   args_parser parser = NULL;
 
   memset(&range, 0, sizeof(Range));
+  memset(&current_range, 0, sizeof(Range));
   memset(&error, 0, sizeof(CommandParserError));
 
   if (((*pp)[0] == '#') &&
@@ -636,7 +646,7 @@ int parse_one_cmd(char_u **pp,
       AddressFollowup *fw;
       if ((*next_node = cmd_alloc(kCmdHashbangComment)) == NULL)
         return FAIL;
-      (*next_node)->range.start.type = kAddrCurrent;
+      (*next_node)->range.address.type = kAddrCurrent;
       if ((fw = address_followup_alloc(type)) == NULL) {
         free_cmd(*next_node);
         *next_node = NULL;
@@ -644,7 +654,7 @@ int parse_one_cmd(char_u **pp,
       }
       fw->type = kAddressFollowupShift;
       fw->data.shift = 1;
-      (*next_node)->range.start_followups = fw;
+      (*next_node)->range.followups = fw;
       return OK;
     }
 
@@ -720,45 +730,70 @@ int parse_one_cmd(char_u **pp,
     p = skipwhite(p);
     if (range_start == NULL)
       range_start = p;
-    if (get_address(&p, &range.end, &error) == FAIL) {
+    if (get_address(&p, &current_range.address, &error) == FAIL) {
+      if (error.message == NULL)
+        return FAIL;
       create_error_node(next_node, &error, position, s);
-      free_range_data(&range, FALSE);
+      free_range_data(&current_range);
       return NOTDONE;
     }
-    if (get_address_followups(&p, &error, &range.end_followups) == FAIL) {
+    if (get_address_followups(&p, &error, &current_range.followups) == FAIL) {
+      if (error.message == NULL)
+        return FAIL;
       create_error_node(next_node, &error, position, s);
-      free_range_data(&range, FALSE);
+      free_range_data(&current_range);
       return NOTDONE;
     }
     p = skipwhite(p);
-    if (range.end_followups != NULL) {
-      if (range.end.type == kAddrMissing)
-        range.end.type = kAddrCurrent;
-    } else if (range.end.type == kAddrMissing) {
+    if (current_range.followups != NULL) {
+      if (current_range.address.type == kAddrMissing)
+        current_range.address.type = kAddrCurrent;
+    } else if (range.address.type == kAddrMissing
+               && current_range.address.type == kAddrMissing) {
       if (*p == '%') {
-        range.start.type = kAddrFixed;
-        range.start.data.lnr = 1;
-        range.end.type = kAddrEnd;
+        current_range.address.type = kAddrFixed;
+        current_range.address.data.lnr = 1;
+        if ((current_range.next = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
+          free_range_data(&range);
+          free_range_data(&current_range);
+          return FAIL;
+        }
+        current_range.next->address.type = kAddrEnd;
+        range = current_range;
         break;
       } else if (*p == '*' && vim_strchr(p_cpo, CPO_STAR) == NULL) {
-        range.start.type = kAddrMark;
-        range.start.data.mark = '<';
-        range.end.type = kAddrMark;
-        range.end.data.mark = '>';
+        current_range.address.type = kAddrMark;
+        current_range.address.data.mark = '<';
+        if ((current_range.next = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
+          free_range_data(&range);
+          free_range_data(&current_range);
+          return FAIL;
+        }
+        current_range.next->address.type = kAddrMark;
+        current_range.next->address.data.mark = '>';
+        range = current_range;
         break;
       }
     }
-    if (*p == ';' || *p == ',') {
-      range.setpos = (*p == ';');
-      free_range_data(&range, TRUE);
-      range.start = range.end;
-      range.start_followups = range.end_followups;
-      range.end.type = kAddrMissing;
-      range.end_followups = NULL;
-      p++;
+    current_range.setpos = (*p == ';');
+    if (range.address.type != kAddrMissing) {
+      Range **target = (&(range.next));
+      while (*target != NULL)
+        target = &((*target)->next);
+      if ((*target = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
+        free_range_data(&range);
+        free_range_data(&current_range);
+        return FAIL;
+      }
+      **target = current_range;
     } else {
-      break;
+      range = current_range;
     }
+    memset(&current_range, 0, sizeof(Range));
+    if (*p == ';' || *p == ',')
+      p++;
+    else
+      break;
   }
 
   // 4. parse command
@@ -778,9 +813,10 @@ int parse_one_cmd(char_u **pp,
      * ":3|..."	prints line 3
      * ":|"		prints current line
      */
-    if (*p == '|' || (flags&FLAG_POC_EXMODE && range.end.type != kAddrMissing)) {
+    if (*p == '|' || (flags&FLAG_POC_EXMODE
+                      && range.address.type != kAddrMissing)) {
       if ((*next_node = cmd_alloc(kCmdPrint)) == NULL) {
-        free_range_data(&range, FALSE);
+        free_range_data(&range);
         return FAIL;
       }
       (*next_node)->range = range;
@@ -788,7 +824,7 @@ int parse_one_cmd(char_u **pp,
       *pp = p;
       return OK;
     } else if (*p == '"') {
-      free_range_data(&range, FALSE);
+      free_range_data(&range);
       if ((*next_node = cmd_alloc(kCmdComment)) == NULL)
         return FAIL;
       p++;
@@ -798,7 +834,7 @@ int parse_one_cmd(char_u **pp,
       *pp = p + len;
       return OK;
     } else {
-      free_range_data(&range, FALSE);
+      free_range_data(&range);
 
       *pp = (nextcmd == NULL
              ? p
@@ -808,7 +844,9 @@ int parse_one_cmd(char_u **pp,
   }
 
   if (find_command(&p, &type, &name, &error) == FAIL) {
-    free_range_data(&range, FALSE);
+    if (error.message == NULL)
+      return FAIL;
+    free_range_data(&range);
     create_error_node(next_node, &error, position, s);
     return NOTDONE;
   }
@@ -827,7 +865,7 @@ int parse_one_cmd(char_u **pp,
     }
   }
 
-  if (range.start.type != kAddrMissing || range.end.type != kAddrMissing) {
+  if (range.address.type != kAddrMissing) {
     if (!(type == kCmdUSER || CMDDEF(type).flags & RANGE)) {
       error.message = e_norange;
       error.position = range_start;
@@ -842,7 +880,7 @@ int parse_one_cmd(char_u **pp,
     p = skipwhite(p);
 
   if ((*next_node = cmd_alloc(type)) == NULL) {
-    free_range_data(&range, FALSE);
+    free_range_data(&range);
     return FAIL;
   }
   (*next_node)->bang = bang;
@@ -1113,14 +1151,15 @@ static size_t range_repr_len(Range *range)
 {
   size_t len = 0;
 
-  if (range->start.type == kAddrMissing && range->end.type == kAddrMissing)
+  if (range->address.type == kAddrMissing)
     return 0;
 
-  len += address_repr_len(&(range->start));
-  len += address_followup_repr_len(range->start_followups);
-  len++;
-  len += address_repr_len(&(range->end));
-  len += address_followup_repr_len(range->end_followups);
+  len += address_repr_len(&(range->address));
+  len += address_followup_repr_len(range->followups);
+  if (range->next != NULL) {
+    len++;
+    len += range_repr_len(range->next);
+  }
 
   return len;
 }
@@ -1129,14 +1168,15 @@ static void range_repr(Range *range, char **pp)
 {
   char *p = *pp;
 
-  if (range->start.type == kAddrMissing && range->end.type == kAddrMissing)
+  if (range->address.type == kAddrMissing)
     return;
 
-  address_repr(&(range->start), &p);
-  address_followup_repr(range->start_followups, &p);
-  *p++ = (range->setpos ? ';' : ',');
-  address_repr(&(range->end), &p);
-  address_followup_repr(range->end_followups, &p);
+  address_repr(&(range->address), &p);
+  address_followup_repr(range->followups, &p);
+  if (range->next != NULL) {
+    *p++ = (range->setpos ? ';' : ',');
+    range_repr(range->next, &p);
+  }
 
   *pp = p;
 }
