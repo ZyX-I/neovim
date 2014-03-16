@@ -114,7 +114,7 @@ typedef enum
 #ifndef DO_DECLARE_EXCMD
   kCmdUnknown = 0,
 #endif
-  EX(kCmdAppend,          "append",       NULL,
+  EX(kCmdAppend,          "append",       &parse_append,
      ARG_APPEND_LINES, ARGS_APPEND,
      BANG|RANGE|ZEROR|TRLBAR|CMDWIN|MODIFY),
   EX(kCmdAbbreviate,      "abbreviate",   NULL,
@@ -241,7 +241,7 @@ typedef enum
   EX(kCmdBwipeout,        "bwipeout",     NULL,
      ARG_SO_FILES, ARGS_SO,
      BANG|RANGE|NOTADR|BUFNAME|BUFUNL|COUNT|EXTRA|TRLBAR),
-  EX(kCmdChange,          "change",       NULL,
+  EX(kCmdChange,          "change",       &parse_append,
      ARG_APPEND_LINES, ARGS_APPEND,
      BANG|WHOLEFOLD|RANGE|COUNT|TRLBAR|CMDWIN|MODIFY),
   EX(kCmdCNext,           "cNext",        NOFUNC,
@@ -623,7 +623,7 @@ typedef enum
   EX(kCmdHistory,         "history",      NULL,
      ARG_HIST_LAST, ARGS_HIST,
      EXTRA|TRLBAR|CMDWIN),
-  EX(kCmdInsert,          "insert",       NULL,
+  EX(kCmdInsert,          "insert",       &parse_append,
      ARG_APPEND_LINES, ARGS_APPEND,
      BANG|RANGE|TRLBAR|CMDWIN|MODIFY),
   EX(kCmdIabbrev,         "iabbrev",      NULL,

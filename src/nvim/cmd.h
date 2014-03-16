@@ -123,7 +123,7 @@ typedef struct command_node {
       int *numbers;
       char_u ch;
       char_u *str;
-      char_u **strs;
+      garray_T strs;
       Pattern *pat;
       Glob *glob;
       Regex *reg;
