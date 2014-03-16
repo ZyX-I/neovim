@@ -839,7 +839,11 @@ int parse_one_cmd(char_u **pp,
       *pp = p + len;
       return OK;
     } else {
-      free_range_data(&range);
+      if ((*next_node = cmd_alloc(kCmdMissing)) == NULL) {
+        free_range_data(&range);
+        return FAIL;
+      }
+      (*next_node)->range = range;
 
       *pp = (nextcmd == NULL
              ? p
@@ -1230,7 +1234,7 @@ static size_t node_repr_len(CommandNode *node)
 
   if (node->type == kCmdUSER)
     len += STRLEN(node->name);
-  else if (node->type == kCmdSyntaxError)
+  else if (CMDDEF(node->type).name == NULL)
     len += 0;
   else
     len += STRLEN(CMDDEF(node->type).name);
@@ -1279,7 +1283,7 @@ static void node_repr(CommandNode *node, char **pp)
 
   if (node->type == kCmdUSER)
     name = node->name;
-  else if (node->type == kCmdSyntaxError)
+  else if (CMDDEF(node->type).name == NULL)
     name = (char_u *) "";
   else
     name = CMDDEF(node->type).name;

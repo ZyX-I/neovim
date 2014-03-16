@@ -1690,6 +1690,9 @@ typedef enum
   EX(kCmdSyntaxError,     NULL,           NULL,
      ARG_ERROR_LINESTR, ARGS_ERROR,
      0),
+  EX(kCmdMissing,         NULL,           NULL,
+     ARG_NO_ARGS, ARGS_NO,
+     RANGE),
 #ifndef DO_DECLARE_EXCMD
   _kCmdEND,             /* MUST be after all real commands! */
   kCmdUSER = -1,        /* User-defined command */
