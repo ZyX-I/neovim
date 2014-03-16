@@ -507,7 +507,10 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
     switch (type) {
       case kAddressFollowupShift: {
         int sign = (p[-1] == '+' ? 1 : -1);
-        fw->data.shift = sign * getdigits(&p);
+        if (VIM_ISDIGIT(*p))
+          fw->data.shift = sign * getdigits(&p);
+        else
+          fw->data.shift = sign;
         break;
       }
       case kAddressFollowupForwardPattern:
@@ -1076,6 +1079,9 @@ static size_t number_repr_len(intmax_t number)
   size_t len = 1;
   intmax_t i = number;
 
+  if (i < 0)
+    i = -i;
+
   do {
     len++;
     i = i >> 4;
@@ -1101,11 +1107,15 @@ static void number_repr(intmax_t number, char **pp)
 {
   char *p = *pp;
   size_t i = number_repr_len(number) - 1;
+  intmax_t num = number;
+
+  if (num < 0)
+    num = -num;
 
   *p++ = (number >= 0 ? '+' : '-');
 
   do {
-    intmax_t digit = (number >> ((i - 1) * 4)) & 0xF;
+    intmax_t digit = (num >> ((i - 1) * 4)) & 0xF;
     *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
   } while(--i);
 

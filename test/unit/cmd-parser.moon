@@ -63,6 +63,7 @@ describe 'parse_one_cmd', ->
     itn '\\&join', '\\&j'
     itn '\\/join', '\\/j'
     itn '\\?join', '\\?j'
+    itn '.-1-1-1join', '---join'
 
   describe 'count and exflags', ->
     itn 'join #', ':join #'
