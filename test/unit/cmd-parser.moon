@@ -24,5 +24,12 @@ describe 'parse_one_cmd', ->
     eqn '1,2join!', ':::::::1,2join!'
   it 'parses :1,2,3,4join!', ->
     eqn '1,2,3,4join!', ':::::::1,2,3,4join!'
+  it 'parses :1      join!', ->
+    eqn '1join!', ':1      join!'
+  it 'parses :%join', ->
+    eqn '1,$join', ':%join'
+  -- TODO: requires &p_cpo option to be initialized
+  -- it 'parses :*join', ->
+    -- eqn '\'<,\'>join', ':*join'
 
 -- vim: sw=2 sts=2 et tw=80

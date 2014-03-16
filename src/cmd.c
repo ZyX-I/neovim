@@ -745,6 +745,7 @@ int parse_one_cmd(char_u **pp,
         }
         current_range.next->address.type = kAddrEnd;
         range = current_range;
+        p++;
         break;
       } else if (*p == '*' && vim_strchr(p_cpo, CPO_STAR) == NULL) {
         current_range.address.type = kAddrMark;
@@ -757,6 +758,7 @@ int parse_one_cmd(char_u **pp,
         current_range.next->address.type = kAddrMark;
         current_range.next->address.data.mark = '>';
         range = current_range;
+        p++;
         break;
       }
     }
