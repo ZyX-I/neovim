@@ -107,9 +107,9 @@ typedef struct {
 } TestExprResult;
 
 ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error);
-ExpressionNode *parse0(char_u *arg);
 void free_expr(ExpressionNode *node);
 void free_test_expr_result(TestExprResult *result);
 TestExprResult *parse0_test(char_u *arg);
+char *parse0_dump(char_u *arg);
 
 #endif  // NEOVIM_EXPR_H
