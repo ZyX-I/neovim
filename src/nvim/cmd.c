@@ -447,6 +447,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
           return FAIL;
         }
       }
+      p++;
       break;
     }
     case '0':
