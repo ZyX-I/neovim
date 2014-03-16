@@ -1379,7 +1379,7 @@ static size_t node_repr_len(CommandNode *node)
     // len("\\ error:\n")
     len += 9
          + 2 * (1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
-         + 1 + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+         + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
 
   if (node->bang)
     len++;
@@ -1464,7 +1464,7 @@ static void node_repr(CommandNode *node, char **pp)
     *p++ = '\n';
     len = STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
     memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
-    *p++ = '\n';
+    p+= len;
   }
 
   if (node->bang)
