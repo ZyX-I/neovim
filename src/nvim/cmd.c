@@ -652,6 +652,7 @@ int parse_one_cmd(char_u **pp,
 
   p = *pp;
   for (;;) {
+    char_u *pstart;
     // 1. skip comment lines and leading white space and colons
     while (*p == ' ' || *p == '\t' || *p == ':')
       p++;
@@ -688,13 +689,13 @@ int parse_one_cmd(char_u **pp,
       return OK;
     }
 
-    // FIXME Why was this here?
-    /* if (VIM_ISDIGIT(*ea.cmd)) { */
-      /* p = skipwhite(skipdigits(ea.cmd)); */
-    /* } */
+    pstart = p;
+    if (VIM_ISDIGIT(*p))
+      p = skipwhite(skipdigits(p));
 
     // 2. handle command modifiers.
     if (ASCII_ISLOWER(*p)) {
+
       for (i = cmdidxs[(int) (*p - 'a')]; *(CMDDEF(i).name) == *p; i++) {
         if (CMDDEF(i).flags & ISMODIFIER) {
           size_t common_len = 0;
@@ -713,14 +714,36 @@ int parse_one_cmd(char_u **pp,
         }
       }
       if (type != kCmdUnknown) {
+        if (VIM_ISDIGIT(*pstart) && !(CMDDEF(type).flags) & COUNT) {
+          error.message = e_norange;
+          error.position = pstart;
+          create_error_node(next_node, &error, position, s);
+          return NOTDONE;
+        }
+        if (*p == '!' && !(CMDDEF(type).flags & BANG)) {
+          error.message = e_nobang;
+          error.position = p;
+          create_error_node(next_node, &error, position, s);
+          return NOTDONE;
+        }
         if ((*next_node = cmd_alloc(type)) == NULL)
           return FAIL;
+        if (VIM_ISDIGIT(*pstart)) {
+          (*next_node)->cnt_type = kCntCount;
+          (*next_node)->cnt.count = getdigits(&pstart);
+        }
+        if (*p == '!') {
+          (*next_node)->bang = TRUE;
+          p++;
+        }
         next_node = &((*next_node)->args[0].arg.cmd);
         type = kCmdUnknown;
       } else {
+        p = pstart;
         break;
       }
     } else {
+      p = pstart;
       break;
     }
   }
