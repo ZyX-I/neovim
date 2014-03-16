@@ -440,11 +440,23 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
     p++;
     if ((fw = address_followup_alloc(type)) == NULL)
       return FAIL;
-    if (type == kAddressFollowupForwardPattern ||
-        type == kAddressFollowupBackwardPattern) {
-      if (get_pattern(pp, error, &(fw->data.regex)) == FAIL) {
-        free_address_followup(fw);
-        return FAIL;
+    fw->type = type;
+    switch (type) {
+      case kAddressFollowupShift: {
+        int sign = (p[-1] == '+' ? 1 : -1);
+        fw->data.shift = sign * getdigits(&p);
+        break;
+      }
+      case kAddressFollowupForwardPattern:
+      case kAddressFollowupBackwardPattern: {
+        if (get_pattern(pp, error, &(fw->data.regex)) == FAIL) {
+          free_address_followup(fw);
+          return FAIL;
+        }
+        break;
+      }
+      default: {
+        assert(FALSE);
       }
     }
     *followup = fw;
@@ -954,7 +966,7 @@ static size_t unumber_repr_len(uintmax_t number)
 static void number_repr(intmax_t number, char **pp)
 {
   char *p = *pp;
-  size_t i = number_repr_len(number);
+  size_t i = number_repr_len(number) - 1;
 
   *p++ = (number >= 0 ? '+' : '-');
 
@@ -1032,6 +1044,8 @@ static void address_followup_repr(AddressFollowup *followup, char **pp)
       break;
     }
   }
+
+  address_followup_repr(followup->next, &p);
 
   *pp = p;
 }

@@ -31,5 +31,7 @@ describe 'parse_one_cmd', ->
   -- TODO: requires &p_cpo option to be initialized
   -- it 'parses :*join', ->
     -- eqn '\'<,\'>join', ':*join'
+  it 'parses :1+1;7+1+2+3join', ->
+    eqn '1+1;7+1+2+3join', ':1+1;7+1+2+3join'
 
 -- vim: sw=2 sts=2 et tw=80
