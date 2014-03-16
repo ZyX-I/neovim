@@ -14,6 +14,12 @@ eqn = (expected_result, cmd, count=0) ->
   eq expected_result, result
 
 describe 'parse_one_cmd', ->
+  it 'parses 1,2|', ->
+    eqn '1,2print', '1,2|'
+  it 'parses 1', ->
+    eqn '1', '1'
+  it 'parses 1,2', ->
+    eqn '1,2', '1,2'
   it 'parses intro', ->
     eqn 'intro', 'intro'
   it 'parses :intro', ->
