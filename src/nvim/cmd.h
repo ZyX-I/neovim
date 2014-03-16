@@ -9,17 +9,10 @@
 #ifdef DO_DECLARE_EXCMD
 # undef DO_DECLARE_EXCMD
 #endif
-<<<<<<< HEAD:src/nvim/cmd.h
-#include <stdint.h>
 #include "nvim/cmd_def.h"
 #include "nvim/types.h"
 #include "nvim/expr.h"
-=======
-#include "cmd_def.h"
-#include "types.h"
-#include "expr.h"
-#include "vim.h"
->>>>>>> 5e1964f... Export parse_one_cmd:src/cmd.h
+#include "nvim/vim.h"
 
 
 // :argadd/:argd

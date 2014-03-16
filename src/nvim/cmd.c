@@ -872,7 +872,7 @@ int parse_one_cmd(char_u **pp,
   return OK;
 }
 
-char_u *fgetline_test(int c, char_u **arg, int indent)
+static char_u *fgetline_test(int c, char_u **arg, int indent)
 {
   size_t len = 0;
   char_u *result;
@@ -887,13 +887,315 @@ char_u *fgetline_test(int c, char_u **arg, int indent)
   return result;
 }
 
-CommandNode *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
+static size_t regex_repr_len(Regex *regex)
+{
+  size_t len = 0;
+  // FIXME
+  return len;
+}
+
+static void regex_repr(Regex *regex, char **pp)
+{
+  // FIXME
+  return;
+}
+
+static size_t number_repr_len(intmax_t number)
+{
+  size_t len = 1;
+  intmax_t i = number;
+
+  do {
+    len++;
+    i = i >> 4;
+  } while (i);
+
+  return len;
+}
+
+static size_t unumber_repr_len(uintmax_t number)
+{
+  size_t len = 0;
+  uintmax_t i = number;
+
+  do {
+    len++;
+    i = i >> 4;
+  } while (i);
+
+  return len;
+}
+
+static void number_repr(intmax_t number, char **pp)
+{
+  char *p = *pp;
+  size_t i = number_repr_len(number);
+
+  *p++ = (number >= 0 ? '+' : '-');
+
+  do {
+    intmax_t digit = (number >> ((i - 1) * 4)) & 0xF;
+    *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
+  } while(--i);
+
+  *pp = p;
+}
+
+static void unumber_repr(uintmax_t number, char **pp)
+{
+  char *p = *pp;
+  size_t i = unumber_repr_len(number);
+
+  do {
+    uintmax_t digit = (number >> ((i - 1) * 4)) & 0xF;
+    *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
+  } while(--i);
+
+  *pp = p;
+}
+
+static size_t address_followup_repr_len(AddressFollowup *followup)
+{
+  size_t len = 5;
+
+  if (followup == NULL)
+    return 0;
+
+  switch (followup->type) {
+    case kAddressFollowupMissing: {
+      return 0;
+    }
+    case kAddressFollowupShift: {
+      len += number_repr_len((intmax_t) followup->data.shift);
+      break;
+    }
+    case kAddressFollowupForwardPattern:
+    case kAddressFollowupBackwardPattern: {
+      len += 2 + regex_repr_len(followup->data.regex);
+      break;
+    }
+  }
+
+  len += address_followup_repr_len(followup->next);
+
+  return len;
+}
+
+static void address_followup_repr(AddressFollowup *followup, char **pp)
+{
+  char *p = *pp;
+
+  if (followup == NULL)
+    return;
+
+  switch (followup->type) {
+    case kAddressFollowupMissing: {
+      return;
+    }
+    case kAddressFollowupShift: {
+      number_repr((intmax_t) followup->data.shift, &p);
+      break;
+    }
+    case kAddressFollowupForwardPattern:
+    case kAddressFollowupBackwardPattern: {
+      char_u ch = followup->type == kAddressFollowupForwardPattern
+                  ? '/'
+                  : '?';
+      *p++ = ch;
+      regex_repr(followup->data.regex, &p);
+      *p++ = ch;
+      break;
+    }
+  }
+
+  *pp = p;
+}
+
+static size_t address_repr_len(Address *address)
+{
+  size_t len = 0;
+
+  if (address == NULL)
+    return 0;
+
+  switch (address->type) {
+    case kAddrMissing: {
+      return 0;
+    }
+    case kAddrFixed: {
+      len += unumber_repr_len((uintmax_t) address->data.lnr);
+      break;
+    }
+    case kAddrEnd:
+    case kAddrCurrent: {
+      len++;
+      break;
+    }
+    case kAddrMark: {
+      len += 2;
+      break;
+    }
+    case kAddrForwardSearch:
+    case kAddrBackwardSearch: {
+      len += regex_repr_len(address->data.regex) + 2;
+      break;
+    }
+    case kAddrForwardPreviousSearch:
+    case kAddrBackwardPreviousSearch:
+    case kAddrSubstituteSearch: {
+      len += 2;
+      break;
+    }
+  }
+
+  return len;
+}
+
+static void address_repr(Address *address, char **pp)
+{
+  char *p = *pp;
+
+  if (address == NULL)
+    return;
+
+  switch (address->type) {
+    case kAddrMissing: {
+      return;
+    }
+    case kAddrFixed: {
+      unumber_repr((uintmax_t) address->data.lnr, &p);
+      break;
+    }
+    case kAddrEnd: {
+      *p++ = '$';
+      break;
+    }
+    case kAddrCurrent: {
+      *p++ = '.';
+      break;
+    }
+    case kAddrMark: {
+      *p++ = '\'';
+      *p++ = address->data.mark;
+      break;
+    }
+    case kAddrForwardSearch:
+    case kAddrBackwardSearch: {
+      char_u ch = address->type == kAddrForwardSearch
+                  ? '/'
+                  : '?';
+      *p++ = ch;
+      regex_repr(address->data.regex, &p);
+      *p++ = ch;
+      break;
+    }
+    case kAddrForwardPreviousSearch: {
+      *p++ = '\\';
+      *p++ = '/';
+      break;
+    }
+    case kAddrBackwardPreviousSearch: {
+      *p++ = '\\';
+      *p++ = '?';
+      break;
+    }
+    case kAddrSubstituteSearch: {
+      *p++ = '\\';
+      *p++ = '&';
+      break;
+    }
+  }
+
+  *pp = p;
+}
+
+static size_t range_repr_len(Range *range)
+{
+  size_t len = 0;
+
+  if (range->start.type == kAddrMissing && range->end.type == kAddrMissing)
+    return 0;
+
+  len += address_repr_len(&(range->start));
+  len += address_followup_repr_len(range->start_followups);
+  len++;
+  len += address_repr_len(&(range->end));
+  len += address_followup_repr_len(range->end_followups);
+
+  return len;
+}
+
+static void range_repr(Range *range, char **pp)
+{
+  char *p = *pp;
+
+  if (range->start.type == kAddrMissing && range->end.type == kAddrMissing)
+    return;
+
+  address_repr(&(range->start), &p);
+  address_followup_repr(range->start_followups, &p);
+  *p++ = (range->setpos ? ';' : ',');
+  address_repr(&(range->end), &p);
+  address_followup_repr(range->end_followups, &p);
+
+  *pp = p;
+}
+
+static size_t node_repr_len(CommandNode *node)
+{
+  size_t len = 0;
+
+  len += range_repr_len(&(node->range));
+
+  if (node->type == kCmdUSER)
+    len += STRLEN(node->name);
+  else if (node->type == kCmdSyntaxError)
+    len += 0;
+  else
+    len += STRLEN(CMDDEF(node->type).name);
+
+  if (node->bang)
+    len++;
+
+  return len;
+}
+
+static void node_repr(CommandNode *node, char **pp)
+{
+  char *p = *pp;
+  size_t len = 0;
+  char_u *name;
+
+  range_repr(&(node->range), &p);
+
+  if (node->type == kCmdUSER)
+    name = node->name;
+  else if (node->type == kCmdSyntaxError)
+    name = (char_u *) "";
+  else
+    name = CMDDEF(node->type).name;
+
+  len = STRLEN(name);
+  if (len)
+    memcpy(p, name, len);
+  p += len;
+
+  if (node->bang)
+    *p++ = '!';
+
+  *pp = p;
+}
+
+char *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
 {
   char_u **pp;
   char_u *p;
   char_u *line;
   CommandNode *node;
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
+  char *repr;
+  char *r;
+  size_t len;
 
   pp = &arg;
   line = fgetline_test(0, pp, 0);
@@ -903,5 +1205,17 @@ CommandNode *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
     ;
   vim_free(line);
 
-  return node;
+  len = node_repr_len(node);
+
+  if ((repr = ALLOC_CLEAR_NEW(char, len + 1)) == NULL) {
+    free_cmd(node);
+    return NULL;
+  }
+
+  r = repr;
+
+  node_repr(node, &r);
+
+  free_cmd(node);
+  return repr;
 }

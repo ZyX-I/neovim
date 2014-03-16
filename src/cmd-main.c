@@ -20,11 +20,20 @@ int main(int argc, char **argv)
 {
   unsigned flags = 0;
   mb_ptr2len = &utfc_ptr2len;
+  char *repr;
 
   if (argc == 3)
     sscanf(argv[2], "%u", &flags);
 
-  parse_one_cmd_test((char_u *) argv[1], (uint_least8_t) flags);
+  if ((repr = parse_one_cmd_test((char_u *) argv[1], (uint_least8_t) flags))
+      == NULL)
+    return 1;
+
+  puts(repr);
+
+  free(repr);
+
+  return 0;
 }
 
 /*
