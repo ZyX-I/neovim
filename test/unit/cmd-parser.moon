@@ -93,7 +93,15 @@ describe 'parse_one_cmd', ->
     eqn 'bnext', ':bn'
   it 'parses :bp5', ->
     eqn 'bprevious 5', ':bp5'
+  it 'parses :br', ->
+    eqn 'brewind', ':br'
   it 'parses :brea', ->
     eqn 'break', ':brea'
+  it 'parses :breakl', ->
+    eqn 'breaklist', ':breakl'
+  it 'parses :buffers', ->
+    eqn 'buffers', ':buffers'
+  it 'parses :cN', ->
+    eqn 'cNext', ':cN'
 
 -- vim: sw=2 sts=2 et tw=80
