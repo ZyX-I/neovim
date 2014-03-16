@@ -562,8 +562,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
       *type = kCmdUSER;
     } else if (p == *pp) {
       *type = kCmdUnknown;
-      // FIXME proper message
-      error->message = (char_u *) "failed to find command";
+      error->message = (char_u *) N_("E492: Not an editor command");
       error->position = *pp;
       return FAIL;
     } else {
@@ -709,12 +708,12 @@ int parse_one_cmd(char_u **pp,
     if (get_address(&p, &range.end, &error) == FAIL) {
       create_error_node(next_node, &error, position, s);
       free_range_data(&range, FALSE);
-      return FAIL;
+      return NOTDONE;
     }
     if (get_address_followups(&p, &error, &range.end_followups) == FAIL) {
       create_error_node(next_node, &error, position, s);
       free_range_data(&range, FALSE);
-      return FAIL;
+      return NOTDONE;
     }
     p = skipwhite(p);
     if (range.end_followups != NULL) {
@@ -796,7 +795,7 @@ int parse_one_cmd(char_u **pp,
   if (find_command(&p, &type, &name, &error) == FAIL) {
     free_range_data(&range, FALSE);
     create_error_node(next_node, &error, position, s);
-    return FAIL;
+    return NOTDONE;
   }
 
   // Here used to be :Ni! egg. It was removed
@@ -809,7 +808,7 @@ int parse_one_cmd(char_u **pp,
       error.message = e_nobang;
       error.position = p;
       create_error_node(next_node, &error, position, s);
-      return FAIL;
+      return NOTDONE;
     }
   }
 
@@ -818,7 +817,7 @@ int parse_one_cmd(char_u **pp,
       error.message = e_norange;
       error.position = range_start;
       create_error_node(next_node, &error, position, s);
-      return FAIL;
+      return NOTDONE;
     }
   }
 
