@@ -168,10 +168,17 @@ static void print_node(int indent, ExpressionNode *node)
 #include <string.h>
 int main(int argc, char **argv) {
   ExpressionNode *node;
-  node = parse0((char_u *) argv[1]);
-  if (node != NULL)
-    print_node(0, node);
-  return 1;
+  char *result;
+  /*
+   * node = parse0((char_u *) argv[1]);
+   * if (node != NULL)
+   *   print_node(0, node);
+   */
+  if ((result = parse0_dump((char_u *) argv[1])) == NULL)
+    return 1;
+  puts(result);
+  vim_free(result);
+  return 0;
 }
 
 /*

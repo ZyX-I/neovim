@@ -146,8 +146,8 @@ static int parse_name(char_u **arg,
       // hard coded <SNR>, already translated
       *arg += 3;
       if ((p = find_id_end(arg)) == NULL) {
-        // FIXME Proper error message
-        error->message = "expected variable name";
+        // XXX Note: vim does not have special error message for this
+        error->message = N_("E15: expected variable name");
         error->position = *arg;
         return FAIL;
       }
@@ -170,8 +170,8 @@ static int parse_name(char_u **arg,
 
     if (**arg != '{') {
       if (p == NULL) {
-        // FIXME Proper error message
-        error->message = "expected variable name";
+        // XXX Note: vim does not have special error message for this
+        error->message = N_("E15: expected expr7 (value)");
         error->position = *arg;
         return FAIL;
       }
@@ -205,8 +205,8 @@ static int parse_name(char_u **arg,
       return FAIL;
 
     if (**arg != '}') {
-      // FIXME Proper error message
-      error->message = "missing closing curly brace";
+      // XXX Note: vim does not have special error message for this
+      error->message = N_("E15: missing closing curly brace");
       error->position = *arg;
       return FAIL;
     }
@@ -514,8 +514,8 @@ static int parse_func_call(char_u **arg,
   }
 
   if (*argp != ')') {
-    // FIXME Proper error message
-    error->message = "expected closing parenthesis";
+    // XXX Note: vim does not have special error message for this
+    error->message = N_("E15: expected closing parenthesis");
     error->position = argp;
     return FAIL;
   }
@@ -1259,23 +1259,6 @@ ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
   return result;
 }
 
-ExpressionNode *parse0(char_u *arg)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  ExpressionNode *result;
-  ExpressionParserError error;
-  char_u *p = arg;
-
-  if ((result = parse0_err(&p, &error)) == NULL) {
-    // FIXME print error properly
-    puts((char *) error.message);
-    puts((char *) error.position);
-    return NULL;
-  }
-
-  return result;
-}
-
 void free_test_expr_result(TestExprResult *result)
 {
   free_expr(result->node);
@@ -1292,5 +1275,183 @@ TestExprResult *parse0_test(char_u *arg)
   result->end = arg;
   result->node = parse0_err(&(result->end), &(result->error));
 
+  return result;
+}
+
+static char *expression_type_string[] = {
+  "Unknown",
+  "?:",
+  "||",
+  "&&",
+  ">",
+  ">=",
+  "<",
+  "<=",
+  "==",
+  "!=",
+  "is",
+  "isnot",
+  "=~",
+  "!~",
+  "+",
+  "-",
+  "..",
+  "*",
+  "/",
+  "%",
+  "!",
+  "-!",
+  "+!",
+  "N",
+  "O",
+  "X",
+  "F",
+  "\"",
+  "'",
+  "&",
+  "@",
+  "$",
+  "cvar",
+  "var",
+  "id",
+  "curly",
+  "expr",
+  "[]",
+  "{}",
+  "index",
+  ".",
+  "call",
+  "empty",
+};
+
+static char *case_compare_strategy_string[] = {
+  "",
+  "#",
+  "?",
+};
+
+static size_t node_repr_len(ExpressionNode *node)
+{
+  size_t len = 0;
+
+  len += STRLEN(expression_type_string[node->type]);
+  len += STRLEN(case_compare_strategy_string[node->ignore_case]);
+
+  if (node->position != NULL) {
+    // 4 for [++] or [!!]
+    len += 4;
+    if (node->end_position != NULL)
+      len += node->end_position - node->position + 1;
+    else
+      len++;
+  }
+
+  if (node->children != NULL)
+    // 2 for parenthesis
+    len += 2 + node_repr_len(node->children);
+
+  if (node->next != NULL)
+    // 2 for ", "
+    len += 2 + node_repr_len(node->next);
+
+  return len;
+}
+
+static void node_repr(ExpressionNode *node, char **pp)
+{
+  char *p = *pp;
+
+  STRCPY(p, expression_type_string[node->type]);
+  p += STRLEN(expression_type_string[node->type]);
+  STRCPY(p, case_compare_strategy_string[node->ignore_case]);
+  p += STRLEN(case_compare_strategy_string[node->ignore_case]);
+
+  if (node->position != NULL) {
+    *p++ = '[';
+    if (node->end_position != NULL) {
+      size_t len = node->end_position - node->position + 1;
+
+      *p++ = '+';
+
+      if (node->type == kTypeRegister && *(node->end_position) == NUL)
+        len--;
+
+      memcpy((void *) p, node->position, len);
+      p += len;
+
+      *p++ = '+';
+    } else {
+      *p++ = '!';
+      *p++ = *(node->position);
+      *p++ = '!';
+    }
+    *p++ = ']';
+  }
+
+  if (node->children != NULL) {
+    *p++ = '(';
+    node_repr(node->children, &p);
+    *p++ = ')';
+  }
+
+  if (node->next != NULL) {
+    *p++ = ',';
+    *p++ = ' ';
+    node_repr(node->next, &p);
+  }
+
+  *pp = p;
+}
+
+char *parse0_dump(char_u *arg)
+{
+  TestExprResult *p0_result;
+  size_t len = 0;
+  size_t shift = 0;
+  size_t offset = 0;
+  size_t i;
+  char *result = NULL;
+  char *p;
+
+  if ((p0_result = parse0_test(arg)) == NULL)
+    goto theend;
+
+  if (p0_result->error.message != NULL)
+    len = 6 + STRLEN(p0_result->error.message);
+  else
+    len = node_repr_len(p0_result->node);
+
+  offset = p0_result->end - arg;
+  i = offset;
+  do {
+    shift++;
+    i = i >> 4;
+  } while (i);
+
+  len += shift + 1;
+
+  if (!(result = ALLOC_CLEAR_NEW(char, len + 1)))
+    goto theend;
+
+  p = result;
+
+  i = shift;
+  do {
+    size_t digit = (offset >> ((i - 1) * 4)) & 0xF;
+    *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
+  } while(--i);
+
+  *p++ = ':';
+
+  if (p0_result->error.message != NULL) {
+    memcpy(p, "error:", 6);
+    p += 6;
+    STRCPY(p, p0_result->error.message);
+  } else {
+    node_repr(p0_result->node, &p);
+  }
+
+theend:
+  free_test_expr_result(p0_result);
   return result;
 }

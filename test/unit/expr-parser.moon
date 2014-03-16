@@ -1,7 +1,6 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 
 expr = cimport('./src/expr.h')
-cstr = ffi.typeof('char[?]')
 
 expression_type = {
   [0]: 'Unknown',
@@ -55,49 +54,24 @@ case_compare_strategy = {
   '?',
 }
 
-node_to_string = (node, err) ->
-  type = expression_type[tonumber(node.type)]
-  case_suffix = case_compare_strategy[tonumber(node.ignore_case)]
-  func = type .. case_suffix
-  result = func
-
-  if (err and err.message ~= nil)
-    result = 'error(' .. ffi.string(err.message) .. ')'
-    return result
-
-  if (node.position ~= nil)
-    str = ffi.string(node.position)
-    if (node.end_position ~= nil)
-      len = node.end_position - node.position + 1
-      result = result .. '[+' .. str\sub(1, len) .. '+]'
-    else
-      result = result .. '[!' .. str\sub(1, 1) .. '!]'
-
-  if (node.children ~= nil)
-    result = (result .. '(' .. node_to_string(node.children, nil) .. ')')
-
-  if (node.next ~= nil)
-    result = result .. ', ' .. node_to_string(node.next, nil)
-
-  return result
-
 p0 = (str) ->
-  s = cstr(string.len(str), str)
-  parsed = ffi.gc(expr.parse0_test(s), expr.free_test_expr_result)
-  offset = parsed['end'] - s
-  return node_to_string(parsed.node, parsed.error), offset
+  s = to_cstr(str)
+  parsed = expr.parse0_dump(s)
+  if parsed == nil
+    error('parse0_dump returned nil')
+  return ffi.string(parsed)
 
 eqn = (expected_result, expr, expected_offset=nil) ->
   if not expected_offset
     expected_offset = expr\len()
 
-  result, offset = p0 expr
+  result = p0 expr
+
+  expected_result = string.format('%X:%s', expected_offset, expected_result)
 
   eq expected_result, result
-  eq expected_offset, offset
 
 describe 'parse0', ->
-
   it 'parses number 0', ->
     eqn 'N[+0+]', '0'
   it 'parses number 10', ->
@@ -287,8 +261,7 @@ describe 'parse0', ->
   it 'partially parses (abc)(def) (ghi)', ->
     eqn 'call(expr[!(!](var[+abc+]), var[+def+])', '(abc)(def) (ghi)', 11
 
-  -- SEGV!!!
-  -- it 'fails to parse <', ->
-    -- eqn 'error', '<'
+  it 'fails to parse <', ->
+    eqn 'error:E15: expected expr7 (value)', '<', 0
 
 -- vim: sw=2 sts=2 et tw=80
