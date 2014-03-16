@@ -33,5 +33,67 @@ describe 'parse_one_cmd', ->
     -- eqn '\'<,\'>join', ':*join'
   it 'parses :1+1;7+1+2+3join', ->
     eqn '1+1;7+1+2+3join', ':1+1;7+1+2+3join'
+  it 'parses :join #', ->
+    eqn 'join #', ':join #'
+  it 'parses :join 5 #', ->
+    eqn 'join 5 #', ':join 5 #'
+  it 'parses :join#', ->
+    eqn 'join #', ':join#'
+  it 'parses :join5#', ->
+    eqn 'join 5 #', ':join5#'
+  it 'parses :j#', ->
+    eqn 'join #', ':j#'
+  it 'parses :num#', ->
+    eqn 'number #', ':num#'
+  it 'parses :p l', ->
+    eqn 'print l', ':p l'
+  it 'parses :##', ->
+    eqn '# #', ':##'
+  it 'parses :#l', ->
+    eqn '# l', ':#l'
+  it 'parses :=l', ->
+    eqn '= l', ':=l'
+  it 'parses :>l', ->
+    eqn '> l', ':>l'
+  it 'parses :num5#', ->
+    eqn 'number 5 #', ':num5#'
+  it 'parses :p 5l', ->
+    eqn 'print 5 l', ':p 5l'
+  it 'parses :#1#', ->
+    eqn '# 1 #', ':#1#'
+  it 'parses :>3l', ->
+    eqn '> 3 l', ':>3l'
+  it 'parses :<3', ->
+    eqn '< 3', ':<3'
+  it 'parses :<', ->
+    eqn '<', ':<'
+  it 'parses :all', ->
+    eqn 'all', ':all'
+  it 'parses :5all', ->
+    eqn '5all', ':5all'
+  it 'parses :all5', ->
+    eqn 'all 5', ':all5'
+  it 'parses :al5', ->
+    eqn 'all 5', ':al5'
+  it 'parses :ascii', ->
+    eqn 'ascii', ':ascii'
+  it 'parses :bN', ->
+    eqn 'bNext', ':bNext'
+  it 'parses :bN5', ->
+    eqn 'bNext 5', ':bNext5'
+  it 'parses :ba', ->
+    eqn 'ball', ':ba'
+  it 'parses :bf', ->
+    eqn 'bfirst', ':bf'
+  it 'parses :bl', ->
+    eqn 'blast', ':bl'
+  it 'parses :bm!', ->
+    eqn 'bmodified!', ':bm!'
+  it 'parses :bn', ->
+    eqn 'bnext', ':bn'
+  it 'parses :bp5', ->
+    eqn 'bprevious 5', ':bp5'
+  it 'parses :brea', ->
+    eqn 'break', ':brea'
 
 -- vim: sw=2 sts=2 et tw=80

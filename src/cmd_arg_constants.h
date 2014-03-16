@@ -69,7 +69,6 @@ typedef enum {
                        kArgString, kArgFlags,  kArgFlags, kArgFlags,  \
                        kArgString, kArgFlags,  kArgFlags, kArgFlags   }
 #define ARGS_HIST     {kArgFlags, kArgNumber, kArgNumber}
-#define ARGS_LIST     {kArgFlags}
 #define ARGS_LANG     {kArgFlags, kArgString}
 #define ARGS_VIMG     {kArgFlags, kArgRegex, kArgGlob}
 #define ARGS_MARK     {kArgChar}
@@ -361,13 +360,6 @@ typedef enum {
 #define FLAG_HIST_DEBUG    0x10
 #define FLAG_HIST_HAS_FST  0x20
 #define FLAG_HIST_HAS_LST  0x40
-
-// :join
-#define ARG_LIST_FLAGS     0
-
-#define FLAG_LIST_LIST     0x01
-#define FLAG_LIST_LNR      0x02
-#define FLAG_LIST_PRINT    0x04
 
 // :language
 #define ARG_LANG_FLAGS     0

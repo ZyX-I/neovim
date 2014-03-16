@@ -87,16 +87,31 @@ typedef struct {
   char_u *fname;
 } CommandPosition;
 
+typedef enum {
+  kCntMissing = 0,
+  kCntCount,
+  kCntBuffer,
+  kCntReg,
+  kCntExprReg,
+} CountType;
+
+#define FLAG_EX_LIST  0x01
+#define FLAG_EX_LNR   0x02
+#define FLAG_EX_PRINT 0x04
+
 typedef struct command_node {
   CommandType type;
   char_u *name;              // Only valid for user commands
   struct command_node *next;
   Range range;               // sometimes used for count
+  CountType cnt_type;
   union {
     int count;
     int bufnr;
     char_u reg;
-  } arg;
+    ExpressionNode *expr;
+  } cnt;
+  uint_least8_t exflags;
   int bang;                   // :cmd!
   struct command_argument {
     union {
