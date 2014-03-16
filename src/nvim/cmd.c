@@ -548,17 +548,32 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
 {
   if (error->message != NULL) {
     char_u *line;
+    char_u *fname;
+    char_u *message;
 
     if ((line = vim_strsave(s)) == NULL)
       return FAIL;
-    if ((*node = cmd_alloc(kCmdSyntaxError)) == NULL) {
+    if ((fname = vim_strsave(position->fname)) == NULL) {
       vim_free(line);
       return FAIL;
     }
+    if ((message = vim_strsave(error->message)) == NULL) {
+      vim_free(line);
+      vim_free(fname);
+      return FAIL;
+    }
+    if ((*node = cmd_alloc(kCmdSyntaxError)) == NULL) {
+      vim_free(line);
+      vim_free(fname);
+      vim_free(message);
+      return FAIL;
+    }
     (*node)->args[ARG_ERROR_POSITION].arg.position = *position;
-    (*node)->args[ARG_ERROR_POSITION].arg.position.fname =
-        vim_strsave(position->fname);
+    (*node)->args[ARG_ERROR_POSITION].arg.position.fname = fname;
     (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
+    (*node)->args[ARG_ERROR_MESSAGE].arg.str = message;
+    (*node)->args[ARG_ERROR_OFFSET].arg.flags =
+        (uint_least32_t) (error->position - s);
   }
   return OK;
 }
@@ -617,6 +632,8 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
     *type = kCmdSubstitute;
     p++;
   } else {
+    int found = FALSE;
+
     while (ASCII_ISALPHA(*p))
       p++;
     // for python 3.x support ":py3", ":python3", ":py3file", etc.
@@ -644,12 +661,15 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
       cmdidx = cmdidxs[26];
 
     for (; (int)cmdidx < (int)kCmdSIZE;
-         cmdidx = (CommandType)((int)cmdidx + 1))
-      if (STRNCMP(CMDDEF(cmdidx).name, (char *) (*pp), (size_t) len) == 0)
+         cmdidx = (CommandType)((int)cmdidx + 1)) {
+      if (STRNCMP(CMDDEF(cmdidx).name, (char *) (*pp), (size_t) len) == 0) {
+        found = TRUE;
         break;
+      }
+    }
 
     // Look for a user defined command as a last resort.
-    if (cmdidx == kCmdSIZE && **pp >= 'A' && **pp <= 'Z') {
+    if (!found && **pp >= 'A' && **pp <= 'Z') {
       // User defined commands may contain digits.
       while (ASCII_ISALNUM(*p))
         p++;
@@ -658,7 +678,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
       if ((*name = vim_strnsave(*pp, p - *pp)) == NULL)
         return FAIL;
       *type = kCmdUSER;
-    } else if (p == *pp) {
+    } else if (!found) {
       *type = kCmdUnknown;
       error->message = (char_u *) N_("E492: Not an editor command");
       error->position = *pp;
@@ -1355,6 +1375,12 @@ static size_t node_repr_len(CommandNode *node)
   else
     len += STRLEN(CMDDEF(node->type).name);
 
+  if (node->type == kCmdSyntaxError)
+    // len("\\ error:\n")
+    len += 9
+         + 2 * (1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
+         + 1 + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+
   if (node->bang)
     len++;
 
@@ -1424,6 +1450,22 @@ static void node_repr(CommandNode *node, char **pp)
   if (len)
     memcpy(p, name, len);
   p += len;
+
+  if (node->type == kCmdSyntaxError) {
+    memcpy(p, "\\ error:\n", 9);
+    p += 9;
+    len = STRLEN(node->args[ARG_ERROR_LINESTR].arg.str);
+    memcpy(p, node->args[ARG_ERROR_LINESTR].arg.str, len);
+    p += len;
+    *p++ = '\n';
+    memset(p, (int) ' ', len);
+    p[node->args[ARG_ERROR_OFFSET].arg.flags] = '^';
+    p += len;
+    *p++ = '\n';
+    len = STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+    memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
+    *p++ = '\n';
+  }
 
   if (node->bang)
     *p++ = '!';
