@@ -60,6 +60,9 @@ describe 'parse_one_cmd', ->
     -- TODO: requires &p_cpo option to be initialized
     -- itn '\'<,\'>join', ':*join'
     itn '1+1;7+1+2+3join', ':1+1;7+1+2+3join'
+    itn '\\&join', '\\&j'
+    itn '\\/join', '\\/j'
+    itn '\\?join', '\\?j'
 
   describe 'count and exflags', ->
     itn 'join #', ':join #'
