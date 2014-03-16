@@ -89,7 +89,7 @@ typedef enum {
 #define ARGS_WINSIZE  {kArgFlags, kArgFlags}
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_WQA      {kArgFlags, kArgString}
-#define ARGS_ERROR    {kArgPosition, kArgString}
+#define ARGS_ERROR    {kArgPosition, kArgString, kArgString, kArgFlags}
 
 // ++opt flags
 #define FLAG_OPT_FF_MASK    0x03
@@ -506,5 +506,7 @@ typedef enum {
 // syntax error
 #define ARG_ERROR_POSITION 0
 #define ARG_ERROR_LINESTR  1
+#define ARG_ERROR_MESSAGE  2
+#define ARG_ERROR_OFFSET   3
 
 #endif  // NEOVIM_CMD_ARG_CONSTANTS_H_

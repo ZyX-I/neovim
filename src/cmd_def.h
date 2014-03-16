@@ -1681,6 +1681,11 @@ typedef enum
   EX(kCmdTilde,           "~",            NULL,
      ARG_S_FLAGS, ARGS_S,
      RANGE|WHOLEFOLD|EXTRA|CMDWIN|MODIFY),
+  // XXX If you add real command just above this line (i.e. after kCmdTilde) you 
+  // should update kCmdSIZE
+#ifndef DO_DECLARE_EXCMD
+# define kCmdSIZE (((size_t)kCmdTilde))
+#endif
   EX(kCmdHashbangComment, "#!",           NULL,
      ARG_NAME_NAME, ARGS_NAME,
      0),
@@ -1688,13 +1693,12 @@ typedef enum
      ARG_NAME_NAME, ARGS_NAME,
      0),
   EX(kCmdSyntaxError,     NULL,           NULL,
-     ARG_ERROR_LINESTR, ARGS_ERROR,
+     ARG_ERROR_OFFSET, ARGS_ERROR,
      0),
   EX(kCmdMissing,         NULL,           NULL,
      ARG_NO_ARGS, ARGS_NO,
      RANGE),
 #ifndef DO_DECLARE_EXCMD
-  _kCmdEND,             /* MUST be after all real commands! */
   kCmdUSER = -1,        /* User-defined command */
 #endif
 }
@@ -1702,7 +1706,4 @@ typedef enum
 CommandType
 #endif
 ;
-#ifndef DO_DECLARE_EXCMD
-# define kCmdSIZE (((size_t)_kCmdEND) - 1)
-#endif
 #endif
