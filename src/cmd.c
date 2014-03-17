@@ -699,9 +699,12 @@ int parse_one_cmd(char_u **pp,
   char_u *name = NULL;
   char_u *range_start = NULL;
   int bang = FALSE;
+  uint_least8_t exflags = 0;
   size_t len;
   size_t i;
   args_parser parser = NULL;
+  CountType cnt_type = kCntMissing;
+  int count = 0;
 
   memset(&range, 0, sizeof(Range));
   memset(&current_range, 0, sizeof(Range));
@@ -993,18 +996,10 @@ int parse_one_cmd(char_u **pp,
   if (type != kCmdBang)
     p = skipwhite(p);
 
-  if ((*next_node = cmd_alloc(type)) == NULL) {
-    free_range_data(&range);
-    return FAIL;
-  }
-  (*next_node)->bang = bang;
-  (*next_node)->range = range;
-  (*next_node)->name = name;
-
   if (CMDDEF(type).flags & COUNT) {
     if (VIM_ISDIGIT(*p)) {
-      (*next_node)->cnt_type = kCntCount;
-      (*next_node)->cnt.count = getdigits(&p);
+      cnt_type = kCntCount;
+      count = getdigits(&p);
       p = skipwhite(p);
     }
   }
@@ -1013,17 +1008,17 @@ int parse_one_cmd(char_u **pp,
     for (;;) {
       switch (*p) {
         case 'l': {
-          (*next_node)->exflags |= FLAG_EX_LIST;
+          exflags |= FLAG_EX_LIST;
           p++;
           continue;
         }
         case '#': {
-          (*next_node)->exflags |= FLAG_EX_LNR;
+          exflags |= FLAG_EX_LNR;
           p++;
           continue;
         }
         case 'p': {
-          (*next_node)->exflags |= FLAG_EX_PRINT;
+          exflags |= FLAG_EX_PRINT;
           p++;
           continue;
         }
@@ -1034,6 +1029,27 @@ int parse_one_cmd(char_u **pp,
       break;
     }
   }
+
+  if (!(CMDDEF(type).flags & EXTRA)
+      && *p != NUL
+      && *p != '"'
+      && (*p != '|' || !(CMDDEF(type).flags & TRLBAR))) {
+    error.message = e_trailing;
+    error.position = p;
+    create_error_node(next_node, &error, position, s);
+    return NOTDONE;
+  }
+
+  if ((*next_node = cmd_alloc(type)) == NULL) {
+    free_range_data(&range);
+    return FAIL;
+  }
+  (*next_node)->bang = bang;
+  (*next_node)->range = range;
+  (*next_node)->name = name;
+  (*next_node)->exflags = exflags;
+  (*next_node)->cnt_type = cnt_type;
+  (*next_node)->cnt.count = count;
 
   if (type == kCmdUSER) {
     len = STRLEN(p);
