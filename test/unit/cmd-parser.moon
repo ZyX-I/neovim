@@ -57,8 +57,7 @@ describe 'parse_one_cmd', ->
     itn '1,2,3,4join!', ':::::::1,2,3,4join!'
     itn '1join!', ':1      join!'
     itn '1,$join', ':%join'
-    -- TODO: requires &p_cpo option to be initialized
-    -- itn '\'<,\'>join', ':*join'
+    itn '\'<,\'>join', ':*join'
     itn '1+1;7+1+2+3join', ':1+1;7+1+2+3join'
     itn '\\&join', '\\&j'
     itn '\\/join', '\\/j'

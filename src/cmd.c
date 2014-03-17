@@ -870,7 +870,7 @@ int parse_one_cmd(char_u **pp,
         range = current_range;
         p++;
         break;
-      } else if (*p == '*' && vim_strchr(p_cpo, CPO_STAR) == NULL) {
+      } else if (*p == '*' && !(flags&FLAG_POC_CPO_STAR)) {
         current_range.address.type = kAddrMark;
         current_range.address.data.mark = '<';
         if ((current_range.next = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {

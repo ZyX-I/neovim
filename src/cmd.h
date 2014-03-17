@@ -165,9 +165,10 @@ typedef int (*args_parser)(char_u **,
                            line_getter,
                            void *);
 
-/* flags for parse_one_cmd */
+// flags for parse_one_cmd
 #define FLAG_POC_SOURCING  0x01
 #define FLAG_POC_EXMODE    0x02
+#define FLAG_POC_CPO_STAR  0x04
 
 void free_cmd(CommandNode *);
 int parse_one_cmd(char_u **pp,
