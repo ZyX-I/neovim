@@ -66,7 +66,7 @@ typedef struct address_followup {
 typedef struct range {
   Address address;
   AddressFollowup *followups;
-  int setpos;                // , vs ;
+  bool setpos;                 // , vs ;
   struct range *next;
 } Range;
 
@@ -112,7 +112,7 @@ typedef struct command_node {
     ExpressionNode *expr;
   } cnt;
   uint_least8_t exflags;
-  int bang;                   // :cmd!
+  bool bang;                 // :cmd!
   struct command_argument {
     union {
       struct command_node *cmd;
@@ -148,7 +148,7 @@ typedef struct command_argument CommandArg;
 typedef struct command_subargs  CommandSubArgs;
 
 typedef struct {
-  int nl_in_cmd;  // Allow commands like :normal to accept nl as their part
+  uint_least16_t flags;
 } CommandParserOptions;
 
 typedef struct {
