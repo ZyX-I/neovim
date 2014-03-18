@@ -11231,7 +11231,8 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
 
   mode = get_map_mode(&which, 0);
 
-  keys = replace_termcodes(keys, &keys_buf, TRUE, TRUE, FALSE);
+  keys = replace_termcodes(keys, &keys_buf, TRUE, TRUE, FALSE,
+                           CPO_TO_CPO_FLAGS);
   rhs = check_map(keys, mode, exact, FALSE, abbr, &mp, &buffer_local);
   vim_free(keys_buf);
 

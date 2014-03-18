@@ -28,5 +28,6 @@ int F_ischar(int c);
 void farsi_fkey(cmdarg_T *cap);
 int arabic_shape(int c, int *ccp, int *c1p, int prev_c, int prev_c1,
                  int next_c);
+void allocate_generic_buffers(void);
 /* vim: set ft=c : */
 #endif /* NEOVIM_MAIN_H */

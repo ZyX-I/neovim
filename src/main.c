@@ -110,7 +110,6 @@ static bool parse_string(char_u **input, char* val, int len);
 static void command_line_scan(mparm_T *parmp);
 static void init_params(mparm_T *parmp, int argc, char **argv);
 static void init_startuptime(mparm_T *parmp);
-static void allocate_generic_buffers(void);
 static void check_and_set_isatty(mparm_T *parmp);
 static char_u* get_fname(mparm_T *parmp);
 static void set_window_layout(mparm_T *parmp);
@@ -1522,7 +1521,7 @@ static void init_startuptime(mparm_T *paramp)
  * Allocate space for the generic buffers (needed for set_init_1() and
  * EMSG2()).
  */
-static void allocate_generic_buffers(void)
+void allocate_generic_buffers(void)
 {
   if ((IObuff = alloc(IOSIZE)) == NULL
       || (NameBuff = alloc(MAXPATHL)) == NULL)

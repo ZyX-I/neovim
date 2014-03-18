@@ -4610,7 +4610,7 @@ did_set_string_option (
   /* 'pastetoggle': translate key codes like in a mapping */
   else if (varp == &p_pt) {
     if (*p_pt) {
-      (void)replace_termcodes(p_pt, &p, TRUE, TRUE, FALSE);
+      (void)replace_termcodes(p_pt, &p, TRUE, TRUE, FALSE, CPO_TO_CPO_FLAGS);
       if (p != NULL) {
         if (new_value_alloced)
           free_string_option(p_pt);

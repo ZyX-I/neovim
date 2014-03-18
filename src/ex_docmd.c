@@ -4339,7 +4339,7 @@ static int uc_add_command(char_u *name, size_t name_len, char_u *rep, long argt,
   char_u      *rep_buf = NULL;
   garray_T    *gap;
 
-  replace_termcodes(rep, &rep_buf, FALSE, FALSE, FALSE);
+  replace_termcodes(rep, &rep_buf, FALSE, FALSE, FALSE, CPO_TO_CPO_FLAGS);
   if (rep_buf == NULL) {
     /* Can't replace termcodes - try using the string as is */
     rep_buf = vim_strsave(rep);

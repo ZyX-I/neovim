@@ -96,8 +96,8 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
   char_u *lhs;
   char_u *lhs_end;
   char_u *rhs;
-  // char_u *lhs_buf;
-  // char_u *rhs_buf;
+  char_u *lhs_buf;
+  char_u *rhs_buf;
   // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
   int do_backslash = !(flags&FLAG_POC_CPO_BSLASH);
 
@@ -193,14 +193,17 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
   }
 
   if (*lhs != NUL) {
-#if 0
+    char_u saved = *lhs_end;
+    *lhs_end = NUL;
     lhs = replace_termcodes(lhs, &lhs_buf, TRUE, TRUE,
                             map_flags&FLAG_MAP_SPECIAL,
                             FLAG_POC_TO_FLAG_CPO(flags));
+    *lhs_end = saved;
     if (lhs_buf == NULL)
       return FAIL;
-#endif
+#if 0
     lhs = vim_strnsave(lhs, (lhs_end - lhs));
+#endif
     node->args[ARG_MAP_LHS].arg.str = lhs;
   }
 
@@ -209,14 +212,14 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
       // Empty string
       rhs = ALLOC_CLEAR_NEW(char_u, 1);
     } else {
-#if 0
       rhs = replace_termcodes(rhs, &rhs_buf, FALSE, TRUE,
                               map_flags&FLAG_MAP_SPECIAL,
                               FLAG_POC_TO_FLAG_CPO(flags));
       if (rhs_buf == NULL)
         return FAIL;
-#endif
+#if 0
       rhs = vim_strnsave(rhs, p - rhs);
+#endif
       node->args[ARG_MAP_RHS].arg.str = rhs;
     }
   }
@@ -827,6 +830,30 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
   return OK;
 }
 
+/// Parses one command
+///
+/// @param[in,out] pp        Command to parse
+/// @param[out]    node      Parsing result. Should be freed with free_cmd
+/// @param[in]     flags     Flags that control parsing behavior
+/// @parblock
+///   Flag                 | Description
+///   -------------------- | -------------------------------------------------
+///   FLAG_POC_EXMODE      | Is set if parser is called for Ex mode
+///   FLAG_POC_CPO_STAR    | Is set if CPO_STAR flag is present in &cpo
+///   FLAG_POC_CPO_SPECI   | Is set if CPO_SPECI flag is present in &cpo
+///   FLAG_POC_CPO_KEYCODE | Is set if CPO_KEYCODE flag is present in &cpo
+///   FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
+///   FLAG_POC_RL          | Is set if &rl option is set
+/// @endparblock
+/// @param[in]     fgetline  Function used to obtain the next line
+/// @parblock
+///   @note This function must return string in allocated memory. Only parser 
+///         thread must have access to strings returned by fgetline.
+/// @endparblock
+/// @param[in,out] cookie    Second argument to fgetline
+///
+/// @return  OK if everything was parsed correctly, FAIL if out of memory, 
+///          NOTDONE for parser error
 int parse_one_cmd(char_u **pp,
                   CommandNode **node,
                   uint_least8_t flags,
@@ -1770,29 +1797,27 @@ static void node_repr(CommandNode *node, char **pp)
     }
     // FIXME untranslate mappings
 #if 0
-    char_u *translated;
-
     if (node->args[ARG_MAP_LHS].arg.str != NULL) {
       *p++ = ' ';
 
-      translated = translate_mapping(
+      hs = translate_mapping(
           node->args[ARG_MAP_LHS].arg.str, FALSE,
           0);
-      len = STRLEN(translated);
-      memcpy(p, translated, len);
+      len = STRLEN(hs);
+      memcpy(p, hs, len);
       p += len;
-      vim_free(translated);
+      vim_free(hs);
 
       if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         *p++ = ' ';
 
-        translated = translate_mapping(
+        hs = translate_mapping(
             node->args[ARG_MAP_LHS].arg.str, FALSE,
             0);
-        len = STRLEN(translated);
-        memcpy(p, translated, len);
+        len = STRLEN(hs);
+        memcpy(p, hs, len);
         p += len;
-        vim_free(translated);
+        vim_free(hs);
       }
     }
 #endif
