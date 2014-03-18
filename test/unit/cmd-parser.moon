@@ -347,5 +347,6 @@ describe 'parse_one_cmd', ->
       itn full .. ' <buffer>', trunc .. '<buffer>'
       itn full .. ' a', trunc .. ' a'
       itn full .. ' <buffer> a', trunc .. '<buffer>a'
+      itn full .. ' a b', trunc .. ' a b|next command'
 
 -- vim: sw=2 sts=2 et tw=80

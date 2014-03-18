@@ -839,6 +839,73 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
   return OK;
 }
 
+/// Get command argument
+///
+/// Not used for commands with relations with bar or comment symbol: e.g. :echo 
+/// (it allows things like "echo 'abc|def'") or :write (":w `='abc|def'`")
+///
+/// @param[in]  type            Command type
+/// @param[in]  flags           Flags. See parse_one_cmd documentation
+/// @param[in]  start           Start of the command-line arguments
+/// @param[out] arg             Resulting command-line argument
+/// @param[out] next_cmd_offset Offset of next command
+///
+/// @return FAIL when out of memory, OK otherwise
+static int get_cmd_arg(CommandType type, uint_least8_t flags, char_u *start,
+                       char_u **arg, size_t *next_cmd_offset)
+{
+  char_u *p;
+
+  *next_cmd_offset = 0;
+
+  if ((*arg = vim_strsave(start)) == NULL)
+    return FAIL;
+
+  p = *arg;
+
+  for (; *p; mb_ptr_adv(p)) {
+    if (*p == Ctrl_V) {
+      *next_cmd_offset += 2;
+      if (CMDDEF(type).flags & (USECTRLV))
+        p++;                // skip CTRL-V and next char
+      else
+        STRMOVE(p, p + 1);  // remove CTRL-V and skip next char
+      if (*p == NUL)        // stop at NUL after CTRL-V
+        break;
+    }
+    // Check for '"': start of comment or '|': next command
+    // :@" and :*" do not start a comment!
+    // :redir @" doesn't either.
+    else if ((*p == '"' && !(CMDDEF(type).flags & NOTRLCOM)
+              && ((type != kCmdAt && type != kCmdStar)
+                  || p != *arg)
+              && (type != kCmdRedir
+                  || p != *arg + 1 || p[-1] != '@'))
+             || *p == '|' || *p == '\n') {
+      *next_cmd_offset += 1;
+      // We remove the '\' before the '|', unless USECTRLV is used
+      // AND 'b' is present in 'cpoptions'.
+      if (((flags & FLAG_POC_CPO_BAR)
+           || !(CMDDEF(type).flags & USECTRLV)) && *(p - 1) == '\\') {
+        STRMOVE(p - 1, p);              // remove the '\'
+        p--;
+      } else {
+        char_u *nextcmd = check_nextcmd(p);
+        if (nextcmd != NULL) {
+          *next_cmd_offset += (nextcmd - p);
+        }
+        *p = NUL;
+        break;
+      }
+    }
+  }
+
+  if (!(CMDDEF(type).flags & NOTRLCOM)) // remove trailing spaces
+    del_trailing_spaces(p);
+
+  return OK;
+}
+
 /// Parses one command
 ///
 /// @param[in,out] pp        Command to parse
@@ -851,6 +918,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
 ///   FLAG_POC_CPO_STAR    | Is set if CPO_STAR flag is present in &cpo
 ///   FLAG_POC_CPO_SPECI   | Is set if CPO_SPECI flag is present in &cpo
 ///   FLAG_POC_CPO_KEYCODE | Is set if CPO_KEYCODE flag is present in &cpo
+///   FLAG_POC_CPO_BAR     | Is set if CPO_BAR flag is present in &cpo
 ///   FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
 ///   FLAG_POC_RL          | Is set if &rl option is set
 /// @endparblock
@@ -1245,12 +1313,45 @@ int parse_one_cmd(char_u **pp,
 
     if (parser != NULL) {
       int ret;
-      if ((ret = parser(&p, *next_node, flags, position, fgetline, cookie))
+      int used_get_cmd_arg = FALSE;
+      char_u *cmd_arg = p;
+      char_u *cmd_arg_start = p;
+      size_t next_cmd_offset = 0;
+      // XFILE commands may have bangs inside `=…`
+      // ISGREP commands may have bangs inside patterns
+      if (!(CMDDEF(type).flags & (XFILE|ISGREP))) {
+        used_get_cmd_arg = TRUE;
+        if (get_cmd_arg(type, flags, p, &cmd_arg_start, &next_cmd_offset)
+            == FAIL) {
+          free_cmd(*next_node);
+          *next_node = NULL;
+          return FAIL;
+        }
+        cmd_arg = cmd_arg_start;
+      }
+      if ((ret = parser(&cmd_arg, *next_node, flags, position, fgetline, cookie))
           == FAIL) {
+        if (used_get_cmd_arg)
+          vim_free(cmd_arg_start);
         free_cmd(*next_node);
         *next_node = NULL;
         return FAIL;
       }
+      if (used_get_cmd_arg) {
+        if (*cmd_arg != NUL) {
+          free_cmd(*next_node);
+          *next_node = NULL;
+          error.message = e_trailing;
+          error.position = p + (cmd_arg - cmd_arg_start);
+          create_error_node(next_node, &error, position, s);
+          return NOTDONE;
+        }
+        vim_free(cmd_arg_start);
+        p += next_cmd_offset;
+      } else {
+        p = cmd_arg;
+      }
+      *pp = p;
       return ret;
     }
   }
