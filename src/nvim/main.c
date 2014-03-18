@@ -1477,7 +1477,7 @@ static void init_startuptime(mparm_T *paramp)
  * Allocate space for the generic buffers (needed for set_init_1() and
  * EMSG2()).
  */
-static void allocate_generic_buffers(void)
+void allocate_generic_buffers(void)
 {
   NameBuff = xmalloc(MAXPATHL);
   TIME_MSG("Allocated generic buffers");

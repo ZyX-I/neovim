@@ -166,14 +166,13 @@ typedef int (*args_parser)(char_u **,
                            void *);
 
 // flags for parse_one_cmd
-#define FLAG_POC_SOURCING    0x01
-#define FLAG_POC_EXMODE      0x02
-#define FLAG_POC_CPO_STAR    0x04
-#define FLAG_POC_CPO_BSLASH  0x08
-#define FLAG_POC_CPO_SPECI   0x10
-#define FLAG_POC_CPO_KEYCODE 0x20
-#define FLAG_POC_ALTKEYMAP   0x40
-#define FLAG_POC_RL          0x80
+#define FLAG_POC_EXMODE      0x01
+#define FLAG_POC_CPO_STAR    0x02
+#define FLAG_POC_CPO_BSLASH  0x04
+#define FLAG_POC_CPO_SPECI   0x08
+#define FLAG_POC_CPO_KEYCODE 0x10
+#define FLAG_POC_ALTKEYMAP   0x20
+#define FLAG_POC_RL          0x40
 
 #define FLAG_POC_TO_FLAG_CPO(flags) ((flags >> 3)&0x06)
 

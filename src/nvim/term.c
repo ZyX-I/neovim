@@ -4126,8 +4126,9 @@ replace_termcodes (
     char_u *from,
     char_u **bufp,
     int from_part,
-    int do_lt,                      /* also translate <lt> */
-    int special                    /* always accept <key> notation */
+    int do_lt,                     /* also translate <lt> */
+    int special,                   /* always accept <key> notation */
+    int cpo_flags                  /* relevant flags from p_cpo option */
 )
 {
   int i;
@@ -4140,9 +4141,9 @@ replace_termcodes (
   int do_key_code;              /* recognize raw key codes */
   char_u      *result;          /* buffer for resulting string */
 
-  do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
-  do_special = (vim_strchr(p_cpo, CPO_SPECI) == NULL) || special;
-  do_key_code = (vim_strchr(p_cpo, CPO_KEYCODE) == NULL);
+  do_backslash = !(cpo_flags&FLAG_CPO_BSLASH);
+  do_special = !(cpo_flags&FLAG_CPO_SPECI) || special;
+  do_key_code = !(cpo_flags&FLAG_CPO_KEYCODE);
 
   /*
    * Allocate space for the translation.  Worst case a single character is
@@ -4632,7 +4633,8 @@ static void check_for_codes_from_term(void)
 char_u *
 translate_mapping (
     char_u *str,
-    int expmap              /* TRUE when expanding mappings on command-line */
+    int expmap,             /* TRUE when expanding mappings on command-line */
+    int cpo_flags           /* if true do not use p_cpo option */
 )
 {
   garray_T ga;
@@ -4644,9 +4646,9 @@ translate_mapping (
 
   ga_init(&ga, 1, 40);
 
-  cpo_bslash = (vim_strchr(p_cpo, CPO_BSLASH) != NULL);
-  cpo_special = (vim_strchr(p_cpo, CPO_SPECI) != NULL);
-  cpo_keycode = (vim_strchr(p_cpo, CPO_KEYCODE) == NULL);
+  cpo_bslash = !(cpo_flags&FLAG_CPO_BSLASH);
+  cpo_special = !(cpo_flags&FLAG_CPO_SPECI);
+  cpo_keycode = !(cpo_flags&FLAG_CPO_KEYCODE);
 
   for (; *str; ++str) {
     c = *str;
