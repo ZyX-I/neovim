@@ -351,8 +351,6 @@ static void free_address_followup(AddressFollowup *followup)
   vim_free(followup);
 }
 
-static void free_range(Range *range);
-
 static void free_range_data(Range *range)
 {
   if (range == NULL)
