@@ -139,7 +139,7 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
   char_u *lhs_buf;
   char_u *rhs_buf;
   // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
-  int do_backslash = !(flags&FLAG_POC_CPO_BSLASH);
+  bool do_backslash = !(flags&FLAG_POC_CPO_BSLASH);
 
   for (;;) {
     if (*p != '<')
@@ -807,7 +807,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
     *type = kCmdSubstitute;
     p++;
   } else {
-    int found = FALSE;
+    bool found = FALSE;
 
     while (ASCII_ISALPHA(*p))
       p++;
@@ -977,7 +977,7 @@ int parse_one_cmd(char_u **pp,
   char_u *nextcmd = NULL;
   char_u *name = NULL;
   char_u *range_start = NULL;
-  int bang = FALSE;
+  bool bang = FALSE;
   uint_least8_t exflags = 0;
   size_t len;
   size_t i;
@@ -1341,7 +1341,7 @@ int parse_one_cmd(char_u **pp,
 
     if (parser != NULL) {
       int ret;
-      int used_get_cmd_arg = FALSE;
+      bool used_get_cmd_arg = FALSE;
       char_u *cmd_arg = p;
       char_u *cmd_arg_start = p;
       size_t next_cmd_offset = 0;

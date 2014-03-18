@@ -50,7 +50,7 @@
 //{{{ Function declarations
 static ExpressionNode *expr_alloc(ExpressionType type,
                                   ExpressionParserError *error);
-static int isnamechar(int c);
+static bool isnamechar(int c);
 static char_u *find_id_end(char_u **arg);
 static int get_fname_script_len(char_u *p);
 static int parse_name(char_u **arg,
@@ -89,11 +89,11 @@ static int handle_subscript(char_u **arg,
 static int parse7(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
-                  int want_string);
+                  bool want_string);
 static int parse6(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
-                  int want_string);
+                  bool want_string);
 static int parse5(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
@@ -103,7 +103,7 @@ static int parse4(char_u **arg,
 static int parse23(char_u **arg,
                    ExpressionNode **node,
                    ExpressionParserError *error,
-                   int level);
+                   uint8_t level);
 static int parse3(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
@@ -143,7 +143,7 @@ void free_expr(ExpressionNode *node)
  * Return TRUE if character "c" can be used in a variable or function name.
  * Does not include '{' or '}' for magic braces.
  */
-static int isnamechar(int c)
+static bool isnamechar(int c)
 {
   return ASCII_ISALNUM(c) || c == '_' || c == ':' || c == AUTOLOAD_CHAR;
 }
@@ -658,8 +658,8 @@ static int handle_subscript(char_u **arg,
 
 void find_nr_end(char_u **arg,
                  ExpressionType *type,
-                 int dooct,             // recognize octal number
-                 int dohex)             // recognize hex number
+                 bool dooct,             // recognize octal number
+                 bool dohex)             // recognize hex number
 {
   char_u          *ptr = *arg;
   int n;
@@ -742,7 +742,7 @@ void find_nr_end(char_u **arg,
 static int parse7(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
-                  int want_string)
+                  bool want_string)
 {
   ExpressionType type = kTypeUnknown;
   ExpressionNode *parse1_node = NULL;
@@ -967,7 +967,7 @@ static int parse7(char_u **arg,
 static int parse6(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
-                  int want_string)
+                  bool want_string)
 {
   ExpressionType type = kTypeUnknown;
   ExpressionNode *top_node = NULL;
@@ -1096,7 +1096,7 @@ static int parse4(char_u **arg,
 {
   char_u *p;
   ExpressionType type = kTypeUnknown;
-  int len = 2;
+  size_t len = 2;
 
   // Get the first variable.
   if (parse5(arg, node, error) == FAIL)
@@ -1187,7 +1187,7 @@ static int parse4(char_u **arg,
 static int parse23(char_u **arg,
                    ExpressionNode **node,
                    ExpressionParserError *error,
-                   int level)
+                   uint8_t level)
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
