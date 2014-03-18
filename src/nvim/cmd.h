@@ -160,7 +160,7 @@ typedef char_u *(*line_getter)(int, void *, int);
 
 typedef int (*args_parser)(char_u **,
                            CommandNode *,
-                           uint_least8_t,
+                           CommandParserOptions,
                            CommandPosition *,
                            line_getter,
                            void *);

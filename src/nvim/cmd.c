@@ -52,7 +52,7 @@ static int get_vcol(char_u **pp)
   return vcol;
 }
 
-static int parse_append(char_u **pp, CommandNode *node, uint_least8_t flags,
+static int parse_append(char_u **pp, CommandNode *node, CommandParserOptions o,
                         CommandPosition *position, line_getter fgetline,
                         void *cookie)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -87,7 +87,7 @@ static int parse_append(char_u **pp, CommandNode *node, uint_least8_t flags,
   return OK;
 }
 
-static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
+static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
                      CommandPosition *position, line_getter fgetline,
                      void *cookie)
 {
@@ -99,7 +99,7 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
   char_u *lhs_buf;
   char_u *rhs_buf;
   // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
-  bool do_backslash = !(flags&FLAG_POC_CPO_BSLASH);
+  bool do_backslash = !(o.flags&FLAG_POC_CPO_BSLASH);
 
   for (;;) {
     if (*p != '<')
@@ -197,7 +197,7 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
     *lhs_end = NUL;
     lhs = replace_termcodes(lhs, &lhs_buf, TRUE, TRUE,
                             map_flags&FLAG_MAP_SPECIAL,
-                            FLAG_POC_TO_FLAG_CPO(flags));
+                            FLAG_POC_TO_FLAG_CPO(o.flags));
     *lhs_end = saved;
     if (lhs_buf == NULL)
       return FAIL;
@@ -214,7 +214,7 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
     } else {
       rhs = replace_termcodes(rhs, &rhs_buf, FALSE, TRUE,
                               map_flags&FLAG_MAP_SPECIAL,
-                              FLAG_POC_TO_FLAG_CPO(flags));
+                              FLAG_POC_TO_FLAG_CPO(o.flags));
       if (rhs_buf == NULL)
         return FAIL;
 #if 0
@@ -224,7 +224,7 @@ static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
     }
   }
 
-  if ((flags&FLAG_POC_ALTKEYMAP) && (flags&FLAG_POC_RL))
+  if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
     lrswap(rhs);
 
   *pp = p;
@@ -843,13 +843,13 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
 /// (it allows things like "echo 'abc|def'") or :write (":w `='abc|def'`")
 ///
 /// @param[in]  type            Command type
-/// @param[in]  flags           Flags. See parse_one_cmd documentation
+/// @param[in]  o               Parser options. See parse_one_cmd documentation
 /// @param[in]  start           Start of the command-line arguments
 /// @param[out] arg             Resulting command-line argument
 /// @param[out] next_cmd_offset Offset of next command
 ///
 /// @return FAIL when out of memory, OK otherwise
-static int get_cmd_arg(CommandType type, uint_least8_t flags, char_u *start,
+static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
                        char_u **arg, size_t *next_cmd_offset)
 {
   char_u *p;
@@ -883,7 +883,7 @@ static int get_cmd_arg(CommandType type, uint_least8_t flags, char_u *start,
       *next_cmd_offset += 1;
       // We remove the '\' before the '|', unless USECTRLV is used
       // AND 'b' is present in 'cpoptions'.
-      if (((flags & FLAG_POC_CPO_BAR)
+      if (((o.flags & FLAG_POC_CPO_BAR)
            || !(CMDDEF(type).flags & USECTRLV)) && *(p - 1) == '\\') {
         STRMOVE(p - 1, p);              // remove the '\'
         p--;
@@ -908,17 +908,19 @@ static int get_cmd_arg(CommandType type, uint_least8_t flags, char_u *start,
 ///
 /// @param[in,out] pp        Command to parse
 /// @param[out]    node      Parsing result. Should be freed with free_cmd
-/// @param[in]     flags     Flags that control parsing behavior
+/// @param[in]     o         Options that control parsing behavior
 /// @parblock
-///   Flag                 | Description
-///   -------------------- | -------------------------------------------------
-///   FLAG_POC_EXMODE      | Is set if parser is called for Ex mode
-///   FLAG_POC_CPO_STAR    | Is set if CPO_STAR flag is present in &cpo
-///   FLAG_POC_CPO_SPECI   | Is set if CPO_SPECI flag is present in &cpo
-///   FLAG_POC_CPO_KEYCODE | Is set if CPO_KEYCODE flag is present in &cpo
-///   FLAG_POC_CPO_BAR     | Is set if CPO_BAR flag is present in &cpo
-///   FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
-///   FLAG_POC_RL          | Is set if &rl option is set
+///   o.flags:
+///
+///    Flag                 | Description
+///    -------------------- | -------------------------------------------------
+///    FLAG_POC_EXMODE      | Is set if parser is called for Ex mode
+///    FLAG_POC_CPO_STAR    | Is set if CPO_STAR flag is present in &cpo
+///    FLAG_POC_CPO_SPECI   | Is set if CPO_SPECI flag is present in &cpo
+///    FLAG_POC_CPO_KEYCODE | Is set if CPO_KEYCODE flag is present in &cpo
+///    FLAG_POC_CPO_BAR     | Is set if CPO_BAR flag is present in &cpo
+///    FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
+///    FLAG_POC_RL          | Is set if &rl option is set
 /// @endparblock
 /// @param[in]     fgetline  Function used to obtain the next line
 /// @parblock
@@ -931,7 +933,7 @@ static int get_cmd_arg(CommandType type, uint_least8_t flags, char_u *start,
 ///          NOTDONE for parser error
 int parse_one_cmd(char_u **pp,
                   CommandNode **node,
-                  uint_least8_t flags,
+                  CommandParserOptions o,
                   CommandPosition *position,
                   line_getter fgetline,
                   void *cookie)
@@ -978,7 +980,7 @@ int parse_one_cmd(char_u **pp,
     while (*p == ' ' || *p == TAB || *p == ':')
       p++;
     // in ex mode, an empty line works like :+ (switch to next line)
-    if (*p == NUL && flags&FLAG_POC_EXMODE) {
+    if (*p == NUL && o.flags&FLAG_POC_EXMODE) {
       AddressFollowup *fw;
       if ((*next_node = cmd_alloc(kCmdHashbangComment)) == NULL)
         return FAIL;
@@ -1122,7 +1124,7 @@ int parse_one_cmd(char_u **pp,
         range = current_range;
         p++;
         break;
-      } else if (*p == '*' && !(flags&FLAG_POC_CPO_STAR)) {
+      } else if (*p == '*' && !(o.flags&FLAG_POC_CPO_STAR)) {
         current_range.address.type = kAddrMark;
         current_range.address.data.mark = '<';
         if ((current_range.next = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
@@ -1175,7 +1177,7 @@ int parse_one_cmd(char_u **pp,
      * ":3|..."	prints line 3
      * ":|"		prints current line
      */
-    if (*p == '|' || (flags&FLAG_POC_EXMODE
+    if (*p == '|' || (o.flags&FLAG_POC_EXMODE
                       && range.address.type != kAddrMissing)) {
       if ((*next_node = cmd_alloc(kCmdPrint)) == NULL) {
         free_range_data(&range);
@@ -1319,7 +1321,7 @@ int parse_one_cmd(char_u **pp,
       // ISGREP commands may have bangs inside patterns
       if (!(CMDDEF(type).flags & (XFILE|ISGREP))) {
         used_get_cmd_arg = TRUE;
-        if (get_cmd_arg(type, flags, p, &cmd_arg_start, &next_cmd_offset)
+        if (get_cmd_arg(type, o, p, &cmd_arg_start, &next_cmd_offset)
             == FAIL) {
           free_cmd(*next_node);
           *next_node = NULL;
@@ -1327,7 +1329,7 @@ int parse_one_cmd(char_u **pp,
         }
         cmd_arg = cmd_arg_start;
       }
-      if ((ret = parser(&cmd_arg, *next_node, flags, position, fgetline, cookie))
+      if ((ret = parser(&cmd_arg, *next_node, o, position, fgetline, cookie))
           == FAIL) {
         if (used_get_cmd_arg)
           vim_free(cmd_arg_start);
@@ -1942,6 +1944,7 @@ char *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
   char_u *line;
   CommandNode *node;
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
+  CommandParserOptions o = {flags};
   char *repr;
   char *r;
   size_t len;
@@ -1949,7 +1952,7 @@ char *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
   pp = &arg;
   line = fgetline_test(0, pp, 0);
   p = line;
-  if ((parse_one_cmd(&p, &node, flags, &position, (line_getter) fgetline_test,
+  if ((parse_one_cmd(&p, &node, o, &position, (line_getter) fgetline_test,
                      pp)) == FAIL)
     ;
   vim_free(line);
