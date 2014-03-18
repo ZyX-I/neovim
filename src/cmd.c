@@ -16,11 +16,51 @@
 #include "term.h"
 #include "main.h"
 
-static int parse_append(char_u **, CommandNode *, uint_least8_t,
-                        CommandPosition *, line_getter, void *);
+//{{{ Function declarations
+static int get_vcol(char_u **pp);
+static int parse_append(char_u **pp, CommandNode *node, uint_least8_t flags,
+                        CommandPosition *position, line_getter fgetline,
+                        void *cookie);
 static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
                      CommandPosition *position, line_getter fgetline,
                      void *cookie);
+static CommandNode *cmd_alloc(CommandType type);
+static void free_menu_item(MenuItem *menu_item);
+static void free_regex(Regex *regex);
+static void free_address_data(Address *address);
+static void free_address(Address *address);
+static void free_address_followup(AddressFollowup *followup);
+static void free_range_data(Range *range);
+static void free_range(Range *range);
+static void free_cmd_arg(CommandArg *arg, CommandArgType type);
+static int get_pattern(char_u **pp, CommandParserError *error, Regex **target);
+static int get_address(char_u **pp, Address *address, CommandParserError *error);
+static AddressFollowup *address_followup_alloc(AddressFollowupType type);
+static int get_address_followups(char_u **pp, CommandParserError *error,
+                                 AddressFollowup **followup);
+static int create_error_node(CommandNode **node, CommandParserError *error,
+                             CommandPosition *position, char_u *s);
+static char_u *check_nextcmd(char_u *p);
+static int find_command(char_u **pp, CommandType *type, char_u **name,
+                        CommandParserError *error);
+static int get_cmd_arg(CommandType type, uint_least8_t flags, char_u *start,
+                       char_u **arg, size_t *next_cmd_offset);
+static char_u *fgetline_test(int c, char_u **arg, int indent);
+static size_t regex_repr_len(Regex *regex);
+static void regex_repr(Regex *regex, char **pp);
+static size_t number_repr_len(intmax_t number);
+static size_t unumber_repr_len(uintmax_t number);
+static void number_repr(intmax_t number, char **pp);
+static void unumber_repr(uintmax_t number, char **pp);
+static size_t address_followup_repr_len(AddressFollowup *followup);
+static void address_followup_repr(AddressFollowup *followup, char **pp);
+static size_t address_repr_len(Address *address);
+static void address_repr(Address *address, char **pp);
+static size_t range_repr_len(Range *range);
+static void range_repr(Range *range, char **pp);
+static size_t node_repr_len(CommandNode *node);
+static void node_repr(CommandNode *node, char **pp);
+//}}}
 
 #include "cmd_def.h"
 #define DO_DECLARE_EXCMD
@@ -349,8 +389,6 @@ static void free_address_followup(AddressFollowup *followup)
   free_address_followup(followup->next);
   vim_free(followup);
 }
-
-static void free_range(Range *range);
 
 static void free_range_data(Range *range)
 {

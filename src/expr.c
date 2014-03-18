@@ -47,9 +47,75 @@
                           || (c) == 't' || (c) == 'v' || (c) == 'a' \
                           || (c) == 'l' || (c) == 's')
 
+//{{{ Function declarations
+static ExpressionNode *expr_alloc(ExpressionType type,
+                                  ExpressionParserError *error);
+static int isnamechar(int c);
+static char_u *find_id_end(char_u **arg);
+static int get_fname_script_len(char_u *p);
+static int parse_name(char_u **arg,
+                      ExpressionNode **node,
+                      ExpressionParserError *error,
+                      ExpressionNode *parse1_node,
+                      char_u *parse1_arg);
+static int parse_list(char_u **arg,
+                      ExpressionNode **node,
+                      ExpressionParserError *error);
+static int parse_dictionary(char_u **arg,
+                            ExpressionNode **node,
+                            ExpressionParserError *error,
+                            ExpressionNode **parse1_node,
+                            char_u **parse1_arg);
+static char_u *find_option_end(char_u **arg);
+static int parse_option(char_u **arg,
+                        ExpressionNode **node,
+                        ExpressionParserError *error);
+static char_u *find_env_end(char_u **arg);
+static int parse_environment_variable(char_u **arg,
+                                      ExpressionNode **node,
+                                      ExpressionParserError *error);
+static int parse_dot_subscript(char_u **arg,
+                               ExpressionNode **node,
+                               ExpressionParserError *error);
+static int parse_func_call(char_u **arg,
+                           ExpressionNode **node,
+                           ExpressionParserError *error);
+static int parse_subscript(char_u **arg,
+                           ExpressionNode **node,
+                           ExpressionParserError *error);
+static int handle_subscript(char_u **arg,
+                            ExpressionNode **node,
+                            ExpressionParserError *error);
+static int parse7(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error,
+                  int want_string);
+static int parse6(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error,
+                  int want_string);
+static int parse5(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error);
+static int parse4(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error);
+static int parse23(char_u **arg,
+                   ExpressionNode **node,
+                   ExpressionParserError *error,
+                   int level);
+static int parse3(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error);
+static int parse2(char_u **arg,
+                  ExpressionNode **node,
+                  ExpressionParserError *error);
 static int parse1(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
+static size_t node_repr_len(ExpressionNode *node);
+static void node_repr(ExpressionNode *node, char **pp);
+//}}}
 
 static ExpressionNode *expr_alloc(ExpressionType type,
                                   ExpressionParserError *error)
@@ -1107,9 +1173,6 @@ static int parse4(char_u **arg,
 
   return OK;
 }
-
-static int parse3(char_u **arg, ExpressionNode **node,
-                  ExpressionParserError *error);
 
 /*
  * Handle second and third level expressions:
