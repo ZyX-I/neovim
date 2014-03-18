@@ -171,8 +171,9 @@ typedef int (*args_parser)(char_u **,
 #define FLAG_POC_CPO_BSLASH  0x04
 #define FLAG_POC_CPO_SPECI   0x08
 #define FLAG_POC_CPO_KEYCODE 0x10
-#define FLAG_POC_ALTKEYMAP   0x20
-#define FLAG_POC_RL          0x40
+#define FLAG_POC_CPO_BAR     0x20
+#define FLAG_POC_ALTKEYMAP   0x40
+#define FLAG_POC_RL          0x80
 
 #define FLAG_POC_TO_FLAG_CPO(flags) ((flags >> 3)&0x06)
 
