@@ -160,7 +160,7 @@ typedef char_u *(*line_getter)(int, void *, int);
 
 typedef int (*args_parser)(char_u **,
                            CommandNode *,
-                           uint_least8_t,
+                           CommandParserOptions,
                            CommandPosition *,
                            line_getter,
                            void *);
@@ -180,7 +180,7 @@ typedef int (*args_parser)(char_u **,
 void free_cmd(CommandNode *);
 int parse_one_cmd(char_u **pp,
                   CommandNode **node,
-                  uint_least8_t flags,
+                  CommandParserOptions o,
                   CommandPosition *position,
                   line_getter fgetline,
                   void *cookie);
