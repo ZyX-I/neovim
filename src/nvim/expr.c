@@ -25,7 +25,7 @@
 
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = expr_alloc(type, error)) == NULL) \
+    if ((top_node = expr_alloc(type)) == NULL) \
       return FAIL; \
     next_node = &((*old_top_node)->next); \
     top_node->children = *old_top_node; \
@@ -34,7 +34,7 @@
 
 #define TOP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = expr_alloc(type, error)) == NULL) \
+    if ((top_node = expr_alloc(type)) == NULL) \
       return FAIL; \
     next_node = &(top_node->children); \
     *old_top_node = top_node; \
@@ -42,7 +42,7 @@
 
 #define VALUE_NODE(type, error, node, pos, end_pos) \
   { \
-    if ((*node = expr_alloc(type, error)) == NULL) \
+    if ((*node = expr_alloc(type)) == NULL) \
       return FAIL; \
     (*node)->position = pos; \
     (*node)->end_position = end_pos; \
@@ -52,8 +52,12 @@
                           || (c) == 't' || (c) == 'v' || (c) == 'a' \
                           || (c) == 'l' || (c) == 's')
 
-static ExpressionNode *expr_alloc(ExpressionType type,
-                                  ExpressionParserError *error)
+/// Allocate new expression node and assign its type property
+///
+/// @param[in]  type   Node type
+///
+/// @return Pointer to allocated block of memory or NULL in case of error
+static ExpressionNode *expr_alloc(ExpressionType type)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *node;
@@ -78,17 +82,25 @@ void free_expr(ExpressionNode *node)
  * Return TRUE if character "c" can be used in a variable or function name.
  * Does not include '{' or '}' for magic braces.
  */
+/// Check whether given character is a valid name character
+///
+/// @param[in]  c  Tested character
+///
+/// @return TRUE if character can be used in a variable of function name, FALSE 
+///         otherwise. Does not include '{' or '}' for magic braces.
 static bool isnamechar(int c)
   FUNC_ATTR_CONST
 {
   return ASCII_ISALNUM(c) || c == '_' || c == ':' || c == AUTOLOAD_CHAR;
 }
 
-/*
- * Find the end of the name of a function or internal variable.
- * "arg" is advanced to the first non-white character after the name.
- * Return NULL if something is wrong.
- */
+/// Find the end of the name of a function or internal variable
+///
+/// @param[in,out]  arg  Searched argument. It is advanced to the first 
+///                      non-white character after the name.
+///
+/// @return Last character of the name if name was found (i.e. *arg - 1). NULL 
+///         if name was not found
 static char_u *find_id_end(char_u **arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -103,11 +115,13 @@ static char_u *find_id_end(char_u **arg)
   return p - 1;
 }
 
-/*
- * Return 5 if "p" starts with "<SID>" or "<SNR>" (ignoring case).
- * Return 2 if "p" starts with "s:".
- * Return 0 otherwise.
- */
+/// Get length of s:/<SID>/<SNR> function name prefix
+///
+/// @param[in]  p  Searched string.
+///
+/// @return 5 if "p" starts with "<SID>" or "<SNR>" (ignoring case).
+///         2 if "p" starts with "s:".
+///         0 otherwise.
 static int get_fname_script_len(char_u *p)
   FUNC_ATTR_CONST
 {
@@ -119,10 +133,21 @@ static int get_fname_script_len(char_u *p)
   return 0;
 }
 
-/*
- * Only the name is recognized, does not handle ".key" or "[idx]".
- * "arg" is advanced to the first non-white character after the name.
- */
+/// Parse variable/function name
+///
+/// @param[in,out]  arg          Parsed string. Is advanced to the first 
+///                              character after the name.
+/// @param[out]     node         Location where results are saved.
+/// @param[out]     error        Structure where errors are saved.
+/// @param[in]      parse1_node  Cached results of parsing first expression in 
+///                              curly-braces-name ({expr}). Only expected if 
+///                              '{' is the first symbol (i.e. *arg == '{'). 
+///                              Must be NULL if it is not the first symbol.
+/// @param[in]      parse1_arg   Cached end of curly braces expression. Only 
+///                              expected under the same conditions with 
+///                              parse1_node.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse_name(char_u **arg,
                       ExpressionNode **node,
                       ExpressionParserError *error,
@@ -224,10 +249,14 @@ static int parse_name(char_u **arg,
   return OK;
 }
 
-/*
- * Allocate a variable for a List and fill it from "*arg".
- * Return OK or FAIL.
- */
+/// Parse list literal
+///
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+///                        after the list.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse_list(char_u **arg,
                       ExpressionNode **node,
                       ExpressionParserError *error)
@@ -266,10 +295,19 @@ static int parse_list(char_u **arg,
   return OK;
 }
 
-/*
- * Allocate a variable for a Dictionary and fill it from "*arg".
- * Return OK or FAIL.  Returns NOTDONE for {expr}.
- */
+/// Parse dictionary literal
+///
+/// @param[in,out]  arg          Parsed string. Is advanced to the first 
+///                              character after the dictionary.
+/// @param[out]     node         Location where parsing results are saved.
+/// @param[out]     error        Structure where errors are saved.
+/// @param[out]     parse1_node  Location where parsing results are saved if 
+///                              expression proved to be curly braces name part.
+/// @param[out]     parse1_arg   Location where end of curly braces name 
+///                              expression is saved.
+///
+/// @return FAIL if parsing failed, NOTDONE if curly braces name found, OK 
+///         otherwise.
 static int parse_dictionary(char_u **arg,
                             ExpressionNode **node,
                             ExpressionParserError *error,
@@ -295,7 +333,7 @@ static int parse_dictionary(char_u **arg,
       return NOTDONE;
   }
 
-  if ((top_node = expr_alloc(kTypeDictionary, error)) == NULL) {
+  if ((top_node = expr_alloc(kTypeDictionary)) == NULL) {
     free_expr(*parse1_node);
     return FAIL;
   }
@@ -347,13 +385,14 @@ static int parse_dictionary(char_u **arg,
   return OK;
 }
 
-/*
- * Skip over the name of an option: "&option", "&g:option" or "&l:option".
- * "arg" points to the "&" or '+' when called.
- * Advance "arg" to the first character after the name.
- * Returns NULL when no option name found.  Otherwise pointer to the last char 
- * of the option name.
- */
+/// Skip over the name of an option ("&option", "&g:option", "&l:option")
+///
+/// @param[in,out]  arg  Start of the option name. It must point to option sigil 
+///                      (i.e. '&' or '+'). Advanced to the first character 
+///                      after the option name.
+///
+/// @return NULL if no option name found, pointer to the last character of the 
+///         option name otherwise (i.e. *arg - 1).
 static char_u *find_option_end(char_u **arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -379,12 +418,15 @@ static char_u *find_option_end(char_u **arg)
   return p - 1;
 }
 
-/*
- * Parse an option value.
- * "arg" points to the '&' or '+' before the option name.
- * "arg" is advanced to character after the option name.
- * Return OK or FAIL.
- */
+/// Parse an option literal
+///
+/// @param[in,out]  arg    Parsed string. It should point to "&" before the 
+///                        option name. Advanced to the first character after 
+///                        the option name.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse_option(char_u **arg,
                         ExpressionNode **node,
                         ExpressionParserError *error)
@@ -403,11 +445,15 @@ static int parse_option(char_u **arg,
   return OK;
 }
 
-/*
- * Find the end of an environment variable name.
- * Advance "arg" to the first character after the name.
- * Return NULL for error.
- */
+/// Skip over the name of an environment variable
+///
+/// @param[in,out]  arg  Start of the variable name. Advanced to the first 
+///                      character after the variable name.
+///
+/// @return NULL if no variable name found, pointer to the last character of the 
+///         variable name otherwise (i.e. *arg - 1).
+///
+/// @note Uses vim_isIDc() function: depends on &isident option.
 static char_u *find_env_end(char_u **arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -415,19 +461,25 @@ static char_u *find_env_end(char_u **arg)
 
   for (p = *arg; vim_isIDc(*p); p++) {
   }
-  if (p == *arg)            /* no name found */
+  if (p == *arg)            // no name found
     return NULL;
 
   *arg = p;
   return p - 1;
 }
 
-/*
- * Parse an environment variable.
- * "arg" is pointing to the '$'.  It is advanced to after the name.
- * If the environment variable was not set, silently assume it is empty.
- * Always return OK.
- */
+/// Parse an environment variable literal
+///
+/// @param[in,out]  arg    Parsed string. Is expected to point to the sigil 
+///                        ('$'). Is advanced after the variable name.
+/// @parblock
+///   @note If there is no variable name after '$' it is simply assumed that 
+///         this name is empty.
+/// @endparblock
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL when out of memory, OK otherwise.
 static int parse_environment_variable(char_u **arg,
                                       ExpressionNode **node,
                                       ExpressionParserError *error)
@@ -446,11 +498,15 @@ static int parse_environment_variable(char_u **arg,
   return OK;
 }
 
-/*
- * Parse .key subscript
- * Return OK, FAIL or NOTDONE, latter only in case handle_subscript can proceed 
- * handling subsequent subscripts (i.e. .key subscript was found).
- */
+/// Parse .key subscript
+///
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+///                        after the subscript.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL when out of memory, NOTDONE if subscript was found, OK 
+///         otherwise.
 static int parse_dot_subscript(char_u **arg,
                                ExpressionNode **node,
                                ExpressionParserError *error)
@@ -473,7 +529,7 @@ static int parse_dot_subscript(char_u **arg,
   // XXX Workaround for concat ambiguity: s:autoload#var
   if (*e == AUTOLOAD_CHAR)
     return OK;
-  if ((top_node = expr_alloc(kTypeConcatOrSubscript, error)) == NULL)
+  if ((top_node = expr_alloc(kTypeConcatOrSubscript)) == NULL)
     return FAIL;
   top_node->children = *node;
   top_node->position = s + 1;
@@ -483,10 +539,14 @@ static int parse_dot_subscript(char_u **arg,
   return NOTDONE;
 }
 
-/*
- * Parse function call arguments
- * Return OK or FAIL.
- */
+/// Parse function call arguments
+///
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+///                        after the closing parenthesis of given function call.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse_func_call(char_u **arg,
                            ExpressionNode **node,
                            ExpressionParserError *error)
@@ -526,11 +586,15 @@ static int parse_func_call(char_u **arg,
   return OK;
 }
 
-/*
- * Parse an "[expr]" or "[expr:expr]" index.
- * "*arg" points to the '['.
- * Returns FAIL or OK. "*arg" is advanced to after the ']'.
- */
+/// Parse "[expr]" or "[expr : expr]" subscript
+///
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+///                        after the subscript. Is expected to point to the 
+///                        opening bracket.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse_subscript(char_u **arg,
                            ExpressionNode **node,
                            ExpressionParserError *error)
@@ -569,11 +633,14 @@ static int parse_subscript(char_u **arg,
   return OK;
 }
 
-/*
- * Handle expr[expr], expr[expr:expr] subscript and .name lookup.
- * Also handle function call with Funcref variable: func(expr)
- * Can all be combined: dict.func(expr)[idx]['func'](expr)
- */
+/// Parse all following "[...]" subscripts, .key subscripts and function calls
+///
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+///                        after the last subscript.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int handle_subscript(char_u **arg,
                             ExpressionNode **node,
                             ExpressionParserError *error)
@@ -605,10 +672,15 @@ static int handle_subscript(char_u **arg,
   return OK;
 }
 
-void find_nr_end(char_u **arg,
-                 ExpressionType *type,
-                 bool dooct,             // recognize octal number
-                 bool dohex)             // recognize hex number
+/// Find end of VimL number (100, 0xA0, 0775, possibly with minus sign)
+///
+/// @param[in,out]  arg    Parsed string.
+/// @param[out]     type   Type of the resulting number.
+/// @param[in]      dooct  If true allow function to recognize octal numbers.
+/// @param[in]      dohex  If true allow function to recognize hexadecimal 
+///                        numbers.
+static void find_nr_end(char_u **arg, ExpressionType *type,
+                        bool dooct, bool dohex)
 {
   char_u          *ptr = *arg;
   int n;
@@ -662,32 +734,39 @@ void find_nr_end(char_u **arg,
   *arg = ptr;
 }
 
-/*
- * Handle sixth level expression:
- *  number		number constant
- *  "string"		string constant
- *  'string'		literal string constant
- *  &option-name	option value
- *  @r			register contents
- *  identifier		variable value
- *  function()		function call
- *  $VAR		environment variable
- *  (expression)	nested expression
- *  [expr, expr]	List
- *  {key: val, key: val}  Dictionary
- *
- *  Also handle:
- *  ! in front		logical NOT
- *  - in front		unary minus
- *  + in front		unary plus (ignored)
- *  trailing []		subscript in String or List
- *  trailing .name	entry in Dictionary
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Return OK or FAIL.
- */
+/// Parse seventh level expression: values
+///
+/// Parsed values:
+///
+/// Value                | Description
+/// -------------------- | -----------------------
+/// number               | number constant
+/// "string"             | string constant
+/// 'string'             | literal string constant
+/// &option-name         | option value
+/// @r                   | register contents
+/// identifier           | variable value
+/// function()           | function call
+/// $VAR                 | environment variable
+/// (expression)         | nested expression
+/// [expr, expr]         | List
+/// {key: val, key: val} | Dictionary
+///
+/// Also handles unary operators (logical NOT, unary minus, unary plus) and 
+/// subscripts ([], .key, func()).
+///
+/// @param[in,out]  arg          Parsed string. Must point to the first 
+///                              non-white character. Advanced to the next 
+///                              non-white after the recognized expression.
+/// @param[out]     node         Location where parsing results are saved.
+/// @param[out]     error        Structure where errors are saved.
+/// @param[in]      want_string  True if the result should be string. Is used to 
+///                              preserve compatibility with vim: "a".1.2 is 
+///                              a string "a12" (uses string concat), not 
+///                              floating-point value. This flag is set in 
+///                              parse5 that handles concats.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse7(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
@@ -867,14 +946,12 @@ static int parse7(char_u **arg,
 
   *arg = skipwhite(*arg);
 
-  /* Handle following '[', '(' and '.' for expr[expr], expr.name,
-   * expr(expr). */
+  // Handle following '[', '(' and '.' for expr[expr], expr.name,
+  // expr(expr).
   if (ret == OK)
     ret = handle_subscript(arg, node, error);
 
-  /*
-   * Apply logical NOT and unary '-', from right to left, ignore '+'.
-   */
+  // Apply logical NOT and unary '-', from right to left, ignore '+'.
   if (ret == OK && end_leader > start_leader) {
     while (end_leader > start_leader) {
       ExpressionNode *top_node = NULL;
@@ -893,7 +970,7 @@ static int parse7(char_u **arg,
           break;
         }
       }
-      if ((top_node = expr_alloc(type, error)) == NULL)
+      if ((top_node = expr_alloc(type)) == NULL)
         return FAIL;
       top_node->children = *node;
       *node = top_node;
@@ -903,17 +980,23 @@ static int parse7(char_u **arg,
   return ret;
 }
 
-/*
- * Handle fifth level expression:
- *	*	number multiplication
- *	/	number division
- *	%	number modulo
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Return OK or FAIL.
- */
+/// Handle sixths level expression: multiplication/division/modulo
+///
+/// Operators supported:
+///
+/// Operator | Operation
+/// -------- | ---------------------
+///   "*"    | Number multiplication
+///   "/"    | Number division
+///   "%"    | Number modulo
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse6(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
@@ -964,17 +1047,23 @@ static int parse6(char_u **arg,
   return OK;
 }
 
-/*
- * Handle fourth level expression:
- *	+	number addition
- *	-	number subtraction
- *	.	string concatenation
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Return OK or FAIL.
- */
+/// Handle fifth level expression: addition/subtraction/concatenation
+///
+/// Operators supported:
+///
+/// Operator | Operation
+/// -------- | --------------------
+///   "+"    | List/number addition
+///   "/"    | Number subtraction
+///   "%"    | String concatenation
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse5(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
@@ -1024,24 +1113,34 @@ static int parse5(char_u **arg,
   return OK;
 }
 
-/*
- * Handle third level expression:
- *	var1 == var2
- *	var1 =~ var2
- *	var1 != var2
- *	var1 !~ var2
- *	var1 > var2
- *	var1 >= var2
- *	var1 < var2
- *	var1 <= var2
- *	var1 is var2
- *	var1 isnot var2
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Return OK or FAIL.
- */
+/// Handle fourth level expression: boolean relations
+///
+/// Relation types:
+///
+/// Operator | Relation
+/// -------- | ---------------------
+///   "=="   | Equals
+///   "=~"   | Matches pattern
+///   "!="   | Not equals
+///   "!~"   | Not matches pattern
+///   ">"    | Is greater than
+///   ">="   | Is greater than or equal to
+///   "<"    | Is less than
+///   "<="   | Is less than or equal to
+///   "is"   | Is identical to
+///  "isnot" | Is not identical to
+///
+/// Accepts "#" or "?" after each operator to designate case compare strategy 
+/// (by default it is taken from &ignore case option, trailing "#" means that 
+/// case is respected, trailing "?" means that it is ignored).
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse4(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
@@ -1127,16 +1226,24 @@ static int parse4(char_u **arg,
   return OK;
 }
 
-/*
- * Handle second and third level expressions:
- *	expr3 && expr3 && expr3	    logical AND (level==3)
- *	expr2 || expr2 || expr2	    logical OR  (level==2)
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Return OK or FAIL.
- */
+/// Handle second and third level expression: logical operations
+///
+/// Operators used:
+///
+/// Operator | Operation
+/// -------- | ----------------------
+///   "&&"   | Logical AND (level==3)
+///   "||"   | Logical OR  (level==2)
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+/// @param[in]      level  Expression level: determines which logical operator 
+///                        should be handled.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse23(char_u **arg,
                    ExpressionNode **node,
                    ExpressionParserError *error,
@@ -1178,6 +1285,15 @@ static int parse23(char_u **arg,
   return OK;
 }
 
+/// Handle third level expression: logical AND
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse3(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
@@ -1186,6 +1302,15 @@ static int parse3(char_u **arg,
   return parse23(arg, node, error, 3);
 }
 
+/// Handle second level expression: logical OR
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse2(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
@@ -1193,17 +1318,17 @@ static int parse2(char_u **arg,
   return parse23(arg, node, error, 2);
 }
 
-/*
- * Handle top level expression:
- *	expr2 ? expr1 : expr1
- *
- * "arg" must point to the first non-white of the expression.
- * "arg" is advanced to the next non-white after the recognized expression.
- *
- * Note: "rettv.v_lock" is not set.
- *
- * Return OK or FAIL.
- */
+/// Handle first (top) level expression: ternary conditional operator
+///
+/// Handles expr2 ? expr1 : expr1
+///
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
+///                        character. Advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return FAIL if parsing failed, OK otherwise.
 static int parse1(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
@@ -1242,6 +1367,15 @@ static int parse1(char_u **arg,
   return OK;
 }
 
+/// Parse expression
+///
+/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
+///                        advanced to the next non-white after the recognized 
+///                        expression.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+///         allocated expression node otherwise.
 ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
