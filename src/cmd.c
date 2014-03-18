@@ -13,9 +13,14 @@
 #include "charset.h"
 #include "globals.h"
 #include "garray.h"
+#include "term.h"
+#include "main.h"
 
 static int parse_append(char_u **, CommandNode *, uint_least8_t,
                         CommandPosition *, line_getter, void *);
+static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
+                     CommandPosition *position, line_getter fgetline,
+                     void *cookie);
 
 #include "cmd_def.h"
 #define DO_DECLARE_EXCMD
@@ -79,6 +84,147 @@ static int parse_append(char_u **pp, CommandNode *node, uint_least8_t flags,
     ((char_u **)(strs->ga_data))[strs->ga_len++] = next_line;
   }
 
+  return OK;
+}
+
+static int parse_map(char_u **pp, CommandNode *node, uint_least8_t flags,
+                     CommandPosition *position, line_getter fgetline,
+                     void *cookie)
+{
+  uint_least32_t map_flags = 0;
+  char_u *p = *pp;
+  char_u *lhs;
+  char_u *lhs_end;
+  char_u *rhs;
+  // char_u *lhs_buf;
+  // char_u *rhs_buf;
+  // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
+  int do_backslash = !(flags&FLAG_POC_CPO_BSLASH);
+
+  for (;;) {
+    if (*p != '<')
+      break;
+
+    switch (p[1]) {
+      case 'b': {
+        // Check for "<buffer>": mapping local to buffer.
+        if (STRNCMP(p, "<buffer>", 8) == 0) {
+          p = skipwhite(p + 8);
+          map_flags |= FLAG_MAP_BUFFER;
+          continue;
+        }
+        break;
+      }
+      case 'n': {
+        // Check for "<nowait>": don't wait for more characters.
+        if (STRNCMP(p, "<nowait>", 8) == 0) {
+          p = skipwhite(p + 8);
+          map_flags |= FLAG_MAP_NOWAIT;
+          continue;
+        }
+        break;
+      }
+      case 's': {
+        // Check for "<silent>": don't echo commands.
+        if (STRNCMP(p, "<silent>", 8) == 0) {
+          p = skipwhite(p + 8);
+          map_flags |= FLAG_MAP_SILENT;
+          continue;
+        }
+
+        // Check for "<special>": accept special keys in <>
+        if (STRNCMP(p, "<special>", 9) == 0) {
+          p = skipwhite(p + 9);
+          map_flags |= FLAG_MAP_SPECIAL;
+          continue;
+        }
+
+        // Check for "<script>": remap script-local mappings only
+        if (STRNCMP(p, "<script>", 8) == 0) {
+          p = skipwhite(p + 8);
+          map_flags |= FLAG_MAP_SCRIPT;
+          continue;
+        }
+        break;
+      }
+      case 'e': {
+        // Check for "<expr>": {rhs} is an expression.
+        if (STRNCMP(p, "<expr>", 6) == 0) {
+          p = skipwhite(p + 6);
+          map_flags |= FLAG_MAP_EXPR;
+          continue;
+        }
+        break;
+      }
+      case 'u': {
+        // Check for "<unique>": don't overwrite an existing mapping.
+        if (STRNCMP(p, "<unique>", 8) == 0) {
+          p = skipwhite(p + 8);
+          map_flags |= FLAG_MAP_UNIQUE;
+          continue;
+        }
+        break;
+      }
+      default: {
+        break;
+      }
+    }
+    break;
+  }
+  node->args[ARG_MAP_FLAGS].arg.flags = map_flags;
+
+  lhs = p;
+  while (*p && !vim_iswhite(*p)) {
+    if ((p[0] == Ctrl_V || (do_backslash && p[0] == '\\')) &&
+        p[1] != NUL)
+      p++;                      // skip CTRL-V or backslash
+    p++;
+  }
+
+  lhs_end = p;
+  p = skipwhite(p);
+  rhs = p;
+
+  while (*p) {
+    if ((p[0] == Ctrl_V || (do_backslash && p[0] == '\\')) &&
+        p[1] != NUL)
+      p++;                      // skip CTRL-V or backslash
+    p++;
+  }
+
+  if (*lhs != NUL) {
+#if 0
+    lhs = replace_termcodes(lhs, &lhs_buf, TRUE, TRUE,
+                            map_flags&FLAG_MAP_SPECIAL,
+                            FLAG_POC_TO_FLAG_CPO(flags));
+    if (lhs_buf == NULL)
+      return FAIL;
+#endif
+    lhs = vim_strnsave(lhs, (lhs_end - lhs));
+    node->args[ARG_MAP_LHS].arg.str = lhs;
+  }
+
+  if (*rhs != NUL) {
+    if (STRICMP(rhs, "<nop>") == 0) {
+      // Empty string
+      rhs = ALLOC_CLEAR_NEW(char_u, 1);
+    } else {
+#if 0
+      rhs = replace_termcodes(rhs, &rhs_buf, FALSE, TRUE,
+                              map_flags&FLAG_MAP_SPECIAL,
+                              FLAG_POC_TO_FLAG_CPO(flags));
+      if (rhs_buf == NULL)
+        return FAIL;
+#endif
+      rhs = vim_strnsave(rhs, p - rhs);
+      node->args[ARG_MAP_RHS].arg.str = rhs;
+    }
+  }
+
+  if ((flags&FLAG_POC_ALTKEYMAP) && (flags&FLAG_POC_RL))
+    lrswap(rhs);
+
+  *pp = p;
   return OK;
 }
 
@@ -636,7 +782,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
     if (**pp == 'd' && (p[-1] == 'l' || p[-1] == 'p')) {
       // Check for ":dl", ":dell", etc. to ":deletel": that's
       // :delete with the 'l' flag.  Same for 'p'.
-      for (i = 0; i < len; ++i)
+      for (i = 0; i < len; i++)
         if ((*pp)[i] != ((char_u *)"delete")[i])
           break;
       if (i == len - 1)
@@ -1426,6 +1572,56 @@ static size_t node_repr_len(CommandNode *node)
     }
 
     len += 2;
+  } else if (CMDDEF(node->type).parse == &parse_map) {
+    uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
+
+    if (map_flags)
+      len++;
+
+    if (map_flags & FLAG_MAP_BUFFER)
+      len += 8;
+    if (map_flags & FLAG_MAP_NOWAIT)
+      len += 8;
+    if (map_flags & FLAG_MAP_SILENT)
+      len += 8;
+    if (map_flags & FLAG_MAP_SPECIAL)
+      len += 9;
+    if (map_flags & FLAG_MAP_SCRIPT)
+      len += 8;
+    if (map_flags & FLAG_MAP_EXPR)
+      len += 6;
+    if (map_flags & FLAG_MAP_UNIQUE)
+      len += 8;
+
+    if (node->args[ARG_MAP_LHS].arg.str != NULL) {
+      len += 1 + STRLEN(node->args[ARG_MAP_LHS].arg.str);
+      if (node->args[ARG_MAP_RHS].arg.str != NULL)
+        len += 1 + STRLEN(node->args[ARG_MAP_RHS].arg.str);
+    }
+    // FIXME untranslate mappings
+#if 0
+    char_u *translated;
+
+    if (node->args[ARG_MAP_LHS].arg.str != NULL) {
+      len++;
+
+      translated = translate_mapping(
+          node->args[ARG_MAP_LHS].arg.str, FALSE,
+          0);
+      len += STRLEN(translated);
+      vim_free(translated);
+
+      if (node->args[ARG_MAP_RHS].arg.str != NULL) {
+        len++;
+
+        translated = translate_mapping(
+            node->args[ARG_MAP_LHS].arg.str, FALSE,
+            0);
+        len += STRLEN(translated);
+        vim_free(translated);
+      }
+    }
+#endif
   }
 
   return len;
@@ -1519,6 +1715,87 @@ static void node_repr(CommandNode *node, char **pp)
     }
     *p++ = '\n';
     *p++ = '.';
+  } else if (CMDDEF(node->type).parse == &parse_map) {
+    char_u *hs;
+    uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
+
+    if (map_flags)
+      *p++ = ' ';
+
+    if (map_flags & FLAG_MAP_BUFFER) {
+      memcpy(p, "<buffer>", 8);
+      p += 8;
+    }
+    if (map_flags & FLAG_MAP_NOWAIT) {
+      memcpy(p, "<nowait>", 8);
+      p += 8;
+    }
+    if (map_flags & FLAG_MAP_SILENT) {
+      memcpy(p, "<silent>", 8);
+      p += 8;
+    }
+    if (map_flags & FLAG_MAP_SPECIAL) {
+      memcpy(p, "<special>", 9);
+      p += 9;
+    }
+    if (map_flags & FLAG_MAP_SCRIPT) {
+      memcpy(p, "<script>", 8);
+      p += 8;
+    }
+    if (map_flags & FLAG_MAP_EXPR) {
+      memcpy(p, "<expr>", 6);
+      p += 6;
+    }
+    if (map_flags & FLAG_MAP_UNIQUE) {
+      memcpy(p, "<unique>", 8);
+      p += 8;
+    }
+
+    if (node->args[ARG_MAP_LHS].arg.str != NULL) {
+      *p++ = ' ';
+
+      hs = node->args[ARG_MAP_LHS].arg.str;
+      len = STRLEN(hs);
+      memcpy(p, hs, len);
+      p += len;
+
+      if (node->args[ARG_MAP_RHS].arg.str != NULL) {
+        *p++ = ' ';
+
+        hs = node->args[ARG_MAP_RHS].arg.str;
+        len = STRLEN(hs);
+        memcpy(p, hs, len);
+        p += len;
+      }
+    }
+    // FIXME untranslate mappings
+#if 0
+    char_u *translated;
+
+    if (node->args[ARG_MAP_LHS].arg.str != NULL) {
+      *p++ = ' ';
+
+      translated = translate_mapping(
+          node->args[ARG_MAP_LHS].arg.str, FALSE,
+          0);
+      len = STRLEN(translated);
+      memcpy(p, translated, len);
+      p += len;
+      vim_free(translated);
+
+      if (node->args[ARG_MAP_RHS].arg.str != NULL) {
+        *p++ = ' ';
+
+        translated = translate_mapping(
+            node->args[ARG_MAP_LHS].arg.str, FALSE,
+            0);
+        len = STRLEN(translated);
+        memcpy(p, translated, len);
+        p += len;
+        vim_free(translated);
+      }
+    }
+#endif
   }
 
   *pp = p;
