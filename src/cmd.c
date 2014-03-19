@@ -24,6 +24,9 @@ static int parse_append(char_u **pp, CommandNode *node, CommandParserOptions o,
 static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
                      CommandPosition *position, line_getter fgetline,
                      void *cookie);
+static int parse_mapclear(char_u **pp, CommandNode *node,
+                          CommandParserOptions o, CommandPosition *position,
+                          line_getter fgetline, void *cookie);
 static CommandNode *cmd_alloc(CommandType type);
 static void free_menu_item(MenuItem *menu_item);
 static void free_regex(Regex *regex);
@@ -301,6 +304,21 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
   }
 
   *pp = p;
+  return OK;
+}
+
+static int parse_mapclear(char_u **pp, CommandNode *node,
+                          CommandParserOptions o, CommandPosition *position,
+                          line_getter fgetline, void *cookie)
+{
+  bool local;
+
+  local = (STRCMP(*pp, "<buffer>") == 0);
+  if (local)
+    *pp += 8;
+
+  node->args[ARG_CLEAR_BUFFER].arg.flags = local;
+
   return OK;
 }
 
@@ -1411,13 +1429,14 @@ int parse_one_cmd(char_u **pp,
         *next_node = NULL;
         return FAIL;
       }
-      if (used_get_cmd_arg) {
+      if (used_get_cmd_arg && (*next_node)->type != kCmdSyntaxError) {
         if (*cmd_arg != NUL) {
           free_cmd(*next_node);
           *next_node = NULL;
           error.message = (char *) e_trailing;
-          error.position = p + (cmd_arg - cmd_arg_start);
-          if (create_error_node(next_node, &error, position, s) == FAIL)
+          error.position = cmd_arg;
+          if (create_error_node(next_node, &error, position, cmd_arg_start)
+              == FAIL)
             return FAIL;
           return NOTDONE;
         }
@@ -1840,6 +1859,9 @@ static size_t node_repr_len(CommandNode *node)
       }
     }
 #endif
+  } else if (CMDDEF(node->type).parse == &parse_mapclear) {
+    if (node->args[ARG_CLEAR_BUFFER].arg.flags)
+      len += 1 + 8;
   }
 
   return len;
@@ -2018,6 +2040,12 @@ static void node_repr(CommandNode *node, char **pp)
       }
     }
 #endif
+  } else if (CMDDEF(node->type).parse == &parse_mapclear) {
+    if (node->args[ARG_CLEAR_BUFFER].arg.flags) {
+      *p++ = ' ';
+      memcpy(p, "<buffer>", 8);
+      p += 8;
+    }
   }
 
   *pp = p;
