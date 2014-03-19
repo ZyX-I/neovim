@@ -1537,7 +1537,7 @@ static void node_repr(ExpressionNode *node, char **pp)
   *pp = p;
 }
 
-char *parse0_dump(char_u *arg)
+char *parse0_repr(char_u *arg)
 {
   TestExprResult *p0_result;
   size_t len = 0;
