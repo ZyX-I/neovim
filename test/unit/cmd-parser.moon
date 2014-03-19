@@ -349,4 +349,25 @@ describe 'parse_one_cmd', ->
       itn full .. ' <buffer> a', trunc .. '<buffer>a'
       itn full .. ' a b', trunc .. ' a b|next command'
 
+  describe ':*mapclear/*abclear commands', ->
+    for trunc, full in pairs {
+      mapc: 'mapclear'
+      ['mapc!']: 'mapclear!'
+      nmapc: 'nmapclear'
+      vmapc: 'vmapclear'
+      xmapc: 'xmapclear'
+      smapc: 'smapclear'
+      omapc: 'omapclear'
+      imapc: 'imapclear'
+      lmapc: 'lmapclear'
+      cmapc: 'cmapclear'
+      abc: 'abclear'
+      iabc: 'iabclear'
+      cabc: 'cabclear'
+    }
+      itn full, trunc
+      itn full, trunc .. ' \t '
+      itn full .. ' <buffer>', trunc .. '<buffer>'
+      itn full .. ' <buffer>', trunc .. '\t<buffer>'
+
 -- vim: sw=2 sts=2 et tw=80
