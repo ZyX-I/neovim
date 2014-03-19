@@ -241,9 +241,6 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
     *lhs_end = saved;
     if (lhs_buf == NULL)
       return FAIL;
-#if 0
-    lhs = vim_strnsave(lhs, (lhs_end - lhs));
-#endif
     node->args[ARG_MAP_LHS].arg.str = lhs;
   }
 
@@ -257,15 +254,51 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
                               FLAG_POC_TO_FLAG_CPO(o.flags));
       if (rhs_buf == NULL)
         return FAIL;
-#if 0
-      rhs = vim_strnsave(rhs, p - rhs);
-#endif
+
+      if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
+        lrswap(rhs);
+
+      if (map_flags&FLAG_MAP_EXPR) {
+        ExpressionParserError error;
+        ExpressionNode *expr = NULL;
+        char_u *rhs_end = rhs;
+
+        error.position = NULL;
+        error.message = NULL;
+
+        if ((expr = parse0_err(&rhs_end, &error)) == NULL) {
+          CommandParserError cmd_error;
+          if (error.message == NULL) {
+            vim_free(rhs);
+            return FAIL;
+          }
+          cmd_error.position = error.position;
+          cmd_error.message = error.message;
+          if (create_error_node(&(node->args[ARG_MAP_CMD].arg.cmd),
+                                &cmd_error, position, rhs)
+              == FAIL) {
+            vim_free(rhs);
+            return FAIL;
+          }
+        } else if (*rhs_end != NUL) {
+          CommandParserError cmd_error;
+
+          cmd_error.position = rhs_end;
+          cmd_error.message = N_("E15: trailing characters");
+
+          if (create_error_node(&(node->args[ARG_MAP_CMD].arg.cmd),
+                                &cmd_error, position, rhs)
+              == FAIL) {
+            vim_free(rhs);
+            return FAIL;
+          }
+        } else {
+          node->args[ARG_MAP_EXPR].arg.expr = expr;
+        }
+      }
       node->args[ARG_MAP_RHS].arg.str = rhs;
     }
   }
-
-  if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
-    lrswap(rhs);
 
   *pp = p;
   return OK;
@@ -586,7 +619,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
       p++;
       if (*p == NUL) {
         // FIXME proper message
-        error->message = (char_u *)"expected mark name, but got nothing";
+        error->message = "expected mark name, but got nothing";
         error->position = p - 1;
         return FAIL;
       }
@@ -622,7 +655,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
           break;
         }
         default: {
-          error->message = e_backslash;
+          error->message = (char *) e_backslash;
           error->position = p;
           return FAIL;
         }
@@ -734,7 +767,7 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
       vim_free(line);
       return FAIL;
     }
-    if ((message = vim_strsave(error->message)) == NULL) {
+    if ((message = vim_strsave((char_u *) error->message)) == NULL) {
       vim_free(line);
       vim_free(fname);
       return FAIL;
@@ -855,7 +888,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
       *type = kCmdUSER;
     } else if (!found) {
       *type = kCmdUnknown;
-      error->message = (char_u *) N_("E492: Not an editor command");
+      error->message = N_("E492: Not an editor command");
       error->position = *pp;
       return FAIL;
     } else {
@@ -1068,15 +1101,17 @@ int parse_one_cmd(char_u **pp,
       }
       if (type != kCmdUnknown) {
         if (VIM_ISDIGIT(*pstart) && !(CMDDEF(type).flags) & COUNT) {
-          error.message = e_norange;
+          error.message = (char *) e_norange;
           error.position = pstart;
-          create_error_node(next_node, &error, position, s);
+          if (create_error_node(next_node, &error, position, s) == FAIL)
+            return FAIL;
           return NOTDONE;
         }
         if (*p == '!' && !(CMDDEF(type).flags & BANG)) {
-          error.message = e_nobang;
+          error.message = (char *) e_nobang;
           error.position = p;
-          create_error_node(next_node, &error, position, s);
+          if (create_error_node(next_node, &error, position, s) == FAIL)
+            return FAIL;
           return NOTDONE;
         }
         if ((*next_node = cmd_alloc(type)) == NULL)
@@ -1123,17 +1158,19 @@ int parse_one_cmd(char_u **pp,
     if (range_start == NULL)
       range_start = p;
     if (get_address(&p, &current_range.address, &error) == FAIL) {
+      free_range_data(&current_range);
       if (error.message == NULL)
         return FAIL;
-      create_error_node(next_node, &error, position, s);
-      free_range_data(&current_range);
+      if (create_error_node(next_node, &error, position, s) == FAIL)
+        return FAIL;
       return NOTDONE;
     }
     if (get_address_followups(&p, &error, &current_range.followups) == FAIL) {
+      free_range_data(&current_range);
       if (error.message == NULL)
         return FAIL;
-      create_error_node(next_node, &error, position, s);
-      free_range_data(&current_range);
+      if (create_error_node(next_node, &error, position, s) == FAIL)
+        return FAIL;
       return NOTDONE;
     }
     p = skipwhite(p);
@@ -1242,10 +1279,11 @@ int parse_one_cmd(char_u **pp,
   }
 
   if (find_command(&p, &type, &name, &error) == FAIL) {
+    free_range_data(&range);
     if (error.message == NULL)
       return FAIL;
-    free_range_data(&range);
-    create_error_node(next_node, &error, position, s);
+    if (create_error_node(next_node, &error, position, s) == FAIL)
+      return FAIL;
     return NOTDONE;
   }
 
@@ -1256,18 +1294,22 @@ int parse_one_cmd(char_u **pp,
       p++;
       bang = TRUE;
     } else {
-      error.message = e_nobang;
+      free_range_data(&range);
+      error.message = (char *) e_nobang;
       error.position = p;
-      create_error_node(next_node, &error, position, s);
+      if (create_error_node(next_node, &error, position, s) == FAIL)
+        return FAIL;
       return NOTDONE;
     }
   }
 
   if (range.address.type != kAddrMissing) {
     if (!(type == kCmdUSER || CMDDEF(type).flags & RANGE)) {
-      error.message = e_norange;
+      free_range_data(&range);
+      error.message = (char *) e_norange;
       error.position = range_start;
-      create_error_node(next_node, &error, position, s);
+      if (create_error_node(next_node, &error, position, s) == FAIL)
+        return FAIL;
       return NOTDONE;
     }
   }
@@ -1315,9 +1357,11 @@ int parse_one_cmd(char_u **pp,
       && *p != NUL
       && *p != '"'
       && (*p != '|' || !(CMDDEF(type).flags & TRLBAR))) {
-    error.message = e_trailing;
+    free_range_data(&range);
+    error.message = (char *) e_trailing;
     error.position = p;
-    create_error_node(next_node, &error, position, s);
+    if (create_error_node(next_node, &error, position, s) == FAIL)
+      return FAIL;
     return NOTDONE;
   }
 
@@ -1371,9 +1415,10 @@ int parse_one_cmd(char_u **pp,
         if (*cmd_arg != NUL) {
           free_cmd(*next_node);
           *next_node = NULL;
-          error.message = e_trailing;
+          error.message = (char *) e_trailing;
           error.position = p + (cmd_arg - cmd_arg_start);
-          create_error_node(next_node, &error, position, s);
+          if (create_error_node(next_node, &error, position, s) == FAIL)
+            return FAIL;
           return NOTDONE;
         }
         vim_free(cmd_arg_start);
@@ -1763,8 +1808,13 @@ static size_t node_repr_len(CommandNode *node)
 
     if (node->args[ARG_MAP_LHS].arg.str != NULL) {
       len += 1 + STRLEN(node->args[ARG_MAP_LHS].arg.str);
-      if (node->args[ARG_MAP_RHS].arg.str != NULL)
+      if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
+        len += 1 + expr_node_dump_len(node->args[ARG_MAP_EXPR].arg.expr);
+      } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
+        len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd);
+      } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         len += 1 + STRLEN(node->args[ARG_MAP_RHS].arg.str);
+      }
     }
     // FIXME untranslate mappings
 #if 0
@@ -1927,7 +1977,13 @@ static void node_repr(CommandNode *node, char **pp)
       memcpy(p, hs, len);
       p += len;
 
-      if (node->args[ARG_MAP_RHS].arg.str != NULL) {
+      if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
+        *p++ = ' ';
+        expr_node_dump(node->args[ARG_MAP_EXPR].arg.expr, &p);
+      } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
+        *p++ = '\n';
+        node_repr(node->args[ARG_MAP_CMD].arg.cmd, &p);
+      } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         *p++ = ' ';
 
         hs = node->args[ARG_MAP_RHS].arg.str;

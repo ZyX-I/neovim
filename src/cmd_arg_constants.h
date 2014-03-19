@@ -33,7 +33,8 @@ typedef enum {
 
 #define ARGS_NO       {0}
 #define ARGS_APPEND   {kArgLines}
-#define ARGS_MAP      {kArgFlags, kArgString, kArgString}
+#define ARGS_MAP      {kArgFlags, kArgString, kArgString, kArgExpression, \
+                       kArgCommand}
 #define ARGS_MENU     {kArgFlags, kArgMenuName, kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
 #define ARGS_MODIFIER {kArgCommand}
@@ -123,6 +124,8 @@ typedef enum {
 #define ARG_MAP_FLAGS      0
 #define ARG_MAP_LHS        1
 #define ARG_MAP_RHS        2
+#define ARG_MAP_EXPR       3
+#define ARG_MAP_CMD        4
 
 #define FLAG_MAP_BUFFER    0x01
 #define FLAG_MAP_NOWAIT    0x02
