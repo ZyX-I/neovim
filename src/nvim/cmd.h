@@ -160,6 +160,7 @@ typedef char_u *(*line_getter)(int, void *, int);
 
 typedef int (*args_parser)(char_u **,
                            CommandNode *,
+                           CommandParserError *,
                            CommandParserOptions,
                            CommandPosition *,
                            line_getter,
@@ -176,6 +177,9 @@ typedef int (*args_parser)(char_u **,
 #define FLAG_POC_RL          0x80
 
 #define FLAG_POC_TO_FLAG_CPO(flags) ((flags >> 3)&0x06)
+
+#define MENU_DEFAULT_PRI_VALUE 500
+#define MENU_DEFAULT_PRI        -1
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "cmd.h.generated.h"

@@ -52,8 +52,12 @@ static int get_vcol(char_u **pp)
   return vcol;
 }
 
-static int parse_append(char_u **pp, CommandNode *node, CommandParserOptions o,
-                        CommandPosition *position, line_getter fgetline,
+static int parse_append(char_u **pp,
+                        CommandNode *node,
+                        CommandParserError *error,
+                        CommandParserOptions o,
+                        CommandPosition *position,
+                        line_getter fgetline,
                         void *cookie)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -87,8 +91,68 @@ static int parse_append(char_u **pp, CommandNode *node, CommandParserOptions o,
   return OK;
 }
 
-static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
-                     CommandPosition *position, line_getter fgetline,
+static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
+                        bool special, bool expr, CommandParserOptions o,
+                        CommandPosition *position)
+{
+  char_u *rhs_buf;
+
+  rhs = replace_termcodes(rhs, &rhs_buf, FALSE, TRUE, special,
+                          FLAG_POC_TO_FLAG_CPO(o.flags));
+  if (rhs_buf == NULL)
+    return FAIL;
+
+  if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
+    lrswap(rhs);
+
+  if (expr) {
+    ExpressionParserError error;
+    ExpressionNode *expr = NULL;
+    char_u *rhs_end = rhs;
+
+    error.position = NULL;
+    error.message = NULL;
+
+    if ((expr = parse0_err(&rhs_end, &error)) == NULL) {
+      CommandParserError cmd_error;
+      if (error.message == NULL) {
+        vim_free(rhs);
+        return FAIL;
+      }
+      cmd_error.position = error.position;
+      cmd_error.message = error.message;
+      if (create_error_node(&(node->args[rhs_idx + 2].arg.cmd),
+                            &cmd_error, position, rhs)
+          == FAIL) {
+        vim_free(rhs);
+        return FAIL;
+      }
+    } else if (*rhs_end != NUL) {
+      CommandParserError cmd_error;
+
+      cmd_error.position = rhs_end;
+      cmd_error.message = N_("E15: trailing characters");
+
+      if (create_error_node(&(node->args[rhs_idx + 2].arg.cmd),
+                            &cmd_error, position, rhs)
+          == FAIL) {
+        vim_free(rhs);
+        return FAIL;
+      }
+    } else {
+      node->args[rhs_idx + 1].arg.expr = expr;
+    }
+  }
+  node->args[rhs_idx].arg.str = rhs;
+  return OK;
+}
+
+static int parse_map(char_u **pp,
+                     CommandNode *node,
+                     CommandParserError *error,
+                     CommandParserOptions o,
+                     CommandPosition *position,
+                     line_getter fgetline,
                      void *cookie)
 {
   uint_least32_t map_flags = 0;
@@ -97,7 +161,6 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
   char_u *lhs_end;
   char_u *rhs;
   char_u *lhs_buf;
-  char_u *rhs_buf;
   // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
   bool do_backslash = !(o.flags&FLAG_POC_CPO_BSLASH);
 
@@ -185,12 +248,7 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
   p = skipwhite(p);
   rhs = p;
 
-  while (*p) {
-    if ((p[0] == Ctrl_V || (do_backslash && p[0] == '\\')) &&
-        p[1] != NUL)
-      p++;                      // skip CTRL-V or backslash
-    p++;
-  }
+  p += STRLEN(p);
 
   if (*lhs != NUL) {
     char_u saved = *lhs_end;
@@ -209,54 +267,10 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
       // Empty string
       rhs = ALLOC_CLEAR_NEW(char_u, 1);
     } else {
-      rhs = replace_termcodes(rhs, &rhs_buf, FALSE, TRUE,
-                              map_flags&FLAG_MAP_SPECIAL,
-                              FLAG_POC_TO_FLAG_CPO(o.flags));
-      if (rhs_buf == NULL)
+      if (set_node_rhs(rhs, ARG_MAP_RHS, node, map_flags&FLAG_MAP_SPECIAL,
+                       map_flags&FLAG_MAP_EXPR, o, position)
+          == FAIL)
         return FAIL;
-
-      if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
-        lrswap(rhs);
-
-      if (map_flags&FLAG_MAP_EXPR) {
-        ExpressionParserError error;
-        ExpressionNode *expr = NULL;
-        char_u *rhs_end = rhs;
-
-        error.position = NULL;
-        error.message = NULL;
-
-        if ((expr = parse0_err(&rhs_end, &error)) == NULL) {
-          CommandParserError cmd_error;
-          if (error.message == NULL) {
-            vim_free(rhs);
-            return FAIL;
-          }
-          cmd_error.position = error.position;
-          cmd_error.message = error.message;
-          if (create_error_node(&(node->args[ARG_MAP_CMD].arg.cmd),
-                                &cmd_error, position, rhs)
-              == FAIL) {
-            vim_free(rhs);
-            return FAIL;
-          }
-        } else if (*rhs_end != NUL) {
-          CommandParserError cmd_error;
-
-          cmd_error.position = rhs_end;
-          cmd_error.message = N_("E15: trailing characters");
-
-          if (create_error_node(&(node->args[ARG_MAP_CMD].arg.cmd),
-                                &cmd_error, position, rhs)
-              == FAIL) {
-            vim_free(rhs);
-            return FAIL;
-          }
-        } else {
-          node->args[ARG_MAP_EXPR].arg.expr = expr;
-        }
-      }
-      node->args[ARG_MAP_RHS].arg.str = rhs;
     }
   }
 
@@ -264,9 +278,13 @@ static int parse_map(char_u **pp, CommandNode *node, CommandParserOptions o,
   return OK;
 }
 
-static int parse_mapclear(char_u **pp, CommandNode *node,
-                          CommandParserOptions o, CommandPosition *position,
-                          line_getter fgetline, void *cookie)
+static int parse_mapclear(char_u **pp,
+                          CommandNode *node,
+                          CommandParserError *error,
+                          CommandParserOptions o,
+                          CommandPosition *position,
+                          line_getter fgetline,
+                          void *cookie)
 {
   bool local;
 
@@ -276,6 +294,207 @@ static int parse_mapclear(char_u **pp, CommandNode *node,
 
   node->args[ARG_CLEAR_BUFFER].arg.flags = local;
 
+  return OK;
+}
+
+static void menu_unescape(char_u *p)
+{
+  while (*p) {
+    if (*p == '\\' && p[1] != NUL)
+      STRMOVE(p, p + 1);
+    p++;
+  }
+}
+
+static int parse_menu(char_u **pp,
+                      CommandNode *node,
+                      CommandParserError *error,
+                      CommandParserOptions o,
+                      CommandPosition *position,
+                      line_getter fgetline,
+                      void *cookie)
+{
+  uint_least32_t menu_flags = 0;
+  char_u *p = *pp;
+  size_t i;
+  char_u *s;
+  char_u *menu_path;
+  char_u *menu_path_end;
+  char_u *map_to;
+  char_u *text = NULL;
+  MenuItem *sub = NULL;
+  MenuItem *cur = NULL;
+
+  for (;;) {
+    if (STRNCMP(p, "<script>", 8) == 0) {
+      menu_flags |= FLAG_MENU_SCRIPT;
+      p = skipwhite(p + 8);
+      continue;
+    }
+    if (STRNCMP(p, "<silent>", 8) == 0) {
+      menu_flags |= FLAG_MENU_SILENT;
+      p = skipwhite(p + 8);
+      continue;
+    }
+    if (STRNCMP(p, "<special>", 9) == 0) {
+      menu_flags |= FLAG_MENU_SPECIAL;
+      p = skipwhite(p + 9);
+      continue;
+    }
+    break;
+  }
+
+  // Locate an optional "icon=filename" argument.
+  if (STRNCMP(p, "icon=", 5) == 0) {
+    char_u *icon;
+
+    p += 5;
+    icon = p;
+
+    while (*p != NUL && *p != ' ') {
+      if (*p == '\\')
+        p++;
+      mb_ptr_adv(p);
+    }
+
+    if ((icon = vim_strnsave(icon, p - icon)) == NULL)
+      return FAIL;
+
+    menu_unescape(icon);
+
+    node->args[ARG_MENU_ICON].arg.str = icon;
+
+    if (*p != NUL)
+      p = skipwhite(p);
+  }
+
+  for (s = p; *s; ++s)
+    if (!VIM_ISDIGIT(*s) && *s != '.')
+      break;
+
+  if (vim_iswhite(*s)) {
+    int *pris;
+    i = 0;
+    for (; i < MENUDEPTH && !vim_iswhite(*p); i++) {
+    }
+    if (i) {
+      if ((pris = ALLOC_CLEAR_NEW(int, i + 1)) == NULL)
+        return FAIL;
+      node->args[ARG_MENU_PRI].arg.numbers = pris;
+      for (i = 0; i < MENUDEPTH && !vim_iswhite(*p); i++) {
+        pris[i] = (int) getdigits(&p);
+        if (pris[i] == 0)
+          pris[i] = MENU_DEFAULT_PRI;
+        if (*p == '.')
+          p++;
+      }
+    }
+    p = skipwhite(p);
+  }
+
+  if (STRNCMP(p, "enable", 6) == 0 && vim_iswhite(p[6])) {
+    menu_flags |= FLAG_MENU_ENABLE;
+    p = skipwhite(p + 6);
+  } else if (STRNCMP(p, "disable", 7) == 0 && vim_iswhite(p[7])) {
+    menu_flags |= FLAG_MENU_DISABLE;
+    p = skipwhite(p + 7);
+  }
+
+  node->args[ARG_MENU_FLAGS].arg.flags = menu_flags;
+
+  if (*p == NUL) {
+    *pp = p;
+    return OK;
+  }
+
+  menu_path = p;
+  if (*menu_path == '.') {
+    error->message = N_("E475: Expected menu name");
+    error->position = menu_path;
+    return NOTDONE;
+  }
+
+  menu_path_end = NULL;
+  while (*p && !vim_iswhite(*p)) {
+    if ((*p == '\\' || *p == Ctrl_V) && p[1] != NUL) {
+      p++;
+      if (*p == TAB) {
+        text = p + 1;
+        menu_path_end = p - 2;
+      }
+    } else if (STRNICMP(p, "<TAB>", 5) == 0) {
+      menu_path_end = p - 1;
+      p += 4;
+      text = p + 1;
+    } else if (*p == '.' && text == NULL) {
+      menu_path_end = p - 1;
+      if (menu_path_end == menu_path) {
+        error->message = N_("E792: Empty menu name");
+        error->position = p;
+        return NOTDONE;
+      }
+    } else if ((!p[1] || vim_iswhite(p[1])) && p != menu_path && text == NULL) {
+      menu_path_end = p;
+    }
+    if (menu_path_end != NULL) {
+      if ((sub = ALLOC_CLEAR_NEW(MenuItem, 1)) == NULL)
+        return FAIL;
+
+      if (node->args[ARG_MENU_NAME].arg.menu_item == NULL)
+        node->args[ARG_MENU_NAME].arg.menu_item = sub;
+      else
+        cur->subitem = sub;
+
+      if ((sub->name = vim_strnsave(menu_path, menu_path_end - menu_path + 1))
+          == NULL)
+        return FAIL;
+
+      menu_unescape(sub->name);
+
+      cur = sub;
+      menu_path = p + 1;
+      menu_path_end = NULL;
+    }
+    p++;
+  }
+
+  if (text != NULL) {
+    if (node->args[ARG_MENU_NAME].arg.menu_item == NULL) {
+      error->message = N_("E792: Empty menu name");
+      error->position = text;
+      return NOTDONE;
+    }
+
+    if ((text = vim_strnsave(text, p - text)) == NULL)
+      return FAIL;
+
+    menu_unescape(text);
+
+    node->args[ARG_MENU_TEXT].arg.str = text;
+  }
+
+  p = skipwhite(p);
+
+  map_to = p;
+
+  p += STRLEN(p);
+
+  if (*map_to != NUL) {
+    if (node->args[ARG_MENU_NAME].arg.menu_item == NULL) {
+      error->message = N_("E792: Empty menu name");
+      error->position = menu_path;
+      return NOTDONE;
+    } else if (node->args[ARG_MENU_NAME].arg.menu_item->subitem == NULL) {
+      error->message = N_("E331: Must not add menu items directly to menu bar");
+      error->position = menu_path;
+      return NOTDONE;
+    }
+    if (set_node_rhs(map_to, ARG_MENU_RHS, node, menu_flags&FLAG_MENU_SPECIAL, 
+                     FALSE, o, position) == FAIL)
+      return FAIL;
+  }
+
+  *pp = p;
   return OK;
 }
 
@@ -316,7 +535,7 @@ static CommandNode *cmd_alloc(CommandType type)
 {
   // XXX May allocate less space then needed to hold the whole struct: less by 
   // one size of CommandArg.
-  size_t size = sizeof(CommandNode) - sizeof(CommandArg);
+  size_t size = offsetof(CommandNode, args);
   CommandNode *node;
 
   if (type == kCmdUSER)
@@ -337,6 +556,7 @@ static void free_menu_item(MenuItem *menu_item)
 
   free_menu_item(menu_item->subitem);
   vim_free(menu_item->name);
+  vim_free(menu_item);
 }
 
 static void free_regex(Regex *regex)
@@ -1085,7 +1305,7 @@ int parse_one_cmd(char_u **pp,
         }
       }
       if (type != kCmdUnknown) {
-        if (VIM_ISDIGIT(*pstart) && !(CMDDEF(type).flags) & COUNT) {
+        if (VIM_ISDIGIT(*pstart) && !((CMDDEF(type).flags) & COUNT)) {
           error.message = (char *) e_norange;
           error.position = pstart;
           if (create_error_node(next_node, &error, position, s) == FAIL)
@@ -1388,7 +1608,8 @@ int parse_one_cmd(char_u **pp,
         }
         cmd_arg = cmd_arg_start;
       }
-      if ((ret = parser(&cmd_arg, *next_node, o, position, fgetline, cookie))
+      if ((ret = parser(&cmd_arg, *next_node, &error, o, position, fgetline,
+                        cookie))
           == FAIL) {
         if (used_get_cmd_arg)
           vim_free(cmd_arg_start);
@@ -1396,7 +1617,14 @@ int parse_one_cmd(char_u **pp,
         *next_node = NULL;
         return FAIL;
       }
-      if (used_get_cmd_arg && (*next_node)->type != kCmdSyntaxError) {
+      if (ret == NOTDONE) {
+        free_cmd(*next_node);
+        *next_node = NULL;
+        if (create_error_node(next_node, &error, position,
+                              used_get_cmd_arg ? cmd_arg_start : s) == FAIL)
+          return FAIL;
+        return NOTDONE;
+      } else if (used_get_cmd_arg) {
         if (*cmd_arg != NUL) {
           free_cmd(*next_node);
           *next_node = NULL;
@@ -1829,6 +2057,58 @@ static size_t node_repr_len(CommandNode *node)
   } else if (CMDDEF(node->type).parse == &parse_mapclear) {
     if (node->args[ARG_CLEAR_BUFFER].arg.flags)
       len += 1 + 8;
+  } else if (CMDDEF(node->type).parse == &parse_menu) {
+    uint_least32_t menu_flags = node->args[ARG_MENU_FLAGS].arg.flags;
+
+    if (menu_flags & (FLAG_MENU_SILENT|FLAG_MENU_SPECIAL|FLAG_MENU_SCRIPT))
+      len++;
+
+    if (menu_flags & FLAG_MENU_SILENT)
+      len += 8;
+    if (menu_flags & FLAG_MENU_SPECIAL)
+      len += 9;
+    if (menu_flags & FLAG_MENU_SCRIPT)
+      len += 8;
+
+    if (node->args[ARG_MENU_ICON].arg.str != NULL)
+      len += 1 + 5 + STRLEN(node->args[ARG_MENU_ICON].arg.str);
+
+    if (node->args[ARG_MENU_PRI].arg.numbers != NULL) {
+      int *number = node->args[ARG_MENU_PRI].arg.numbers;
+
+      len++;
+
+      while (*number) {
+        if (*number != MENU_DEFAULT_PRI)
+          len += unumber_repr_len((uintmax_t) *number);
+        number++;
+        if (*number)
+          len++;
+      }
+    }
+
+    if (menu_flags & FLAG_MENU_DISABLE)
+      len += 1 + 7;
+    if (menu_flags & FLAG_MENU_ENABLE)
+      len += 1 + 6;
+
+    if (node->args[ARG_MENU_NAME].arg.menu_item != NULL) {
+      MenuItem *cur = node->args[ARG_MENU_NAME].arg.menu_item;
+
+      while (cur != NULL) {
+        // Space or dot + STRLEN
+        len += 1 + STRLEN(cur->name);
+        cur = cur->subitem;
+      }
+
+      if (node->args[ARG_MENU_TEXT].arg.str != NULL) {
+        len += 5;
+        len += STRLEN(node->args[ARG_MENU_TEXT].arg.str);
+      }
+    }
+
+    if (node->args[ARG_MENU_RHS].arg.str != NULL)
+      len += 1 + STRLEN(node->args[ARG_MENU_RHS].arg.str);
   }
 
   return len;
@@ -2013,6 +2293,91 @@ static void node_repr(CommandNode *node, char **pp)
       memcpy(p, "<buffer>", 8);
       p += 8;
     }
+  } else if (CMDDEF(node->type).parse == &parse_menu) {
+    uint_least32_t menu_flags = node->args[ARG_MENU_FLAGS].arg.flags;
+
+    if (menu_flags & (FLAG_MENU_SILENT|FLAG_MENU_SPECIAL|FLAG_MENU_SCRIPT))
+      *p++ = ' ';
+
+    if (menu_flags & FLAG_MENU_SILENT) {
+      memcpy(p, "<silent>", 8);
+      p += 8;
+    }
+    if (menu_flags & FLAG_MENU_SPECIAL) {
+      memcpy(p, "<special>", 9);
+      p += 9;
+    }
+    if (menu_flags & FLAG_MENU_SCRIPT) {
+      memcpy(p, "<script>", 8);
+      p += 8;
+    }
+
+    if (node->args[ARG_MENU_ICON].arg.str != NULL) {
+      *p++ = ' ';
+      memcpy(p, "icon=", 5);
+      p += 5;
+      len = STRLEN(node->args[ARG_MENU_ICON].arg.str);
+      memcpy(p, node->args[ARG_MENU_ICON].arg.str, len);
+      p += len;
+    }
+
+    if (node->args[ARG_MENU_PRI].arg.numbers != NULL) {
+      int *number = node->args[ARG_MENU_PRI].arg.numbers;
+
+      *p++ = ' ';
+
+      while (*number) {
+        if (*number != MENU_DEFAULT_PRI)
+          unumber_repr((uintmax_t) *number, &p);
+        number++;
+        if (*number)
+          *p++ = '.';
+      }
+    }
+
+    if (menu_flags & FLAG_MENU_DISABLE) {
+      *p++ = ' ';
+      memcpy(p, "disable", 7);
+      p += 7;
+    }
+    if (menu_flags & FLAG_MENU_ENABLE) {
+      *p++ = ' ';
+      memcpy(p, "enable", 6);
+      p += 6;
+    }
+
+    if (node->args[ARG_MENU_NAME].arg.menu_item != NULL) {
+      MenuItem *cur = node->args[ARG_MENU_NAME].arg.menu_item;
+
+      while (cur != NULL) {
+        if (cur == node->args[ARG_MENU_NAME].arg.menu_item)
+          *p++ = ' ';
+        else
+          *p++ = '.';
+        len = STRLEN(cur->name);
+        memcpy(p, cur->name, len);
+        p += len;
+        cur = cur->subitem;
+      }
+
+      if (node->args[ARG_MENU_TEXT].arg.str != NULL) {
+        *p++ = '<';
+        *p++ = 'T';
+        *p++ = 'a';
+        *p++ = 'b';
+        *p++ = '>';
+        len = STRLEN(node->args[ARG_MENU_TEXT].arg.str);
+        memcpy(p, node->args[ARG_MENU_TEXT].arg.str, len);
+        p += len;
+      }
+    }
+
+    if (node->args[ARG_MENU_RHS].arg.str != NULL) {
+      *p++ = ' ';
+      len = STRLEN(node->args[ARG_MENU_RHS].arg.str);
+      memcpy(p, node->args[ARG_MENU_RHS].arg.str, len);
+      p += len;
+    }
   }
 
   *pp = p;
@@ -2034,8 +2399,8 @@ char *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
   line = fgetline_test(0, pp, 0);
   p = line;
   if ((parse_one_cmd(&p, &node, o, &position, (line_getter) fgetline_test,
-                     pp)) == FAIL)
-    ;
+                     pp)) == FAIL) {
+  }
   vim_free(line);
 
   len = node_repr_len(node);

@@ -370,4 +370,34 @@ describe 'parse_one_cmd', ->
       itn full .. ' <buffer>', trunc .. '<buffer>'
       itn full .. ' <buffer>', trunc .. '\t<buffer>'
 
+  describe ':*menu commands', ->
+    for trunc, full in pairs {
+      me: 'menu'
+      am: 'amenu'
+      nme: 'nmenu'
+      ome: 'omenu'
+      vme: 'vmenu'
+      sme: 'smenu'
+      ime: 'imenu'
+      cme: 'cmenu'
+      noreme: 'noremenu'
+      an: 'anoremenu'
+      nnoreme: 'nnoremenu'
+      onoreme: 'onoremenu'
+      vnoreme: 'vnoremenu'
+      snoreme: 'snoremenu'
+      inoreme: 'inoremenu'
+      cnoreme: 'cnoremenu'
+    }
+      itn '5' .. full, '5' .. trunc
+      itn full, trunc
+      itn full .. ' icon=abc.gif', trunc .. '\ticon=abc.gif'
+      itn full .. ' enable', trunc .. '\tenable'
+      itn full .. ' disable', trunc .. '\tdisable'
+      itn full .. ' .2 abc.def ghi', trunc .. ' .2 abc.def ghi'
+      itn full .. ' 1.2 abc.def ghi', trunc .. ' 1.2 abc.def ghi'
+      itn full .. ' abc.def def', trunc .. ' abc.def def'
+      itn full .. ' abc.def<Tab>def def', trunc .. ' abc.def<tAb>def def'
+      itn full .. ' abc.def<Tab>def def', trunc .. ' abc.def\\\tdef def'
+
 -- vim: sw=2 sts=2 et tw=80

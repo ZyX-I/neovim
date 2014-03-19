@@ -35,7 +35,8 @@ typedef enum {
 #define ARGS_APPEND   {kArgLines}
 #define ARGS_MAP      {kArgFlags, kArgString, kArgString, kArgExpression, \
                        kArgCommand}
-#define ARGS_MENU     {kArgFlags, kArgMenuName, kArgString, kArgString}
+#define ARGS_MENU     {kArgFlags, kArgString, kArgNumbers, kArgMenuName, \
+                       kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
 #define ARGS_MODIFIER {kArgCommand}
 #define ARGS_DO       {kArgCommand}
@@ -120,7 +121,7 @@ typedef enum {
 // :append/:insert
 #define ARG_APPEND_LINES   0
 
-// :*map/:*abbrev/:*menu
+// :*map/:*abbrev
 #define ARG_MAP_FLAGS      0
 #define ARG_MAP_LHS        1
 #define ARG_MAP_RHS        2
@@ -135,19 +136,19 @@ typedef enum {
 #define FLAG_MAP_EXPR      0x20
 #define FLAG_MAP_UNIQUE    0x40
 
-#define DEFAULT_MAP_FLAGS  0x00
-
 // :*menu
 #define ARG_MENU_FLAGS     0
-#define ARG_MENU_NAME      1
-#define ARG_MENU_LHS       2
-#define ARG_MENU_TEXT      3
+#define ARG_MENU_ICON      1
+#define ARG_MENU_PRI       2
+#define ARG_MENU_NAME      3
+#define ARG_MENU_TEXT      4
+#define ARG_MENU_RHS       5
 
 #define FLAG_MENU_SILENT   0x01
 #define FLAG_MENU_SPECIAL  0x02
 #define FLAG_MENU_SCRIPT   0x04
-
-#define DEFAULT_MENU_FLAGS 0x00
+#define FLAG_MENU_DISABLE  0x08
+#define FLAG_MENU_ENABLE   0x10
 
 // :*mapclear/:*abclear
 #define ARG_CLEAR_BUFFER   0
