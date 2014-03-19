@@ -25,9 +25,6 @@
 #include "garray.h"
 #include "term.h"
 
-
-#define MENUDEPTH   10          /* maximum depth of menus */
-
 static int add_menu_path(char_u *, vimmenu_T *, int *, char_u *);
 static int menu_nable_recurse(vimmenu_T *menu, char_u *name, int modes,
                               int enable);
