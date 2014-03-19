@@ -516,9 +516,6 @@ static int parse_dot_subscript(char_u **arg,
   char_u *e;
   ExpressionNode *top_node = NULL;
 
-  // It cannot be subscript if previous character is "\"" or "'"
-  if (s[-1] == '"' || s[-1] == '\'')
-    return OK;
   for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; e++) {
   }
   if (e == s + 1)
@@ -653,7 +650,9 @@ static int handle_subscript(char_u **arg,
         int ret;
         if ((*node)->type == kTypeDecimalNumber
             || (*node)->type == kTypeOctalNumber
-            || (*node)->type == kTypeHexNumber)
+            || (*node)->type == kTypeHexNumber
+            || (*node)->type == kTypeSingleQuotedString
+            || (*node)->type == kTypeDoubleQuotedString)
           return OK;
         ret = parse_dot_subscript(arg, node, error);
         if (ret == FAIL)
