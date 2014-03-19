@@ -153,7 +153,7 @@ typedef struct {
 
 typedef struct {
   char_u *position;
-  char_u *message;
+  char *message;
 } CommandParserError;
 
 typedef char_u *(*line_getter)(int, void *, int);

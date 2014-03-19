@@ -27,7 +27,7 @@ typedef enum {
   kTypeMatches,               // =~
   kTypeNotMatches,            // !~
   kTypeAdd,                   // +
-  kTypeSubstract,             // -
+  kTypeSubtract,              // -
   kTypeStringConcat,          // .
   kTypeMultiply,              // *
   kTypeDivide,                // /

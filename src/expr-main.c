@@ -119,8 +119,8 @@ static void print_node(int indent, ExpressionNode *node)
     case kTypeAdd: {
       if (name == NULL) name = "kTypeAdd";
     }
-    case kTypeSubstract: {
-      if (name == NULL) name = "kTypeSubstract";
+    case kTypeSubtract: {
+      if (name == NULL) name = "kTypeSubtract";
     }
     case kTypeStringConcat: {
       if (name == NULL) name = "kTypeStringConcat";
@@ -174,7 +174,11 @@ int main(int argc, char **argv) {
    * if (node != NULL)
    *   print_node(0, node);
    */
-  if ((result = parse0_dump((char_u *) argv[1])) == NULL)
+  if ((result = parse0_repr((char_u *) argv[1], TRUE)) == NULL)
+    return 1;
+  puts(result);
+  vim_free(result);
+  if ((result = parse0_repr((char_u *) argv[1], FALSE)) == NULL)
     return 1;
   puts(result);
   vim_free(result);

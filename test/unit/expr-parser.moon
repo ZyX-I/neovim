@@ -56,7 +56,7 @@ case_compare_strategy = {
 
 p0 = (str) ->
   s = to_cstr(str)
-  parsed = expr.parse0_repr(s)
+  parsed = expr.parse0_repr(s, false)
   if parsed == nil
     error('parse0_dump returned nil')
   return ffi.string(parsed)
