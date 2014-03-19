@@ -158,7 +158,7 @@ describe 'parse0', ->
   it 'parses abc.autoload#var', ->
     eqn '..(var[+abc+], var[+autoload#var+])', 'abc.autoload#var'
   it 'parses 1.2.3.4', ->
-    eqn '.[+4+](.[+3+](.[+2+](N[+1+])))', '1.2.3.4'
+    eqn '..(N[+1+], N[+2+], N[+3+], N[+4+])', '1.2.3.4'
   it 'parses "abc".def', ->
     eqn '..("[+"abc"+], var[+def+])', '"abc".def'
   it 'parses 1 . 2 . 3 . 4', ->

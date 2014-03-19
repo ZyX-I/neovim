@@ -650,7 +650,12 @@ static int handle_subscript(char_u **arg,
          && !vim_iswhite(*(*arg - 1))) {
     switch (**arg) {
       case '.': {
-        int ret = parse_dot_subscript(arg, node, error);
+        int ret;
+        if ((*node)->type == kTypeDecimalNumber
+            || (*node)->type == kTypeOctalNumber
+            || (*node)->type == kTypeHexNumber)
+          return OK;
+        ret = parse_dot_subscript(arg, node, error);
         if (ret == FAIL)
           return FAIL;
         if (ret != NOTDONE)
