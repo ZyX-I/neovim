@@ -816,14 +816,9 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
     case '\'': {
       address->type = kAddrMark;
       p++;
-      if (*p == NUL) {
-        // FIXME proper message
-        error->message = "expected mark name, but got nothing";
-        error->position = p - 1;
-        return FAIL;
-      }
       address->data.mark = *p;
-      p++;
+      if (*p != NUL)
+        p++;
       break;
     }
     case '/':
