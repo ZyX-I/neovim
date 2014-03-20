@@ -1940,6 +1940,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         }
       }
       if (find_in_stack != kCmdMissing) {
+        size_t initial_blockstack_len = blockstack_len;
+
         while (TRUE) {
           CommandType last_block_type = blockstack[blockstack_len - 1]->type;
           if (not_after != kCmdMissing && last_block_type == not_after) {
@@ -1958,8 +1960,9 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
                          && last_block_type == find_in_stack_3)) {
             CommandNode *new_node = *next_node;
             if (prev_node == NULL) {
-              assert(blockstack[blockstack_len - 1]->children == new_node);
-              blockstack[blockstack_len - 1]->children = NULL;
+              assert(blockstack[initial_blockstack_len - 1]->children
+                     == new_node);
+              blockstack[initial_blockstack_len - 1]->children = NULL;
             } else {
               assert(prev_node->next == new_node);
               prev_node->next = NULL;
