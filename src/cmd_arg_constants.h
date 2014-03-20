@@ -48,7 +48,7 @@ typedef enum {
 #define ARGS_UNMAP    {kArgFlags, kArgString}
 #define ARGS_UNMENU   {kArgMenuName}
 #define ARGS_BREAK    {kArgFlags, kArgPattern}
-#define ARGS_EXPR     {kArgExpression}
+#define ARGS_EXPR     {kArgString, kArgExpression}
 #define ARGS_REG      {kArgRegex}
 #define ARGS_CENTER   {kArgNumber}
 #define ARGS_CLIST    {kArgNumber, kArgNumber}
@@ -58,7 +58,7 @@ typedef enum {
 #define ARGS_CSTAG    {kArgString}
 #define ARGS_DIG      {kArgStrings, kArgNumbers}
 #define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
-#define ARGS_EXPRS    {kArgExpressions}
+#define ARGS_EXPRS    {kArgString, kArgExpressions}
 #define ARGS_EXIT     {kArgGlob, kArgFlags, kArgString}
 #define ARGS_FIRST    {kArgFlags, kArgString, kArgCommand}
 #define ARGS_WN       {kArgGlob, kArgFlags, kArgString}
@@ -195,7 +195,8 @@ typedef enum {
 #define FLAG_BREAK_HERE    0x04
 
 // :caddexpr/:laddexpr/:call
-#define ARG_EXPR_EXPR      0
+#define ARG_EXPR_STR       0
+#define ARG_EXPR_EXPR      1
 
 // :catch/:djump
 #define ARG_REG_REG        0
@@ -277,7 +278,8 @@ typedef enum {
 #define ARG_DOAU_FNAME     3
 
 // :echo*/:execute
-#define ARG_EXPRS_EXPRS    0
+#define ARG_EXPRS_STR      0
+#define ARG_EXPRS_EXPRS    1
 
 // :exit
 #define ARG_EXIT_FILES     0

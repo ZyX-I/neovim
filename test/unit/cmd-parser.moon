@@ -400,4 +400,20 @@ describe 'parse_one_cmd', ->
       itn full .. ' abc.def<Tab>def def', trunc .. ' abc.def<tAb>def def'
       itn full .. ' abc.def<Tab>def def', trunc .. ' abc.def\\\tdef def'
 
+  describe 'expression commands', ->
+    itn 'if 1', 'if1'
+    itn 'elseif 1', 'elsei1'
+    itn 'return 1', 'retu1'
+    itn 'throw 1', 'th1'
+    itn 'while 1', 'wh1'
+    for trunc, full in pairs {
+      cex: 'cexpr'
+      lex: 'lexpr'
+      cgete: 'cgetexpr'
+      lgete: 'lgetexpr'
+      cadde: 'caddexpr'
+      ladde: 'laddexpr'
+    }
+      itn full .. ' 1', trunc .. '1'
+
 -- vim: sw=2 sts=2 et tw=80
