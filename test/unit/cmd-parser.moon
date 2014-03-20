@@ -430,6 +430,12 @@ describe 'parse_one_cmd', ->
     itn 'normal! abc\\|def', 'norm!abc\\|def'
     itn '2normal! abc\\|def', '2norm!abc\\|def'
 
+  describe 'iterator commands', ->
+    itn 'bufdo if 1 | endif', 'bufd:if1|end'
+    itn 'windo if 1 | endif', 'wind:if1|end'
+    itn 'tabdo if 1 | endif', 'tabd:if1|end'
+    itn 'argdo if 1 | endif', 'argdo:if1|end'
+
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
     t '

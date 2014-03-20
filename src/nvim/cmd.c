@@ -5,6 +5,7 @@
 
 // cmd.c: Ex commands parsing
 
+#include <stddef.h>
 #include "nvim/vim.h"
 #include "nvim/types.h"
 #include "nvim/cmd.h"
@@ -15,6 +16,8 @@
 #include "nvim/garray.h"
 #include "nvim/term.h"
 #include "nvim/main.h"
+#include "nvim/menu.h"
+#include "nvim/memory.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "cmd.c.generated.h"
@@ -853,6 +856,46 @@ static int parse_rest_line(char_u **pp,
   if ((node->args[0].arg.str = vim_strnsave(*pp, len)) == NULL)
     return FAIL;
   *pp += len;
+  return OK;
+}
+
+static char_u *do_fgetline(int c, char_u **arg, int indent)
+{
+  if (*arg) {
+    char_u *result;
+    result = vim_strsave(*arg);
+    *arg = NULL;
+    return result;
+  } else {
+    return NULL;
+  }
+}
+
+static int parse_do(char_u **pp,
+                    CommandNode *node,
+                    CommandParserError *error,
+                    CommandParserOptions o,
+                    CommandPosition *position,
+                    line_getter fgetline,
+                    void *cookie)
+{
+  CommandNode *cmd;
+  char_u *arg = *pp;
+  CommandPosition new_position = {
+    1,
+    1,
+    (char_u *) "<*do argument>",
+  };
+
+  if ((cmd = parse_cmd_sequence(o, new_position, (line_getter) &do_fgetline,
+                                &arg))
+      == NULL)
+    return FAIL;
+
+  node->children = cmd;
+
+  *pp += STRLEN(*pp);
+
   return OK;
 }
 
@@ -2383,7 +2426,7 @@ static void range_repr(Range *range, char **pp)
   *pp = p;
 }
 
-static size_t node_repr_len(CommandNode *node, size_t indent)
+static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
 {
   size_t len = 0;
   size_t start_from_arg;
@@ -2392,7 +2435,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
   if (node == NULL)
     return 0;
 
-  len += indent;
+  if (!barnext)
+    len += indent;
   len += range_repr_len(&(node->range));
 
   if (node->name != NULL)
@@ -2474,7 +2518,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
       if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         len += 1 + expr_node_dump_len(node->args[ARG_MAP_EXPR].arg.expr);
       } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
-        len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd, indent);
+        len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd, indent,
+                                 barnext);
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         len += 1 + STRLEN(node->args[ARG_MAP_RHS].arg.str);
       }
@@ -2587,19 +2632,30 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
 
   if (node->children) {
     if (CMDDEF(node->type).flags & ISMODIFIER) {
-      len += 1 + node_repr_len(node->children, indent);
+      len += 1 + node_repr_len(node->children, indent, barnext);
+    } else if (CMDDEF(node->type).parse == &parse_do) {
+      len += 1 + node_repr_len(node->children, indent, TRUE);
     } else {
-      len += 1 + node_repr_len(node->children, indent + 2);
+      if (barnext)
+        len += 3;
+      else
+        len++;
+      len += node_repr_len(node->children, indent + 2, barnext);
     }
   }
 
-  if (node->next != NULL)
-    len += 1 + node_repr_len(node->next, indent);
+  if (node->next != NULL) {
+    if (barnext)
+      len += 3;
+    else
+      len++;
+    len += node_repr_len(node->next, indent, barnext);
+  }
 
   return len;
 }
 
-static void node_repr(CommandNode *node, size_t indent, char **pp)
+static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 {
   char *p = *pp;
   size_t len = 0;
@@ -2610,8 +2666,10 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
   if (node == NULL)
     return;
 
-  memset(p, ' ', indent);
-  p += indent;
+  if (!barnext) {
+    memset(p, ' ', indent);
+    p += indent;
+  }
 
   range_repr(&(node->range), &p);
 
@@ -2742,7 +2800,7 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
         expr_node_dump(node->args[ARG_MAP_EXPR].arg.expr, &p);
       } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
         *p++ = '\n';
-        node_repr(node->args[ARG_MAP_CMD].arg.cmd, indent, &p);
+        node_repr(node->args[ARG_MAP_CMD].arg.cmd, indent, barnext, &p);
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         *p++ = ' ';
 
@@ -2904,16 +2962,29 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
   if (node->children) {
     if (CMDDEF(node->type).flags & ISMODIFIER) {
       *p++ = ' ';
-      node_repr(node->children, indent, &p);
+      node_repr(node->children, indent, barnext, &p);
+    } else if (CMDDEF(node->type).parse == &parse_do) {
+      *p++ = ' ';
+      node_repr(node->children, indent, TRUE, &p);
     } else {
-      *p++ = '\n';
-      node_repr(node->children, indent + 2, &p);
+      if (barnext) {
+        memcpy(p, " | ", 3);
+        p += 3;
+      } else {
+        *p++ = '\n';
+      }
+      node_repr(node->children, indent + 2, barnext, &p);
     }
   }
 
   if (node->next != NULL) {
-    *p++ = '\n';
-    node_repr(node->next, indent, &p);
+    if (barnext) {
+      memcpy(p, " | ", 3);
+      p += 3;
+    } else {
+      *p++ = '\n';
+    }
+    node_repr(node->next, indent, barnext, &p);
   }
 
   *pp = p;
@@ -2946,7 +3017,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
       return NULL;
   }
 
-  len = node_repr_len(node, 0);
+  len = node_repr_len(node, 0, FALSE);
 
   if ((repr = ALLOC_CLEAR_NEW(char, len + 1)) == NULL) {
     free_cmd(node);
@@ -2955,7 +3026,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 
   r = repr;
 
-  node_repr(node, 0, &r);
+  node_repr(node, 0, FALSE, &r);
 
   free_cmd(node);
   return repr;
