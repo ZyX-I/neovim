@@ -418,13 +418,15 @@ describe 'parse_one_cmd', ->
     itn 'py3do print ("abc\\|def")', 'py3d print ("abc\\|def")'
     itn 'rubydo print ("abc\\|def")', 'rubyd print ("abc\\|def")'
     itn 'perldo print ("abc\\|def")', 'perld print ("abc\\|def")'
-    itn 'tcldo ::vim::command "echo 1\\|\\|2"', 'tcld::vim::command "echo 1\\|\\|2"'
+    itn 'tcldo ::vim::command "echo 1\\|\\|2"',
+      'tcld::vim::command "echo 1\\|\\|2"'
     itn '1luado print ("abc\\|def")', '1luad print ("abc\\|def")'
     itn '1pydo print ("abc\\|def")', '1pyd print ("abc\\|def")'
     itn '1py3do print ("abc\\|def")', '1py3d print ("abc\\|def")'
     itn '1rubydo print ("abc\\|def")', '1rubyd print ("abc\\|def")'
     itn '1perldo print ("abc\\|def")', '1perld print ("abc\\|def")'
-    itn '1tcldo ::vim::command "echo 1\\|\\|2"', '1tcld::vim::command "echo 1\\|\\|2"'
+    itn '1tcldo ::vim::command "echo 1\\|\\|2"',
+      '1tcld::vim::command "echo 1\\|\\|2"'
 
   describe 'normal command', ->
     itn 'normal! abc\\|def', 'norm!abc\\|def'
