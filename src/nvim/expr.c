@@ -572,7 +572,7 @@ static int parse_func_call(char_u **arg,
 
   if (*argp != ')') {
     // XXX Note: vim does not have special error message for this
-    error->message = N_("E15: expected closing parenthesis");
+    error->message = N_("E116: expected closing parenthesis");
     error->position = argp;
     return FAIL;
   }
