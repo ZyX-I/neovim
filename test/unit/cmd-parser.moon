@@ -435,6 +435,8 @@ describe 'parse_one_cmd', ->
     itn 'windo if 1 | endif', 'wind:if1|end'
     itn 'tabdo if 1 | endif', 'tabd:if1|end'
     itn 'argdo if 1 | endif', 'argdo:if1|end'
+    itn 'folddoopen if 1 | endif', 'foldd:if1|end'
+    itn 'folddoclosed if 1 | endif', 'folddoc:if1|end'
 
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
