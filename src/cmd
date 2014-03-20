@@ -17,6 +17,7 @@ cimport = (function(path)
   ffi.cdef(header)
 end)
 
+cimport 'src/vim.h'
 cimport 'src/cmd.h'
 cimport 'src/os_unix.h'
 cimport 'src/eval.h'
