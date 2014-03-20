@@ -12,7 +12,6 @@
 #include "nvim/cmd_def.h"
 #include "nvim/types.h"
 #include "nvim/expr.h"
-#include "nvim/vim.h"
 
 
 // :argadd/:argd

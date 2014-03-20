@@ -899,10 +899,6 @@ typedef enum {
 #define PERROR(msg) \
   (void) emsg3((char_u *) "%s: %s", (char_u *)msg, (char_u *)strerror(errno))
 
-typedef long linenr_T;                  /* line number type */
-typedef int colnr_T;                    /* column number type */
-typedef unsigned short disptick_T;      /* display tick type */
-
 #define MAXLNUM (0x7fffffffL)           /* maximum (invalid) line number */
 #define MAXCOL (0x7fffffffL)          /* maximum column number, 31 bits */
 
