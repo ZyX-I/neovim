@@ -2035,7 +2035,11 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 void *cookie)
 {
   char_u *line_start, *line;
-  CommandNode *blockstack[MAX_NEST_BLOCKS];
+  struct {
+    CommandType type;
+    CommandNode *node;
+    CommandNode *block_node;
+  } blockstack[MAX_NEST_BLOCKS];
   CommandNode *result = (CommandNode *) &nocmd;
   CommandNode **next_node = &result;
   CommandNode *prev_node = NULL;
@@ -2047,6 +2051,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       char_u *parse_start = line;
       CommandBlockOptions bo;
       int ret;
+      CommandType block_type;
+      CommandNode *block_command_node;
 
       position.col = line - line_start + 1;
       if ((ret = parse_one_cmd(&line, next_node, o, &position, fgetline, cookie))
@@ -2058,24 +2064,32 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         break;
       assert(parse_start != line);
 
-      get_block_options((*next_node)->type, &bo);
+      block_command_node = *next_node;
+      while (block_command_node != NULL
+             && block_command_node->children != NULL
+             && (CMDDEF(block_command_node->type).flags&ISMODIFIER))
+        block_command_node = block_command_node->children;
+
+      block_type = block_command_node->type;
+
+      get_block_options(block_type, &bo);
 
       if (bo.find_in_stack != kCmdUnknown) {
         size_t initial_blockstack_len = blockstack_len;
 
         while (TRUE) {
-          CommandType last_block_type = blockstack[blockstack_len - 1]->type;
+          CommandType last_block_type = blockstack[blockstack_len - 1].type;
           if (bo.not_after != kCmdUnknown && last_block_type == bo.not_after) {
             free_cmd(*next_node);
             *next_node = NULL;
-            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1]->next),
+            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
                            bo.not_after_message, line, line_start)
             break;
           } else if (bo.duplicate_message != NULL
                      && last_block_type == (*next_node)->type) {
             free_cmd(*next_node);
             *next_node = NULL;
-            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1]->next),
+            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
                            bo.duplicate_message, line, line_start)
             break;
           } else if (last_block_type == bo.find_in_stack
@@ -2085,19 +2099,22 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
                          && last_block_type == bo.find_in_stack_3)) {
             CommandNode *new_node = *next_node;
             if (prev_node == NULL) {
-              assert(blockstack[initial_blockstack_len - 1]->children
+              assert(blockstack[initial_blockstack_len - 1].block_node->children
                      == new_node);
-              blockstack[initial_blockstack_len - 1]->children = NULL;
+              blockstack[initial_blockstack_len - 1].block_node->children
+                  = NULL;
             } else {
               assert(prev_node->next == new_node);
               prev_node->next = NULL;
             }
-            new_node->prev = blockstack[blockstack_len - 1];
-            blockstack[blockstack_len - 1]->next = new_node;
+            new_node->prev = blockstack[blockstack_len - 1].node;
+            blockstack[blockstack_len - 1].node->next = new_node;
             if (bo.push_stack) {
+              blockstack[blockstack_len - 1].node = new_node;
+              blockstack[blockstack_len - 1].type = block_type;
+              blockstack[blockstack_len - 1].block_node = block_command_node;
+              next_node = &(block_command_node->children);
               prev_node = NULL;
-              next_node = &(new_node->children);
-              blockstack[blockstack_len - 1] = new_node;
               break;
             } else {
               prev_node = new_node;
@@ -2107,15 +2124,15 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
             }
           } else {
             char *missing_message =
-                get_missing_message(blockstack[blockstack_len - 1]->type);
-            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1]->next),
+                get_missing_message(blockstack[blockstack_len - 1].type);
+            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
                            missing_message, line, line_start)
           }
           blockstack_len--;
           if (blockstack_len == 0) {
             free_cmd(*next_node);
             *next_node = NULL;
-            NEW_ERROR_NODE(&(blockstack[0]->next),
+            NEW_ERROR_NODE(&(blockstack[0].node->next),
                            bo.no_start_message, line, line_start)
             break;
           }
@@ -2136,9 +2153,11 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
               return FAIL;
             }
           }
-          blockstack[blockstack_len - 1] = *next_node;
+          blockstack[blockstack_len - 1].node = *next_node;
+          blockstack[blockstack_len - 1].type = block_type;
+          blockstack[blockstack_len - 1].block_node = block_command_node;
+          next_node = &(block_command_node->children);
           prev_node = NULL;
-          next_node = &((*next_node)->children);
         } else {
           prev_node = *next_node;
           next_node = &((*next_node)->next);

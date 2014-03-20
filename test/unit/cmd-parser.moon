@@ -442,18 +442,28 @@ describe 'parse_cmd_sequence', ->
     elseif def
     else
     endif'
+
     t '
     if abc
     elseif def
     else
     endif', 'if abc|elseif def|else|endif'
+
     t '
     if abc
       join
     endif', 'if abc|join|endif'
+
     t '
     if abc
       5print
     endif', 'if abc|5|endif'
+
+    t '
+    silent if 1
+    endif
+    ', '
+    silent if 1
+    endif'
 
 -- vim: sw=2 sts=2 et tw=80
