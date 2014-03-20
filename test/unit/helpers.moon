@@ -43,6 +43,29 @@ cstr = ffi.typeof 'char[?]'
 to_cstr = (string) ->
   cstr (string.len string) + 1, string
 
+cimport './src/cmd.h'
+cimport './src/os_unix.h'
+cimport './src/eval.h'
+-- cimport 'src/main.h'
+ffi.cdef('void allocate_generic_buffers(void);')
+cimport './src/window.h'
+cimport './src/ops.h'
+-- cimport 'src/misc1.h'
+ffi.cdef('void init_homedir(void);')
+cimport './src/option.h'
+cimport './src/ex_cmds2.h'
+
+libnvim.mch_early_init()
+libnvim.mb_init()
+libnvim.eval_init()
+libnvim.init_normal_cmds()
+libnvim.allocate_generic_buffers()
+libnvim.win_alloc_first()
+libnvim.init_yank()
+libnvim.init_homedir()
+libnvim.set_init_1()
+libnvim.set_lang_var()
+
 return {
   cimport: cimport
   cppimport: cppimport
