@@ -1,27 +1,6 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 
 cmd = cimport './src/cmd.h'
-cimport 'src/os_unix.h'
-cimport 'src/eval.h'
--- cimport 'src/main.h'
-ffi.cdef('void allocate_generic_buffers(void);')
-cimport 'src/window.h'
-cimport 'src/ops.h'
--- cimport 'src/misc1.h'
-ffi.cdef('void init_homedir(void);')
-cimport 'src/option.h'
-cimport 'src/ex_cmds2.h'
-
-cmd.mch_early_init()
-cmd.mb_init()
-cmd.eval_init()
-cmd.init_normal_cmds()
-cmd.allocate_generic_buffers()
-cmd.win_alloc_first()
-cmd.init_yank()
-cmd.init_homedir()
-cmd.set_init_1()
-cmd.set_lang_var()
 
 p1ct = (str, one, flags=0) ->
   s = to_cstr(str)
