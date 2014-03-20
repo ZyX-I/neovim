@@ -40,9 +40,11 @@ itn = (expected_result, cmd, flags=0) ->
 
 t = (expected_result, cmd, flags=0) ->
   it 'parses ' .. cmd, ->
-    expected = expected_result\sub(2)
-    expected = expected\gsub('^%s+', '')
-    expected = expected\gsub('\n%s+', '\n')
+    expected = expected_result
+    expected = expected\gsub('^%s*\n', '')
+    first_indent = expected\match('^%s*')
+    expected = expected\gsub('^' .. first_indent, '')
+    expected = expected\gsub('\n' .. first_indent, '\n')
     expected = expected\gsub('\n%s*$', '')
     eqn expected, cmd, false, flags
 
@@ -439,5 +441,18 @@ describe 'parse_cmd_sequence', ->
     elseif def
     else
     endif'
+    t '
+    if abc
+    elseif def
+    else
+    endif', 'if abc|elseif def|else|endif'
+    t '
+    if abc
+      join
+    endif', 'if abc|join|endif'
+    t '
+    if abc
+      5print
+    endif', 'if abc|5|endif'
 
 -- vim: sw=2 sts=2 et tw=80
