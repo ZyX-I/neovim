@@ -2310,14 +2310,6 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
   if (node->exflags & FLAG_EX_PRINT)
     len++;
 
-  if (node->children) {
-    if (CMDDEF(node->type).flags & ISMODIFIER) {
-      len += 1 + node_repr_len(node->children, indent);
-    } else {
-      len += 1 + node_repr_len(node->children, indent + 2);
-    }
-  }
-
   if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int i = ga->ga_len;
@@ -2464,6 +2456,14 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
     }
   }
 
+  if (node->children) {
+    if (CMDDEF(node->type).flags & ISMODIFIER) {
+      len += 1 + node_repr_len(node->children, indent);
+    } else {
+      len += 1 + node_repr_len(node->children, indent + 2);
+    }
+  }
+
   if (node->next != NULL)
     len += 1 + node_repr_len(node->next, indent);
 
@@ -2552,16 +2552,6 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
     *p++ = '#';
   if (node->exflags & FLAG_EX_PRINT)
     *p++ = 'p';
-
-  if (node->children) {
-    if (CMDDEF(node->type).flags & ISMODIFIER) {
-      *p++ = ' ';
-      node_repr(node->children, indent, &p);
-    } else {
-      *p++ = '\n';
-      node_repr(node->children, indent + 2, &p);
-    }
-  }
 
   if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
@@ -2781,6 +2771,16 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
           break;
         }
       }
+    }
+  }
+
+  if (node->children) {
+    if (CMDDEF(node->type).flags & ISMODIFIER) {
+      *p++ = ' ';
+      node_repr(node->children, indent, &p);
+    } else {
+      *p++ = '\n';
+      node_repr(node->children, indent + 2, &p);
     }
   }
 
