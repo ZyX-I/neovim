@@ -30,6 +30,16 @@ typedef struct {
 } CommandBlockOptions;
 
 //{{{ Function declarations
+static CommandNode *cmd_alloc(CommandType type);
+static AddressFollowup *address_followup_alloc(AddressFollowupType type);
+static void free_menu_item(MenuItem *menu_item);
+static void free_regex(Regex *regex);
+static void free_address_data(Address *address);
+static void free_address(Address *address);
+static void free_address_followup(AddressFollowup *followup);
+static void free_range_data(Range *range);
+static void free_range(Range *range);
+static void free_cmd_arg(CommandArg *arg, CommandArgType type);
 static int get_vcol(char_u **pp);
 static int parse_append(char_u **pp,
                         CommandNode *node,
@@ -70,18 +80,8 @@ static int parse_expr(char_u **pp,
                       CommandPosition *position,
                       line_getter fgetline,
                       void *cookie);
-static CommandNode *cmd_alloc(CommandType type);
-static void free_menu_item(MenuItem *menu_item);
-static void free_regex(Regex *regex);
-static void free_address_data(Address *address);
-static void free_address(Address *address);
-static void free_address_followup(AddressFollowup *followup);
-static void free_range_data(Range *range);
-static void free_range(Range *range);
-static void free_cmd_arg(CommandArg *arg, CommandArgType type);
 static int get_pattern(char_u **pp, CommandParserError *error, Regex **target);
 static int get_address(char_u **pp, Address *address, CommandParserError *error);
-static AddressFollowup *address_followup_alloc(AddressFollowupType type);
 static int get_address_followups(char_u **pp, CommandParserError *error,
                                  AddressFollowup **followup);
 static int create_error_node(CommandNode **node, CommandParserError *error,
@@ -114,6 +114,282 @@ static void node_repr(CommandNode *node, size_t indent, char **pp);
 #define DO_DECLARE_EXCMD
 #include "cmd_def.h"
 #undef DO_DECLARE_EXCMD
+
+/// Allocate new command node and assign its type property
+///
+/// Uses type argument to determine how much memory it should allocate.
+///
+/// @param[in]  type  Node type.
+///
+/// @return Pointer to allocated block of memory or NULL in case of error.
+static CommandNode *cmd_alloc(CommandType type)
+{
+  // XXX May allocate less space then needed to hold the whole struct: less by 
+  // one size of CommandArg.
+  size_t size = offsetof(CommandNode, args);
+  CommandNode *node;
+
+  if (type == kCmdUSER)
+    size++;
+  else if (type != kCmdUnknown)
+    size += sizeof(CommandArg) * CMDDEF(type).num_args;
+
+  if ((node = (CommandNode *) alloc_clear(size)) != NULL)
+    node->type = type;
+
+  return node;
+}
+
+/// Allocate new address followup structure and set its type
+///
+/// @param[in]  type  Followup type.
+///
+/// @return Pointer to allocated block of memory or NULL in case of error.
+static AddressFollowup *address_followup_alloc(AddressFollowupType type)
+{
+  AddressFollowup *followup;
+
+  if ((followup = ALLOC_CLEAR_NEW(AddressFollowup, 1)) != NULL)
+    followup->type = type;
+
+  return followup;
+}
+
+static void free_menu_item(MenuItem *menu_item)
+{
+  if (menu_item == NULL)
+    return;
+
+  free_menu_item(menu_item->subitem);
+  vim_free(menu_item->name);
+  vim_free(menu_item);
+}
+
+static void free_regex(Regex *regex)
+{
+  // FIXME
+  vim_free(regex);
+  return;
+}
+
+static void free_address_data(Address *address)
+{
+  if (address == NULL)
+    return;
+
+  switch (address->type) {
+    case kAddrMissing:
+    case kAddrFixed:
+    case kAddrEnd:
+    case kAddrCurrent:
+    case kAddrMark:
+    case kAddrForwardPreviousSearch:
+    case kAddrBackwardPreviousSearch:
+    case kAddrSubstituteSearch: {
+      break;
+    }
+    case kAddrForwardSearch:
+    case kAddrBackwardSearch: {
+      free_regex(address->data.regex);
+      break;
+    }
+  }
+}
+
+static void free_address(Address *address)
+{
+  if (address == NULL)
+    return;
+
+  free_address_data(address);
+  vim_free(address);
+}
+
+static void free_address_followup(AddressFollowup *followup)
+{
+  if (followup == NULL)
+    return;
+
+  switch (followup->type) {
+    case kAddressFollowupMissing:
+    case kAddressFollowupShift: {
+      break;
+    }
+    case kAddressFollowupForwardPattern:
+    case kAddressFollowupBackwardPattern: {
+      free_regex(followup->data.regex);
+      break;
+    }
+  }
+  free_address_followup(followup->next);
+  vim_free(followup);
+}
+
+static void free_range_data(Range *range)
+{
+  if (range == NULL)
+    return;
+
+  free_address_data(&(range->address));
+  free_address_followup(range->followups);
+  free_range(range->next);
+}
+
+static void free_range(Range *range)
+{
+  if (range == NULL)
+    return;
+
+  free_range_data(range);
+  vim_free(range);
+}
+
+static void free_cmd_arg(CommandArg *arg, CommandArgType type)
+{
+  switch (type) {
+    case kArgCommand: {
+      free_cmd(arg->arg.cmd);
+      break;
+    }
+    case kArgExpression:
+    case kArgExpressions:
+    case kArgAssignLhs: {
+      free_expr(arg->arg.expr);
+      break;
+    }
+    case kArgFlags:
+    case kArgNumber:
+    case kArgAuEvent:
+    case kArgChar: {
+      break;
+    }
+    case kArgPosition: {
+      vim_free(arg->arg.position.fname);
+      break;
+    }
+    case kArgNumbers: {
+      vim_free(arg->arg.numbers);
+      break;
+    }
+    case kArgString: {
+      vim_free(arg->arg.str);
+      break;
+    }
+    case kArgPattern: {
+      // FIXME
+      break;
+    }
+    case kArgGlob: {
+      // FIXME
+      break;
+    }
+    case kArgRegex: {
+      free_regex(arg->arg.reg);
+      break;
+    }
+    case kArgReplacement: {
+      // FIXME
+      break;
+    }
+    case kArgLines:
+    case kArgStrings: {
+      ga_clear_strings(&(arg->arg.strs));
+      break;
+    }
+    case kArgMenuName: {
+      free_menu_item(arg->arg.menu_item);
+      break;
+    }
+    case kArgAuEvents: {
+      vim_free(arg->arg.events);
+      break;
+    }
+    case kArgAddress: {
+      free_address(arg->arg.address);
+      break;
+    }
+    case kArgCmdComplete: {
+      // FIXME
+      break;
+    }
+    case kArgArgs: {
+      CommandArg *subargs = arg->arg.args.args;
+      size_t numsubargs = arg->arg.args.num_args;
+      size_t i;
+      for (i = 0; i < numsubargs; i++)
+        free_cmd_arg(&(subargs[i]), arg->arg.args.types[i]);
+      vim_free(subargs);
+      break;
+    }
+  }
+}
+
+void free_cmd(CommandNode *node)
+{
+  size_t numargs;
+  size_t i;
+
+  if (node == NULL || node == &nocmd)
+    return;
+
+  numargs = CMDDEF(node->type).num_args;
+
+  if (node->type == kCmdUSER)
+    free_cmd_arg(&(node->args[0]), kArgString);
+  else if (node->type != kCmdUnknown)
+    for (i = 0; i < numargs; i++)
+      free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
+
+  free_cmd(node->next);
+  free_cmd(node->children);
+  free_range_data(&(node->range));
+  vim_free(node->name);
+  vim_free(node);
+}
+
+/// Create new syntax error node
+///
+/// @param[out]  node      Place where created node will be saved.
+/// @param[in]   error     Structure that describes the error. Is used to 
+///                        populate node fields.
+/// @param[in]   position  Position of errorred command.
+/// @param[in]   s         Start of the string of errorred command.
+///
+/// @return FAIL when out of memory, OK otherwise.
+static int create_error_node(CommandNode **node, CommandParserError *error,
+                             CommandPosition *position, char_u *s)
+{
+  if (error->message != NULL) {
+    char_u *line;
+    char_u *fname;
+    char_u *message;
+
+    if ((line = vim_strsave(s)) == NULL)
+      return FAIL;
+    if ((fname = vim_strsave(position->fname)) == NULL) {
+      vim_free(line);
+      return FAIL;
+    }
+    if ((message = vim_strsave((char_u *) error->message)) == NULL) {
+      vim_free(line);
+      vim_free(fname);
+      return FAIL;
+    }
+    if ((*node = cmd_alloc(kCmdSyntaxError)) == NULL) {
+      vim_free(line);
+      vim_free(fname);
+      vim_free(message);
+      return FAIL;
+    }
+    (*node)->args[ARG_ERROR_POSITION].arg.position = *position;
+    (*node)->args[ARG_ERROR_POSITION].arg.position.fname = fname;
+    (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
+    (*node)->args[ARG_ERROR_MESSAGE].arg.str = message;
+    (*node)->args[ARG_ERROR_OFFSET].arg.flags =
+        (uint_least32_t) (error->position - s);
+  }
+  return OK;
+}
 
 /// Get virtual column for the first non-blank character
 ///
@@ -657,223 +933,6 @@ static int parse_expr(char_u **pp,
   return OK;
 }
 
-/// Allocate new command node and assign its type property
-///
-/// Uses type argument to determine how much memory it should allocate.
-///
-/// @param[in]  type  Node type.
-///
-/// @return Pointer to allocated block of memory or NULL in case of error.
-static CommandNode *cmd_alloc(CommandType type)
-{
-  // XXX May allocate less space then needed to hold the whole struct: less by 
-  // one size of CommandArg.
-  size_t size = offsetof(CommandNode, args);
-  CommandNode *node;
-
-  if (type == kCmdUSER)
-    size++;
-  else if (type != kCmdUnknown)
-    size += sizeof(CommandArg) * CMDDEF(type).num_args;
-
-  if ((node = (CommandNode *) alloc_clear(size)) != NULL)
-    node->type = type;
-
-  return node;
-}
-
-static void free_menu_item(MenuItem *menu_item)
-{
-  if (menu_item == NULL)
-    return;
-
-  free_menu_item(menu_item->subitem);
-  vim_free(menu_item->name);
-  vim_free(menu_item);
-}
-
-static void free_regex(Regex *regex)
-{
-  // FIXME
-  vim_free(regex);
-  return;
-}
-
-static void free_address_data(Address *address)
-{
-  if (address == NULL)
-    return;
-
-  switch (address->type) {
-    case kAddrMissing:
-    case kAddrFixed:
-    case kAddrEnd:
-    case kAddrCurrent:
-    case kAddrMark:
-    case kAddrForwardPreviousSearch:
-    case kAddrBackwardPreviousSearch:
-    case kAddrSubstituteSearch: {
-      break;
-    }
-    case kAddrForwardSearch:
-    case kAddrBackwardSearch: {
-      free_regex(address->data.regex);
-      break;
-    }
-  }
-}
-
-static void free_address(Address *address)
-{
-  if (address == NULL)
-    return;
-
-  free_address_data(address);
-  vim_free(address);
-}
-
-static void free_address_followup(AddressFollowup *followup)
-{
-  if (followup == NULL)
-    return;
-
-  switch (followup->type) {
-    case kAddressFollowupMissing:
-    case kAddressFollowupShift: {
-      break;
-    }
-    case kAddressFollowupForwardPattern:
-    case kAddressFollowupBackwardPattern: {
-      free_regex(followup->data.regex);
-      break;
-    }
-  }
-  free_address_followup(followup->next);
-  vim_free(followup);
-}
-
-static void free_range_data(Range *range)
-{
-  if (range == NULL)
-    return;
-
-  free_address_data(&(range->address));
-  free_address_followup(range->followups);
-  free_range(range->next);
-}
-
-static void free_range(Range *range)
-{
-  if (range == NULL)
-    return;
-
-  free_range_data(range);
-  vim_free(range);
-}
-
-static void free_cmd_arg(CommandArg *arg, CommandArgType type)
-{
-  switch (type) {
-    case kArgCommand: {
-      free_cmd(arg->arg.cmd);
-      break;
-    }
-    case kArgExpression:
-    case kArgExpressions:
-    case kArgAssignLhs: {
-      free_expr(arg->arg.expr);
-      break;
-    }
-    case kArgFlags:
-    case kArgNumber:
-    case kArgAuEvent:
-    case kArgChar: {
-      break;
-    }
-    case kArgPosition: {
-      vim_free(arg->arg.position.fname);
-      break;
-    }
-    case kArgNumbers: {
-      vim_free(arg->arg.numbers);
-      break;
-    }
-    case kArgString: {
-      vim_free(arg->arg.str);
-      break;
-    }
-    case kArgPattern: {
-      // FIXME
-      break;
-    }
-    case kArgGlob: {
-      // FIXME
-      break;
-    }
-    case kArgRegex: {
-      free_regex(arg->arg.reg);
-      break;
-    }
-    case kArgReplacement: {
-      // FIXME
-      break;
-    }
-    case kArgLines:
-    case kArgStrings: {
-      ga_clear_strings(&(arg->arg.strs));
-      break;
-    }
-    case kArgMenuName: {
-      free_menu_item(arg->arg.menu_item);
-      break;
-    }
-    case kArgAuEvents: {
-      vim_free(arg->arg.events);
-      break;
-    }
-    case kArgAddress: {
-      free_address(arg->arg.address);
-      break;
-    }
-    case kArgCmdComplete: {
-      // FIXME
-      break;
-    }
-    case kArgArgs: {
-      CommandArg *subargs = arg->arg.args.args;
-      size_t numsubargs = arg->arg.args.num_args;
-      size_t i;
-      for (i = 0; i < numsubargs; i++)
-        free_cmd_arg(&(subargs[i]), arg->arg.args.types[i]);
-      vim_free(subargs);
-      break;
-    }
-  }
-}
-
-void free_cmd(CommandNode *node)
-{
-  size_t numargs;
-  size_t i;
-
-  if (node == NULL || node == &nocmd)
-    return;
-
-  numargs = CMDDEF(node->type).num_args;
-
-  if (node->type == kCmdUSER)
-    free_cmd_arg(&(node->args[0]), kArgString);
-  else if (node->type != kCmdUnknown)
-    for (i = 0; i < numargs; i++)
-      free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
-
-  free_cmd(node->next);
-  free_cmd(node->children);
-  free_range_data(&(node->range));
-  vim_free(node->name);
-  vim_free(node);
-}
-
 /// Check for an Ex command with optional tail.
 ///
 /// @param[in,out]  pp   Start of the command. Is advanced to the command 
@@ -923,14 +982,14 @@ static int get_pattern(char_u **pp, CommandParserError *error, Regex **target)
   return OK;
 }
 
-/*
- * get a single EX address
- *
- * Set ptr to the next character after the part that was interpreted.
- * Set ptr to NULL when an error is encountered.
- *
- * Return MAXLNUM when no Ex address was found.
- */
+/// Get a single Ex adress
+///
+/// @param[in,out]  pp       Parsed string. Is advanced to the next character 
+///                          after parsed address. May point at whitespace.
+/// @param[out]     address  Structure where result will be saved.
+/// @param[out]     error    Structure where errors are saved.
+///
+/// @return OK when parsing was successfull, FAIL otherwise.
 static int get_address(char_u **pp, Address *address, CommandParserError *error)
 {
   char_u *p;
@@ -1014,16 +1073,6 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
   return OK;
 }
 
-static AddressFollowup *address_followup_alloc(AddressFollowupType type)
-{
-  AddressFollowup *followup;
-
-  if ((followup = ALLOC_CLEAR_NEW(AddressFollowup, 1)) != NULL)
-    followup->type = type;
-
-  return followup;
-}
-
 static int get_address_followups(char_u **pp, CommandParserError *error,
                                  AddressFollowup **followup)
 {
@@ -1081,45 +1130,12 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
   return OK;
 }
 
-static int create_error_node(CommandNode **node, CommandParserError *error,
-                             CommandPosition *position, char_u *s)
-{
-  if (error->message != NULL) {
-    char_u *line;
-    char_u *fname;
-    char_u *message;
-
-    if ((line = vim_strsave(s)) == NULL)
-      return FAIL;
-    if ((fname = vim_strsave(position->fname)) == NULL) {
-      vim_free(line);
-      return FAIL;
-    }
-    if ((message = vim_strsave((char_u *) error->message)) == NULL) {
-      vim_free(line);
-      vim_free(fname);
-      return FAIL;
-    }
-    if ((*node = cmd_alloc(kCmdSyntaxError)) == NULL) {
-      vim_free(line);
-      vim_free(fname);
-      vim_free(message);
-      return FAIL;
-    }
-    (*node)->args[ARG_ERROR_POSITION].arg.position = *position;
-    (*node)->args[ARG_ERROR_POSITION].arg.position.fname = fname;
-    (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
-    (*node)->args[ARG_ERROR_MESSAGE].arg.str = message;
-    (*node)->args[ARG_ERROR_OFFSET].arg.flags =
-        (uint_least32_t) (error->position - s);
-  }
-  return OK;
-}
-
-/*
- * Check if *p is a separator between Ex commands.
- * Return NULL if it isn't, (p + 1) if it is.
- */
+/// Check if p points to a separator between Ex commands (possibly with spaces)
+///
+/// @param[in]  p  Checked string
+///
+/// @return First character of next command (last character after command 
+///         separator), NULL if no separator was found.
 static char_u *check_nextcmd(char_u *p)
 {
   p = skipwhite(p);
@@ -1161,12 +1177,19 @@ static CommandType cmdidxs[27] =
   kCmdBang
 };
 
-/*
- * Find an Ex command by its name, either built-in or user.
- * User command name can be found in *name. It is not resolved
- * Built in command name is not returned, use CMDDEF(type).name
- * Returns OK or FAIL, may set fields in CommandParserError in case of FAIL
- */
+/// Find a built-in Ex command by its name or find user command name
+///
+/// @param[in,out]  pp     Parsed string. Is advanced to the next character 
+///                        after the command.
+/// @param[out]     type   Command type: for built-in commands the only value 
+///                        returned.
+/// @param[out]     name   For user commands: command name in allocated memory 
+///                        (not resolved because parser does not know about 
+///                        defined user commands). For built-in commands: NULL.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return OK if parsing was successfull, FAIL otherwise. Use error->message 
+///         value to distinguish out-of-memory and failing parsing cases.
 static int find_command(char_u **pp, CommandType *type, char_u **name,
                         CommandParserError *error)
 {
