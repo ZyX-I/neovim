@@ -106,35 +106,35 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
     lrswap(rhs);
 
   if (expr) {
-    ExpressionParserError error;
+    ExpressionParserError expr_error;
     ExpressionNode *expr = NULL;
     char_u *rhs_end = rhs;
 
-    error.position = NULL;
-    error.message = NULL;
+    expr_error.position = NULL;
+    expr_error.message = NULL;
 
-    if ((expr = parse0_err(&rhs_end, &error)) == NULL) {
-      CommandParserError cmd_error;
-      if (error.message == NULL) {
+    if ((expr = parse0_err(&rhs_end, &expr_error)) == NULL) {
+      CommandParserError error;
+      if (expr_error.message == NULL) {
         vim_free(rhs);
         return FAIL;
       }
-      cmd_error.position = error.position;
-      cmd_error.message = error.message;
+      error.position = expr_error.position;
+      error.message = expr_error.message;
       if (create_error_node(&(node->args[rhs_idx + 2].arg.cmd),
-                            &cmd_error, position, rhs)
+                            &error, position, rhs)
           == FAIL) {
         vim_free(rhs);
         return FAIL;
       }
     } else if (*rhs_end != NUL) {
-      CommandParserError cmd_error;
+      CommandParserError error;
 
-      cmd_error.position = rhs_end;
-      cmd_error.message = N_("E15: trailing characters");
+      error.position = rhs_end;
+      error.message = N_("E15: trailing characters");
 
       if (create_error_node(&(node->args[rhs_idx + 2].arg.cmd),
-                            &cmd_error, position, rhs)
+                            &error, position, rhs)
           == FAIL) {
         vim_free(rhs);
         return FAIL;
@@ -499,37 +499,39 @@ static int parse_menu(char_u **pp,
   return OK;
 }
 
-// Table used to quickly search for a command, based on its first character.
-static CommandType cmdidxs[27] =
+static int parse_expr(char_u **pp,
+                      CommandNode *node,
+                      CommandParserError *error,
+                      CommandParserOptions o,
+                      CommandPosition *position,
+                      line_getter fgetline,
+                      void *cookie)
 {
-  kCmdAppend,
-  kCmdBuffer,
-  kCmdChange,
-  kCmdDelete,
-  kCmdEdit,
-  kCmdFile,
-  kCmdGlobal,
-  kCmdHelp,
-  kCmdInsert,
-  kCmdJoin,
-  kCmdK,
-  kCmdList,
-  kCmdMove,
-  kCmdNext,
-  kCmdOpen,
-  kCmdPrint,
-  kCmdQuit,
-  kCmdRead,
-  kCmdSubstitute,
-  kCmdT,
-  kCmdUndo,
-  kCmdVglobal,
-  kCmdWrite,
-  kCmdXit,
-  kCmdYank,
-  kCmdZ,
-  kCmdBang
-};
+  ExpressionNode *expr;
+  ExpressionParserError expr_error;
+  char_u *arg;
+  char_u *arg_end;
+
+  if ((arg = vim_strsave(*pp)) == NULL)
+    return FAIL;
+
+  node->args[ARG_EXPR_STR].arg.str = arg;
+  arg_end = arg;
+
+  if ((expr = parse0_err(&arg_end, &expr_error)) == NULL) {
+    if (expr_error.message == NULL)
+      return FAIL;
+    error->message = expr_error.message;
+    error->position = expr_error.position;
+    return NOTDONE;
+  }
+
+  node->args[ARG_EXPR_EXPR].arg.expr = expr;
+
+  *pp += arg_end - arg;
+
+  return OK;
+}
 
 static CommandNode *cmd_alloc(CommandType type)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
@@ -1001,6 +1003,38 @@ static char_u *check_nextcmd(char_u *p)
   else
     return NULL;
 }
+
+// Table used to quickly search for a command, based on its first character.
+static CommandType cmdidxs[27] =
+{
+  kCmdAppend,
+  kCmdBuffer,
+  kCmdChange,
+  kCmdDelete,
+  kCmdEdit,
+  kCmdFile,
+  kCmdGlobal,
+  kCmdHelp,
+  kCmdInsert,
+  kCmdJoin,
+  kCmdK,
+  kCmdList,
+  kCmdMove,
+  kCmdNext,
+  kCmdOpen,
+  kCmdPrint,
+  kCmdQuit,
+  kCmdRead,
+  kCmdSubstitute,
+  kCmdT,
+  kCmdUndo,
+  kCmdVglobal,
+  kCmdWrite,
+  kCmdXit,
+  kCmdYank,
+  kCmdZ,
+  kCmdBang
+};
 
 /*
  * Find an Ex command by its name, either built-in or user.
@@ -1604,7 +1638,8 @@ int parse_one_cmd(char_u **pp,
       size_t next_cmd_offset = 0;
       // XFILE commands may have bangs inside `=…`
       // ISGREP commands may have bangs inside patterns
-      if (!(CMDDEF(type).flags & (XFILE|ISGREP))) {
+      // ISEXPR commands may have bangs inside "" or as logical OR
+      if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR))) {
         used_get_cmd_arg = TRUE;
         if (get_cmd_arg(type, o, p, &cmd_arg_start, &next_cmd_offset)
             == FAIL) {
@@ -1747,9 +1782,9 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         free_cmd(result);
         return NULL;
       }
-      assert(parse_start != line || ret == NOTDONE);
       if (ret == NOTDONE)
         break;
+      assert(parse_start != line);
       switch ((*next_node)->type) {
         case kCmdEndif: {
           no_start_message  = N_("E580: :endif without :if");
@@ -2222,6 +2257,8 @@ static void range_repr(Range *range, char **pp)
 static size_t node_repr_len(CommandNode *node, size_t indent)
 {
   size_t len = 0;
+  size_t start_from_arg;
+  bool do_arg_dump = FALSE;
 
   if (node == NULL)
     return 0;
@@ -2392,14 +2429,39 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
         cur = cur->subitem;
       }
 
-      if (node->args[ARG_MENU_TEXT].arg.str != NULL) {
-        len += 5;
-        len += STRLEN(node->args[ARG_MENU_TEXT].arg.str);
-      }
+      if (node->args[ARG_MENU_TEXT].arg.str != NULL)
+        len += 5 + STRLEN(node->args[ARG_MENU_TEXT].arg.str);
     }
 
-    if (node->args[ARG_MENU_RHS].arg.str != NULL)
-      len += 1 + STRLEN(node->args[ARG_MENU_RHS].arg.str);
+    start_from_arg = ARG_MENU_RHS;
+    do_arg_dump = TRUE;
+  } else if (CMDDEF(node->type).parse == &parse_expr) {
+    start_from_arg = 1;
+    do_arg_dump = TRUE;
+  } else {
+    start_from_arg = 0;
+    do_arg_dump = TRUE;
+  }
+
+  if (do_arg_dump) {
+    size_t i;
+
+    for (i = start_from_arg; i < CMDDEF(node->type).num_args; i++) {
+      switch (CMDDEF(node->type).arg_types[i]) {
+        case kArgExpression: {
+          if (node->args[i].arg.expr != NULL)
+            len += 1 + expr_node_dump_len(node->args[i].arg.expr);
+          break;
+        }
+        case kArgString: {
+          if (node->args[i].arg.str != NULL)
+            len += 1 + STRLEN(node->args[i].arg.str);
+        }
+        default: {
+          break;
+        }
+      }
+    }
   }
 
   if (node->next != NULL)
@@ -2412,6 +2474,8 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
 {
   char *p = *pp;
   size_t len = 0;
+  size_t start_from_arg;
+  bool do_arg_dump = FALSE;
   char_u *name;
 
   if (node == NULL)
@@ -2682,11 +2746,41 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
       }
     }
 
-    if (node->args[ARG_MENU_RHS].arg.str != NULL) {
-      *p++ = ' ';
-      len = STRLEN(node->args[ARG_MENU_RHS].arg.str);
-      memcpy(p, node->args[ARG_MENU_RHS].arg.str, len);
-      p += len;
+    start_from_arg = ARG_MENU_RHS;
+    do_arg_dump = TRUE;
+  } else if (CMDDEF(node->type).parse == &parse_expr) {
+    start_from_arg = 1;
+    do_arg_dump = TRUE;
+  } else {
+    start_from_arg = 0;
+    do_arg_dump = TRUE;
+  }
+
+  if (do_arg_dump) {
+    size_t i;
+
+    for (i = start_from_arg; i < CMDDEF(node->type).num_args; i++) {
+      switch (CMDDEF(node->type).arg_types[i]) {
+        case kArgExpression: {
+          if (node->args[i].arg.expr != NULL) {
+            *p++ = ' ';
+            expr_node_dump(node->args[i].arg.expr, &p);
+          }
+          break;
+        }
+        case kArgString: {
+          if (node->args[i].arg.str != NULL) {
+            *p++ = ' ';
+            len = STRLEN(node->args[i].arg.str);
+            memcpy(p, node->args[i].arg.str, len);
+            p += len;
+          }
+          break;
+        }
+        default: {
+          break;
+        }
+      }
     }
   }
 
