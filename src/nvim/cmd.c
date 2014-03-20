@@ -2305,12 +2305,6 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
   else
     len += STRLEN(CMDDEF(node->type).name);
 
-  if (node->type == kCmdSyntaxError)
-    // len("\\ error:\n")
-    len += indent + 9
-         + 2 * (indent + 1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
-         + indent + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
-
   if (node->bang)
     len++;
 
@@ -2342,7 +2336,13 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
   if (node->exflags & FLAG_EX_PRINT)
     len++;
 
-  if (CMDDEF(node->type).parse == &parse_append) {
+  if (node->type == kCmdSyntaxError) {
+    // len("\\ error:\n")
+    len += indent + 9
+         + 2 * (indent + 1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
+         + 1
+         + indent + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+  } else if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int i = ga->ga_len;
 
@@ -2530,28 +2530,6 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
     memcpy(p, name, len);
   p += len;
 
-  if (node->type == kCmdSyntaxError) {
-    memcpy(p, "\\ error:\n", 9);
-    p += 9;
-    memset(p, ' ', indent);
-    p += indent;
-    len = STRLEN(node->args[ARG_ERROR_LINESTR].arg.str);
-    memcpy(p, node->args[ARG_ERROR_LINESTR].arg.str, len);
-    p += len;
-    *p++ = '\n';
-    memset(p, ' ', indent);
-    p += indent;
-    memset(p, (int) ' ', len);
-    p[node->args[ARG_ERROR_OFFSET].arg.flags] = '^';
-    p += len;
-    *p++ = '\n';
-    memset(p, ' ', indent);
-    p += indent;
-    len = STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
-    memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
-    p+= len;
-  }
-
   if (node->bang)
     *p++ = '!';
 
@@ -2585,7 +2563,27 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
   if (node->exflags & FLAG_EX_PRINT)
     *p++ = 'p';
 
-  if (CMDDEF(node->type).parse == &parse_append) {
+  if (node->type == kCmdSyntaxError) {
+    memcpy(p, "\\ error:\n", 9);
+    p += 9;
+    memset(p, ' ', indent);
+    p += indent;
+    len = STRLEN(node->args[ARG_ERROR_LINESTR].arg.str);
+    memcpy(p, node->args[ARG_ERROR_LINESTR].arg.str, len);
+    p += len;
+    *p++ = '\n';
+    memset(p, ' ', indent);
+    p += indent;
+    memset(p, (int) ' ', len + 1);
+    p[node->args[ARG_ERROR_OFFSET].arg.flags] = '^';
+    p += len + 1;
+    *p++ = '\n';
+    memset(p, ' ', indent);
+    p += indent;
+    len = STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+    memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
+    p+= len;
+  } else if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int ga_len = ga->ga_len;
     int i;
