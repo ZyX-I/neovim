@@ -267,7 +267,7 @@ typedef enum
   EX(kCmdCaddfile,        "caddfile",     NULL,
      ARG_SO_FILES, ARGS_SO,
      TRLBAR|FILE1),
-  EX(kCmdCall,            "call",         NULL,
+  EX(kCmdCall,            "call",         &parse_expr,
      ARG_EXPR_EXPR, ARGS_EXPR,
      RANGE|NEEDARG|EXTRA|NOTRLCOM|SBOXOK|CMDWIN | ISEXPR),
   EX(kCmdCatch,           "catch",        NULL,

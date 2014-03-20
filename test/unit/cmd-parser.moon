@@ -414,6 +414,9 @@ describe 'parse_one_cmd', ->
     itn 'return 1', 'retu1'
     itn 'throw 1', 'th1'
     itn 'while 1', 'wh1'
+    itn 'call tr(1, 2, 3)', 'cal tr(1, 2, 3)'
+    itn 'call tr(1, 2, 3)', 'cal\ttr\t(1, 2, 3)'
+    itn '1,2call tr(1, 2, 3)', '1,2cal\ttr\t\t\t(1, 2, 3)'
     for trunc, full in pairs {
       cex: 'cexpr'
       lex: 'lexpr'
