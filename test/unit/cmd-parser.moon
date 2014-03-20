@@ -23,20 +23,28 @@ cmd.init_homedir()
 cmd.set_init_1()
 cmd.set_lang_var()
 
-p1ct = (str, flags=0) ->
+p1ct = (str, one, flags=0) ->
   s = to_cstr(str)
-  result = cmd.parse_cmd_test(s, flags, true)
+  result = cmd.parse_cmd_test(s, flags, one)
   if result == nil
     error('parse_cmd_test returned nil')
   return ffi.string(result)
 
-eqn = (expected_result, cmd, offset=nil) ->
-  result = p1ct cmd
+eqn = (expected_result, cmd, one, flags=0) ->
+  result = p1ct cmd, one, flags
   eq expected_result, result
 
-itn = (expected_result, cmd, offset=nil) ->
+itn = (expected_result, cmd, flags=0) ->
   it 'parses ' .. cmd, ->
-    eqn expected_result, cmd, offset
+    eqn expected_result, cmd, true, flags
+
+t = (expected_result, cmd, flags=0) ->
+  it 'parses ' .. cmd, ->
+    expected = expected_result\sub(2)
+    expected = expected\gsub('^%s+', '')
+    expected = expected\gsub('\n%s+', '\n')
+    expected = expected\gsub('\n%s*$', '')
+    eqn expected, cmd, false, flags
 
 describe 'parse_one_cmd', ->
   describe 'no commands', ->
@@ -415,5 +423,18 @@ describe 'parse_one_cmd', ->
       ladde: 'laddexpr'
     }
       itn full .. ' 1', trunc .. '1'
+
+describe 'parse_cmd_sequence', ->
+  describe 'if block', ->
+    t '
+    if abc
+    elseif def
+    else
+    endif
+    ', '
+    if abc
+    elseif def
+    else
+    endif'
 
 -- vim: sw=2 sts=2 et tw=80
