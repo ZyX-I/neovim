@@ -18,6 +18,17 @@
 #include "main.h"
 #include "menu.h"
 
+typedef struct {
+  CommandType find_in_stack;
+  CommandType find_in_stack_2;
+  CommandType find_in_stack_3;
+  CommandType not_after;
+  bool push_stack;
+  char *not_after_message;
+  char *no_start_message;
+  char *duplicate_message;
+} CommandBlockOptions;
+
 //{{{ Function declarations
 static int get_vcol(char_u **pp);
 static int parse_append(char_u **pp,
@@ -80,6 +91,8 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
                         CommandParserError *error);
 static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
                        char_u **arg, size_t *next_cmd_offset);
+static char *get_missing_message(CommandType type);
+static void get_block_options(CommandType type, CommandBlockOptions *bo);
 static char_u *fgetline_test(int c, char_u **arg, int indent);
 static size_t regex_repr_len(Regex *regex);
 static void regex_repr(Regex *regex, char **pp);
@@ -1755,6 +1768,135 @@ int parse_one_cmd(char_u **pp,
   return OK;
 }
 
+static void get_block_options(CommandType type, CommandBlockOptions *bo)
+{
+  memset(bo, 0, sizeof(CommandBlockOptions));
+  switch (type) {
+    case kCmdEndif: {
+      bo->no_start_message  = N_("E580: :endif without :if");
+      bo->find_in_stack_3 = kCmdElse;
+      bo->find_in_stack_2 = kCmdElseif;
+      bo->find_in_stack   = kCmdIf;
+      break;
+    }
+    case kCmdElseif: {
+      bo->not_after_message = N_("E584: :elseif after :else");
+      bo->no_start_message  = N_("E582: :elseif without :if");
+      bo->find_in_stack_2 = kCmdElseif;
+      bo->find_in_stack   = kCmdIf;
+      bo->not_after = kCmdElse;
+      bo->push_stack = TRUE;
+      break;
+    }
+    case kCmdElse: {
+      bo->no_start_message  = N_("E581: :else without :if");
+      bo->duplicate_message = N_("E583: multiple :else");
+      bo->find_in_stack_2 = kCmdElseif;
+      bo->find_in_stack   = kCmdIf;
+      bo->push_stack = TRUE;
+      break;
+    }
+    case kCmdEndfunction: {
+      bo->no_start_message  = N_("E193: :endfunction not inside a function");
+      bo->find_in_stack   = kCmdFunction;
+      break;
+    }
+    case kCmdEndtry: {
+      bo->no_start_message  = N_("E602: :endtry without :try");
+      bo->find_in_stack_3 = kCmdFinally;
+      bo->find_in_stack_2 = kCmdCatch;
+      bo->find_in_stack   = kCmdTry;
+      break;
+    }
+    case kCmdFinally: {
+      bo->no_start_message  = N_("E606: :finally without :try");
+      bo->duplicate_message = N_("E607: multiple :finally");
+      bo->find_in_stack_2 = kCmdCatch;
+      bo->find_in_stack   = kCmdTry;
+      bo->push_stack = TRUE;
+      break;
+    }
+    case kCmdCatch: {
+      bo->not_after_message = N_("E604: :catch after :finally");
+      bo->no_start_message  = N_("E603: :catch without :try");
+      bo->find_in_stack_2 = kCmdCatch;
+      bo->find_in_stack   = kCmdTry;
+      bo->not_after = kCmdFinally;
+      bo->push_stack = TRUE;
+      break;
+    }
+    case kCmdEndfor: {
+      bo->not_after_message = N_("E732: Using :endfor with :while");
+      bo->no_start_message  = (char *) e_for;
+      bo->find_in_stack   = kCmdFor;
+      bo->not_after = kCmdWhile;
+      break;
+    }
+    case kCmdEndwhile: {
+      bo->not_after_message = N_("E733: Using :endwhile with :for");
+      bo->no_start_message  = (char *) e_while;
+      bo->find_in_stack   =kCmdWhile;
+      bo->not_after = kCmdFor;
+      break;
+    }
+    case kCmdIf:
+    case kCmdFunction:
+    case kCmdTry:
+    case kCmdFor:
+    case kCmdWhile: {
+      bo->push_stack = TRUE;
+      break;
+    }
+    default: {
+      break;
+    }
+  }
+}
+
+/// Get message for missing block command ends
+///
+/// @param[in]  type  Command for which message should be obtained. Must be one 
+///                   of the commands that starts block or separates it (i.e. 
+///                   if, else, elseif, function, finally, catch, try, for, 
+///                   while). Behavior is undefined if called for other 
+///                   commands.
+///
+/// @return Pointer to the error message. Must not be freed.
+static char *get_missing_message(CommandType type)
+{
+  char *missing_message = NULL;
+  switch (type) {
+    case kCmdElseif:
+    case kCmdElse:
+    case kCmdIf: {
+      missing_message   = (char *) e_endif;
+      break;
+    }
+    case kCmdFunction: {
+      missing_message   = N_("E126: Missing :endfunction");
+      break;
+    }
+    case kCmdFinally:
+    case kCmdCatch:
+    case kCmdTry: {
+      missing_message   = (char *) e_endtry;
+      break;
+    }
+    case kCmdFor: {
+      missing_message   = (char *) e_endfor;
+      break;
+    }
+    case kCmdWhile: {
+      missing_message   = (char *) e_endwhile;
+      break;
+    }
+    default: {
+      assert(FALSE);
+    }
+  }
+  return missing_message;
+}
+
 const CommandNode nocmd = {
   kCmdMissing,
   NULL,
@@ -1780,23 +1922,17 @@ const CommandNode nocmd = {
   }
 };
 
-#define ADD_ERROR_NODE(error_message, error_position, line_start, next_node, \
-                       prev_node) \
+#define NEW_ERROR_NODE(target, error_message, error_position, line_start) \
         { \
           CommandParserError error; \
           error.message = error_message; \
           error.position = error_position; \
-          free_cmd(*next_node); \
-          *next_node = NULL; \
-          if (create_error_node(next_node, &error, &position, line_start) \
+          if (create_error_node(target, &error, &position, line_start) \
               == FAIL) { \
             free_cmd(result); \
             vim_free(line_start); \
             return FAIL; \
           } \
-          (*next_node)->prev = prev_node; \
-          prev_node = *next_node; \
-          next_node = &((*next_node)->next); \
         }
 
 /// Parses sequence of commands
@@ -1830,15 +1966,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
     line = line_start;
     while (*line) {
       char_u *parse_start = line;
-      CommandType find_in_stack = kCmdMissing;
-      CommandType find_in_stack_2 = kCmdMissing;
-      CommandType find_in_stack_3 = kCmdMissing;
-      CommandType not_after = kCmdMissing;
-      bool push_stack = FALSE;
-      char *missing_message;
-      char *not_after_message;
-      char *no_start_message = NULL;
-      char *duplicate_message = NULL;
+      CommandBlockOptions bo;
       int ret;
 
       position.col = line - line_start + 1;
@@ -1850,114 +1978,32 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       if (ret == NOTDONE)
         break;
       assert(parse_start != line);
-      switch ((*next_node)->type) {
-        case kCmdEndif: {
-          no_start_message  = N_("E580: :endif without :if");
-          missing_message   = (char *) e_endif;
-          find_in_stack_3 = kCmdElse;
-          find_in_stack_2 = kCmdElseif;
-          find_in_stack   = kCmdIf;
-          break;
-        }
-        case kCmdElseif: {
-          not_after_message = N_("E584: :elseif after :else");
-          no_start_message  = N_("E582: :elseif without :if");
-          missing_message   = (char *) e_endif;
-          find_in_stack_2 = kCmdElseif;
-          find_in_stack   = kCmdIf;
-          not_after = kCmdElse;
-          push_stack = TRUE;
-          break;
-        }
-        case kCmdElse: {
-          no_start_message  = N_("E581: :else without :if");
-          missing_message   = (char *) e_endif;
-          duplicate_message = N_("E583: multiple :else");
-          find_in_stack_2 = kCmdElseif;
-          find_in_stack   = kCmdIf;
-          push_stack = TRUE;
-          break;
-        }
-        case kCmdEndfunction: {
-          no_start_message  = N_("E193: :endfunction not inside a function");
-          missing_message   = N_("E126: Missing :endfunction");
-          find_in_stack   = kCmdFunction;
-          break;
-        }
-        case kCmdEndtry: {
-          no_start_message  = N_("E602: :endtry without :try");
-          missing_message   = (char *) e_endtry;
-          find_in_stack_3 = kCmdFinally;
-          find_in_stack_2 = kCmdCatch;
-          find_in_stack   = kCmdTry;
-          break;
-        }
-        case kCmdFinally: {
-          no_start_message  = N_("E606: :finally without :try");
-          missing_message   = (char *) e_endtry;
-          duplicate_message = N_("E607: multiple :finally");
-          find_in_stack_2 = kCmdCatch;
-          find_in_stack   = kCmdTry;
-          push_stack = TRUE;
-          break;
-        }
-        case kCmdCatch: {
-          not_after_message = N_("E604: :catch after :finally");
-          no_start_message  = N_("E603: :catch without :try");
-          missing_message   = (char *) e_endtry;
-          find_in_stack_2 = kCmdCatch;
-          find_in_stack   = kCmdTry;
-          not_after = kCmdFinally;
-          push_stack = TRUE;
-          break;
-        }
-        case kCmdEndfor: {
-          not_after_message = N_("E732: Using :endfor with :while");
-          no_start_message  = (char *) e_for;
-          missing_message   = (char *) e_endfor;
-          find_in_stack   = kCmdFor;
-          not_after = kCmdWhile;
-          break;
-        }
-        case kCmdEndwhile: {
-          not_after_message = N_("E733: Using :endwhile with :for");
-          no_start_message  = (char *) e_while;
-          missing_message   = (char *) e_endwhile;
-          find_in_stack   = kCmdWhile;
-          not_after = kCmdFor;
-          break;
-        }
-        case kCmdIf:
-        case kCmdFunction:
-        case kCmdTry:
-        case kCmdFor:
-        case kCmdWhile: {
-          push_stack = TRUE;
-          break;
-        }
-        default: {
-          break;
-        }
-      }
-      if (find_in_stack != kCmdMissing) {
+
+      get_block_options((*next_node)->type, &bo);
+
+      if (bo.find_in_stack != kCmdUnknown) {
         size_t initial_blockstack_len = blockstack_len;
 
         while (TRUE) {
           CommandType last_block_type = blockstack[blockstack_len - 1]->type;
-          if (not_after != kCmdMissing && last_block_type == not_after) {
-            ADD_ERROR_NODE(not_after_message, line, line_start,
-                           next_node, prev_node)
+          if (bo.not_after != kCmdUnknown && last_block_type == bo.not_after) {
+            free_cmd(*next_node);
+            *next_node = NULL;
+            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1]->next),
+                           bo.not_after_message, line, line_start)
             break;
-          } else if (duplicate_message != NULL
+          } else if (bo.duplicate_message != NULL
                      && last_block_type == (*next_node)->type) {
-            ADD_ERROR_NODE(duplicate_message, parse_start, line_start,
-                           next_node, prev_node)
+            free_cmd(*next_node);
+            *next_node = NULL;
+            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1]->next),
+                           bo.duplicate_message, line, line_start)
             break;
-          } else if (last_block_type == find_in_stack
-                     || (find_in_stack_2 != kCmdMissing
-                         && last_block_type == find_in_stack_2)
-                     || (find_in_stack_3 != kCmdMissing
-                         && last_block_type == find_in_stack_3)) {
+          } else if (last_block_type == bo.find_in_stack
+                     || (bo.find_in_stack_2 != kCmdUnknown
+                         && last_block_type == bo.find_in_stack_2)
+                     || (bo.find_in_stack_3 != kCmdUnknown
+                         && last_block_type == bo.find_in_stack_3)) {
             CommandNode *new_node = *next_node;
             if (prev_node == NULL) {
               assert(blockstack[initial_blockstack_len - 1]->children
@@ -1969,7 +2015,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
             }
             new_node->prev = blockstack[blockstack_len - 1];
             blockstack[blockstack_len - 1]->next = new_node;
-            if (push_stack) {
+            if (bo.push_stack) {
               prev_node = NULL;
               next_node = &(new_node->children);
               blockstack[blockstack_len - 1] = new_node;
@@ -1981,27 +2027,23 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
               break;
             }
           } else {
-            CommandParserError error;
-            error.message = missing_message;
-            error.position = line;
-            if (create_error_node(&(blockstack[blockstack_len - 1]->next),
-                                  &error, &position, line_start)
-                == FAIL) {
-              free_cmd(result);
-              vim_free(line_start);
-              return FAIL;
-            }
+            char *missing_message =
+                get_missing_message(blockstack[blockstack_len - 1]->type);
+            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1]->next),
+                           missing_message, line, line_start)
           }
           blockstack_len--;
           if (blockstack_len == 0) {
-            ADD_ERROR_NODE(missing_message, parse_start, line_start,
-                           next_node, prev_node)
+            free_cmd(*next_node);
+            *next_node = NULL;
+            NEW_ERROR_NODE(&(blockstack[0]->next),
+                           bo.no_start_message, line, line_start)
             break;
           }
         }
       } else {
         (*next_node)->prev = prev_node;
-        if (push_stack) {
+        if (bo.push_stack) {
           blockstack_len++;
           if (blockstack_len >= MAX_NEST_BLOCKS) {
             CommandParserError error;
