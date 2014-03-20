@@ -12,7 +12,6 @@
 #include "cmd_def.h"
 #include "types.h"
 #include "expr.h"
-#include "vim.h"
 
 
 // :argadd/:argd

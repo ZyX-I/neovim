@@ -19,4 +19,8 @@ typedef unsigned char char_u;
 typedef unsigned short short_u;
 typedef unsigned int int_u;
 
+typedef long linenr_T;                  /* line number type */
+typedef int colnr_T;                    /* column number type */
+typedef unsigned short disptick_T;      /* display tick type */
+
 #endif /* NEOVIM_TYPES_H */

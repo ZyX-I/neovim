@@ -43,17 +43,26 @@ cstr = ffi.typeof 'char[?]'
 to_cstr = (string) ->
   cstr (string.len string) + 1, string
 
-cimport './src/cmd.h'
-cimport './src/os_unix.h'
-cimport './src/eval.h'
--- cimport 'src/main.h'
+-- cimport './src/os_unix.h'
+ffi.cdef('void mch_early_init(void);')
+-- cimport './src/eval.h'
+ffi.cdef('void eval_init(void);')
+-- cimport './src/main.h'
 ffi.cdef('void allocate_generic_buffers(void);')
-cimport './src/window.h'
-cimport './src/ops.h'
--- cimport 'src/misc1.h'
+-- cimport './src/window.h'
+ffi.cdef('int win_alloc_first(void);')
+-- cimport './src/ops.h'
+ffi.cdef('void init_yank(void);')
+-- cimport './src/misc1.h'
 ffi.cdef('void init_homedir(void);')
-cimport './src/option.h'
-cimport './src/ex_cmds2.h'
+-- cimport './src/option.h'
+ffi.cdef('void set_init_1(void);')
+-- cimport './src/ex_cmds2.h'
+ffi.cdef('void set_lang_var(void);')
+-- cimport './src/mbyte.h'
+ffi.cdef('char_u *mb_init(void);')
+-- cimport './src/normal.h'
+ffi.cdef('void init_normal_cmds(void);')
 
 libnvim.mch_early_init()
 libnvim.mb_init()
