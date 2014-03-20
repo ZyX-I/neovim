@@ -134,7 +134,7 @@ ex_menu (
         ++arg;
     }
     arg = skipwhite(arg);
-  } else if (eap->addr_count && eap->line2 != 0)   {
+  } else if (eap->addr_count && eap->line2 != 0) {
     pri_tab[0] = eap->line2;
     i = 1;
   } else
@@ -149,7 +149,7 @@ ex_menu (
   if (STRNCMP(arg, "enable", 6) == 0 && vim_iswhite(arg[6])) {
     enable = TRUE;
     arg = skipwhite(arg + 6);
-  } else if (STRNCMP(arg, "disable", 7) == 0 && vim_iswhite(arg[7]))   {
+  } else if (STRNCMP(arg, "disable", 7) == 0 && vim_iswhite(arg[7])) {
     enable = FALSE;
     arg = skipwhite(arg + 7);
   }
@@ -177,7 +177,7 @@ ex_menu (
   if (*map_to == NUL && !unmenu && enable == MAYBE) {
     show_menus(menu_path, modes);
     goto theend;
-  } else if (*map_to != NUL && (unmenu || enable != MAYBE))   {
+  } else if (*map_to != NUL && (unmenu || enable != MAYBE)) {
     EMSG(_(e_trailing));
     goto theend;
   }
@@ -203,7 +203,7 @@ ex_menu (
         }
     }
     menu_nable_recurse(root_menu, menu_path, modes, enable);
-  } else if (unmenu)   {
+  } else if (unmenu) {
     /*
      * Delete menu(s).
      */
@@ -226,7 +226,7 @@ ex_menu (
 
     /* Careful: remove_menu() changes menu_path */
     remove_menu(&root_menu, menu_path, modes, FALSE);
-  } else   {
+  } else {
     /*
      * Add menu(s).
      * Replace special key codes.
@@ -381,7 +381,7 @@ add_menu_path (
       if (en_name != NULL) {
         menu->en_name = vim_strsave(en_name);
         menu->en_dname = menu_text(en_name, NULL, NULL);
-      } else   {
+      } else {
         menu->en_name = NULL;
         menu->en_dname = NULL;
       }
@@ -396,7 +396,7 @@ add_menu_path (
 
       old_modes = 0;
 
-    } else   {
+    } else {
       old_modes = menu->modes;
 
       /*
@@ -607,7 +607,7 @@ remove_menu (
 #endif
         if (remove_menu(&menu->children, p, modes, silent) == FAIL)
           return FAIL;
-      } else if (*name != NUL)   {
+      } else if (*name != NUL) {
         if (!silent)
           EMSG(_(e_othermode));
         return FAIL;
@@ -740,7 +740,7 @@ static int show_menus(char_u *path_name, int modes)
           EMSG(_(e_notsubmenu));
           vim_free(path_name);
           return FAIL;
-        } else if ((menu->modes & modes) == 0x0)   {
+        } else if ((menu->modes & modes) == 0x0) {
           EMSG(_(e_othermode));
           vim_free(path_name);
           return FAIL;
@@ -822,7 +822,7 @@ static void show_menus_recursive(vimmenu_T *menu, int modes, int depth)
         else
           msg_outtrans_special(menu->strings[bit], FALSE);
       }
-  } else   {
+  } else {
     if (menu == NULL) {
       menu = root_menu;
       depth--;
@@ -1034,7 +1034,7 @@ char_u *get_menu_names(expand_T *xp, int idx)
        * so that '.' in names gets escaped properly */
       STRCAT(tbuffer, "\001");
       str = tbuffer;
-    } else   {
+    } else {
       if (should_advance)
         str = menu->en_dname;
       else {
@@ -1320,7 +1320,7 @@ void ex_emenu(exarg_T *eap)
         if (*p == NUL && menu->children != NULL) {
           EMSG(_("E333: Menu path must lead to a menu item"));
           menu = NULL;
-        } else if (*p != NUL && menu->children == NULL)   {
+        } else if (*p != NUL && menu->children == NULL) {
           EMSG(_(e_notsubmenu));
           menu = NULL;
         }
@@ -1346,7 +1346,7 @@ void ex_emenu(exarg_T *eap)
       ) {
     mode = (char_u *)"Insert";
     idx = MENU_INDEX_INSERT;
-  } else if (eap->addr_count)   {
+  } else if (eap->addr_count) {
     pos_T tpos;
 
     mode = (char_u *)"Visual";
@@ -1363,7 +1363,7 @@ void ex_emenu(exarg_T *eap)
       tpos = curbuf->b_visual.vi_end;
       curwin->w_cursor = curbuf->b_visual.vi_start;
       curwin->w_curswant = curbuf->b_visual.vi_curswant;
-    } else   {
+    } else {
       /* Set it up for line-wise visual mode */
       VIsual_mode = 'V';
       curwin->w_cursor.lnum = eap->line1;
@@ -1386,7 +1386,7 @@ void ex_emenu(exarg_T *eap)
      * for exclusive mode */
     if (*p_sel == 'e' && gchar_cursor() != NUL)
       ++curwin->w_cursor.col;
-  } else   {
+  } else {
     mode = (char_u *)"Normal";
     idx = MENU_INDEX_NORMAL;
   }
@@ -1501,7 +1501,7 @@ void ex_menutranslate(exarg_T *eap)
     ga_clear(&menutrans_ga);
     /* Delete all "menutrans_" global variables. */
     del_menutrans_vars();
-  } else   {
+  } else {
     /* ":menutrans from to": add translation */
     from = arg;
     arg = menu_skip_part(arg);
@@ -1526,7 +1526,7 @@ void ex_menutranslate(exarg_T *eap)
             tp[menutrans_ga.ga_len].from_noamp = from_noamp;
             tp[menutrans_ga.ga_len].to = to;
             ++menutrans_ga.ga_len;
-          } else   {
+          } else {
             vim_free(from);
             vim_free(from_noamp);
             vim_free(to);

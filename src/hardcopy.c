@@ -92,6 +92,29 @@
  * printed in the margin.
  */
 
+static option_table_T printer_opts[OPT_PRINT_NUM_OPTIONS]
+#ifdef DO_INIT
+  =
+  {
+  {"top",     TRUE, 0, NULL, 0, FALSE},
+  {"bottom",  TRUE, 0, NULL, 0, FALSE},
+  {"left",    TRUE, 0, NULL, 0, FALSE},
+  {"right",   TRUE, 0, NULL, 0, FALSE},
+  {"header",  TRUE, 0, NULL, 0, FALSE},
+  {"syntax",  FALSE, 0, NULL, 0, FALSE},
+  {"number",  FALSE, 0, NULL, 0, FALSE},
+  {"wrap",    FALSE, 0, NULL, 0, FALSE},
+  {"duplex",  FALSE, 0, NULL, 0, FALSE},
+  {"portrait", FALSE, 0, NULL, 0, FALSE},
+  {"paper",   FALSE, 0, NULL, 0, FALSE},
+  {"collate", FALSE, 0, NULL, 0, FALSE},
+  {"jobsplit", FALSE, 0, NULL, 0, FALSE},
+  {"formfeed", FALSE, 0, NULL, 0, FALSE},
+  }
+#endif
+;
+
+
 static const long_u cterm_color_8[8] =
 {
   (long_u)0x000000L, (long_u)0xff0000L, (long_u)0x00ff00L, (long_u)0xffff00L,
@@ -170,7 +193,8 @@ static void prt_get_attr(int hl_id, prt_text_attr_T* pattr, int modec);
  * Parse 'printoptions' and set the flags in "printer_opts".
  * Returns an error message or NULL;
  */
-char_u *parse_printoptions(void)              {
+char_u *parse_printoptions(void)
+{
   return parse_list_options(p_popt, printer_opts, OPT_PRINT_NUM_OPTIONS);
 }
 
@@ -178,7 +202,8 @@ char_u *parse_printoptions(void)              {
  * Parse 'printoptions' and set the flags in "printer_opts".
  * Returns an error message or NULL;
  */
-char_u *parse_printmbfont(void)              {
+char_u *parse_printmbfont(void)
+{
   return parse_list_options(p_pmfn, mbfont_opts, OPT_MBFONT_NUM_OPTIONS);
 }
 
@@ -363,7 +388,8 @@ static void prt_line_number(prt_settings_T *psettings, int page_line, linenr_T l
 /*
  * Get the currently effective header height.
  */
-int prt_header_height(void)         {
+int prt_header_height(void)
+{
   if (printer_opts[OPT_PRINT_HEADERHEIGHT].present)
     return printer_opts[OPT_PRINT_HEADERHEIGHT].number;
   return 2;
@@ -372,7 +398,8 @@ int prt_header_height(void)         {
 /*
  * Return TRUE if using a line number for printing.
  */
-int prt_use_number(void)         {
+int prt_use_number(void)
+{
   return printer_opts[OPT_PRINT_NUMBER].present
          && TOLOWER_ASC(printer_opts[OPT_PRINT_NUMBER].string[0]) == 'y';
 }
@@ -672,7 +699,7 @@ void ex_hardcopy(exarg_T *eap)
                 STRLEN(skipwhite(ml_get(prtpos.file_line)));
               if (++prtpos.file_line > eap->line2)
                 break;                 /* reached the end */
-            } else if (prtpos.ff)   {
+            } else if (prtpos.ff) {
               /* Line had a formfeed in it - start new page but
                * stay on the current line */
               break;
@@ -740,7 +767,7 @@ static colnr_T hardcopy_line(prt_settings_T *psettings, int page_line, prt_pos_T
     if (!ppos->ff && prt_use_number())
       prt_line_number(psettings, page_line, ppos->file_line);
     ppos->ff = FALSE;
-  } else   {
+  } else {
     /* left over from wrap halfway a tab */
     print_pos = ppos->print_pos;
     tab_spaces = ppos->lead_spaces;
@@ -800,7 +827,7 @@ static colnr_T hardcopy_line(prt_settings_T *psettings, int page_line, prt_pos_T
                == 'y') {
       ppos->ff = TRUE;
       need_break = 1;
-    } else   {
+    } else {
       need_break = mch_print_text_out(line + col, outputlen);
       if (has_mbyte)
         print_pos += (*mb_ptr2cells)(line + col);
@@ -1484,7 +1511,8 @@ static void prt_def_var(char *name, double value, int prec)
 /* Convert size from font space to user space at current font scale */
 #define PRT_PS_FONT_TO_USER(scale, size)    ((size) * ((scale)/1000.0))
 
-static void prt_flush_buffer(void)                 {
+static void prt_flush_buffer(void)
+{
   if (prt_ps_buffer.ga_len > 0) {
     /* Any background color must be drawn first */
     if (prt_do_bgcol && (prt_new_bgcol != PRCOLOR_WHITE)) {
@@ -1601,7 +1629,8 @@ struct prt_resfile_buffer_S {
 
 static struct prt_resfile_buffer_S prt_resfile;
 
-static int prt_resfile_next_line(void)                {
+static int prt_resfile_next_line(void)
+{
   int idx;
 
   /* Move to start of next line and then find end of line */
@@ -1684,7 +1713,7 @@ static int prt_next_dsc(struct prt_dsc_line_S *p_dsc_line)
     /* Return type of comment */
     p_dsc_line->type = prt_dsc_table[comment].type;
     offset = prt_dsc_table[comment].len;
-  } else   {
+  } else {
     /* Unrecognised DSC comment, skip to ws after comment leader */
     p_dsc_line->type = PRT_DSC_MISC_TYPE;
     offset = prt_resfile_skip_nonws(0);
@@ -1835,7 +1864,8 @@ static int prt_check_resource(struct prt_ps_resource_S *resource, char_u *versio
   return TRUE;
 }
 
-static void prt_dsc_start(void)                 {
+static void prt_dsc_start(void)
+{
   prt_write_string("%!PS-Adobe-3.0\n");
 }
 
@@ -1960,7 +1990,8 @@ static void prt_dsc_docmedia(char *paper_name, double width, double height, doub
   prt_write_string("\n");
 }
 
-void mch_print_cleanup(void)          {
+void mch_print_cleanup(void)
+{
   if (prt_out_mbyte) {
     int i;
 
@@ -2040,7 +2071,8 @@ static void prt_font_metrics(int font_scale)
 }
 
 
-static int prt_get_cpl(void)                {
+static int prt_get_cpl(void)
+{
   if (prt_use_number()) {
     prt_number_width = PRINT_NUMBER_WIDTH * prt_char_width;
     /* If we are outputting multi-byte characters then line numbers will be
@@ -2071,7 +2103,8 @@ static int prt_build_cid_fontname(int font, char_u *name, int name_len)
 /*
  * Get number of lines of text that fit on a page (excluding the header).
  */
-static int prt_get_lpp(void)                {
+static int prt_get_lpp(void)
+{
   int lpp;
 
   /*
@@ -2208,7 +2241,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
             (char_u *)p_mbchar->cmap_charset, sizeof(prt_cmap) - 3);
         STRCAT(prt_cmap, "-");
       }
-    } else   {
+    } else {
       /* Add custom CMap character set name */
       if (*p_pmcs == NUL) {
         EMSG(_("E674: printmbcharset cannot be empty with multi-byte encoding."));
@@ -2267,7 +2300,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
     }
 
     prt_ps_font = &prt_ps_mb_font;
-  } else   {
+  } else {
     prt_use_courier = FALSE;
     prt_ps_font = &prt_ps_courier_font;
   }
@@ -2281,7 +2314,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
   if (printer_opts[OPT_PRINT_PAPER].present) {
     paper_name = (char *)printer_opts[OPT_PRINT_PAPER].string;
     paper_strlen = printer_opts[OPT_PRINT_PAPER].strlen;
-  } else   {
+  } else {
     paper_name = "A4";
     paper_strlen = 2;
   }
@@ -2304,7 +2337,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
   if (prt_portrait) {
     prt_page_width = prt_mediasize[i].width;
     prt_page_height = prt_mediasize[i].height;
-  } else   {
+  } else {
     prt_page_width = prt_mediasize[i].height;
     prt_page_height = prt_mediasize[i].width;
   }
@@ -2355,7 +2388,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
   if (prt_collate) {
     /* TODO: Get number of collated copies wanted. */
     psettings->n_collated_copies = 1;
-  } else   {
+  } else {
     /* TODO: Get number of uncollated copies wanted and update the cached
      * count.
      */
@@ -2391,7 +2424,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
       return FAIL;
     }
     prt_ps_fd = mch_fopen((char *)prt_ps_file_name, WRITEBIN);
-  } else   {
+  } else {
     p = expand_env_save(psettings->outfile);
     if (p != NULL) {
       prt_ps_fd = mch_fopen((char *)p, WRITEBIN);
@@ -2535,7 +2568,7 @@ int mch_print_begin(prt_settings_T *psettings)
     bbox[2] = (int)(left + psettings->chars_per_line * prt_char_width
                     + 0.5);
     bbox[3] = (int)(top + 0.5);
-  } else   {
+  } else {
     /* In landscape printing the fixed point is the bottom left corner so we
      * derive the bbox from that point.  We have lpp chars across the media
      * and cpl lines up the media.
@@ -2613,7 +2646,7 @@ int mch_print_begin(prt_settings_T *psettings)
       return FALSE;
     /* For the moment there are no checks on encoding resource files to
      * perform */
-  } else   {
+  } else {
     p_encoding = enc_skip(p_penc);
     if (*p_encoding == NUL)
       p_encoding = enc_skip(p_enc);
@@ -2871,7 +2904,8 @@ void mch_print_end(prt_settings_T *psettings)
   mch_print_cleanup();
 }
 
-int mch_print_end_page(void)         {
+int mch_print_end_page(void)
+{
   prt_flush_buffer();
 
   prt_write_string("re sp\n");
@@ -2918,7 +2952,8 @@ int mch_print_begin_page(char_u *str)
   return !prt_file_error;
 }
 
-int mch_print_blank_page(void)         {
+int mch_print_blank_page(void)
+{
   return mch_print_begin_page(NULL) ? (mch_print_end_page()) : FALSE;
 }
 
@@ -2967,7 +3002,7 @@ int mch_print_text_out(char_u *p, int len)
         prt_need_font = TRUE;
         prt_attribute_change = TRUE;
       }
-    } else if (in_ascii)   {
+    } else if (in_ascii) {
       /* Now in ASCII range - need to switch font */
       prt_in_ascii = TRUE;
       prt_need_font = TRUE;
@@ -2985,7 +3020,7 @@ int mch_print_text_out(char_u *p, int len)
         prt_need_moveto = TRUE;
         prt_attribute_change = TRUE;
       }
-    } else if (half_width)   {
+    } else if (half_width) {
       prt_half_width = TRUE;
       prt_pos_x += prt_char_width/4;
       prt_need_moveto = TRUE;
@@ -3067,7 +3102,7 @@ int mch_print_text_out(char_u *p, int len)
       ga_append(&prt_ps_buffer, ch);
       p++;
     } while (--len);
-  } else   {
+  } else {
     /* Add next character to buffer of characters to output.
      * Note: One printed character may require several PS characters to
      * represent it, but we only count them as one printed character.
