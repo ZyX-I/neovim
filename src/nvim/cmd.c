@@ -25,6 +25,15 @@
 #include "nvim/cmd_def.h"
 #undef DO_DECLARE_EXCMD
 
+/// Get virtual column for the first non-blank character
+///
+/// Tabs are considered to be 8 cells wide. Spaces are 1 cell wide. Other 
+/// characters are considered non-blank.
+///
+/// @param[in,out]  pp  String for which indentation should be updated. Is 
+///                     advanced to the first non-white character.
+///
+/// @return Offset of the first non-white character.
 static int get_vcol(char_u **pp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -91,6 +100,26 @@ static int parse_append(char_u **pp,
   return OK;
 }
 
+/// Set RHS of :map/:abbrev/:menu node
+///
+/// @param[in]      rhs      Right hand side of the command.
+/// @param[in]      rhs_idx  Offset of RHS argument in node->args array.
+/// @parblock
+///   @note rhs_idx + 1 is expected to point to parsed variant of RHS (for 
+///         <expr>-type mappings), rhs + 2 is expected to point to cmd variant 
+///         of RHS (for <expr>-type mappings in case parser error occurred)
+/// @endparblock
+/// @param[in,out]  node     Node whose argument rhs should be saved to.
+/// @param[in]      special  TRUE if explicit <special> was supplied.
+/// @param[in]      expr     TRUE if it is <expr>-type mapping.
+/// @parblock
+///   @note If this argument is always FALSE then you do not need to care about 
+///         rhs_idx + 1 and rhs_idx + 2.
+/// @endparblock
+/// @param[in]      o         Options that control parsing behavior.
+/// @param[in]      position  Position of input.
+///
+/// @return FAIL when out of memory, OK otherwise.
 static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
                         CommandPosition *position)
@@ -297,6 +326,13 @@ static int parse_mapclear(char_u **pp,
   return OK;
 }
 
+/// Unescape characters
+///
+/// It is expected to be called on a string in allocated memory that is safe to 
+/// alter. This function only removes "\\" charaters from the string, modifying 
+/// memory in-place.
+///
+/// @param[in,out]  p  String being unescaped.
 static void menu_unescape(char_u *p)
 {
   while (*p) {
@@ -533,6 +569,13 @@ static int parse_expr(char_u **pp,
   return OK;
 }
 
+/// Allocate new command node and assign its type property
+///
+/// Uses type argument to determine how much memory it should allocate.
+///
+/// @param[in]  type  Node type.
+///
+/// @return Pointer to allocated block of memory or NULL in case of error.
 static CommandNode *cmd_alloc(CommandType type)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
 {
@@ -744,13 +787,15 @@ void free_cmd(CommandNode *node)
   vim_free(node);
 }
 
-/*
- * Check for an Ex command with optional tail.
- * If there is a match advance "pp" to the argument and return TRUE.
- */
-static int checkforcmd(char_u **pp, /* start of command */
-                       char_u *cmd, /* name of command */
-                       int    len)  /* required length */
+/// Check for an Ex command with optional tail.
+///
+/// @param[in,out]  pp   Start of the command. Is advanced to the command 
+///                      argument if requested command was found.
+/// @param[in]      cmd  Name of the command which is checked for.
+/// @param[in]      len  Minimal length required to accept a match.
+///
+/// @return TRUE if requested command was found, FALSE otherwise.
+static int checkforcmd(char_u **pp, char_u *cmd, int len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int i;
@@ -1142,13 +1187,14 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
 /// Not used for commands with relations with bar or comment symbol: e.g. :echo 
 /// (it allows things like "echo 'abc|def'") or :write (":w `='abc|def'`")
 ///
-/// @param[in]  type            Command type
-/// @param[in]  o               Parser options. See parse_one_cmd documentation
-/// @param[in]  start           Start of the command-line arguments
-/// @param[out] arg             Resulting command-line argument
-/// @param[out] next_cmd_offset Offset of next command
+/// @param[in]   type            Command type.
+/// @param[in]   o               Parser options. See parse_one_cmd 
+///                              documentation.
+/// @param[in]   start           Start of the command-line arguments.
+/// @param[out]  arg             Resulting command-line argument.
+/// @param[out]  next_cmd_offset Offset of next command.
 ///
-/// @return FAIL when out of memory, OK otherwise
+/// @return FAIL when out of memory, OK otherwise.
 static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
                        char_u **arg, size_t *next_cmd_offset)
 {
@@ -1206,9 +1252,9 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
 
 /// Parses one command
 ///
-/// @param[in,out] pp        Command to parse
-/// @param[out]    node      Parsing result. Should be freed with free_cmd.
-/// @param[in]     o         Options that control parsing behavior.
+/// @param[in,out]  pp        Command to parse.
+/// @param[out]     node      Parsing result. Should be freed with free_cmd.
+/// @param[in]      o         Options that control parsing behavior.
 /// @parblock
 ///   o.flags:
 ///
@@ -1222,12 +1268,12 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
 ///    FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
 ///    FLAG_POC_RL          | Is set if &rl option is set
 /// @endparblock
-/// @param[in]     position  Position of input.
-/// @param[in]     fgetline  Function used to obtain the next line.
-/// @param[in,out] cookie    Second argument to fgetline.
+/// @param[in]      position  Position of input.
+/// @param[in]      fgetline  Function used to obtain the next line.
+/// @param[in,out]  cookie    Second argument to fgetline.
 ///
-/// @return  OK if everything was parsed correctly, FAIL if out of memory, 
-///          NOTDONE for parser error.
+/// @return OK if everything was parsed correctly, FAIL if out of memory, 
+///         NOTDONE for parser error.
 int parse_one_cmd(char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
@@ -1859,19 +1905,20 @@ const CommandNode nocmd = {
 
 /// Parses sequence of commands
 ///
-/// @param[in]   o         Options that control parsing behavior. In addition to 
-///                        flags documented in parse_one_command documentation 
-///                        it accepts o.early_return option that makes in not 
-///                        call fgetline once there is something to execute.
-/// @param[in]   position  Position of input. Only position.fname is used.
-/// @param[in]   fgetline  Function used to obtain the next line.
+/// @param[in]      o         Options that control parsing behavior. In addition 
+///                           to flags documented in parse_one_command 
+///                           documentation it accepts o.early_return option 
+///                           that makes in not call fgetline once there is 
+///                           something to execute.
+/// @param[in]      position  Position of input. Only position.fname is used.
+/// @param[in]      fgetline  Function used to obtain the next line.
 /// @parblock
 ///   This function should return NULL when there are no more lines.
 ///
 ///   @note This function must return string in allocated memory. Only parser 
 ///         thread must have access to strings returned by fgetline.
 /// @endparblock
-/// @param[in,out] cookie    Second argument to fgetline.
+/// @param[in,out]  cookie    Second argument to fgetline.
 CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 CommandPosition position,
                                 line_getter fgetline,

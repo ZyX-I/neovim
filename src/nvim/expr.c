@@ -21,7 +21,8 @@
 # include "expr.c.generated.h"
 #endif
 
-#define MAX_FUNC_ARGS   20      /* maximum number of function arguments */
+// maximum number of function arguments
+#define MAX_FUNC_ARGS   20
 
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
@@ -54,9 +55,9 @@
 
 /// Allocate new expression node and assign its type property
 ///
-/// @param[in]  type   Node type
+/// @param[in]  type   Node type.
 ///
-/// @return Pointer to allocated block of memory or NULL in case of error
+/// @return Pointer to allocated block of memory or NULL in case of error.
 static ExpressionNode *expr_alloc(ExpressionType type)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -78,13 +79,9 @@ void free_expr(ExpressionNode *node)
   vim_free(node);
 }
 
-/*
- * Return TRUE if character "c" can be used in a variable or function name.
- * Does not include '{' or '}' for magic braces.
- */
 /// Check whether given character is a valid name character
 ///
-/// @param[in]  c  Tested character
+/// @param[in]  c  Tested character.
 ///
 /// @return TRUE if character can be used in a variable of function name, FALSE 
 ///         otherwise. Does not include '{' or '}' for magic braces.
@@ -810,11 +807,11 @@ static int parse7(char_u **arg,
       e = p - 1;
       type = kTypeDecimalNumber;
 
-      /* We accept a float when the format matches
-       * "[0-9]\+\.[0-9]\+\([eE][+-]\?[0-9]\+\)\?".  This is very
-       * strict to avoid backwards compatibility problems.
-       * Don't look for a float after the "." operator, so that
-       * ":let vers = 1.2.3" doesn't fail. */
+      // We accept a float when the format matches
+      // "[0-9]\+\.[0-9]\+\([eE][+-]\?[0-9]\+\)\?".  This is very
+      // strict to avoid backwards compatibility problems.
+      // Don't look for a float after the "." operator, so that
+      // ":let vers = 1.2.3" doesn't fail.
       if (!want_string && p[0] == '.' && VIM_ISDIGIT(p[1])) {
         type = kTypeFloat;
         p = skipdigits(p + 2);
