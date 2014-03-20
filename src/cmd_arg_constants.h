@@ -33,13 +33,13 @@ typedef enum {
 
 #define ARGS_NO       {0}
 #define ARGS_MODIFIER ARGS_NO
+#define ARGS_DO       ARGS_NO
 #define ARGS_APPEND   {kArgLines}
 #define ARGS_MAP      {kArgFlags, kArgString, kArgString, kArgExpression, \
                        kArgCommand}
 #define ARGS_MENU     {kArgFlags, kArgString, kArgNumbers, kArgMenuName, \
                        kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
-#define ARGS_DO       {kArgCommand}
 #define ARGS_E        {kArgGlob, kArgFlags, kArgString, kArgCommand}
 #define ARGS_SO       {kArgGlob}
 #define ARGS_AU       {kArgString, kArgAuEvents, kArgPattern, kArgFlags, \
@@ -158,7 +158,7 @@ typedef enum {
 #define ARG_MODIFIER_CMD   ARG_NO_ARGS
 
 // :argdo/:bufdo
-#define ARG_DO_CMD         0
+#define ARG_DO_CMD         ARG_NO_ARGS
 
 // :args/:e
 #define ARG_E_FILES        0
