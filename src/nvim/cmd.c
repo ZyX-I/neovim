@@ -1989,7 +1989,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       if (bo.find_in_stack != kCmdUnknown) {
         size_t initial_blockstack_len = blockstack_len;
 
-        while (TRUE) {
+        while (blockstack_len) {
           CommandType last_block_type = blockstack[blockstack_len - 1].type;
           if (bo.not_after != kCmdUnknown && last_block_type == bo.not_after) {
             free_cmd(*next_node);
