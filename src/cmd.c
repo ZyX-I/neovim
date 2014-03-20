@@ -2173,6 +2173,15 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       break;
   }
 
+  while (blockstack_len) {
+    char *missing_message =
+        get_missing_message(blockstack[blockstack_len - 1].type);
+    char_u *empty = (char_u *) "";
+    NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
+                   missing_message, empty, empty)
+    blockstack_len--;
+  }
+
   return result;
 }
 
