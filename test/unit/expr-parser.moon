@@ -261,6 +261,9 @@ describe 'parse0', ->
   it 'partially parses (abc)(def) (ghi)', ->
     eqn 'call(expr[!(!](var[+abc+]), var[+def+])', '(abc)(def) (ghi)', 11
 
+  it 'fully parses tr>--(1, 2, 3)', ->
+    eqn 'call(var[+tr+], N[+1+], N[+2+], N[+3+])', 'tr\t(1, 2, 3)'
+
   it 'fails to parse <', ->
     eqn 'error:E15: expected expr7 (value)', '<', 0
 

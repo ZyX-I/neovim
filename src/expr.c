@@ -594,7 +594,8 @@ static int parse_dot_subscript(char_u **arg,
 /// Parse function call arguments
 ///
 /// @param[in,out]  arg    Parsed string. Is advanced to the first character 
-///                        after the closing parenthesis of given function call.
+///                        after the closing parenthesis of given function call. 
+///                        Should point to the opening parenthesis.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
 ///
@@ -997,6 +998,13 @@ static int parse7(char_u **arg,
     // Must be a variable or function name.
     // Can also be a curly-braces kind of name: {expr}.
     ret = parse_name(arg, node, error, parse1_node, parse1_arg);
+
+    *arg = skipwhite(*arg);
+
+    if (**arg == '(')
+      // Function call. First function call is not handled by handle_subscript 
+      // for whatever reasons. Allows expressions like "tr   (1, 2, 3)"
+      ret = parse_func_call(arg, node, error);
   }
 
   *arg = skipwhite(*arg);
