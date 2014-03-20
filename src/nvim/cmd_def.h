@@ -70,6 +70,7 @@
 #define SHELLARG    0x1000000L  // :read !cmd/:w !cmd : allows shell arguments
 #define ISGREP      0x2000000L  // :*(vim|)grep* commands
 #define ISEXPR      0x4000000L  // :if/:*expr commands
+#define LITERAL     0x8000000L  // Do not transform its arguments
 
 #define FILES   (XFILE | EXTRA) // multiple extra files allowed
 #define WORD1   (EXTRA | NOSPC) // one extra word allowed
@@ -1688,6 +1689,9 @@ typedef enum
 #ifndef DO_DECLARE_EXCMD
 # define kCmdSIZE (((size_t)kCmdTilde))
 #endif
+  EX(kCmdUSER,            NULL,           &parse_rest_line,
+     ARG_USER_ARG, ARGS_USER,
+     BANG|RANGE|EXTRA|NOTRLCOM|USECTRLV | LITERAL),
   EX(kCmdHashbangComment, "#!",           NULL,
      ARG_NAME_NAME, ARGS_NAME,
      0),
@@ -1699,10 +1703,7 @@ typedef enum
      0),
   EX(kCmdMissing,         NULL,           NULL,
      ARG_NO_ARGS, ARGS_NO,
-     RANGE),
-#ifndef DO_DECLARE_EXCMD
-  kCmdUSER = -1,        /* User-defined command */
-#endif
+     0),
 }
 #ifndef DO_DECLARE_EXCMD
 CommandType

@@ -408,6 +408,10 @@ describe 'parse_one_cmd', ->
     }
       itn full .. ' 1', trunc .. '1'
 
+  describe 'user commands', ->
+    itn 'Eq |abc|def', 'Eq|abc|def'
+    itn '1Eq! |abc\\|def', '1Eq!|abc\\|def'
+
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
     t '

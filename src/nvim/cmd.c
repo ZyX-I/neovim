@@ -39,9 +39,7 @@ static CommandNode *cmd_alloc(CommandType type)
   size_t size = offsetof(CommandNode, args);
   CommandNode *node;
 
-  if (type == kCmdUSER)
-    size++;
-  else if (type != kCmdUnknown)
+  if (type != kCmdUnknown)
     size += sizeof(CommandArg) * CMDDEF(type).num_args;
 
   if ((node = (CommandNode *) alloc_clear(size)) != NULL)
@@ -244,9 +242,7 @@ void free_cmd(CommandNode *node)
 
   numargs = CMDDEF(node->type).num_args;
 
-  if (node->type == kCmdUSER)
-    free_cmd_arg(&(node->args[0]), kArgString);
-  else if (node->type != kCmdUnknown)
+  if (node->type != kCmdUnknown)
     for (i = 0; i < numargs; i++)
       free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
 
@@ -845,6 +841,21 @@ static int parse_expr(char_u **pp,
   return OK;
 }
 
+static int parse_rest_line(char_u **pp,
+                           CommandNode *node,
+                           CommandParserError *error,
+                           CommandParserOptions o,
+                           CommandPosition *position,
+                           line_getter fgetline,
+                           void *cookie)
+{
+  size_t len = STRLEN(*pp);
+  if ((node->args[0].arg.str = vim_strnsave(*pp, len)) == NULL)
+    return FAIL;
+  *pp += len;
+  return OK;
+}
+
 /// Check for an Ex command with optional tail.
 ///
 /// @param[in,out]  pp   Start of the command. Is advanced to the command 
@@ -1352,12 +1363,11 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       (*next_node)->parent = parent;
       (*next_node)->range.address.type = kAddrCurrent;
-      if ((fw = address_followup_alloc(type)) == NULL) {
+      if ((fw = address_followup_alloc(kAddressFollowupShift)) == NULL) {
         free_cmd(*next_node);
         *next_node = NULL;
         return FAIL;
       }
-      fw->type = kAddressFollowupShift;
       fw->data.shift = 1;
       (*next_node)->range.followups = fw;
       return OK;
@@ -1600,7 +1610,7 @@ int parse_one_cmd(char_u **pp,
   // Here used to be :Ni! egg. It was removed
 
   if (*p == '!') {
-    if (type ==  kCmdUSER || CMDDEF(type).flags & BANG) {
+    if (CMDDEF(type).flags & BANG) {
       p++;
       bang = TRUE;
     } else {
@@ -1614,7 +1624,7 @@ int parse_one_cmd(char_u **pp,
   }
 
   if (range.address.type != kAddrMissing) {
-    if (!(type == kCmdUSER || CMDDEF(type).flags & RANGE)) {
+    if (!(CMDDEF(type).flags & RANGE)) {
       free_range_data(&range);
       error.message = (char *) e_norange;
       error.position = range_start;
@@ -1687,69 +1697,61 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->cnt.count = count;
   (*next_node)->parent = parent;
 
-  if (type == kCmdUSER) {
-    len = STRLEN(p);
-    if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
-      return FAIL;
-    *pp = p + len;
-    return OK;
-  } else {
-    parser = CMDDEF(type).parse;
+  parser = CMDDEF(type).parse;
 
-    if (parser != NULL) {
-      int ret;
-      bool used_get_cmd_arg = FALSE;
-      char_u *cmd_arg = p;
-      char_u *cmd_arg_start = p;
-      size_t next_cmd_offset = 0;
-      // XFILE commands may have bangs inside `=…`
-      // ISGREP commands may have bangs inside patterns
-      // ISEXPR commands may have bangs inside "" or as logical OR
-      if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR))) {
-        used_get_cmd_arg = TRUE;
-        if (get_cmd_arg(type, o, p, &cmd_arg_start, &next_cmd_offset)
-            == FAIL) {
-          free_cmd(*next_node);
-          *next_node = NULL;
-          return FAIL;
-        }
-        cmd_arg = cmd_arg_start;
-      }
-      if ((ret = parser(&cmd_arg, *next_node, &error, o, position, fgetline,
-                        cookie))
+  if (parser != NULL) {
+    int ret;
+    bool used_get_cmd_arg = FALSE;
+    char_u *cmd_arg = p;
+    char_u *cmd_arg_start = p;
+    size_t next_cmd_offset = 0;
+    // XFILE commands may have bangs inside `=…`
+    // ISGREP commands may have bangs inside patterns
+    // ISEXPR commands may have bangs inside "" or as logical OR
+    if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR|LITERAL))) {
+      used_get_cmd_arg = TRUE;
+      if (get_cmd_arg(type, o, p, &cmd_arg_start, &next_cmd_offset)
           == FAIL) {
-        if (used_get_cmd_arg)
-          vim_free(cmd_arg_start);
         free_cmd(*next_node);
         *next_node = NULL;
         return FAIL;
       }
-      if (ret == NOTDONE) {
+      cmd_arg = cmd_arg_start;
+    }
+    if ((ret = parser(&cmd_arg, *next_node, &error, o, position, fgetline,
+                      cookie))
+        == FAIL) {
+      if (used_get_cmd_arg)
+        vim_free(cmd_arg_start);
+      free_cmd(*next_node);
+      *next_node = NULL;
+      return FAIL;
+    }
+    if (ret == NOTDONE) {
+      free_cmd(*next_node);
+      *next_node = NULL;
+      if (create_error_node(next_node, &error, position,
+                            used_get_cmd_arg ? cmd_arg_start : s) == FAIL)
+        return FAIL;
+      return NOTDONE;
+    } else if (used_get_cmd_arg) {
+      if (*cmd_arg != NUL) {
         free_cmd(*next_node);
         *next_node = NULL;
-        if (create_error_node(next_node, &error, position,
-                              used_get_cmd_arg ? cmd_arg_start : s) == FAIL)
+        error.message = (char *) e_trailing;
+        error.position = cmd_arg;
+        if (create_error_node(next_node, &error, position, cmd_arg_start)
+            == FAIL)
           return FAIL;
         return NOTDONE;
-      } else if (used_get_cmd_arg) {
-        if (*cmd_arg != NUL) {
-          free_cmd(*next_node);
-          *next_node = NULL;
-          error.message = (char *) e_trailing;
-          error.position = cmd_arg;
-          if (create_error_node(next_node, &error, position, cmd_arg_start)
-              == FAIL)
-            return FAIL;
-          return NOTDONE;
-        }
-        vim_free(cmd_arg_start);
-        p += next_cmd_offset;
-      } else {
-        p = cmd_arg;
       }
-      *pp = p;
-      return ret;
+      vim_free(cmd_arg_start);
+      p += next_cmd_offset;
+    } else {
+      p = cmd_arg;
     }
+    *pp = p;
+    return ret;
   }
 
   *pp = p;
@@ -2365,7 +2367,7 @@ static size_t node_repr_len(CommandNode *node, size_t indent)
   len += indent;
   len += range_repr_len(&(node->range));
 
-  if (node->type == kCmdUSER)
+  if (node->name != NULL)
     len += STRLEN(node->name);
   else if (CMDDEF(node->type).name == NULL)
     len += 0;
@@ -2585,7 +2587,7 @@ static void node_repr(CommandNode *node, size_t indent, char **pp)
 
   range_repr(&(node->range), &p);
 
-  if (node->type == kCmdUSER)
+  if (node->name != NULL)
     name = node->name;
   else if (CMDDEF(node->type).name == NULL)
     name = (char_u *) "";
