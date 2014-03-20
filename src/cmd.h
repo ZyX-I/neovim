@@ -101,9 +101,13 @@ typedef enum {
 
 typedef struct command_node {
   CommandType type;
-  char_u *name;              // Only valid for user commands
+  char_u *name;                  // Only valid for user commands
+  struct command_node *prev;
   struct command_node *next;
-  Range range;               // sometimes used for count
+  struct command_node *children; // Only valid for block and modifier commands
+  struct command_node *parent;   // Only valid for modified commands (i.e.
+                                 // commands prefixed with modifier)
+  Range range;                   // sometimes used for count
   CountType cnt_type;
   union {
     int count;
@@ -112,7 +116,7 @@ typedef struct command_node {
     ExpressionNode *expr;
   } cnt;
   uint_least8_t exflags;
-  bool bang;                 // :cmd!
+  bool bang;                     // :cmd!
   struct command_argument {
     union {
       struct command_node *cmd;
@@ -149,6 +153,7 @@ typedef struct command_subargs  CommandSubArgs;
 
 typedef struct {
   uint_least16_t flags;
+  bool early_return;
 } CommandParserOptions;
 
 typedef struct {
@@ -188,6 +193,14 @@ int parse_one_cmd(char_u **pp,
                   CommandPosition *position,
                   line_getter fgetline,
                   void *cookie);
-char *parse_one_cmd_test(char_u *arg, uint_least8_t flags);
+char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one);
+CommandNode *parse_cmd_sequence(CommandParserOptions o,
+                                CommandPosition position,
+                                line_getter fgetline,
+                                void *cookie);
+
+const CommandNode nocmd;
+
+#define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
 #endif  // NEOVIM_CMD_H

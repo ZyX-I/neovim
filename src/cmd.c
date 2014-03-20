@@ -27,6 +27,9 @@ static int parse_append(char_u **pp,
                         CommandPosition *position,
                         line_getter fgetline,
                         void *cookie);
+static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
+                        bool special, bool expr, CommandParserOptions o,
+                        CommandPosition *position);
 static int parse_map(char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
@@ -34,9 +37,6 @@ static int parse_map(char_u **pp,
                      CommandPosition *position,
                      line_getter fgetline,
                      void *cookie);
-static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
-                        bool special, bool expr, CommandParserOptions o,
-                        CommandPosition *position);
 static int parse_mapclear(char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
@@ -86,8 +86,8 @@ static size_t address_repr_len(Address *address);
 static void address_repr(Address *address, char **pp);
 static size_t range_repr_len(Range *range);
 static void range_repr(Range *range, char **pp);
-static size_t node_repr_len(CommandNode *node);
-static void node_repr(CommandNode *node, char **pp);
+static size_t node_repr_len(CommandNode *node, size_t indent);
+static void node_repr(CommandNode *node, size_t indent, char **pp);
 //}}}
 
 #include "cmd_def.h"
@@ -547,6 +547,7 @@ static int parse_menu(char_u **pp,
 
   p += STRLEN(p);
 
+  // FIXME More checks
   if (*map_to != NUL) {
     if (node->args[ARG_MENU_NAME].arg.menu_item == NULL) {
       error->message = N_("E792: Empty menu name");
@@ -790,7 +791,7 @@ void free_cmd(CommandNode *node)
   size_t numargs;
   size_t i;
 
-  if (node == NULL)
+  if (node == NULL || node == &nocmd)
     return;
 
   numargs = CMDDEF(node->type).num_args;
@@ -801,6 +802,8 @@ void free_cmd(CommandNode *node)
     for (i = 0; i < numargs; i++)
       free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
 
+  free_cmd(node->next);
+  free_cmd(node->children);
   free_range_data(&(node->range));
   vim_free(node->name);
   vim_free(node);
@@ -1229,8 +1232,8 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
 /// Parses one command
 ///
 /// @param[in,out] pp        Command to parse
-/// @param[out]    node      Parsing result. Should be freed with free_cmd
-/// @param[in]     o         Options that control parsing behavior
+/// @param[out]    node      Parsing result. Should be freed with free_cmd.
+/// @param[in]     o         Options that control parsing behavior.
 /// @parblock
 ///   o.flags:
 ///
@@ -1244,15 +1247,12 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
 ///    FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
 ///    FLAG_POC_RL          | Is set if &rl option is set
 /// @endparblock
-/// @param[in]     fgetline  Function used to obtain the next line
-/// @parblock
-///   @note This function must return string in allocated memory. Only parser 
-///         thread must have access to strings returned by fgetline.
-/// @endparblock
-/// @param[in,out] cookie    Second argument to fgetline
+/// @param[in]     position  Position of input.
+/// @param[in]     fgetline  Function used to obtain the next line.
+/// @param[in,out] cookie    Second argument to fgetline.
 ///
 /// @return  OK if everything was parsed correctly, FAIL if out of memory, 
-///          NOTDONE for parser error
+///          NOTDONE for parser error.
 int parse_one_cmd(char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
@@ -1261,6 +1261,7 @@ int parse_one_cmd(char_u **pp,
                   void *cookie)
 {
   CommandNode **next_node = node;
+  CommandNode *parent = NULL;
   CommandParserError error;
   CommandType type = kCmdUnknown;
   Range range;
@@ -1283,9 +1284,11 @@ int parse_one_cmd(char_u **pp,
   memset(&error, 0, sizeof(CommandParserError));
 
   if (((*pp)[0] == '#') &&
-      ((*pp)[1] == '!')) {
+      ((*pp)[1] == '!') &&
+      position->col == 1) {
     if ((*next_node = cmd_alloc(kCmdHashbangComment)) == NULL)
       return FAIL;
+    (*next_node)->parent = parent;
     p = *pp + 2;
     len = STRLEN(p);
     if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
@@ -1305,6 +1308,7 @@ int parse_one_cmd(char_u **pp,
       AddressFollowup *fw;
       if ((*next_node = cmd_alloc(kCmdHashbangComment)) == NULL)
         return FAIL;
+      (*next_node)->parent = parent;
       (*next_node)->range.address.type = kAddrCurrent;
       if ((fw = address_followup_alloc(type)) == NULL) {
         free_cmd(*next_node);
@@ -1322,6 +1326,7 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       p++;
       len = STRLEN(p);
+      (*next_node)->parent = parent;
       if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
         return FAIL;
       *pp = p + len;
@@ -1382,7 +1387,9 @@ int parse_one_cmd(char_u **pp,
           (*next_node)->bang = TRUE;
           p++;
         }
-        next_node = &((*next_node)->args[0].arg.cmd);
+        (*next_node)->parent = parent;
+        parent = *next_node;
+        next_node = &((*next_node)->children);
         type = kCmdUnknown;
       } else {
         p = pstart;
@@ -1508,6 +1515,7 @@ int parse_one_cmd(char_u **pp,
         free_range_data(&range);
         return FAIL;
       }
+      (*next_node)->parent = parent;
       (*next_node)->range = range;
       p++;
       *pp = p;
@@ -1518,6 +1526,7 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       p++;
       len = STRLEN(p);
+      (*next_node)->parent = parent;
       if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
         return FAIL;
       *pp = p + len;
@@ -1528,6 +1537,7 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       }
       (*next_node)->range = range;
+      (*next_node)->parent = parent;
 
       *pp = (nextcmd == NULL
              ? p
@@ -1633,6 +1643,7 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->exflags = exflags;
   (*next_node)->cnt_type = cnt_type;
   (*next_node)->cnt.count = count;
+  (*next_node)->parent = parent;
 
   if (type == kCmdUSER) {
     len = STRLEN(p);
@@ -1700,6 +1711,284 @@ int parse_one_cmd(char_u **pp,
 
   *pp = p;
   return OK;
+}
+
+const CommandNode nocmd = {
+  kCmdMissing,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  NULL,
+  {
+    {
+      kAddrMissing,
+      {NULL}
+    },
+    NULL,
+    FALSE,
+    NULL
+  },
+  kCntMissing,
+  {0},
+  0,
+  FALSE,
+  {
+    {{NULL}}
+  }
+};
+
+#define ADD_ERROR_NODE(error_message, error_position, line_start, next_node, \
+                       prev_node) \
+        { \
+          CommandParserError error; \
+          error.message = error_message; \
+          error.position = error_position; \
+          free_cmd(*next_node); \
+          *next_node = NULL; \
+          if (create_error_node(next_node, &error, &position, line_start) \
+              == FAIL) { \
+            free_cmd(result); \
+            vim_free(line_start); \
+            return FAIL; \
+          } \
+          (*next_node)->prev = prev_node; \
+          prev_node = *next_node; \
+          next_node = &((*next_node)->next); \
+        }
+
+/// Parses sequence of commands
+///
+/// @param[in]   o         Options that control parsing behavior. In addition to 
+///                        flags documented in parse_one_command documentation 
+///                        it accepts o.early_return option that makes in not 
+///                        call fgetline once there is something to execute.
+/// @param[in]   position  Position of input. Only position.fname is used.
+/// @param[in]   fgetline  Function used to obtain the next line.
+/// @parblock
+///   This function should return NULL when there are no more lines.
+///
+///   @note This function must return string in allocated memory. Only parser 
+///         thread must have access to strings returned by fgetline.
+/// @endparblock
+/// @param[in,out] cookie    Second argument to fgetline.
+CommandNode *parse_cmd_sequence(CommandParserOptions o,
+                                CommandPosition position,
+                                line_getter fgetline,
+                                void *cookie)
+{
+  char_u *line_start, *line;
+  CommandNode *blockstack[MAX_NEST_BLOCKS];
+  CommandNode *result = (CommandNode *) &nocmd;
+  CommandNode **next_node = &result;
+  CommandNode *prev_node = NULL;
+  size_t blockstack_len = 0;
+
+  while ((line_start = fgetline(':', cookie, 0)) != NULL) {
+    line = line_start;
+    while (*line) {
+      char_u *parse_start = line;
+      CommandType find_in_stack = kCmdMissing;
+      CommandType find_in_stack_2 = kCmdMissing;
+      CommandType find_in_stack_3 = kCmdMissing;
+      CommandType not_after = kCmdMissing;
+      bool push_stack = FALSE;
+      char *missing_message;
+      char *not_after_message;
+      char *no_start_message = NULL;
+      char *duplicate_message = NULL;
+      int ret;
+
+      position.col = line - line_start + 1;
+      if ((ret = parse_one_cmd(&line, next_node, o, &position, fgetline, cookie))
+          == FAIL) {
+        free_cmd(result);
+        return NULL;
+      }
+      assert(parse_start != line || ret == NOTDONE);
+      if (ret == NOTDONE)
+        break;
+      switch ((*next_node)->type) {
+        case kCmdEndif: {
+          no_start_message  = N_("E580: :endif without :if");
+          missing_message   = (char *) e_endif;
+          find_in_stack_3 = kCmdElse;
+          find_in_stack_2 = kCmdElseif;
+          find_in_stack   = kCmdIf;
+          break;
+        }
+        case kCmdElseif: {
+          not_after_message = N_("E584: :elseif after :else");
+          no_start_message  = N_("E582: :elseif without :if");
+          missing_message   = (char *) e_endif;
+          find_in_stack_2 = kCmdElseif;
+          find_in_stack   = kCmdIf;
+          not_after = kCmdElse;
+          push_stack = TRUE;
+          break;
+        }
+        case kCmdElse: {
+          no_start_message  = N_("E581: :else without :if");
+          missing_message   = (char *) e_endif;
+          duplicate_message = N_("E583: multiple :else");
+          find_in_stack_2 = kCmdElseif;
+          find_in_stack   = kCmdIf;
+          push_stack = TRUE;
+          break;
+        }
+        case kCmdEndfunction: {
+          no_start_message  = N_("E193: :endfunction not inside a function");
+          missing_message   = N_("E126: Missing :endfunction");
+          find_in_stack   = kCmdFunction;
+          break;
+        }
+        case kCmdEndtry: {
+          no_start_message  = N_("E602: :endtry without :try");
+          missing_message   = (char *) e_endtry;
+          find_in_stack_3 = kCmdFinally;
+          find_in_stack_2 = kCmdCatch;
+          find_in_stack   = kCmdTry;
+          break;
+        }
+        case kCmdFinally: {
+          no_start_message  = N_("E606: :finally without :try");
+          missing_message   = (char *) e_endtry;
+          duplicate_message = N_("E607: multiple :finally");
+          find_in_stack_2 = kCmdCatch;
+          find_in_stack   = kCmdTry;
+          push_stack = TRUE;
+          break;
+        }
+        case kCmdCatch: {
+          not_after_message = N_("E604: :catch after :finally");
+          no_start_message  = N_("E603: :catch without :try");
+          missing_message   = (char *) e_endtry;
+          find_in_stack_2 = kCmdCatch;
+          find_in_stack   = kCmdTry;
+          not_after = kCmdFinally;
+          push_stack = TRUE;
+          break;
+        }
+        case kCmdEndfor: {
+          not_after_message = N_("E732: Using :endfor with :while");
+          no_start_message  = (char *) e_for;
+          missing_message   = (char *) e_endfor;
+          find_in_stack   = kCmdFor;
+          not_after = kCmdWhile;
+          break;
+        }
+        case kCmdEndwhile: {
+          not_after_message = N_("E733: Using :endwhile with :for");
+          no_start_message  = (char *) e_while;
+          missing_message   = (char *) e_endwhile;
+          find_in_stack   = kCmdWhile;
+          not_after = kCmdFor;
+          break;
+        }
+        case kCmdIf:
+        case kCmdFunction:
+        case kCmdTry:
+        case kCmdFor:
+        case kCmdWhile: {
+          push_stack = TRUE;
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+      if (find_in_stack != kCmdMissing) {
+        while (TRUE) {
+          CommandType last_block_type = blockstack[blockstack_len - 1]->type;
+          if (not_after != kCmdMissing && last_block_type == not_after) {
+            ADD_ERROR_NODE(not_after_message, line, line_start,
+                           next_node, prev_node)
+            break;
+          } else if (duplicate_message != NULL
+                     && last_block_type == (*next_node)->type) {
+            ADD_ERROR_NODE(duplicate_message, parse_start, line_start,
+                           next_node, prev_node)
+            break;
+          } else if (last_block_type == find_in_stack
+                     || (find_in_stack_2 != kCmdMissing
+                         && last_block_type == find_in_stack_2)
+                     || (find_in_stack_3 != kCmdMissing
+                         && last_block_type == find_in_stack_3)) {
+            CommandNode *new_node = *next_node;
+            if (prev_node == NULL) {
+              assert(blockstack[blockstack_len - 1]->children == new_node);
+              blockstack[blockstack_len - 1]->children = NULL;
+            } else {
+              assert(prev_node->next == new_node);
+              prev_node->next = NULL;
+            }
+            new_node->prev = blockstack[blockstack_len - 1];
+            blockstack[blockstack_len - 1]->next = new_node;
+            if (push_stack) {
+              prev_node = NULL;
+              next_node = &(new_node->children);
+              blockstack[blockstack_len - 1] = new_node;
+              break;
+            } else {
+              prev_node = new_node;
+              next_node = &(new_node->next);
+              blockstack_len--;
+              break;
+            }
+          } else {
+            CommandParserError error;
+            error.message = missing_message;
+            error.position = line;
+            if (create_error_node(&(blockstack[blockstack_len - 1]->next),
+                                  &error, &position, line_start)
+                == FAIL) {
+              free_cmd(result);
+              vim_free(line_start);
+              return FAIL;
+            }
+          }
+          blockstack_len--;
+          if (blockstack_len == 0) {
+            ADD_ERROR_NODE(missing_message, parse_start, line_start,
+                           next_node, prev_node)
+            break;
+          }
+        }
+      } else {
+        (*next_node)->prev = prev_node;
+        if (push_stack) {
+          blockstack_len++;
+          if (blockstack_len >= MAX_NEST_BLOCKS) {
+            CommandParserError error;
+            // FIXME Make message with error code
+            error.message = N_("too many nested blocks");
+            error.position = line;
+            if (create_error_node(next_node, &error, &position, line_start)
+                == FAIL) {
+              free_cmd(result);
+              vim_free(line_start);
+              return FAIL;
+            }
+          }
+          blockstack[blockstack_len - 1] = *next_node;
+          prev_node = NULL;
+          next_node = &((*next_node)->children);
+        } else {
+          prev_node = *next_node;
+          next_node = &((*next_node)->next);
+        }
+      }
+      line = skipwhite(line);
+      if (*line == '|' || *line == '\n' || *line == '"')
+        line++;
+    }
+    position.lnr++;
+    vim_free(line_start);
+    if (blockstack_len == 0 && o.early_return)
+      break;
+  }
+
+  return result;
 }
 
 static char_u *fgetline_test(int c, char_u **arg, int indent)
@@ -1988,13 +2277,14 @@ static void range_repr(Range *range, char **pp)
   *pp = p;
 }
 
-static size_t node_repr_len(CommandNode *node)
+static size_t node_repr_len(CommandNode *node, size_t indent)
 {
   size_t len = 0;
 
   if (node == NULL)
     return 0;
 
+  len += indent;
   len += range_repr_len(&(node->range));
 
   if (node->type == kCmdUSER)
@@ -2006,9 +2296,9 @@ static size_t node_repr_len(CommandNode *node)
 
   if (node->type == kCmdSyntaxError)
     // len("\\ error:\n")
-    len += 9
-         + 2 * (1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
-         + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+    len += indent + 9
+         + 2 * (indent + 1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
+         + indent + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
 
   if (node->bang)
     len++;
@@ -2041,9 +2331,15 @@ static size_t node_repr_len(CommandNode *node)
   if (node->exflags & FLAG_EX_PRINT)
     len++;
 
-  if (CMDDEF(node->type).flags & ISMODIFIER) {
-    len += node_repr_len(node->args[0].arg.cmd) + 1;
-  } else if (CMDDEF(node->type).parse == &parse_append) {
+  if (node->children) {
+    if (CMDDEF(node->type).flags & ISMODIFIER) {
+      len += 1 + node_repr_len(node->children, indent);
+    } else {
+      len += 1 + node_repr_len(node->children, indent + 2);
+    }
+  }
+
+  if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int i = ga->ga_len;
 
@@ -2078,7 +2374,7 @@ static size_t node_repr_len(CommandNode *node)
       if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         len += 1 + expr_node_dump_len(node->args[ARG_MAP_EXPR].arg.expr);
       } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
-        len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd);
+        len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd, indent);
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         len += 1 + STRLEN(node->args[ARG_MAP_RHS].arg.str);
       }
@@ -2164,10 +2460,13 @@ static size_t node_repr_len(CommandNode *node)
       len += 1 + STRLEN(node->args[ARG_MENU_RHS].arg.str);
   }
 
+  if (node->next != NULL)
+    len += 1 + node_repr_len(node->next, indent);
+
   return len;
 }
 
-static void node_repr(CommandNode *node, char **pp)
+static void node_repr(CommandNode *node, size_t indent, char **pp)
 {
   char *p = *pp;
   size_t len = 0;
@@ -2175,6 +2474,9 @@ static void node_repr(CommandNode *node, char **pp)
 
   if (node == NULL)
     return;
+
+  memset(p, ' ', indent);
+  p += indent;
 
   range_repr(&(node->range), &p);
 
@@ -2193,14 +2495,20 @@ static void node_repr(CommandNode *node, char **pp)
   if (node->type == kCmdSyntaxError) {
     memcpy(p, "\\ error:\n", 9);
     p += 9;
+    memset(p, ' ', indent);
+    p += indent;
     len = STRLEN(node->args[ARG_ERROR_LINESTR].arg.str);
     memcpy(p, node->args[ARG_ERROR_LINESTR].arg.str, len);
     p += len;
     *p++ = '\n';
+    memset(p, ' ', indent);
+    p += indent;
     memset(p, (int) ' ', len);
     p[node->args[ARG_ERROR_OFFSET].arg.flags] = '^';
     p += len;
     *p++ = '\n';
+    memset(p, ' ', indent);
+    p += indent;
     len = STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
     memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
     p+= len;
@@ -2239,10 +2547,17 @@ static void node_repr(CommandNode *node, char **pp)
   if (node->exflags & FLAG_EX_PRINT)
     *p++ = 'p';
 
-  if (CMDDEF(node->type).flags & ISMODIFIER) {
-    *p++ = ' ';
-    node_repr(node->args[0].arg.cmd, &p);
-  } else if (CMDDEF(node->type).parse == &parse_append) {
+  if (node->children) {
+    if (CMDDEF(node->type).flags & ISMODIFIER) {
+      *p++ = ' ';
+      node_repr(node->children, indent, &p);
+    } else {
+      *p++ = '\n';
+      node_repr(node->children, indent + 2, &p);
+    }
+  }
+
+  if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int ga_len = ga->ga_len;
     int i;
@@ -2304,7 +2619,7 @@ static void node_repr(CommandNode *node, char **pp)
         expr_node_dump(node->args[ARG_MAP_EXPR].arg.expr, &p);
       } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
         *p++ = '\n';
-        node_repr(node->args[ARG_MAP_CMD].arg.cmd, &p);
+        node_repr(node->args[ARG_MAP_CMD].arg.cmd, indent, &p);
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         *p++ = ' ';
 
@@ -2433,30 +2748,42 @@ static void node_repr(CommandNode *node, char **pp)
     }
   }
 
+  if (node->next != NULL) {
+    *p++ = '\n';
+    node_repr(node->next, indent, &p);
+  }
+
   *pp = p;
 }
 
-char *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
+char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 {
-  char_u **pp;
-  char_u *p;
-  char_u *line;
   CommandNode *node;
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
-  CommandParserOptions o = {flags};
+  CommandParserOptions o = {flags, FALSE};
   char *repr;
   char *r;
   size_t len;
+  char_u **pp;
 
   pp = &arg;
-  line = fgetline_test(0, pp, 0);
-  p = line;
-  if ((parse_one_cmd(&p, &node, o, &position, (line_getter) fgetline_test,
-                     pp)) == FAIL) {
-  }
-  vim_free(line);
 
-  len = node_repr_len(node);
+  if (one) {
+    char_u *p;
+    char_u *line;
+    line = fgetline_test(0, pp, 0);
+    p = line;
+    if (parse_one_cmd(&p, &node, o, &position, (line_getter) fgetline_test,
+                      pp) == FAIL)
+      return NULL;
+    vim_free(line);
+  } else {
+    if ((node = parse_cmd_sequence(o, position, (line_getter) fgetline_test, pp))
+        == FAIL)
+      return NULL;
+  }
+
+  len = node_repr_len(node, 0);
 
   if ((repr = ALLOC_CLEAR_NEW(char, len + 1)) == NULL) {
     free_cmd(node);
@@ -2465,7 +2792,7 @@ char *parse_one_cmd_test(char_u *arg, uint_least8_t flags)
 
   r = repr;
 
-  node_repr(node, &r);
+  node_repr(node, 0, &r);
 
   free_cmd(node);
   return repr;

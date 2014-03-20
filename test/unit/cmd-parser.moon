@@ -25,9 +25,9 @@ cmd.set_lang_var()
 
 p1ct = (str, flags=0) ->
   s = to_cstr(str)
-  result = cmd.parse_one_cmd_test(s, flags)
+  result = cmd.parse_cmd_test(s, flags, true)
   if result == nil
-    error('parse_one_cmd_test returned nil')
+    error('parse_cmd_test returned nil')
   return ffi.string(result)
 
 eqn = (expected_result, cmd, offset=nil) ->
