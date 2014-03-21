@@ -311,7 +311,7 @@ static int parse_name(char_u **arg,
 /// Parse list literal
 ///
 /// @param[in,out]  arg    Parsed string. Is advanced to the first character 
-///                        after the list.
+///                        after the list. Must point to the opening bracket.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
 ///
@@ -324,6 +324,8 @@ static int parse_list(char_u **arg,
   ExpressionNode **next_node = node;
 
   TOP_NODE(kTypeList, error, node, top_node, next_node)
+
+  top_node->position = *arg;
 
   *arg = skipwhite(*arg + 1);
   while (**arg != ']' && **arg != NUL) {
@@ -356,7 +358,8 @@ static int parse_list(char_u **arg,
 /// Parse dictionary literal
 ///
 /// @param[in,out]  arg          Parsed string. Is advanced to the first 
-///                              character after the dictionary.
+///                              character after the dictionary. Must point to 
+///                              the opening curly brace.
 /// @param[out]     node         Location where parsing results are saved.
 /// @param[out]     error        Structure where errors are saved.
 /// @param[out]     parse1_node  Location where parsing results are saved if 
@@ -374,6 +377,7 @@ static int parse_dictionary(char_u **arg,
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
+  char_u *s = *arg;
   char_u *start = skipwhite(*arg + 1);
 
   *parse1_node = NULL;
@@ -396,6 +400,8 @@ static int parse_dictionary(char_u **arg,
   }
   next_node = &(top_node->children);
   *node = top_node;
+
+  top_node->position = s;
 
   *arg = start;
   while (**arg != '}' && **arg != NUL) {
@@ -1652,12 +1658,14 @@ size_t expr_node_dump_len(ExpressionNode *node)
     }
     case kTypeSubscript: {
       assert(node->children != NULL);
-      len += 1;
+      assert(node->children->next != NULL);
       len += expr_node_dump_len(node->children);
-      if (node->children->next != NULL) {
-        assert(node->children->next->next == NULL);
+      len += 1;
+      len += expr_node_dump_len(node->children->next);
+      if (node->children->next->next != NULL) {
+        assert(node->children->next->next->next == NULL);
         len += 3;
-        len += expr_node_dump_len(node->children->next);
+        len += expr_node_dump_len(node->children->next->next);
       }
       len += 1;
       break;
@@ -1860,13 +1868,14 @@ void expr_node_dump(ExpressionNode *node, char **pp)
       break;
     }
     case kTypeSubscript: {
-      *p++ = '[';
       expr_node_dump(node->children, &p);
-      if (node->children->next != NULL) {
+      *p++ = '[';
+      expr_node_dump(node->children->next, &p);
+      if (node->children->next->next != NULL) {
         *p++ = ' ';
         *p++ = ':';
         *p++ = ' ';
-        expr_node_dump(node->children->next, &p);
+        expr_node_dump(node->children->next->next, &p);
       }
       *p++ = ']';
       break;
