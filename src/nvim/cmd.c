@@ -19,6 +19,17 @@
 #include "nvim/menu.h"
 #include "nvim/memory.h"
 
+typedef struct {
+  CommandType find_in_stack;
+  CommandType find_in_stack_2;
+  CommandType find_in_stack_3;
+  CommandType not_after;
+  bool push_stack;
+  char *not_after_message;
+  char *no_start_message;
+  char *duplicate_message;
+} CommandBlockOptions;
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "cmd.c.generated.h"
 #endif
@@ -895,6 +906,165 @@ static int parse_do(char_u **pp,
   node->children = cmd;
 
   *pp += STRLEN(*pp);
+
+  return OK;
+}
+
+static bool check_lval(ExpressionNode *expr, CommandParserError *error,
+                       bool allow_list)
+{
+  switch (expr->type) {
+    case kTypeVariableName:
+    case kTypeSimpleVariableName: {
+      break;
+    }
+    case kTypeConcatOrSubscript:
+    case kTypeSubscript: {
+      ExpressionNode *root = expr;
+      while (root->children != NULL)
+        root = root->children;
+
+      if (root->type != kTypeVariableName
+          && root->type != kTypeSimpleVariableName) {
+        error->message =
+            N_("E475: Expected variable name or a list of variable names");
+        error->position = root->position;
+        return TRUE;
+      }
+      break;
+    }
+    case kTypeList: {
+      if (allow_list) {
+        ExpressionNode *item = expr->children;
+
+        if (item == NULL) {
+          error->message =
+              N_("E475: Expected non-empty list of variable names");
+          error->position = expr->position;
+          return TRUE;
+        }
+
+        while (item != NULL) {
+          if (check_lval(item, error, FALSE))
+            return TRUE;
+          item = item->next;
+        }
+      } else {
+        error->message = N_("E475: Expected variable name");
+        error->position = expr->position;
+        return TRUE;
+      }
+      break;
+    }
+    default: {
+      ExpressionNode *root = expr;
+      while (root->children != NULL && root->position == NULL)
+        root = root->children;
+
+      printf("%i\n", expr->type);
+      if (allow_list)
+        error->message =
+            N_("E475: Expected variable name or a list of variable names");
+      else
+        error->message = N_("E475: Expected variable name");
+      error->position = root->position;
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+/// Parse left value of assignment
+///
+/// @param[in,out]  pp        Parsed string. Is advanced to the next character 
+///                           after parsed expression.
+/// @param[out]     error     Structure where errors are saved.
+/// @param[in]      o         Options that control parsing behavior.
+/// @param[out]     expr      Location where result will be saved.
+///
+/// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when out 
+///         of memory.
+static int parse_lval(char_u **pp,
+                      CommandParserError *error,
+                      CommandParserOptions o,
+                      ExpressionNode **expr)
+{
+  ExpressionParserError expr_error;
+  char_u *expr_start = *pp;
+
+  if ((*expr = parse0_err(pp, &expr_error)) == NULL) {
+    if (expr_error.message == NULL)
+      return FAIL;
+    error->message = expr_error.message;
+    error->position = expr_error.position;
+    return NOTDONE;
+  }
+
+  if (check_lval(*expr, error, TRUE)) {
+    free_expr(*expr);
+    *expr = NULL;
+    if (error->message == NULL)
+      return FAIL;
+    if (error->position == NULL)
+      error->position = expr_start;
+    return NOTDONE;
+  }
+
+  return OK;
+}
+static int parse_for(char_u **pp,
+                     CommandNode *node,
+                     CommandParserError *error,
+                     CommandParserOptions o,
+                     CommandPosition *position,
+                     line_getter fgetline,
+                     void *cookie)
+{
+  ExpressionNode *expr;
+  ExpressionNode *list_expr;
+  ExpressionParserError expr_error;
+  char_u *expr_str;
+  char_u *expr_str_start;
+  int ret;
+
+  if ((expr_str = vim_strsave(*pp)) == NULL)
+    return FAIL;
+
+  node->args[ARG_ASSIGN_STR].arg.str = expr_str;
+
+  expr_str_start = expr_str;
+
+  if ((ret = parse_lval(&expr_str, error, o, &expr)) == FAIL)
+    return FAIL;
+
+  node->args[ARG_ASSIGN_LHS].arg.expr = expr;
+
+  if (ret == NOTDONE) {
+    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    return NOTDONE;
+  }
+
+  expr_str = skipwhite(expr_str);
+
+  if (expr_str[0] != 'i' || expr_str[1] != 'n') {
+    error->message = N_("E690: Missing \"in\" after :for");
+    error->position = *pp + (expr_str - expr_str_start);
+    return NOTDONE;
+  }
+
+  expr_str = skipwhite(expr_str + 2);
+
+  if ((list_expr = parse0_err(&expr_str, &expr_error)) == NULL) {
+    if (expr_error.message == NULL)
+      return FAIL;
+    error->message = expr_error.message;
+    error->position = *pp + (((char_u *) expr_error.position) - expr_str_start);
+    return NOTDONE;
+  }
+
+  node->args[ARG_ASSIGN_RHS].arg.expr = list_expr;
+
+  *pp += expr_str - expr_str_start;
 
   return OK;
 }
@@ -2601,6 +2771,11 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
 
     start_from_arg = ARG_MENU_RHS;
     do_arg_dump = TRUE;
+  } else if (CMDDEF(node->type).parse == &parse_for) {
+    len++;
+    len += expr_node_dump_len(node->args[ARG_ASSIGN_LHS].arg.expr);
+    len += 4;
+    len += expr_node_dump_len(node->args[ARG_ASSIGN_RHS].arg.expr);
   } else if (CMDDEF(node->type).parse == &parse_expr) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
@@ -2923,6 +3098,12 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
     start_from_arg = ARG_MENU_RHS;
     do_arg_dump = TRUE;
+  } else if (CMDDEF(node->type).parse == &parse_for) {
+    *p++ = ' ';
+    expr_node_dump(node->args[ARG_ASSIGN_LHS].arg.expr, &p);
+    memcpy(p, " in ", 4);
+    p += 4;
+    expr_node_dump(node->args[ARG_ASSIGN_RHS].arg.expr, &p);
   } else if (CMDDEF(node->type).parse == &parse_expr) {
     start_from_arg = 1;
     do_arg_dump = TRUE;

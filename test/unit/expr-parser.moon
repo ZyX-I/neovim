@@ -194,11 +194,11 @@ describe 'parse0', ->
   it 'parses (abc)', ->
     eqn 'expr[!(!](var[+abc+])', '(abc)'
   it 'parses [1, 2 , 3 ,4]', ->
-    eqn '[](N[+1+], N[+2+], N[+3+], N[+4+])', '[1, 2 , 3 ,4]'
+    eqn '[][![!](N[+1+], N[+2+], N[+3+], N[+4+])', '[1, 2 , 3 ,4]'
   it 'parses {1:2, v : c, (10): abc}', ->
-    str   = '{}(N[+1+], N[+2+], '
-    str ..=    'var[+v+], var[+c+], '
-    str ..=    'expr[!(!](N[+10+]), var[+abc+])'
+    str   = '{}[!{!](N[+1+], N[+2+], '
+    str ..=         'var[+v+], var[+c+], '
+    str ..=         'expr[!(!](N[+10+]), var[+abc+])'
     eqn str, '{1:2, v : c, (10): abc}'
   it 'parses 1 == 2 && 3 != 4 && 5 > 6 && 7 < 8', ->
     str   = '&&(==(N[+1+], N[+2+]), !=(N[+3+], N[+4+]), >(N[+5+], N[+6+]), '
@@ -248,15 +248,15 @@ describe 'parse0', ->
   -- it('parses call (def)', function()
     -- eq 'call(var[+call+], var[+def+])', 'call (def)'
   it 'parses [][1]', ->
-    eqn 'index([], N[+1+])', '[][1]'
+    eqn 'index([][![!], N[+1+])', '[][1]'
   it 'parses [][1:]', ->
-    eqn 'index([], N[+1+], empty[!]!])', '[][1:]'
+    eqn 'index([][![!], N[+1+], empty[!]!])', '[][1:]'
   it 'parses [][:1]', ->
-    eqn 'index([], empty[!:!], N[+1+])', '[][:1]'
+    eqn 'index([][![!], empty[!:!], N[+1+])', '[][:1]'
   it 'parses [][:]', ->
-    eqn 'index([], empty[!:!], empty[!]!])', '[][:]'
+    eqn 'index([][![!], empty[!:!], empty[!]!])', '[][:]'
   it 'parses [][i1 : i2]', ->
-    eqn 'index([], var[+i1+], var[+i2+])', '[][i1 : i2]'
+    eqn 'index([][![!], var[+i1+], var[+i2+])', '[][i1 : i2]'
 
   it 'partially parses (abc)(def) (ghi)', ->
     eqn 'call(expr[!(!](var[+abc+]), var[+def+])', '(abc)(def) (ghi)', 11
