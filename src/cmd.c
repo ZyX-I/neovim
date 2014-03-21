@@ -2274,9 +2274,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         free_cmd(result);
         return NULL;
       }
-      if (ret == NOTDONE)
-        break;
-      assert(parse_start != line);
+      assert(parse_start != line || ret == NOTDONE);
 
       block_command_node = *next_node;
       while (block_command_node != NULL
@@ -2377,6 +2375,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
           next_node = &((*next_node)->next);
         }
       }
+      if (ret == NOTDONE)
+        break;
       line = skipwhite(line);
       if (*line == '|' || *line == '\n' || *line == '"')
         line++;
