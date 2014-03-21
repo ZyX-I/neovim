@@ -1543,11 +1543,12 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
 
   for (; *p; mb_ptr_adv(p)) {
     if (*p == Ctrl_V) {
-      *next_cmd_offset += 2;
-      if (CMDDEF(type).flags & (USECTRLV))
+      if (CMDDEF(type).flags & (USECTRLV)) {
         p++;                // skip CTRL-V and next char
-      else
+      } else {
+        (*next_cmd_offset)++;
         STRMOVE(p, p + 1);  // remove CTRL-V and skip next char
+      }
       if (*p == NUL)        // stop at NUL after CTRL-V
         break;
     }
@@ -1560,23 +1561,24 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
               && (type != kCmdRedir
                   || p != *arg + 1 || p[-1] != '@'))
              || *p == '|' || *p == '\n') {
-      *next_cmd_offset += 1;
       // We remove the '\' before the '|', unless USECTRLV is used
       // AND 'b' is present in 'cpoptions'.
       if (((o.flags & FLAG_POC_CPO_BAR)
            || !(CMDDEF(type).flags & USECTRLV)) && *(p - 1) == '\\') {
+        *next_cmd_offset += 1;
         STRMOVE(p - 1, p);              // remove the '\'
         p--;
       } else {
         char_u *nextcmd = check_nextcmd(p);
-        if (nextcmd != NULL) {
+        if (nextcmd != NULL)
           *next_cmd_offset += (nextcmd - p);
-        }
         *p = NUL;
         break;
       }
     }
   }
+
+  *next_cmd_offset += p - *arg;
 
   if (!(CMDDEF(type).flags & NOTRLCOM)) // remove trailing spaces
     del_trailing_spaces(p);
