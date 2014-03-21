@@ -2214,17 +2214,20 @@ const CommandNode nocmd = {
   }
 };
 
-#define NEW_ERROR_NODE(target, error_message, error_position, line_start) \
+#define NEW_ERROR_NODE(prev_node, error_message, error_position, line_start) \
         { \
           CommandParserError error; \
           error.message = error_message; \
           error.position = error_position; \
-          if (create_error_node(target, &error, &position, line_start) \
+          assert(prev_node->next == NULL); \
+          if (create_error_node(&(prev_node->next), &error, &position, \
+                                line_start) \
               == FAIL) { \
             free_cmd(result); \
             vim_free(line_start); \
             return FAIL; \
           } \
+          prev_node->next->prev = prev_node; \
         }
 
 /// Parses sequence of commands
@@ -2269,7 +2272,9 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       CommandNode *block_command_node;
 
       position.col = line - line_start + 1;
-      if ((ret = parse_one_cmd(&line, next_node, o, &position, fgetline, cookie))
+      assert(*next_node == NULL || *next_node == &nocmd);
+      if ((ret = parse_one_cmd(&line, next_node, o, &position, fgetline,
+                               cookie))
           == FAIL) {
         free_cmd(result);
         return NULL;
@@ -2294,14 +2299,14 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
           if (bo.not_after != kCmdUnknown && last_block_type == bo.not_after) {
             free_cmd(*next_node);
             *next_node = NULL;
-            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
+            NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
                            bo.not_after_message, line, line_start)
             break;
           } else if (bo.duplicate_message != NULL
                      && last_block_type == (*next_node)->type) {
             free_cmd(*next_node);
             *next_node = NULL;
-            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
+            NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
                            bo.duplicate_message, line, line_start)
             break;
           } else if (last_block_type == bo.find_in_stack
@@ -2337,15 +2342,19 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
           } else {
             char *missing_message =
                 get_missing_message(blockstack[blockstack_len - 1].type);
-            NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
+            NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
                            missing_message, line, line_start)
           }
           blockstack_len--;
           if (blockstack_len == 0) {
             free_cmd(*next_node);
             *next_node = NULL;
-            NEW_ERROR_NODE(&(blockstack[0].node->next),
-                           bo.no_start_message, line, line_start)
+            prev_node = blockstack[0].node;
+            while (prev_node->next != NULL)
+              prev_node = prev_node->next;
+            NEW_ERROR_NODE(prev_node, bo.no_start_message, line, line_start)
+            prev_node = prev_node->next;
+            next_node = &(prev_node->next);
             break;
           }
         }
@@ -2391,7 +2400,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
     char *missing_message =
         get_missing_message(blockstack[blockstack_len - 1].type);
     char_u *empty = (char_u *) "";
-    NEW_ERROR_NODE(&(blockstack[blockstack_len - 1].node->next),
+    NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
                    missing_message, empty, empty)
     blockstack_len--;
   }
