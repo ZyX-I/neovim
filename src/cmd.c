@@ -51,6 +51,14 @@ static int parse_append(char_u **pp,
 static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
                         CommandPosition *position);
+static int do_parse_map(char_u **pp,
+                        CommandNode *node,
+                        CommandParserError *error,
+                        CommandParserOptions o,
+                        CommandPosition *position,
+                        line_getter fgetline,
+                        void *cookie,
+                        bool unmap);
 static int parse_map(char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
@@ -58,6 +66,13 @@ static int parse_map(char_u **pp,
                      CommandPosition *position,
                      line_getter fgetline,
                      void *cookie);
+static int parse_unmap(char_u **pp,
+                       CommandNode *node,
+                       CommandParserError *error,
+                       CommandParserOptions o,
+                       CommandPosition *position,
+                       line_getter fgetline,
+                       void *cookie);
 static int parse_mapclear(char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
@@ -558,13 +573,29 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
   return OK;
 }
 
-static int parse_map(char_u **pp,
-                     CommandNode *node,
-                     CommandParserError *error,
-                     CommandParserOptions o,
-                     CommandPosition *position,
-                     line_getter fgetline,
-                     void *cookie)
+/// Parse :*map/:*abbrev/:*unmap/:*unabbrev commands
+///
+/// @param[in,out]  pp        Parsed string. Is advanced to the end of the 
+///                           string unless a error occurred. Must point to the 
+///                           first non-white character of the command argument.
+/// @param[out]     node      Location where parsing results are saved.
+/// @param[out]     error     Structure where errors are saved.
+/// @param[in]      o         Options that control parsing behavior.
+/// @param[in]      position  Position of input.
+/// @param[in]      fgetline  Function used to obtain the next line. Not used.
+/// @param[in,out]  cookie    Argument to the above function. Not used.
+/// @param[in]      unmap     Determines whether :*map/:*abbrev or 
+///                           :*unmap/:*unabbrev command is being parsed.
+///
+/// @return FAIL when out of memory, OK otherwise.
+static int do_parse_map(char_u **pp,
+                        CommandNode *node,
+                        CommandParserError *error,
+                        CommandParserOptions o,
+                        CommandPosition *position,
+                        line_getter fgetline,
+                        void *cookie,
+                        bool unmap)
 {
   uint_least32_t map_flags = 0;
   char_u *p = *pp;
@@ -648,7 +679,7 @@ static int parse_map(char_u **pp,
   node->args[ARG_MAP_FLAGS].arg.flags = map_flags;
 
   lhs = p;
-  while (*p && !vim_iswhite(*p)) {
+  while (*p && (unmap || !vim_iswhite(*p))) {
     if ((p[0] == Ctrl_V || (do_backslash && p[0] == '\\')) &&
         p[1] != NUL)
       p++;                      // skip CTRL-V or backslash
@@ -663,6 +694,11 @@ static int parse_map(char_u **pp,
 
   if (*lhs != NUL) {
     char_u saved = *lhs_end;
+    // Note: type of the abbreviation is not checked because it depends on the 
+    //       &iskeyword option. Unlike $ENV parsing (which depends on the 
+    //       options too) it is not unlikely that both 1. file will be parsed 
+    //       before result is actually used and 2. option value at the execution 
+    //       stage will make results invalid.
     *lhs_end = NUL;
     lhs = replace_termcodes(lhs, &lhs_buf, TRUE, TRUE,
                             map_flags&FLAG_MAP_SPECIAL,
@@ -674,6 +710,7 @@ static int parse_map(char_u **pp,
   }
 
   if (*rhs != NUL) {
+    assert(!unmap);
     if (STRICMP(rhs, "<nop>") == 0) {
       // Empty string
       rhs = ALLOC_CLEAR_NEW(char_u, 1);
@@ -687,6 +724,28 @@ static int parse_map(char_u **pp,
 
   *pp = p;
   return OK;
+}
+
+static int parse_map(char_u **pp,
+                     CommandNode *node,
+                     CommandParserError *error,
+                     CommandParserOptions o,
+                     CommandPosition *position,
+                     line_getter fgetline,
+                     void *cookie)
+{
+  return do_parse_map(pp, node, error, o, position, fgetline, cookie, FALSE);
+}
+
+static int parse_unmap(char_u **pp,
+                       CommandNode *node,
+                       CommandParserError *error,
+                       CommandParserOptions o,
+                       CommandPosition *position,
+                       line_getter fgetline,
+                       void *cookie)
+{
+  return do_parse_map(pp, node, error, o, position, fgetline, cookie, TRUE);
 }
 
 static int parse_mapclear(char_u **pp,
@@ -2762,8 +2821,10 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     }
 
     len += 2;
-  } else if (CMDDEF(node->type).parse == &parse_map) {
+  } else if (CMDDEF(node->type).parse == &parse_map
+             || CMDDEF(node->type).parse == &parse_unmap) {
     uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
+    bool unmap = CMDDEF(node->type).parse == &parse_unmap;
 
     if (map_flags)
       len++;
@@ -2785,7 +2846,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
 
     if (node->args[ARG_MAP_LHS].arg.str != NULL) {
       len += 1 + STRLEN(node->args[ARG_MAP_LHS].arg.str);
-      if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
+      if (unmap) {
+      } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         len += 1 + expr_node_dump_len(node->args[ARG_MAP_EXPR].arg.expr);
       } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
         len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd, indent,
@@ -3026,9 +3088,11 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     }
     *p++ = '\n';
     *p++ = '.';
-  } else if (CMDDEF(node->type).parse == &parse_map) {
+  } else if (CMDDEF(node->type).parse == &parse_map
+             || CMDDEF(node->type).parse == &parse_unmap) {
     char_u *hs;
     uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
+    bool unmap = CMDDEF(node->type).parse == &parse_unmap;
 
     if (map_flags)
       *p++ = ' ';
@@ -3070,7 +3134,8 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       memcpy(p, hs, len);
       p += len;
 
-      if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
+      if (unmap) {
+      } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         *p++ = ' ';
         expr_node_dump(node->args[ARG_MAP_EXPR].arg.expr, &p);
       } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {

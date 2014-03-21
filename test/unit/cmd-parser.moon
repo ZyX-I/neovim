@@ -329,6 +329,7 @@ describe 'parse_one_cmd', ->
       itn full .. ' <buffer><unique> a b', trunc .. ' <unique><buffer> a b'
       itn full .. ' <buffer><unique> a b', trunc .. ' <unique> <buffer> a b'
       itn full .. ' a b', trunc .. ' a b'
+      itn full .. ' a b', trunc .. ' a\t\t\tb'
       itn full .. ' <nowait><silent> a b', trunc .. ' <nowait>\t<silent> a b'
       itn full .. ' <special><script> a b', trunc .. ' <special>\t<script> a b'
       itn full .. ' <expr><unique> a 1', trunc .. ' <unique>\t<expr> a 1'
@@ -337,6 +338,25 @@ describe 'parse_one_cmd', ->
       itn full .. ' a', trunc .. ' a'
       itn full .. ' <buffer> a', trunc .. '<buffer>a'
       itn full .. ' a b', trunc .. ' a b|next command'
+
+  describe ':*unmap/:*unabbrev commands', ->
+    for trunc, full in pairs {
+      unm: 'unmap'
+      ['unm!']: 'unmap!'
+      vu: 'vunmap'
+      xu: 'xunmap'
+      sunm: 'sunmap'
+      ou: 'ounmap'
+      iu: 'iunmap'
+      lun: 'lunmap'
+      cu: 'cunmap'
+      una: 'unabbreviate'
+      cuna: 'cunabbrev'
+      iuna: 'iunabbrev'
+    }
+      itn full .. ' <buffer>', trunc .. '<buffer>'
+      itn full, trunc
+      itn full .. ' <buffer> a   b', trunc .. '<buffer>a   b'
 
   describe ':*mapclear/*abclear commands', ->
     for trunc, full in pairs {
