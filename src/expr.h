@@ -32,11 +32,13 @@ typedef enum {
   kTypeMultiply,              // *
   kTypeDivide,                // /
   kTypeModulo,                // %
+  // 19
 
   // Unary operators
   kTypeNot,                   // !
   kTypeMinus,                 // -
   kTypePlus,                  // +
+  // 22
 
   // Simple value nodes
   kTypeDecimalNumber,         // 0
@@ -48,17 +50,20 @@ typedef enum {
   kTypeOption,                // &option
   kTypeRegister,              // @r
   kTypeEnvironmentVariable,   // $VAR
+  // 31
 
   // Curly braces names parts
   kTypeVariableName,          // Top-level part
   kTypeSimpleVariableName,    // Variable name without curly braces
   kTypeIdentifier,            // plain string part
   kTypeCurlyName,             // curly brace name
+  // 35
 
   // Complex value nodes
   kTypeExpression,            // (expr)
   kTypeList,                  // [expr, ]
   kTypeDictionary,            // {expr : expr, }
+  // 38
 
   // Subscripts
   kTypeSubscript,             // expr[expr:expr]
