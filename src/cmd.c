@@ -927,26 +927,26 @@ static int parse_expr(char_u **pp,
 {
   ExpressionNode *expr;
   ExpressionParserError expr_error;
-  char_u *arg;
-  char_u *arg_end;
+  char_u *expr_str_start;
+  char_u *expr_str;
 
-  if ((arg = vim_strsave(*pp)) == NULL)
+  if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_EXPR_STR].arg.str = arg;
-  arg_end = arg;
+  node->args[ARG_EXPR_STR].arg.str = expr_str;
+  expr_str_start = expr_str;
 
-  if ((expr = parse0_err(&arg_end, &expr_error)) == NULL) {
+  if ((expr = parse0_err(&expr_str, &expr_error)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
-    error->position = expr_error.position;
+    error->position = *pp + (expr_error.position - expr_str_start);
     return NOTDONE;
   }
 
   node->args[ARG_EXPR_EXPR].arg.expr = expr;
 
-  *pp += arg_end - arg;
+  *pp += expr_str - expr_str_start;
 
   return OK;
 }
