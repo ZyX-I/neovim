@@ -476,4 +476,22 @@ describe 'parse_cmd_sequence', ->
     silent if 1
     endif'
 
+    t '
+    while 1
+    endwhile', 'while 1|endwhile'
+
+    t '
+    for x in [1]
+    endfor
+    ', '
+    for x in [1]
+    endfo'
+
+    t '
+    for [x, y] in [[1, 2]]
+    endfor
+    ', '
+    for [x,y] in [[1,2]]
+    endfo'
+
 -- vim: sw=2 sts=2 et tw=80
