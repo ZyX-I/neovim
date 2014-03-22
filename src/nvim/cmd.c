@@ -1061,18 +1061,23 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 /// @param[out]     error     Structure where errors are saved.
 /// @param[in]      o         Options that control parsing behavior.
 /// @param[out]     expr      Location where result will be saved.
+/// @param[in]      listmult  Determines whether multiple lval values are 
+///                           supported in a form of a list ([a, b, c]) or just 
+///                           a number of space-separated expressions (a b c).
 ///
 /// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when out 
 ///         of memory.
 static int parse_lval(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
-                      ExpressionNode **expr)
+                      ExpressionNode **expr,
+                      bool listmult)
 {
   ExpressionParserError expr_error;
+  ExpressionNode *next;
   char_u *expr_start = *pp;
 
-  if ((*expr = parse0_err(pp, &expr_error, FALSE)) == NULL) {
+  if ((*expr = parse0_err(pp, &expr_error, !listmult)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1080,18 +1085,60 @@ static int parse_lval(char_u **pp,
     return NOTDONE;
   }
 
-  if (check_lval(*expr, error, TRUE)) {
-    free_expr(*expr);
-    *expr = NULL;
-    if (error->message == NULL)
-      return FAIL;
-    if (error->position == NULL)
-      error->position = expr_start;
-    return NOTDONE;
+  next = *expr;
+  while (next != NULL) {
+    if (check_lval(next, error, listmult)) {
+      free_expr(*expr);
+      *expr = NULL;
+      if (error->message == NULL)
+        return FAIL;
+      if (error->position == NULL)
+        error->position = expr_start;
+      return NOTDONE;
+    }
+    next = next->next;
   }
 
   return OK;
 }
+
+static int parse_lvals(char_u **pp,
+                       CommandNode *node,
+                       CommandParserError *error,
+                       CommandParserOptions o,
+                       CommandPosition *position,
+                       line_getter fgetline,
+                       void *cookie)
+{
+  ExpressionNode *expr;
+  char_u *expr_str;
+  char_u *expr_str_start;
+  int ret;
+
+  if ((expr_str = vim_strsave(*pp)) == NULL)
+    return FAIL;
+
+  node->args[ARG_EXPRS_STR].arg.str = expr_str;
+
+  expr_str_start = expr_str;
+
+  if ((ret = parse_lval(&expr_str, error, o, &expr, FALSE)) == FAIL)
+    return FAIL;
+
+  node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
+
+  if (ret == NOTDONE) {
+    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    return NOTDONE;
+  }
+
+  node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
+
+  *pp += expr_str - expr_str_start;
+
+  return OK;
+}
+
 static int parse_for(char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
@@ -1114,7 +1161,7 @@ static int parse_for(char_u **pp,
 
   expr_str_start = expr_str;
 
-  if ((ret = parse_lval(&expr_str, error, o, &expr)) == FAIL)
+  if ((ret = parse_lval(&expr_str, error, o, &expr, TRUE)) == FAIL)
     return FAIL;
 
   node->args[ARG_ASSIGN_LHS].arg.expr = expr;
@@ -2871,7 +2918,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     len += 4;
     len += expr_node_dump_len(node->args[ARG_ASSIGN_RHS].arg.expr);
   } else if (CMDDEF(node->type).parse == &parse_expr
-             || CMDDEF(node->type).parse == &parse_exprs) {
+             || CMDDEF(node->type).parse == &parse_exprs
+             || CMDDEF(node->type).parse == &parse_lvals) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
   } else {
@@ -3204,7 +3252,8 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     p += 4;
     expr_node_dump(node->args[ARG_ASSIGN_RHS].arg.expr, &p);
   } else if (CMDDEF(node->type).parse == &parse_expr
-             || CMDDEF(node->type).parse == &parse_exprs) {
+             || CMDDEF(node->type).parse == &parse_exprs
+             || CMDDEF(node->type).parse == &parse_lvals) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
   } else {

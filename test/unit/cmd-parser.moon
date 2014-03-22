@@ -473,6 +473,15 @@ describe 'parse_one_cmd', ->
       itn full .. ' "abclear" "<buffer>"', trunc .. ' "abclear" "<buffer>"'
       itn full .. ' "abclear" "<buffer>"', trunc .. ' "abclear""<buffer>"'
 
+  describe 'lvals commands', ->
+    for trunc, full in pairs {
+      unlo: 'unlockvar'
+      unl: 'unlet'
+      ['unl!']: 'unlet!'
+    }
+      itn full .. ' abc', trunc .. ' abc'
+      itn full .. ' abc def', trunc .. ' abc def'
+
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
     t '
