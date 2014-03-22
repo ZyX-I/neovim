@@ -28,7 +28,6 @@ typedef enum {
   kArgCmdComplete,   // :command -complete={complete}
   kArgArgs,          // for commands with subcommands
   kArgChar,          // :mark {char}
-  kArgPosition,      // error position
 } CommandArgType;
 
 #define ARGS_NO       {0}
@@ -92,7 +91,7 @@ typedef enum {
 #define ARGS_WINSIZE  {kArgFlags, kArgFlags}
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_WQA      {kArgFlags, kArgString}
-#define ARGS_ERROR    {kArgPosition, kArgString, kArgString, kArgFlags}
+#define ARGS_ERROR    {kArgString, kArgString, kArgFlags}
 #define ARGS_USER     {kArgString}
 
 // ++opt flags
@@ -515,10 +514,9 @@ typedef enum {
 #define ARG_WQA_ENC        1
 
 // syntax error
-#define ARG_ERROR_POSITION 0
-#define ARG_ERROR_LINESTR  1
-#define ARG_ERROR_MESSAGE  2
-#define ARG_ERROR_OFFSET   3
+#define ARG_ERROR_LINESTR  0
+#define ARG_ERROR_MESSAGE  1
+#define ARG_ERROR_OFFSET   2
 
 // User-defined commands
 #define ARG_USER_ARG       0
