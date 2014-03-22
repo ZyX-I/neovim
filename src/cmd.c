@@ -88,6 +88,11 @@ static int parse_menu(char_u **pp,
                       CommandPosition *position,
                       line_getter fgetline,
                       void *cookie);
+static int do_parse_expr(char_u **pp,
+                         CommandNode *node,
+                         CommandParserError *error,
+                         CommandParserOptions o,
+                         bool multi);
 static int parse_expr(char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
@@ -95,6 +100,13 @@ static int parse_expr(char_u **pp,
                       CommandPosition *position,
                       line_getter fgetline,
                       void *cookie);
+static int parse_exprs(char_u **pp,
+                       CommandNode *node,
+                       CommandParserError *error,
+                       CommandParserOptions o,
+                       CommandPosition *position,
+                       line_getter fgetline,
+                       void *cookie);
 static int parse_rest_line(char_u **pp,
                            CommandNode *node,
                            CommandParserError *error,
@@ -539,7 +551,7 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
     expr_error.position = NULL;
     expr_error.message = NULL;
 
-    if ((expr = parse0_err(&rhs_end, &expr_error)) == NULL) {
+    if ((expr = parse0_err(&rhs_end, &expr_error, FALSE)) == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
         vim_free(rhs);
@@ -976,13 +988,25 @@ static int parse_menu(char_u **pp,
   return OK;
 }
 
-static int parse_expr(char_u **pp,
-                      CommandNode *node,
-                      CommandParserError *error,
-                      CommandParserOptions o,
-                      CommandPosition *position,
-                      line_getter fgetline,
-                      void *cookie)
+/// Parse an expression or a whitespace-separated sequence of expressions
+///
+/// Used for ":execute" and ":echo*"
+///
+/// @param[in,out]  pp     Parsed string. Is advanced to the end of the last 
+///                        expression. Should point to the first character of 
+///                        the expression (may point to whitespace character).
+/// @param[out]     node   Location where parsing results are saved.
+/// @param[out]     error  Structure where errors are saved.
+/// @param[in]      o      Options that control parsing behavior.
+/// @param[in]      multi  Determines whether parsed expression is actually 
+///                        a sequence of expressions.
+///
+/// @return FAIL if out of memory, NOTDONE in case of error, OK otherwise.
+static int do_parse_expr(char_u **pp,
+                         CommandNode *node,
+                         CommandParserError *error,
+                         CommandParserOptions o,
+                         bool multi)
 {
   ExpressionNode *expr;
   ExpressionParserError expr_error;
@@ -995,7 +1019,7 @@ static int parse_expr(char_u **pp,
   node->args[ARG_EXPR_STR].arg.str = expr_str;
   expr_str_start = expr_str;
 
-  if ((expr = parse0_err(&expr_str, &expr_error)) == NULL) {
+  if ((expr = parse0_err(&expr_str, &expr_error, multi)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1008,6 +1032,30 @@ static int parse_expr(char_u **pp,
   *pp += expr_str - expr_str_start;
 
   return OK;
+}
+
+static int parse_expr(char_u **pp,
+                      CommandNode *node,
+                      CommandParserError *error,
+                      CommandParserOptions o,
+                      CommandPosition *position,
+                      line_getter fgetline,
+                      void *cookie)
+{
+  return do_parse_expr(pp, node, error, o, FALSE);
+}
+
+static int parse_exprs(char_u **pp,
+                       CommandNode *node,
+                       CommandParserError *error,
+                       CommandParserOptions o,
+                       CommandPosition *position,
+                       line_getter fgetline,
+                       void *cookie)
+{
+  if (!**pp)
+    return OK;
+  return do_parse_expr(pp, node, error, o, TRUE);
 }
 
 static int parse_rest_line(char_u **pp,
@@ -1147,7 +1195,7 @@ static int parse_lval(char_u **pp,
   ExpressionParserError expr_error;
   char_u *expr_start = *pp;
 
-  if ((*expr = parse0_err(pp, &expr_error)) == NULL) {
+  if ((*expr = parse0_err(pp, &expr_error, FALSE)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1209,7 +1257,7 @@ static int parse_for(char_u **pp,
 
   expr_str = skipwhite(expr_str + 2);
 
-  if ((list_expr = parse0_err(&expr_str, &expr_error)) == NULL) {
+  if ((list_expr = parse0_err(&expr_str, &expr_error, FALSE)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -2938,7 +2986,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     len += expr_node_dump_len(node->args[ARG_ASSIGN_LHS].arg.expr);
     len += 4;
     len += expr_node_dump_len(node->args[ARG_ASSIGN_RHS].arg.expr);
-  } else if (CMDDEF(node->type).parse == &parse_expr) {
+  } else if (CMDDEF(node->type).parse == &parse_expr
+             || CMDDEF(node->type).parse == &parse_exprs) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
   } else {
@@ -2951,6 +3000,7 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
 
     for (i = start_from_arg; i < CMDDEF(node->type).num_args; i++) {
       switch (CMDDEF(node->type).arg_types[i]) {
+        case kArgExpressions:
         case kArgExpression: {
           if (node->args[i].arg.expr != NULL)
             len += 1 + expr_node_dump_len(node->args[i].arg.expr);
@@ -3269,7 +3319,8 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     memcpy(p, " in ", 4);
     p += 4;
     expr_node_dump(node->args[ARG_ASSIGN_RHS].arg.expr, &p);
-  } else if (CMDDEF(node->type).parse == &parse_expr) {
+  } else if (CMDDEF(node->type).parse == &parse_expr
+             || CMDDEF(node->type).parse == &parse_exprs) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
   } else {
@@ -3282,6 +3333,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
     for (i = start_from_arg; i < CMDDEF(node->type).num_args; i++) {
       switch (CMDDEF(node->type).arg_types[i]) {
+        case kArgExpressions:
         case kArgExpression: {
           if (node->args[i].arg.expr != NULL) {
             *p++ = ' ';

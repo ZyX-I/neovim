@@ -111,7 +111,8 @@ typedef struct {
   char_u *end;
 } TestExprResult;
 
-ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error);
+ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error,
+                           bool multi);
 void free_expr(ExpressionNode *node);
 void free_test_expr_result(TestExprResult *result);
 TestExprResult *parse0_test(char_u *arg);

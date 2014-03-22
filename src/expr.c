@@ -1433,10 +1433,13 @@ static int parse1(char_u **arg,
 ///                        advanced to the next non-white after the recognized 
 ///                        expression.
 /// @param[out]     error  Structure where errors are saved.
+/// @param[in]      multi  Determines whether it should parse a sequence of 
+///                        expressions (e.g. for ":echo").
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
+ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error,
+                           bool multi)
 {
   ExpressionNode *result = NULL;
 
@@ -1447,6 +1450,18 @@ ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
   if (parse1(arg, &result, error) == FAIL) {
     free_expr(result);
     return NULL;
+  }
+
+  if (multi) {
+    ExpressionNode **next = &(result->next);
+    while (**arg && **arg != '\n' && **arg != '|') {
+      *arg = skipwhite(*arg);
+      if (parse1(arg, next, error) == FAIL) {
+        free_expr(result);
+        return NULL;
+      }
+      next = &((*next)->next);
+    }
   }
 
   return result;
@@ -1466,7 +1481,7 @@ TestExprResult *parse0_test(char_u *arg)
     return NULL;
 
   result->end = arg;
-  result->node = parse0_err(&(result->end), &(result->error));
+  result->node = parse0_err(&(result->end), &(result->error), FALSE);
 
   return result;
 }
@@ -1523,7 +1538,7 @@ static char *case_compare_strategy_string[] = {
   "?",
 };
 
-size_t expr_node_dump_len(ExpressionNode *node)
+static size_t node_dump_len(ExpressionNode *node)
 {
   size_t len = 0;
 
@@ -1564,7 +1579,7 @@ size_t expr_node_dump_len(ExpressionNode *node)
       assert(node->children->next != NULL);
       child = node->children;
       do {
-        len += expr_node_dump_len(child);
+        len += node_dump_len(child);
         child = child->next;
         if (child != NULL)
           len += operator_len;
@@ -1577,11 +1592,11 @@ size_t expr_node_dump_len(ExpressionNode *node)
       assert(node->children->next != NULL);
       assert(node->children->next->next != NULL);
       assert(node->children->next->next->next == NULL);
-      len += expr_node_dump_len(node->children);
+      len += node_dump_len(node->children);
       len += 3;
-      len += expr_node_dump_len(node->children->next);
+      len += node_dump_len(node->children->next);
       len += 3;
-      len += expr_node_dump_len(node->children->next->next);
+      len += node_dump_len(node->children->next->next);
       break;
     }
     case kTypeNot:
@@ -1590,7 +1605,7 @@ size_t expr_node_dump_len(ExpressionNode *node)
       assert(node->children != NULL);
       assert(node->children->next == NULL);
       len += 1;
-      len += expr_node_dump_len(node->children);
+      len += node_dump_len(node->children);
       break;
     }
     case kTypeDecimalNumber:
@@ -1614,7 +1629,7 @@ size_t expr_node_dump_len(ExpressionNode *node)
       ExpressionNode *child = node->children;
       assert(child != NULL);
       do {
-        len += expr_node_dump_len(child);
+        len += node_dump_len(child);
         child = child->next;
       } while (child != NULL);
       break;
@@ -1624,7 +1639,7 @@ size_t expr_node_dump_len(ExpressionNode *node)
       assert(node->children != NULL);
       assert(node->children->next == NULL);
       len += 1;
-      len += expr_node_dump_len(node->children);
+      len += node_dump_len(node->children);
       len += 1;
       break;
     }
@@ -1632,7 +1647,7 @@ size_t expr_node_dump_len(ExpressionNode *node)
       ExpressionNode *child = node->children;
       len += 1;
       while (child != NULL) {
-        len += expr_node_dump_len(child);
+        len += node_dump_len(child);
         child = child->next;
         if (child != NULL)
           len += 2;
@@ -1644,11 +1659,11 @@ size_t expr_node_dump_len(ExpressionNode *node)
       ExpressionNode *child = node->children;
       len += 1;
       while (child != NULL) {
-        len += expr_node_dump_len(child);
+        len += node_dump_len(child);
         child = child->next;
         assert(child != NULL);
         len += 3;
-        len += expr_node_dump_len(child);
+        len += node_dump_len(child);
         child = child->next;
         if (child != NULL)
           len += 2;
@@ -1659,13 +1674,13 @@ size_t expr_node_dump_len(ExpressionNode *node)
     case kTypeSubscript: {
       assert(node->children != NULL);
       assert(node->children->next != NULL);
-      len += expr_node_dump_len(node->children);
+      len += node_dump_len(node->children);
       len += 1;
-      len += expr_node_dump_len(node->children->next);
+      len += node_dump_len(node->children->next);
       if (node->children->next->next != NULL) {
         assert(node->children->next->next->next == NULL);
         len += 3;
-        len += expr_node_dump_len(node->children->next->next);
+        len += node_dump_len(node->children->next->next);
       }
       len += 1;
       break;
@@ -1673,7 +1688,7 @@ size_t expr_node_dump_len(ExpressionNode *node)
     case kTypeConcatOrSubscript: {
       assert(node->children != NULL);
       assert(node->children->next == NULL);
-      len += expr_node_dump_len(node->children);
+      len += node_dump_len(node->children);
       len += 1;
       len += node->end_position - node->position + 1;
       break;
@@ -1682,11 +1697,11 @@ size_t expr_node_dump_len(ExpressionNode *node)
       ExpressionNode *child;
 
       assert(node->children != NULL);
-      len += expr_node_dump_len(node->children);
+      len += node_dump_len(node->children);
       len += 1;
       child = node->children->next;
       while (child != NULL) {
-        len += expr_node_dump_len(child);
+        len += node_dump_len(child);
         child = child->next;
         if (child != NULL)
           len += 2;
@@ -1701,6 +1716,20 @@ size_t expr_node_dump_len(ExpressionNode *node)
       assert(FALSE);
     }
   }
+  return len;
+}
+
+size_t expr_node_dump_len(ExpressionNode *node)
+{
+  size_t len = node_dump_len(node);
+  ExpressionNode *next = node->next;
+
+  while (next != NULL) {
+    len++;
+    len += node_dump_len(next);
+    next = next->next;
+  }
+
   return len;
 }
 
@@ -1731,7 +1760,7 @@ static size_t node_repr_len(ExpressionNode *node)
   return len;
 }
 
-void expr_node_dump(ExpressionNode *node, char **pp)
+static void node_dump(ExpressionNode *node, char **pp)
 {
   char *p = *pp;
   bool add_ccs = FALSE;
@@ -1770,7 +1799,7 @@ void expr_node_dump(ExpressionNode *node, char **pp)
 
       child = node->children;
       do {
-        expr_node_dump(child, &p);
+        node_dump(child, &p);
         child = child->next;
         if (child != NULL) {
           *p++ = ' ';
@@ -1786,22 +1815,22 @@ void expr_node_dump(ExpressionNode *node, char **pp)
       break;
     }
     case kTypeTernaryConditional: {
-      expr_node_dump(node->children, &p);
+      node_dump(node->children, &p);
       *p++ = ' ';
       *p++ = '?';
       *p++ = ' ';
-      expr_node_dump(node->children->next, &p);
+      node_dump(node->children->next, &p);
       *p++ = ' ';
       *p++ = ':';
       *p++ = ' ';
-      expr_node_dump(node->children->next->next, &p);
+      node_dump(node->children->next->next, &p);
       break;
     }
     case kTypeNot:
     case kTypeMinus:
     case kTypePlus: {
       *p++ = *(expression_type_string[node->type]);
-      expr_node_dump(node->children, &p);
+      node_dump(node->children, &p);
       break;
     }
     case kTypeDecimalNumber:
@@ -1823,14 +1852,14 @@ void expr_node_dump(ExpressionNode *node, char **pp)
     case kTypeVariableName: {
       ExpressionNode *child = node->children;
       do {
-        expr_node_dump(child, &p);
+        node_dump(child, &p);
       } while (child != NULL);
       break;
     }
     case kTypeCurlyName:
     case kTypeExpression: {
       *p++ = node->type == kTypeExpression ? '(' : '{';
-      expr_node_dump(node->children, &p);
+      node_dump(node->children, &p);
       *p++ = node->type == kTypeExpression ? ')' : '}';
       break;
     }
@@ -1838,7 +1867,7 @@ void expr_node_dump(ExpressionNode *node, char **pp)
       ExpressionNode *child = node->children;
       *p++ = '[';
       while (child != NULL) {
-        expr_node_dump(child, &p);
+        node_dump(child, &p);
         child = child->next;
         if (child != NULL) {
           *p++ = ',';
@@ -1852,12 +1881,12 @@ void expr_node_dump(ExpressionNode *node, char **pp)
       ExpressionNode *child = node->children;
       *p++ = '{';
       while (child != NULL) {
-        expr_node_dump(child, &p);
+        node_dump(child, &p);
         child = child->next;
         *p++ = ' ';
         *p++ = ':';
         *p++ = ' ';
-        expr_node_dump(child, &p);
+        node_dump(child, &p);
         child = child->next;
         if (child != NULL) {
           *p++ = ',';
@@ -1868,21 +1897,21 @@ void expr_node_dump(ExpressionNode *node, char **pp)
       break;
     }
     case kTypeSubscript: {
-      expr_node_dump(node->children, &p);
+      node_dump(node->children, &p);
       *p++ = '[';
-      expr_node_dump(node->children->next, &p);
+      node_dump(node->children->next, &p);
       if (node->children->next->next != NULL) {
         *p++ = ' ';
         *p++ = ':';
         *p++ = ' ';
-        expr_node_dump(node->children->next->next, &p);
+        node_dump(node->children->next->next, &p);
       }
       *p++ = ']';
       break;
     }
     case kTypeConcatOrSubscript: {
       size_t len = node->end_position - node->position + 1;
-      expr_node_dump(node->children, &p);
+      node_dump(node->children, &p);
       *p++ = '.';
       memcpy(p, node->position, len);
       p += len;
@@ -1891,11 +1920,11 @@ void expr_node_dump(ExpressionNode *node, char **pp)
     case kTypeCall: {
       ExpressionNode *child;
 
-      expr_node_dump(node->children, &p);
+      node_dump(node->children, &p);
       *p++ = '(';
       child = node->children->next;
       while (child != NULL) {
-        expr_node_dump(child, &p);
+        node_dump(child, &p);
         child = child->next;
         if (child != NULL) {
           *p++ = ',';
@@ -1914,6 +1943,19 @@ void expr_node_dump(ExpressionNode *node, char **pp)
   }
 
   *pp = p;
+}
+
+void expr_node_dump(ExpressionNode *node, char **pp)
+{
+  ExpressionNode *next = node->next;
+
+  node_dump(node, pp);
+
+  while (next != NULL) {
+    *(*pp)++ = ' ';
+    node_dump(next, pp);
+    next = next->next;
+  }
 }
 
 static void node_repr(ExpressionNode *node, char **pp)
