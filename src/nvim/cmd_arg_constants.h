@@ -59,6 +59,7 @@ typedef enum {
 #define ARGS_DIG      {kArgStrings, kArgNumbers}
 #define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
 #define ARGS_EXPRS    {kArgString, kArgExpressions}
+#define ARGS_LOCKVAR  {kArgString, kArgExpressions, kArgFlags}
 #define ARGS_EXIT     {kArgGlob, kArgFlags, kArgString}
 #define ARGS_FIRST    {kArgFlags, kArgString, kArgCommand}
 #define ARGS_WN       {kArgGlob, kArgFlags, kArgString}
@@ -281,6 +282,8 @@ typedef enum {
 // :echo*/:execute
 #define ARG_EXPRS_STR      0
 #define ARG_EXPRS_EXPRS    1
+// :lockvar
+#define ARG_LOCKVAR_DEPTH  (ARG_EXPRS_EXPRS+1)
 
 // :exit
 #define ARG_EXIT_FILES     0

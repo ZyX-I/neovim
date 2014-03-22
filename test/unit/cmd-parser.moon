@@ -481,6 +481,9 @@ describe 'parse_one_cmd', ->
     }
       itn full .. ' abc', trunc .. ' abc'
       itn full .. ' abc def', trunc .. ' abc def'
+    itn 'lockvar abc', 'lockv abc'
+    itn 'lockvar! abc', 'lockvar!abc'
+    itn 'lockvar 5 abc', 'lockv5abc'
 
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->

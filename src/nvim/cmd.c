@@ -1139,6 +1139,20 @@ static int parse_lvals(char_u **pp,
   return OK;
 }
 
+static int parse_lockvar(char_u **pp,
+                         CommandNode *node,
+                         CommandParserError *error,
+                         CommandParserOptions o,
+                         CommandPosition *position,
+                         line_getter fgetline,
+                         void *cookie)
+{
+  if (VIM_ISDIGIT(**pp))
+    node->args[ARG_LOCKVAR_DEPTH].arg.flags = getdigits(pp);
+
+  return parse_lvals(pp, node, error, o, position, fgetline, cookie);
+}
+
 static int parse_for(char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
@@ -2922,6 +2936,10 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
              || CMDDEF(node->type).parse == &parse_lvals) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
+  } else if (CMDDEF(node->type).parse == &parse_lockvar) {
+    if (node->args[ARG_LOCKVAR_DEPTH].arg.number)
+      len += 1 + unumber_repr_len(node->args[ARG_LOCKVAR_DEPTH].arg.number);
+    len += 1 + expr_node_dump_len(node->args[ARG_EXPRS_EXPRS].arg.expr);
   } else {
     start_from_arg = 0;
     do_arg_dump = TRUE;
@@ -3256,6 +3274,13 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
              || CMDDEF(node->type).parse == &parse_lvals) {
     start_from_arg = 1;
     do_arg_dump = TRUE;
+  } else if (CMDDEF(node->type).parse == &parse_lockvar) {
+    if (node->args[ARG_LOCKVAR_DEPTH].arg.number) {
+      *p++ = ' ';
+      unumber_repr(node->args[ARG_LOCKVAR_DEPTH].arg.number, &p);
+    }
+    *p++ = ' ';
+    expr_node_dump(node->args[ARG_EXPRS_EXPRS].arg.expr, &p);
   } else {
     start_from_arg = 0;
     do_arg_dump = TRUE;
