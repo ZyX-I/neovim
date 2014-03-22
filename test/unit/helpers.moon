@@ -72,6 +72,21 @@ ffi.cdef('char_u *mb_init(void);')
 -- cimport './src/normal.h'
 ffi.cdef('void init_normal_cmds(void);')
 
+export garray_defined
+
+if not garray_defined
+  -- FIXME Required by os/users and cmd-parser
+  ffi.cdef [[
+  typedef struct growarray {
+    int ga_len;
+    int ga_maxlen;
+    int ga_itemsize;
+    int ga_growsize;
+    void    *ga_data;
+  } garray_T;
+  ]]
+  garray_defined = true
+
 libnvim.mch_early_init()
 libnvim.mb_init()
 libnvim.eval_init()

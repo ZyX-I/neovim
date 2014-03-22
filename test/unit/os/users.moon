@@ -4,13 +4,6 @@
 -- remove these statements once 'cimport' is working properly for misc1.h
 users = lib
 ffi.cdef [[
-typedef struct growarray {
-  int ga_len;
-  int ga_maxlen;
-  int ga_itemsize;
-  int ga_growsize;
-  void    *ga_data;
-} garray_T;
 int mch_get_usernames(garray_T *usernames);
 int mch_get_user_name(char *s, size_t len);
 int mch_get_uname(int uid, char *s, size_t len);
