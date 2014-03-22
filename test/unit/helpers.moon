@@ -1,7 +1,11 @@
 ffi = require 'ffi'
 
 -- load neovim shared library
-libnvim = ffi.load './build/src/libnvim-test.so'
+testlib = os.getenv 'NVIM_TEST_LIB'
+unless testlib
+    testlib = './build/src/libnvim-test.so'
+
+libnvim = ffi.load testlib
 
 export imported = {}
 
@@ -27,8 +31,12 @@ cimport = (path) ->
 
   return libnvim
 
+testinc = os.getenv 'TEST_INCLUDES'
+unless testinc
+    testinc = './build/test/includes/post'
+
 cppimport = (path) ->
-  return cimport './test/includes/post/' .. path
+  return cimport testinc .. '/' .. path
 
 cimport './src/types.h'
 
