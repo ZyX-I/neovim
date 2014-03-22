@@ -128,6 +128,7 @@ static void free_address_data(Address *address)
       break;
     }
   }
+  free_address_followup(address->followups);
 }
 
 static void free_address(Address *address)
@@ -165,7 +166,6 @@ static void free_range_data(Range *range)
     return;
 
   free_address_data(&(range->address));
-  free_address_followup(range->followups);
   free_range(range->next);
 }
 
@@ -181,10 +181,6 @@ static void free_range(Range *range)
 static void free_cmd_arg(CommandArg *arg, CommandArgType type)
 {
   switch (type) {
-    case kArgCommand: {
-      free_cmd(arg->arg.cmd);
-      break;
-    }
     case kArgExpression:
     case kArgExpressions:
     case kArgAssignLhs: {
@@ -193,8 +189,10 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     }
     case kArgFlags:
     case kArgNumber:
+    case kArgUNumber:
     case kArgAuEvent:
-    case kArgChar: {
+    case kArgChar:
+    case kArgColumn: {
       break;
     }
     case kArgNumbers: {
@@ -304,8 +302,7 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
     }
     (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
     (*node)->args[ARG_ERROR_MESSAGE].arg.str = message;
-    (*node)->args[ARG_ERROR_OFFSET].arg.flags =
-        (uint_least32_t) (error->position - s);
+    (*node)->args[ARG_ERROR_OFFSET].arg.col = (colnr_T) (error->position - s);
   }
   return OK;
 }
@@ -391,15 +388,15 @@ static int parse_append(char_u **pp,
 /// @param[in]      rhs_idx  Offset of RHS argument in node->args array.
 /// @parblock
 ///   @note rhs_idx + 1 is expected to point to parsed variant of RHS (for 
-///         <expr>-type mappings), rhs + 2 is expected to point to cmd variant 
-///         of RHS (for <expr>-type mappings in case parser error occurred)
+///         <expr>-type mappings)). If parser error occurred during running 
+///         expression node->children will point to syntax error node.
 /// @endparblock
 /// @param[in,out]  node     Node whose argument rhs should be saved to.
 /// @param[in]      special  TRUE if explicit <special> was supplied.
 /// @param[in]      expr     TRUE if it is <expr>-type mapping.
 /// @parblock
 ///   @note If this argument is always FALSE then you do not need to care about 
-///         rhs_idx + 1 and rhs_idx + 2.
+///         rhs_idx + 1 and node->children.
 /// @endparblock
 /// @param[in]      o         Options that control parsing behavior.
 /// @param[in]      position  Position of input.
@@ -435,8 +432,7 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
       }
       error.position = expr_error.position;
       error.message = expr_error.message;
-      if (create_error_node(&(node->args[rhs_idx + 2].arg.cmd),
-                            &error, position, rhs)
+      if (create_error_node(&(node->children), &error, position, rhs)
           == FAIL) {
         vim_free(rhs);
         return FAIL;
@@ -444,11 +440,12 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
     } else if (*rhs_end != NUL) {
       CommandParserError error;
 
+      free_expr(expr);
+
       error.position = rhs_end;
       error.message = N_("E15: trailing characters");
 
-      if (create_error_node(&(node->args[rhs_idx + 2].arg.cmd),
-                            &error, position, rhs)
+      if (create_error_node(&(node->children), &error, position, rhs)
           == FAIL) {
         vim_free(rhs);
         return FAIL;
@@ -679,6 +676,7 @@ static int parse_menu(char_u **pp,
                       line_getter fgetline,
                       void *cookie)
 {
+  // FIXME "menu *" parses to something weird
   uint_least32_t menu_flags = 0;
   char_u *p = *pp;
   size_t i;
@@ -1146,7 +1144,7 @@ static int parse_lockvar(char_u **pp,
                          void *cookie)
 {
   if (VIM_ISDIGIT(**pp))
-    node->args[ARG_LOCKVAR_DEPTH].arg.flags = getdigits(pp);
+    node->args[ARG_LOCKVAR_DEPTH].arg.unumber = (unsigned) getdigits(pp);
 
   return parse_lvals(pp, node, error, o, position, fgetline, cookie);
 }
@@ -1668,7 +1666,6 @@ int parse_one_cmd(char_u **pp,
   FUNC_ATTR_NONNULL_ALL
 {
   CommandNode **next_node = node;
-  CommandNode *parent = NULL;
   CommandParserError error;
   CommandType type = kCmdUnknown;
   Range range;
@@ -1695,7 +1692,6 @@ int parse_one_cmd(char_u **pp,
       position->col == 1) {
     if ((*next_node = cmd_alloc(kCmdHashbangComment, position)) == NULL)
       return FAIL;
-    (*next_node)->parent = parent;
     p = *pp + 2;
     len = STRLEN(p);
     if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
@@ -1716,7 +1712,6 @@ int parse_one_cmd(char_u **pp,
       AddressFollowup *fw;
       if ((*next_node = cmd_alloc(kCmdHashbangComment, position)) == NULL)
         return FAIL;
-      (*next_node)->parent = parent;
       (*next_node)->range.address.type = kAddrCurrent;
       if ((fw = address_followup_alloc(kAddressFollowupShift)) == NULL) {
         free_cmd(*next_node);
@@ -1724,7 +1719,7 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       }
       fw->data.shift = 1;
-      (*next_node)->range.followups = fw;
+      (*next_node)->range.address.followups = fw;
       (*next_node)->end_col = position->col + (*pp - s);
       return OK;
     }
@@ -1734,7 +1729,6 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       p++;
       len = STRLEN(p);
-      (*next_node)->parent = parent;
       if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
         return FAIL;
       *pp = p + len;
@@ -1797,8 +1791,6 @@ int parse_one_cmd(char_u **pp,
           (*next_node)->bang = TRUE;
           p++;
         }
-        (*next_node)->parent = parent;
-        parent = *next_node;
         (*next_node)->position.col = position->col + (mod_start - s);
         (*next_node)->end_col = position->col + (p - s - 1);
         next_node = &((*next_node)->children);
@@ -1844,7 +1836,8 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       return NOTDONE;
     }
-    if (get_address_followups(&p, &error, &current_range.followups) == FAIL) {
+    if (get_address_followups(&p, &error, &current_range.address.followups)
+        == FAIL) {
       free_range_data(&current_range);
       if (error.message == NULL)
         return FAIL;
@@ -1853,7 +1846,7 @@ int parse_one_cmd(char_u **pp,
       return NOTDONE;
     }
     p = skipwhite(p);
-    if (current_range.followups != NULL) {
+    if (current_range.address.followups != NULL) {
       if (current_range.address.type == kAddrMissing)
         current_range.address.type = kAddrCurrent;
     } else if (range.address.type == kAddrMissing
@@ -1931,7 +1924,6 @@ int parse_one_cmd(char_u **pp,
         free_range_data(&range);
         return FAIL;
       }
-      (*next_node)->parent = parent;
       (*next_node)->range = range;
       p++;
       *pp = p;
@@ -1945,7 +1937,6 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       p++;
       len = STRLEN(p);
-      (*next_node)->parent = parent;
       if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
         return FAIL;
       *pp = p + len;
@@ -1959,7 +1950,6 @@ int parse_one_cmd(char_u **pp,
         return FAIL;
       }
       (*next_node)->range = range;
-      (*next_node)->parent = parent;
 
       *pp = (nextcmd == NULL
              ? p
@@ -2068,7 +2058,6 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->exflags = exflags;
   (*next_node)->cnt_type = cnt_type;
   (*next_node)->cnt.count = count;
-  (*next_node)->parent = parent;
 
   parser = CMDDEF(type).parse;
 
@@ -2268,28 +2257,27 @@ const CommandNode nocmd = {
   NULL,
   NULL,
   NULL,
-  NULL,
   {
     {
       kAddrMissing,
-      {NULL}
+      {NULL},
+      NULL
     },
     NULL,
-    FALSE,
-    NULL
+    FALSE
   },
-  kCntMissing,
   {
     0,
     0,
-    NULL,
+    NULL
   },
   0,
+  kCntMissing,
   {0},
   0,
   FALSE,
   {
-    {{NULL}}
+    {{0}}
   }
 };
 
@@ -2747,7 +2735,7 @@ static size_t range_repr_len(Range *range)
     return 0;
 
   len += address_repr_len(&(range->address));
-  len += address_followup_repr_len(range->followups);
+  len += address_followup_repr_len(range->address.followups);
   if (range->next != NULL) {
     len++;
     len += range_repr_len(range->next);
@@ -2764,7 +2752,7 @@ static void range_repr(Range *range, char **pp)
     return;
 
   address_repr(&(range->address), &p);
-  address_followup_repr(range->followups, &p);
+  address_followup_repr(range->address.followups, &p);
   if (range->next != NULL) {
     *p++ = (range->setpos ? ';' : ',');
     range_repr(range->next, &p);
@@ -2877,9 +2865,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
       if (unmap) {
       } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         len += 1 + expr_node_dump_len(node->args[ARG_MAP_EXPR].arg.expr);
-      } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
-        len += 1 + node_repr_len(node->args[ARG_MAP_CMD].arg.cmd, indent,
-                                 barnext);
+      } else if (node->children != NULL) {
+        len += 1 + node_repr_len(node->children, indent, barnext);
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         len += 1 + STRLEN(node->args[ARG_MAP_RHS].arg.str);
       }
@@ -3190,9 +3177,9 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         *p++ = ' ';
         expr_node_dump(node->args[ARG_MAP_EXPR].arg.expr, &p);
-      } else if (node->args[ARG_MAP_CMD].arg.cmd != NULL) {
+      } else if (node->children != NULL) {
         *p++ = '\n';
-        node_repr(node->args[ARG_MAP_CMD].arg.cmd, indent, barnext, &p);
+        node_repr(node->children, indent, barnext, &p);
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         *p++ = ' ';
 

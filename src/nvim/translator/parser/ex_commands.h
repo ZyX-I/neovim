@@ -25,28 +25,7 @@ typedef char_u Regex;
 typedef int AuEvent;
 typedef int CmdCompleteType;
 
-typedef enum {
-  kAddrMissing = 0,             // No address
-  kAddrFixed,                   // Fixed line: 1, 10, …
-  kAddrEnd,                     // End of file: $
-  kAddrCurrent,                 // Current line: .
-  kAddrMark,                    // Mark: 't, 'T
-  kAddrForwardSearch,           // Forward search: /pattern/
-  kAddrBackwardSearch,          // Backward search: ?pattern?
-  kAddrForwardPreviousSearch,   // Forward search with old pattern: \/
-  kAddrBackwardPreviousSearch,  // Backward search with old pattern: \?
-  kAddrSubstituteSearch,        // Search with old substitute pattern: \&
-} AddressType;
-
-typedef struct {
-  AddressType type;
-  union {
-    Regex *regex;
-    char_u mark;
-    linenr_T lnr;
-  } data;
-} Address;
-
+/// Address followup type
 typedef enum {
   kAddressFollowupMissing = 0,      // No folowup
   kAddressFollowupForwardPattern,   // 10/abc/
@@ -54,26 +33,65 @@ typedef enum {
   kAddressFollowupShift,            // /abc/+10
 } AddressFollowupType;
 
+/// A structure to represent Ex address followup
+///
+/// Ex address followup is a part of address that follows the first token: e.g. 
+/// "+1" in "/foo/+1", "?bar?" in "/foo/?bar?", etc.
 typedef struct address_followup {
-  AddressFollowupType type;
+  AddressFollowupType type;       ///< Type of the followup
   union {
-    int shift;
-    Regex *regex;
-  } data;
-  struct address_followup *next;
+    int shift;                    ///< Exact offset: "+1", "-1" (for
+                                  ///< kAddressFollowupShift)
+    Regex *regex;                 ///< Regular expression (for
+                                  ///< kAddressFollowupForwardPattern and 
+                                  ///< kAddressFollowupBackwardPattern)
+  } data;                         ///< Address followup data
+  struct address_followup *next;  ///< Next followup in a sequence
 } AddressFollowup;
 
+/// Ex address types
+typedef enum {
+  kAddrMissing = 0,             ///< No address
+  kAddrFixed,                   ///< Fixed line: 1, 10, …
+  kAddrEnd,                     ///< End of file: $
+  kAddrCurrent,                 ///< Current line: .
+  kAddrMark,                    ///< Mark: 't, 'T
+  kAddrForwardSearch,           ///< Forward search: /pattern/
+  kAddrBackwardSearch,          ///< Backward search: ?pattern?
+  kAddrForwardPreviousSearch,   ///< Forward search with old pattern: \/
+  kAddrBackwardPreviousSearch,  ///< Backward search with old pattern: \?
+  kAddrSubstituteSearch,        ///< Search with old substitute pattern: \&
+} AddressType;
+
+/// A structure to represent Ex address
+typedef struct {
+  AddressType type;  ///< Ex address type
+  union {
+    Regex *regex;              ///< Regular expression (for kAddrForwardSearch 
+                               ///< and kAddrBackwardSearch address types)
+    char_u mark;               ///< Address mark (for kAddrMark type)
+    linenr_T lnr;              ///< Exact line (for kAddrFixed type)
+  } data;                      ///< Address data (not for kAddrMissing, 
+                               ///< kAddrEnd, kAddrCurrent, 
+                               ///< kAddrForwardPreviousSearch, 
+                               ///< kAddrBackwardPreviousSearch and 
+                               ///< kAddrSubstituteSearch)
+  AddressFollowup *followups;  ///< Ex address followups data
+} Address;
+
+/// A structure to represent line range
 typedef struct range {
-  Address address;
-  AddressFollowup *followups;
-  bool setpos;                 // , vs ;
-  struct range *next;
+  Address address;     ///< Ex address
+  bool setpos;         ///< TRUE if next address in range was separated from 
+                       ///< this address by ';'
+  struct range *next;  ///< Next address in range. There is no limit in a number 
+                       ///< of consequent addresses
 } Range;
 
+/// A structure to represent GUI menu item
 typedef struct menu_item {
-  char_u *name;               // NULL for :unmenu *
-  size_t shortcut_position;   // Ignored for :unmenu
-  struct menu_item *subitem;
+  char_u *name;               ///< Menu name
+  struct menu_item *subitem;  ///< Sub menu name
 } MenuItem;
 
 typedef struct {
@@ -81,15 +99,19 @@ typedef struct {
   char_u *arg;
 } CmdComplete;
 
+/// A structure for holding command position
+///
+/// Intended for debugging purposes later
 typedef struct {
   linenr_T lnr;
   colnr_T col;
   char_u *fname;
 } CommandPosition;
 
+/// Counter type: type of a simple additional argument
 typedef enum {
-  kCntMissing = 0,
-  kCntCount,
+  kCntMissing = 0,  ///< No additional argument was specified
+  kCntCount,        ///< Unsigned integer
   kCntBuffer,
   kCntReg,
   kCntExprReg,
@@ -99,46 +121,52 @@ typedef enum {
 #define FLAG_EX_LNR   0x02
 #define FLAG_EX_PRINT 0x04
 
+/// Structure for representing one command
 typedef struct command_node {
-  CommandType type;
-  char_u *name;                  // Only valid for user commands
-  struct command_node *prev;
-  struct command_node *next;
-  struct command_node *children; // Only valid for block and modifier commands
-  struct command_node *parent;   // Only valid for modified commands (i.e.
-                                 // commands prefixed with modifier)
-  Range range;                   // sometimes used for count
-  CountType cnt_type;
-  CommandPosition position;
-  colnr_T end_col;
+  CommandType type;              ///< Command type. For built-in commands it 
+                                 ///< replaces name
+  char_u *name;                  ///< Name of the user command, unresolved
+  struct command_node *prev;     ///< Previous command of the same level
+  struct command_node *next;     ///< Next command of the same level
+  struct command_node *children; ///< Block (if/while/for/try/function), 
+                                 ///< modifier (like leftabove or silent) or 
+                                 ///< iterator (tabdo/windo/bufdo/argdo etc)
+                                 ///< subcommands
+  Range range;                   ///< Ex address range, if any
+  CommandPosition position;      ///< Position of the start of the command
+  colnr_T end_col;               ///< Last column occupied by this command
+  CountType cnt_type;            ///< Type of the argument in the next union
   union {
-    int count;
+    int count;                   ///< Count (for kCntCount)
     int bufnr;
     char_u reg;
     ExpressionNode *expr;
-  } cnt;
-  uint_least8_t exflags;
-  bool bang;                     // :cmd!
+  } cnt;                         ///< First simple argument
+  uint_least8_t exflags;         ///< Ex flags (for :print command and like)
+  bool bang;                     ///< TRUE if command was used with a bang
   struct command_argument {
     union {
-      struct command_node *cmd;
       // least32 is essential to hold 24-bit color and additional 4 flag bits 
       // for :hi guifg/guibg/guisp
-      uint_least32_t flags;
-      int number;
-      int *numbers;
-      char_u ch;
-      char_u *str;
-      garray_T strs;
-      Pattern *pat;
-      Glob *glob;
-      Regex *reg;
-      AuEvent event;
-      AuEvent *events;
-      MenuItem *menu_item;
-      Address *address;
+      uint_least32_t flags;      ///< Command flags
+      unsigned unumber;          ///< Unsigned integer
+      colnr_T col;               ///< Column number (for syntax error)
+      int number;                ///< Signed integer
+      int *numbers;              ///< A sequence of numbers in allocated memory
+      char_u ch;                 ///< A single character
+      char_u *str;               ///< String in allocated memory
+      garray_T strs;             ///< Growarray
+      Pattern *pat;              ///< Pattern (like in :au)
+      Glob *glob;                ///< Glob (like in :e)
+      Regex *reg;                ///< Regular expression (like in :catch)
+      AuEvent event;             ///< A autocmd event
+      AuEvent *events;           ///< A sequence of autocommand events
+      MenuItem *menu_item;       ///< Menu item
+      Address *address;          ///< Ex mode address
       CmdComplete *complete;
-      ExpressionNode *expr;
+      ExpressionNode *expr;      ///< Expression (:if) or a list of expressions 
+                                 ///< (:echo) (uses expr->next to build a linked 
+                                 ///< list)
       struct command_subargs {
         unsigned type;
         size_t num_args;
@@ -146,7 +174,7 @@ typedef struct command_node {
         struct command_argument *args;
       } args;
     } arg;
-  } args[1];
+  } args[1];                     ///< Command arguments
 } CommandNode;
 
 typedef struct command_argument CommandArg;

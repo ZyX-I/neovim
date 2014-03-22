@@ -6,11 +6,11 @@
 #define NEOVIM_TRANSLATOR_PARSER_COMMAND_ARGUMENTS_H_
 
 typedef enum {
-  kArgCommand,       // :vertical {cmd}, :bufdo {cmd}, :e +{cmd}
   kArgExpression,    // :let a={expr}
   kArgExpressions,   // :echo {expr1}[ {expr2}]
   kArgFlags,         // :map {<nowait><expr><buffer><silent><unique>}
-  kArgNumber,        // :sign place {id} line={lnum} name=name buffer={nr}
+  kArgNumber,        // :resize -1
+  kArgUNumber,       // :sign place {id} line={lnum} name=name buffer={nr}
   kArgNumbers,       // :dig e: {num1} a: {num2}
   kArgString,        // :sign place 10 line=11 name={name} buffer=1
   // Note the difference: you cannot use backtics in :autocmd, but can in :e
@@ -28,21 +28,20 @@ typedef enum {
   kArgCmdComplete,   // :command -complete={complete}
   kArgArgs,          // for commands with subcommands
   kArgChar,          // :mark {char}
+  kArgColumn,        // column (in syntax error)
 } CommandArgType;
 
 #define ARGS_NO       {0}
 #define ARGS_MODIFIER ARGS_NO
 #define ARGS_DO       ARGS_NO
 #define ARGS_APPEND   {kArgLines}
-#define ARGS_MAP      {kArgFlags, kArgString, kArgString, kArgExpression, \
-                       kArgCommand}
+#define ARGS_MAP      {kArgFlags, kArgString, kArgString, kArgExpression}
 #define ARGS_MENU     {kArgFlags, kArgString, kArgNumbers, kArgMenuName, \
                        kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
-#define ARGS_E        {kArgGlob, kArgFlags, kArgString, kArgCommand}
+#define ARGS_E        {kArgGlob, kArgFlags, kArgString}
 #define ARGS_SO       {kArgGlob}
-#define ARGS_AU       {kArgString, kArgAuEvents, kArgPattern, kArgFlags, \
-                       kArgCommand}
+#define ARGS_AU       {kArgString, kArgAuEvents, kArgPattern, kArgFlags}
 #define ARGS_NAME     {kArgString}
 #define ARGS_UNMAP    {kArgFlags, kArgString}
 #define ARGS_UNMENU   {kArgMenuName}
@@ -58,18 +57,19 @@ typedef enum {
 #define ARGS_DIG      {kArgStrings, kArgNumbers}
 #define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
 #define ARGS_EXPRS    {kArgString, kArgExpressions}
-#define ARGS_LOCKVAR  {kArgString, kArgExpressions, kArgFlags}
+#define ARGS_LOCKVAR  {kArgString, kArgExpressions, kArgUNumber}
 #define ARGS_EXIT     {kArgGlob, kArgFlags, kArgString}
-#define ARGS_FIRST    {kArgFlags, kArgString, kArgCommand}
+#define ARGS_FIRST    {kArgFlags, kArgString}
 #define ARGS_WN       {kArgGlob, kArgFlags, kArgString}
 #define ARGS_ASSIGN   {kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_FUNC     {kArgAssignLhs, kArgStrings, kArgFlags}
-#define ARGS_G        {kArgRegex, kArgCommand}
+#define ARGS_G        {kArgRegex}
 #define ARGS_SHELL    {kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
-#define ARGS_HI       {kArgFlags,  kArgString, kArgFlags, kArgString, \
-                       kArgString, kArgFlags,  kArgFlags, kArgFlags,  \
-                       kArgString, kArgFlags,  kArgFlags, kArgFlags   }
+#define ARGS_HI       {kArgFlags,  kArgString, kArgFlags,   kArgString,  \
+                       kArgString, kArgFlags,  kArgUNumber, kArgUNumber, \
+                       kArgFlags,  kArgString, kArgUNumber, kArgUNumber, \
+                       kArgUNumber}
 #define ARGS_HIST     {kArgFlags, kArgNumber, kArgNumber}
 #define ARGS_LANG     {kArgFlags, kArgString}
 #define ARGS_VIMG     {kArgFlags, kArgRegex, kArgGlob}
@@ -84,14 +84,14 @@ typedef enum {
 #define ARGS_S        {kArgRegex, kArgReplacement, kArgFlags}
 #define ARGS_SET      {kArgStrings, kArgNumbers, kArgStrings}
 #define ARGS_FT       {kArgFlags}
-#define ARGS_SLEEP    {kArgFlags}
+#define ARGS_SLEEP    {kArgUNumber}
 #define ARGS_SNIFF    {kArgString}
 #define ARGS_SORT     {kArgFlags, kArgRegex}
 #define ARGS_SYNTIME  {kArgFlags}
-#define ARGS_WINSIZE  {kArgFlags, kArgFlags}
+#define ARGS_WINSIZE  {kArgUNumber, kArgUNumber}
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_WQA      {kArgFlags, kArgString}
-#define ARGS_ERROR    {kArgString, kArgString, kArgFlags}
+#define ARGS_ERROR    {kArgString, kArgString, kArgColumn}
 #define ARGS_USER     {kArgString}
 
 // ++opt flags
@@ -127,7 +127,6 @@ typedef enum {
 #define ARG_MAP_LHS        1
 #define ARG_MAP_RHS        2
 #define ARG_MAP_EXPR       3
-#define ARG_MAP_CMD        4
 
 #define FLAG_MAP_BUFFER    0x01
 #define FLAG_MAP_NOWAIT    0x02
@@ -164,7 +163,6 @@ typedef enum {
 #define ARG_E_FILES        0
 #define ARG_E_OPT          1
 #define ARG_E_ENC          2
-#define ARG_E_CMD          3
 
 // :argadd/:argdelete/:source
 #define ARG_SO_FILES       0
@@ -174,7 +172,6 @@ typedef enum {
 #define ARG_AU_EVENTS      1
 #define ARG_AU_PATTERNS    2
 #define ARG_AU_NESTED      3
-#define ARG_AU_CMD         4
 
 // :aug/:behave/:colorscheme
 #define ARG_NAME_NAME      0
@@ -215,7 +212,6 @@ typedef enum {
 // :command
 #define ARG_CMD_FLAGS      0
 #define ARG_CMD_COMPLETE   1
-#define ARG_CMD_CMD        2
 
 #define FLAG_CMD_NARGS_MASK 0x007
 #define VAL_CMD_NARGS_NO    0x000
@@ -292,7 +288,6 @@ typedef enum {
 // :first/:rewind/:last/:next
 #define ARG_FIRST_OPT      0
 #define ARG_FIRST_ENC      1
-#define ARG_FIRST_CMD      2
 
 // :wnext/:wNext/:wprevious
 #define ARG_WN_FILES       0
@@ -316,7 +311,6 @@ typedef enum {
 
 // :global
 #define ARG_G_REG          0
-#define ARG_G_CMD          1
 
 // :grep/:make/:!
 #define ARG_SHELL_ARGS     0
