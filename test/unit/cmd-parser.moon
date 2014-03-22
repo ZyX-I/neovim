@@ -460,6 +460,19 @@ describe 'parse_one_cmd', ->
     itn 'folddoopen if 1 | endif', 'foldd:if1|end'
     itn 'folddoclosed if 1 | endif', 'folddoc:if1|end'
 
+  describe 'multiple expressions commands', ->
+    for trunc, full in pairs {
+      ec: 'echo'
+      echon: 'echon'
+      echom: 'echomsg'
+      echoe: 'echoerr'
+      exe: 'execute'
+    }
+      itn full, trunc
+      itn full .. ' "abclear"', trunc .. ' "abclear"'
+      itn full .. ' "abclear" "<buffer>"', trunc .. ' "abclear" "<buffer>"'
+      itn full .. ' "abclear" "<buffer>"', trunc .. ' "abclear""<buffer>"'
+
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
     t '
