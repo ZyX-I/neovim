@@ -1,6 +1,6 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 
-expr = cimport('./src/cmd.h')
+expr = cimport('./src/translator/parser/ex_commands.h')
 
 expression_type = {
   [0]: 'Unknown',

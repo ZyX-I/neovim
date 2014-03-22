@@ -2,8 +2,8 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_CMD_ARG_CONSTANTS_H_
-#define NEOVIM_CMD_ARG_CONSTANTS_H_
+#ifndef NEOVIM_TRANSLATOR_PARSER_COMMAND_ARGUMENTS_H_
+#define NEOVIM_TRANSLATOR_PARSER_COMMAND_ARGUMENTS_H_
 
 typedef enum {
   kArgCommand,       // :vertical {cmd}, :bufdo {cmd}, :e +{cmd}
@@ -521,4 +521,4 @@ typedef enum {
 // User-defined commands
 #define ARG_USER_ARG       0
 
-#endif  // NEOVIM_CMD_ARG_CONSTANTS_H_
+#endif  // NEOVIM_TRANSLATOR_PARSER_COMMAND_ARGUMENTS_H_

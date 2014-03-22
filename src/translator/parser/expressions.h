@@ -2,8 +2,8 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_EXPR_H
-#define NEOVIM_EXPR_H
+#ifndef NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H
+#define NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H
 
 #include "types.h"
 
@@ -120,4 +120,4 @@ char *parse0_repr(char_u *arg, bool dump_as_expr);
 size_t expr_node_dump_len(ExpressionNode *node);
 void expr_node_dump(ExpressionNode *node, char **pp);
 
-#endif  // NEOVIM_EXPR_H
+#endif  // NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H

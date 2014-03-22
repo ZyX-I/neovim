@@ -26,16 +26,17 @@
  *    long name of the command.
  */
 
-#if (defined(DO_DECLARE_EXCMD) && !defined(NEOVIM_CMD_DEF_H_DECLARED)) || (!defined(DO_DECLARE_EXCMD) && !defined(NEOVIM_CMD_DEF_H_DEFINED_ENUM))
+#if (defined(DO_DECLARE_EXCMD) && !defined(NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DECLARED)) || (!defined(DO_DECLARE_EXCMD) && !defined(NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DEFINED_ENUM))
 #ifdef DO_DECLARE_EXCMD
-# define NEOVIM_CMD_DEF_H_DECLARED
+# define NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DECLARED
 #else
-# define NEOVIM_CMD_DEF_H_DEFINED_ENUM
+# define NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DEFINED_ENUM
 #endif
 
 #include <stdint.h>
-#include "cmd.h"
-#include "cmd_arg_constants.h"
+
+#include "translator/parser/ex_commands.h"
+#include "translator/parser/command_arguments.h"
 
 #ifdef RANGE
 # undef RANGE                   /* SASC on Amiga defines it */

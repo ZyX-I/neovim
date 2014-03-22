@@ -13,6 +13,7 @@ list(REMOVE_ITEM NEOVIM_SOURCES ${to_remove})
 list(APPEND NEOVIM_SOURCES "${PROJECT_BINARY_DIR}/config/auto/pathdef.c")
 
 file( GLOB OS_SOURCES os/*.c )
+file( GLOB TRANSLATOR_SOURCES translator/*/*.c )
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   if(DEFINED ENV{SANITIZE})
@@ -55,7 +56,7 @@ if(NOT DEFINED ENV{SKIP_EXEC})
 endif()
 
 if(NOT DEFINED ENV{SKIP_UNITTEST})
-  add_library(nvim-test MODULE ${NEOVIM_SOURCES} ${OS_SOURCES})
+  add_library(nvim-test MODULE ${NEOVIM_SOURCES} ${OS_SOURCES} ${TRANSLATOR_SOURCES})
   target_link_libraries (nvim-test ${NVIM_LINK_LIBRARIES})
 endif()
 

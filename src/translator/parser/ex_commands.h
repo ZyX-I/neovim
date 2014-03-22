@@ -2,17 +2,18 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_CMD_H
-#define NEOVIM_CMD_H
+#ifndef NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H
+#define NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H
 
 #include <stdint.h>
+
+#include "types.h"
+
 #ifdef DO_DECLARE_EXCMD
 # undef DO_DECLARE_EXCMD
 #endif
-#include "cmd_def.h"
-#include "types.h"
-#include "expr.h"
-
+#include "translator/parser/command_definitions.h"
+#include "translator/parser/expressions.h"
 
 // :argadd/:argd
 #define ARG_NAME_FILES     0
@@ -203,4 +204,4 @@ const CommandNode nocmd;
 
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
-#endif  // NEOVIM_CMD_H
+#endif  // NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H

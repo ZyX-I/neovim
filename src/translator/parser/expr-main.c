@@ -4,9 +4,8 @@
 #include "vim.h"
 #include "misc2.h"
 #include "types.h"
-#include "expr.h"
 #include "charset.h"
-#include "expr.h"
+#include "translator/parser/expressions.h"
 #include <stdio.h>
 static void print_node(int indent, ExpressionNode *node)
 {

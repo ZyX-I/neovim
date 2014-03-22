@@ -6,10 +6,9 @@
 // cmd.c: Ex commands parsing
 
 #include <stddef.h>
+
 #include "vim.h"
 #include "types.h"
-#include "cmd.h"
-#include "expr.h"
 #include "misc2.h"
 #include "charset.h"
 #include "globals.h"
@@ -17,6 +16,9 @@
 #include "term.h"
 #include "main.h"
 #include "menu.h"
+
+#include "translator/parser/expressions.h"
+#include "translator/parser/ex_commands.h"
 
 typedef struct {
   CommandType find_in_stack;
@@ -178,9 +180,9 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext,
                       char **pp);
 //}}}
 
-#include "cmd_def.h"
+#include "translator/parser/command_definitions.h"
 #define DO_DECLARE_EXCMD
-#include "cmd_def.h"
+#include "translator/parser/command_definitions.h"
 #undef DO_DECLARE_EXCMD
 
 #define NODE_IS_ALLOCATED(node) ((node) != NULL && (node) != &nocmd)

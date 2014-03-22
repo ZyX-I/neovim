@@ -13,8 +13,9 @@
 #include "vim.h"
 #include "misc2.h"
 #include "types.h"
-#include "expr.h"
 #include "charset.h"
+
+#include "translator/parser/expressions.h"
 
 // maximum number of function arguments
 #define MAX_FUNC_ARGS   20

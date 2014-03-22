@@ -24,7 +24,7 @@ cimport = (path) ->
     -- while idx
       -- imported[path]
 
-    pipe = io.popen('cpp -P -E ' .. path)
+    pipe = io.popen('cc -Isrc -P -E ' .. path)
     header = pipe\read('*a')
     pipe\close()
     ffi.cdef(header)
