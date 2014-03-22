@@ -13,12 +13,13 @@
 #include "nvim/vim.h"
 #include "nvim/misc2.h"
 #include "nvim/types.h"
-#include "nvim/memory.h"
-#include "nvim/expr.h"
 #include "nvim/charset.h"
+#include "nvim/memory.h"
+
+#include "nvim/translator/parser/expressions.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "expr.c.generated.h"
+# include "translator/parser/expressions.c.generated.h"
 #endif
 
 // maximum number of function arguments

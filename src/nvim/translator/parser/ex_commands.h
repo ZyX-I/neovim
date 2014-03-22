@@ -2,17 +2,18 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_CMD_H
-#define NEOVIM_CMD_H
+#ifndef NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H
+#define NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H
 
 #include <stdint.h>
+
+#include "nvim/types.h"
+
 #ifdef DO_DECLARE_EXCMD
 # undef DO_DECLARE_EXCMD
 #endif
-#include "nvim/cmd_def.h"
-#include "nvim/types.h"
-#include "nvim/expr.h"
-
+#include "nvim/translator/parser/command_definitions.h"
+#include "nvim/translator/parser/expressions.h"
 
 // :argadd/:argd
 #define ARG_NAME_FILES     0
@@ -189,7 +190,7 @@ typedef int (*args_parser)(char_u **,
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "cmd.h.generated.h"
+# include "nvim/translator/parser/ex_commands.h.generated.h"
 #endif
 
-#endif  // NEOVIM_CMD_H
+#endif  // NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H

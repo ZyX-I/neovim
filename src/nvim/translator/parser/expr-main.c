@@ -4,9 +4,8 @@
 #include "nvim/vim.h"
 #include "nvim/misc2.h"
 #include "nvim/types.h"
-#include "nvim/expr.h"
 #include "nvim/charset.h"
-#include "nvim/expr.h"
+#include "nvim/translator/parser/expressions.h"
 #include <stdio.h>
 static void print_node(int indent, ExpressionNode *node)
 {

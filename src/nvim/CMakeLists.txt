@@ -15,10 +15,14 @@ file(MAKE_DIRECTORY ${GENERATED_DIR})
 file(MAKE_DIRECTORY ${GENERATED_DIR}/os)
 file(MAKE_DIRECTORY ${GENERATED_DIR}/api)
 file(MAKE_DIRECTORY ${GENERATED_DIR}/api/private)
+file(MAKE_DIRECTORY ${GENERATED_DIR}/translator)
+file(MAKE_DIRECTORY ${GENERATED_DIR}/translator/parser)
 file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR})
 file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/os)
 file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/api)
 file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/api/private)
+file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/translator)
+file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/translator/parser)
 
 file( GLOB NEOVIM_SOURCES *.c )
 
@@ -34,6 +38,7 @@ list(REMOVE_ITEM NEOVIM_SOURCES ${to_remove})
 file( GLOB OS_SOURCES os/*.c )
 file( GLOB API_SOURCES api/*.c )
 file( GLOB API_PRIV_SOURCES api/private/*.c )
+file( GLOB TRANSLATOR_SOURCES translator/*/*.c )
 
 set(CONV_SRCS
   api.c
@@ -95,7 +100,8 @@ foreach(sfile ${NEOVIM_SOURCES}
               "${PROJECT_SOURCE_DIR}/src/nvim/regexp_nfa.c"
               ${OS_SOURCES}
               ${API_SOURCES}
-              ${API_PRIV_SOURCES})
+              ${API_PRIV_SOURCES}
+              ${TRANSLATOR_SOURCES})
   get_filename_component(full_d ${sfile} PATH)
   file(RELATIVE_PATH d "${PROJECT_SOURCE_DIR}/src/nvim" "${full_d}")
   get_filename_component(f ${sfile} NAME)
@@ -167,6 +173,7 @@ endif()
 
 if(NOT DEFINED ENV{SKIP_UNITTEST})
   add_library(nvim-test MODULE EXCLUDE_FROM_ALL ${NEOVIM_GENERATED_SOURCES}
-    ${NEOVIM_SOURCES} ${OS_SOURCES} ${API_SOURCES} ${API_PRIV_SOURCES})
+    ${NEOVIM_SOURCES} ${OS_SOURCES} ${API_SOURCES} ${API_PRIV_SOURCES}
+    ${TRANSLATOR_SOURCES})
   target_link_libraries(nvim-test ${NVIM_LINK_LIBRARIES})
 endif()

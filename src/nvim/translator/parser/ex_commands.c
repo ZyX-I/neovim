@@ -6,10 +6,9 @@
 // cmd.c: Ex commands parsing
 
 #include <stddef.h>
+
 #include "nvim/vim.h"
 #include "nvim/types.h"
-#include "nvim/cmd.h"
-#include "nvim/expr.h"
 #include "nvim/misc2.h"
 #include "nvim/charset.h"
 #include "nvim/globals.h"
@@ -18,6 +17,9 @@
 #include "nvim/main.h"
 #include "nvim/menu.h"
 #include "nvim/memory.h"
+
+#include "nvim/translator/parser/expressions.h"
+#include "nvim/translator/parser/ex_commands.h"
 
 typedef struct {
   CommandType find_in_stack;
@@ -31,7 +33,7 @@ typedef struct {
 } CommandBlockOptions;
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "cmd.c.generated.h"
+# include "translator/parser/ex_commands.c.generated.h"
 #endif
 
 #include "nvim/cmd_def.h"

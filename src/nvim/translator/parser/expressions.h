@@ -2,8 +2,8 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-#ifndef NEOVIM_EXPR_H
-#define NEOVIM_EXPR_H
+#ifndef NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H
+#define NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H
 
 #include "nvim/types.h"
 
@@ -112,7 +112,7 @@ typedef struct {
 } TestExprResult;
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "expr.h.generated.h"
+# include "translator/parser/expressions.h.generated.h"
 #endif
 
-#endif  // NEOVIM_EXPR_H
+#endif  // NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H
