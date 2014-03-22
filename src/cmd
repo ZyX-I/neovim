@@ -41,7 +41,12 @@ p1ct = (function(str, flags)
   if result == nil then
     error('parse_cmd_test returned nil')
   end
-  return ffi.string(result)
+  result = ffi.string(result)
+
+  result = result:gsub("!!!", "\x1B[31;41m \x1B[m")
+  result = result:gsub("!!(.)!!", "\x1B[31;41m%1\x1B[m")
+
+  return result
 end)
 
 libnvim.mch_early_init()

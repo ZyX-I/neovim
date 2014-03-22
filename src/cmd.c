@@ -1183,7 +1183,6 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       while (root->children != NULL && root->position == NULL)
         root = root->children;
 
-      printf("%i\n", expr->type);
       if (allow_list)
         error->message =
             N_("E475: Expected variable name or a list of variable names");
@@ -2935,18 +2934,25 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     len++;
 
   if (node->type == kCmdSyntaxError) {
-    // len("\\ error:\n")
-    len += indent + 9
-         + 2 * (indent + 1 + STRLEN(node->args[ARG_ERROR_LINESTR].arg.str))
-         + 1
-         + indent + STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+    char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
+    char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
+    size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
+
+    // len("\\ error: ")
+    len += 9;
+    len += STRLEN(message);
+    len += 2;
+    len += STRLEN(line);
+    if (offset < len)
+      len += 4;
+    else
+      len += 3;
   } else if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int i = ga->ga_len;
 
-    while (i--) {
+    while (i--)
       len += 1 + STRLEN(((char_u **)ga->ga_data)[i]);
-    }
 
     len += 2;
   } else if (CMDDEF(node->type).parse == &parse_map
@@ -3191,25 +3197,42 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     *p++ = 'p';
 
   if (node->type == kCmdSyntaxError) {
-    memcpy(p, "\\ error:\n", 9);
+    char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
+    char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
+    size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
+
+    memcpy(p, "\\ error: ", 9);
     p += 9;
-    memset(p, ' ', indent);
-    p += indent;
-    len = STRLEN(node->args[ARG_ERROR_LINESTR].arg.str);
-    memcpy(p, node->args[ARG_ERROR_LINESTR].arg.str, len);
-    p += len;
-    *p++ = '\n';
-    memset(p, ' ', indent);
-    p += indent;
-    memset(p, (int) ' ', len + 1);
-    p[node->args[ARG_ERROR_OFFSET].arg.flags] = '^';
-    p += len + 1;
-    *p++ = '\n';
-    memset(p, ' ', indent);
-    p += indent;
-    len = STRLEN(node->args[ARG_ERROR_MESSAGE].arg.str);
+
+    len = STRLEN(message);
     memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
     p+= len;
+
+    *p++ = ':';
+    *p++ = ' ';
+
+    len = STRLEN(line);
+
+    if (offset < len) {
+      if (offset) {
+        memcpy(p, line, offset - 1);
+        p += offset - 1;
+      }
+      *p++ = '!';
+      *p++ = '!';
+      *p++ = line[offset];
+      *p++ = '!';
+      *p++ = '!';
+
+      memcpy(p, line + offset + 1, len - offset - 1);
+      p += len - offset - 1;
+    } else {
+      memcpy(p, line, len);
+      p += len;
+      *p++ = '!';
+      *p++ = '!';
+      *p++ = '!';
+    }
   } else if (CMDDEF(node->type).parse == &parse_append) {
     garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
     int ga_len = ga->ga_len;
