@@ -108,6 +108,8 @@ typedef struct command_node {
                                  // commands prefixed with modifier)
   Range range;                   // sometimes used for count
   CountType cnt_type;
+  CommandPosition position;
+  colnr_T end_col;
   union {
     int count;
     int bufnr;
@@ -142,7 +144,6 @@ typedef struct command_node {
         CommandArgType *types;
         struct command_argument *args;
       } args;
-      CommandPosition position;
     } arg;
   } args[1];
 } CommandNode;
