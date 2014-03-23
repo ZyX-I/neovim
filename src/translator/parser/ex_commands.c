@@ -43,6 +43,8 @@ static void free_range_data(Range *range);
 static void free_range(Range *range);
 static void free_cmd_arg(CommandArg *arg, CommandArgType type);
 static int get_vcol(char_u **pp);
+static int get_regex(char_u **pp, CommandParserError *error, Regex **target,
+                     char_u endch);
 static int parse_append(char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
@@ -153,8 +155,8 @@ static int parse_for(char_u **pp,
                      CommandPosition *position,
                      line_getter fgetline,
                      void *cookie);
-static int get_pattern(char_u **pp, CommandParserError *error, Regex **target);
-static int get_address(char_u **pp, Address *address, CommandParserError *error);
+static int get_address(char_u **pp, Address *address,
+                       CommandParserError *error);
 static int get_address_followups(char_u **pp, CommandParserError *error,
                                  AddressFollowup **followup);
 static int create_error_node(CommandNode **node, CommandParserError *error,
@@ -488,6 +490,36 @@ static int get_vcol(char_u **pp)
 
   *pp = p - 1;
   return vcol;
+}
+
+static int get_regex(char_u **pp, CommandParserError *error, Regex **target,
+                     char_u endch)
+{
+  // FIXME compile regex
+  char_u *p = *pp;
+  char_u *s = p;
+  char_u c = p[-1];
+
+  while (*p != c && *p != NUL && *p != endch)
+  {
+    if (*p == '\\' && p[1] != NUL)
+      p += 2;
+    else
+      p++;
+  }
+
+  if (*p != NUL)
+    p++;
+
+  if ((*target = vim_strnsave(s, p - s)) == NULL)
+    return FAIL;
+
+  if (*p == endch)
+    p++;
+
+  *pp = p;
+
+  return OK;
 }
 
 static int parse_append(char_u **pp,
@@ -1402,32 +1434,6 @@ static int checkforcmd(char_u **pp, char_u *cmd, int len)
   return FALSE;
 }
 
-static int get_pattern(char_u **pp, CommandParserError *error, Regex **target)
-{
-  // FIXME compile regex
-  char_u *p = *pp;
-  char_u *s = p;
-  char_u c = p[-1];
-
-  while (*p != c && *p != NUL)
-  {
-    if (*p == '\\' && p[1] != NUL)
-      p += 2;
-    else
-      p++;
-  }
-
-  if (*p != NUL)
-    p++;
-
-  if ((*target = vim_strnsave(s, p - s)) == NULL)
-    return FAIL;
-
-  *pp = p;
-
-  return OK;
-}
-
 /// Get a single Ex adress
 ///
 /// @param[in,out]  pp       Parsed string. Is advanced to the next character 
@@ -1436,7 +1442,8 @@ static int get_pattern(char_u **pp, CommandParserError *error, Regex **target)
 /// @param[out]     error    Structure where errors are saved.
 ///
 /// @return OK when parsing was successfull, FAIL otherwise.
-static int get_address(char_u **pp, Address *address, CommandParserError *error)
+static int get_address(char_u **pp, Address *address,
+                       CommandParserError *error)
 {
   char_u *p;
 
@@ -1468,7 +1475,7 @@ static int get_address(char_u **pp, Address *address, CommandParserError *error)
         address->type = kAddrForwardSearch;
       else
         address->type = kAddrBackwardSearch;
-      if (get_pattern(pp, error, &(address->data.regex)) == FAIL)
+      if (get_regex(&p, error, &(address->data.regex), c) == FAIL)
         return FAIL;
       break;
     }
@@ -1558,7 +1565,9 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
       }
       case kAddressFollowupForwardPattern:
       case kAddressFollowupBackwardPattern: {
-        if (get_pattern(pp, error, &(fw->data.regex)) == FAIL) {
+        if (get_regex(pp, error, &(fw->data.regex),
+                      type == kAddressFollowupForwardPattern ? '/' : '?')
+            == FAIL) {
           free_address_followup(fw);
           return FAIL;
         }
