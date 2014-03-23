@@ -2905,6 +2905,10 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   assert(node->end_col >= node->position.col
          || node->type == kCmdSyntaxError);
 
+  assert(node->next == NULL || node->next->prev == node);
+
+  assert(node->prev == NULL || node->prev->next == node);
+
   if (node == NULL)
     return 0;
 
