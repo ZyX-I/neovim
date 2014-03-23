@@ -43,8 +43,8 @@ p1ct = (function(str, flags)
   end
   result = ffi.string(result)
 
-  result = result:gsub("!!!", "\x1B[31;41m \x1B[m")
-  result = result:gsub("!!(.)!!", "\x1B[31;41m%1\x1B[m")
+  result = result:gsub("!!!", "\x1B[1;33;41m \x1B[m")
+  result = result:gsub("!!(.)!!", "\x1B[1;33;41m%1\x1B[m")
 
   return result
 end)
