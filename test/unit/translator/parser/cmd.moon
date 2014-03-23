@@ -484,6 +484,8 @@ describe 'parse_one_cmd', ->
     itn 'lockvar abc', 'lockv abc'
     itn 'lockvar! abc', 'lockvar!abc'
     itn 'lockvar 5 abc', 'lockv5abc'
+    itn 'delfunction Abc', 'delf Abc'
+    itn 'delfunction {"abc"}', 'delf{"abc"}'
 
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->

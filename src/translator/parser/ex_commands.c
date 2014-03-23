@@ -123,11 +123,15 @@ static int parse_do(char_u **pp,
                     CommandPosition *position,
                     line_getter fgetline,
                     void *cookie);
+static bool check_lval(ExpressionNode *expr, CommandParserError *error,
+                       bool allow_list, bool allow_lower);
 static int parse_lval(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       ExpressionNode **expr,
-                      bool listmult);
+                      bool listmult,
+                      bool allowlist,
+                      bool allowlower);
 static int parse_lvals(char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
@@ -1130,11 +1134,28 @@ static int parse_do(char_u **pp,
 }
 
 static bool check_lval(ExpressionNode *expr, CommandParserError *error,
-                       bool allow_list)
+                       bool allow_list, bool allow_lower)
 {
   switch (expr->type) {
-    case kTypeVariableName:
     case kTypeSimpleVariableName: {
+      if (!allow_lower && ASCII_ISLOWER(*expr->position)) {
+        error->message =
+            N_("E128: Function name must start with a capital "
+               "or contain a colon or a hash");
+        error->position = expr->position;
+        return TRUE;
+      }
+      break;
+    }
+    case kTypeVariableName: {
+      if (!allow_lower && expr->children->type == kTypeVariableName
+          && ASCII_ISLOWER(*expr->children->position)) {
+        error->message =
+            N_("E128: Function name must start with a capital "
+               "or contain a colon or a hash");
+        error->position = expr->children->position;
+        return TRUE;
+      }
       break;
     }
     case kTypeConcatOrSubscript:
@@ -1164,7 +1185,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
         }
 
         while (item != NULL) {
-          if (check_lval(item, error, FALSE))
+          if (check_lval(item, error, FALSE, allow_lower))
             return TRUE;
           item = item->next;
         }
@@ -1194,14 +1215,20 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 
 /// Parse left value of assignment
 ///
-/// @param[in,out]  pp        Parsed string. Is advanced to the next character 
-///                           after parsed expression.
-/// @param[out]     error     Structure where errors are saved.
-/// @param[in]      o         Options that control parsing behavior.
-/// @param[out]     expr      Location where result will be saved.
-/// @param[in]      listmult  Determines whether multiple lval values are 
-///                           supported in a form of a list ([a, b, c]) or just 
-///                           a number of space-separated expressions (a b c).
+/// @param[in,out]  pp          Parsed string. Is advanced to the next character 
+///                             after parsed expression.
+/// @param[out]     error       Structure where errors are saved.
+/// @param[in]      o           Options that control parsing behavior.
+/// @param[out]     expr        Location where result will be saved.
+/// @param[in]      listmult    Determines whether multiple lval values are 
+///                             supported in a form of a list ([a, b, c]) or 
+///                             just a number of space-separated expressions (a 
+///                             b c).
+/// @param[in]      allowmult   Determines whether muliple values are allowed at 
+///                             all.
+/// @param[in]      allowlower  Determines whether lval is allowed to start with 
+///                             lowercase letter (only used if top node is 
+///                             kTypeSimpleVariableName or kTypeVariableName).
 ///
 /// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when out 
 ///         of memory.
@@ -1209,13 +1236,15 @@ static int parse_lval(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       ExpressionNode **expr,
-                      bool listmult)
+                      bool listmult,
+                      bool allowmult,
+                      bool allowlower)
 {
   ExpressionParserError expr_error;
   ExpressionNode *next;
   char_u *expr_start = *pp;
 
-  if ((*expr = parse0_err(pp, &expr_error, !listmult)) == NULL) {
+  if ((*expr = parse0_err(pp, &expr_error, allowmult && !listmult)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1225,7 +1254,7 @@ static int parse_lval(char_u **pp,
 
   next = *expr;
   while (next != NULL) {
-    if (check_lval(next, error, listmult)) {
+    if (check_lval(next, error, allowmult && listmult, allowlower)) {
       free_expr(*expr);
       *expr = NULL;
       if (error->message == NULL)
@@ -1260,7 +1289,9 @@ static int parse_lvals(char_u **pp,
 
   expr_str_start = expr_str;
 
-  if ((ret = parse_lval(&expr_str, error, o, &expr, FALSE)) == FAIL)
+  if ((ret = parse_lval(&expr_str, error, o, &expr, FALSE,
+                        node->type != kCmdDelfunction,
+                        node->type != kCmdDelfunction)) == FAIL)
     return FAIL;
 
   node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
@@ -1313,7 +1344,7 @@ static int parse_for(char_u **pp,
 
   expr_str_start = expr_str;
 
-  if ((ret = parse_lval(&expr_str, error, o, &expr, TRUE)) == FAIL)
+  if ((ret = parse_lval(&expr_str, error, o, &expr, TRUE, TRUE, TRUE)) == FAIL)
     return FAIL;
 
   node->args[ARG_ASSIGN_LHS].arg.expr = expr;
