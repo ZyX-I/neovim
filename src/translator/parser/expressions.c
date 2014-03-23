@@ -1854,14 +1854,15 @@ static void node_dump(ExpressionNode *node, char **pp)
       ExpressionNode *child = node->children;
       do {
         node_dump(child, &p);
+        child = child->next;
       } while (child != NULL);
       break;
     }
     case kTypeCurlyName:
     case kTypeExpression: {
-      *p++ = node->type == kTypeExpression ? '(' : '{';
+      *p++ = (node->type == kTypeExpression ? '(' : '{');
       node_dump(node->children, &p);
-      *p++ = node->type == kTypeExpression ? ')' : '}';
+      *p++ = (node->type == kTypeExpression ? ')' : '}');
       break;
     }
     case kTypeList: {
