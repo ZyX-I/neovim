@@ -27,6 +27,8 @@
  */
 # define select select_declared_wrong
 
+#include <string.h>
+
 #include "vim.h"
 #include "os_unix.h"
 #include "buffer.h"
@@ -47,6 +49,9 @@
 #include "term.h"
 #include "ui.h"
 #include "os/os.h"
+#include "os/time.h"
+#include "os/event.h"
+#include "os/input.h"
 
 #include "os_unixx.h"       /* unix includes for os_unix.c only */
 
@@ -104,7 +109,6 @@ typedef int waitstatus;
 #endif
 static pid_t wait4pid(pid_t, waitstatus *);
 
-static int WaitForChar(long);
 static int RealWaitForChar(int, long, int *);
 
 
@@ -141,10 +145,6 @@ static char_u   *extra_shell_arg = NULL;
 static int show_shell_mess = TRUE;
 /* volatile because it is used in signal handler deathtrap(). */
 static volatile int deadly_signal = 0;      /* The signal we caught */
-/* volatile because it is used in signal handler deathtrap(). */
-static volatile int in_mch_delay = FALSE;    /* sleeping in mch_delay() */
-
-static int curr_tmode = TMODE_COOK;     /* contains current terminal mode */
 
 
 #ifdef SYS_SIGLIST_DECLARED
@@ -248,156 +248,12 @@ void mch_write(char_u *s, int len)
     RealWaitForChar(read_cmd_fd, p_wd, NULL);
 }
 
-/*
- * mch_inchar(): low level input function.
- * Get a characters from the keyboard.
- * Return the number of characters that are available.
- * If wtime == 0 do not wait for characters.
- * If wtime == n wait a short time for characters.
- * If wtime == -1 wait forever for characters.
- */
-int mch_inchar(
-        char_u      *buf,
-        int maxlen,
-        long wtime,                 /* don't use "time", MIPS cannot handle it */
-        int tb_change_cnt
-        )
-{
-    int len;
-
-
-    /* Check if window changed size while we were busy, perhaps the ":set
-     * columns=99" command was used. */
-    while (do_resize)
-        handle_resize();
-
-    if (wtime >= 0) {
-        while (WaitForChar(wtime) == 0) {           /* no character available */
-            if (!do_resize)           /* return if not interrupted by resize */
-                return 0;
-            handle_resize();
-        }
-    } else {    /* wtime == -1 */
-        /*
-         * If there is no character available within 'updatetime' seconds
-         * flush all the swap files to disk.
-         * Also done when interrupted by SIGWINCH.
-         */
-        if (WaitForChar(p_ut) == 0) {
-            if (trigger_cursorhold() && maxlen >= 3
-                    && !typebuf_changed(tb_change_cnt)) {
-                buf[0] = K_SPECIAL;
-                buf[1] = KS_EXTRA;
-                buf[2] = (int)KE_CURSORHOLD;
-                return 3;
-            }
-            before_blocking();
-        }
-    }
-
-    for (;; ) {   /* repeat until we got a character */
-        while (do_resize)        /* window changed size */
-            handle_resize();
-
-        /*
-         * We want to be interrupted by the winch signal
-         * or by an event on the monitored file descriptors.
-         */
-        if (WaitForChar(-1L) == 0) {
-            if (do_resize)                /* interrupted by SIGWINCH signal */
-                handle_resize();
-            return 0;
-        }
-
-        /* If input was put directly in typeahead buffer bail out here. */
-        if (typebuf_changed(tb_change_cnt))
-            return 0;
-
-        /*
-         * For some terminals we only get one character at a time.
-         * We want the get all available characters, so we could keep on
-         * trying until none is available
-         * For some other terminals this is quite slow, that's why we don't do
-         * it.
-         */
-        len = read_from_input_buf(buf, (long)maxlen);
-        if (len > 0) {
-            return len;
-        }
-    }
-}
-
 static void handle_resize()
 {
   do_resize = FALSE;
   shell_resized();
 }
 
-/*
- * return non-zero if a character is available
- */
-int mch_char_avail()
-{
-  return WaitForChar(0L);
-}
-
-void mch_delay(long msec, int ignoreinput)
-{
-  int old_tmode;
-
-  if (ignoreinput) {
-    /* Go to cooked mode without echo, to allow SIGINT interrupting us
-     * here.  But we don't want QUIT to kill us (CTRL-\ used in a
-     * shell may produce SIGQUIT). */
-    in_mch_delay = TRUE;
-    old_tmode = curr_tmode;
-    if (curr_tmode == TMODE_RAW)
-      settmode(TMODE_SLEEP);
-
-    /*
-     * Everybody sleeps in a different way...
-     * Prefer nanosleep(), some versions of usleep() can only sleep up to
-     * one second.
-     */
-#ifdef HAVE_NANOSLEEP
-    {
-      struct timespec ts;
-
-      ts.tv_sec = msec / 1000;
-      ts.tv_nsec = (msec % 1000) * 1000000;
-      (void)nanosleep(&ts, NULL);
-    }
-#else
-# ifdef HAVE_USLEEP
-    while (msec >= 1000) {
-      usleep((unsigned int)(999 * 1000));
-      msec -= 999;
-    }
-    usleep((unsigned int)(msec * 1000));
-# else
-#  ifndef HAVE_SELECT
-    poll(NULL, 0, (int)msec);
-#  else
-    {
-      struct timeval tv;
-
-      tv.tv_sec = msec / 1000;
-      tv.tv_usec = (msec % 1000) * 1000;
-      /*
-       * NOTE: Solaris 2.6 has a bug that makes select() hang here.  Get
-       * a patch from Sun to fix this.  Reported by Gunnar Pedersen.
-       */
-      select(0, NULL, NULL, NULL, &tv);
-    }
-#  endif /* HAVE_SELECT */
-# endif /* HAVE_NANOSLEEP */
-#endif /* HAVE_USLEEP */
-
-    settmode(old_tmode);
-    in_mch_delay = FALSE;
-  } else
-    WaitForChar(msec);
-}
 
 #if defined(HAVE_SIGALTSTACK) || defined(HAVE_SIGSTACK)
 /*
@@ -563,10 +419,10 @@ deathtrap SIGDEFARG(sigarg) {
 
 #ifdef SIGHASARG
 # ifdef SIGQUIT
-  /* While in mch_delay() we go to cooked mode to allow a CTRL-C to
+  /* While in os_delay() we go to cooked mode to allow a CTRL-C to
    * interrupt us.  But in cooked mode we may also get SIGQUIT, e.g., when
    * pressing CTRL-\, but we don't want Vim to exit then. */
-  if (in_mch_delay && sigarg == SIGQUIT)
+  if (in_os_delay && sigarg == SIGQUIT)
     SIGRETURN;
 # endif
 
@@ -712,7 +568,7 @@ void mch_suspend()
     long wait_time;
     for (wait_time = 0; !sigcont_received && wait_time <= 3L; wait_time++)
       /* Loop is not entered most of the time */
-      mch_delay(wait_time, FALSE);
+      os_delay(wait_time, FALSE);
   }
 # endif
 
@@ -740,6 +596,8 @@ void mch_init()
 #ifdef MACOS_CONVERT
   mac_conv_init();
 #endif
+
+  event_init();
 }
 
 static void set_signals()
@@ -1307,6 +1165,8 @@ void mch_early_init()
   signal_stack = (char *)alloc(SIGSTKSZ);
   init_signal_stack();
 #endif
+
+  time_init();
 }
 
 #if defined(EXITFREE) || defined(PROTO)
@@ -1734,9 +1594,9 @@ int mch_get_shellsize()
    *    the ioctl() values!
    */
   if (columns == 0 || rows == 0 || vim_strchr(p_cpo, CPO_TSIZE) != NULL) {
-    if ((p = (char_u *)mch_getenv("LINES")))
+    if ((p = (char_u *)os_getenv("LINES")))
       rows = atoi((char *)p);
-    if ((p = (char_u *)mch_getenv("COLUMNS")))
+    if ((p = (char_u *)os_getenv("COLUMNS")))
       columns = atoi((char *)p);
   }
 
@@ -1807,7 +1667,7 @@ waitstatus  *status;
 # endif
     if (wait_pid == 0) {
       /* Wait for 10 msec before trying again. */
-      mch_delay(10L, TRUE);
+      os_delay(10L, TRUE);
       continue;
     }
     if (wait_pid <= 0
@@ -2019,13 +1879,13 @@ int options;                    /* SHELL_*, see vim.h */
         }
 # endif
         /* Simulate to have a dumb terminal (for now) */
-        mch_setenv("TERM", "dumb", 1);
+        os_setenv("TERM", "dumb", 1);
         sprintf((char *)envbuf, "%ld", Rows);
-        mch_setenv("ROWS", (char *)envbuf, 1);
+        os_setenv("ROWS", (char *)envbuf, 1);
         sprintf((char *)envbuf, "%ld", Rows);
-        mch_setenv("LINES", (char *)envbuf, 1);
+        os_setenv("LINES", (char *)envbuf, 1);
         sprintf((char *)envbuf, "%ld", Columns);
-        mch_setenv("COLUMNS", (char *)envbuf, 1);
+        os_setenv("COLUMNS", (char *)envbuf, 1);
 
         /*
          * stderr is only redirected when using the GUI, so that a
@@ -2247,7 +2107,7 @@ int options;                    /* SHELL_*, see vim.h */
                 if (ta_buf[i] == CSI && len - i > 2) {
                   c = TERMCAP2KEY(ta_buf[i + 1], ta_buf[i + 2]);
                   if (c == K_DEL || c == K_KDEL || c == K_BS) {
-                    mch_memmove(ta_buf + i + 1, ta_buf + i + 3,
+                    memmove(ta_buf + i + 1, ta_buf + i + 3,
                         (size_t)(len - i - 2));
                     if (c == K_DEL || c == K_KDEL)
                       ta_buf[i] = DEL;
@@ -2297,7 +2157,7 @@ int options;                    /* SHELL_*, see vim.h */
                 len = write(toshell_fd, (char *)ta_buf, (size_t)1);
                 if (len > 0) {
                   ta_len -= len;
-                  mch_memmove(ta_buf, ta_buf + len, ta_len);
+                  memmove(ta_buf, ta_buf + len, ta_len);
                 }
               }
             }
@@ -2320,7 +2180,7 @@ int options;                    /* SHELL_*, see vim.h */
            * Check if the child has any characters to be printed.
            * Read them and write them to our window.	Repeat this as
            * long as there is something to do, avoid the 10ms wait
-           * for mch_inchar(), or sending typeahead characters to
+           * for os_inchar(), or sending typeahead characters to
            * the external process.
            * TODO: This should handle escape sequences, compatible
            * to some terminal (vt52?).
@@ -2376,7 +2236,7 @@ int options;                    /* SHELL_*, see vim.h */
               if (p < buffer + len) {
                 *p = c;
                 buffer_off = (buffer + len) - p;
-                mch_memmove(buffer, p, buffer_off);
+                memmove(buffer, p, buffer_off);
                 continue;
               }
               buffer_off = 0;
@@ -2514,43 +2374,6 @@ error:
   vim_free(newcmd);
 
   return retval;
-}
-
-/*
- * Check for CTRL-C typed by reading all available characters.
- * In cooked mode we should get SIGINT, no need to check.
- */
-void mch_breakcheck()
-{
-  if (curr_tmode == TMODE_RAW && RealWaitForChar(read_cmd_fd, 0L, NULL))
-    fill_input_buf(FALSE);
-}
-
-/*
- * Wait "msec" msec until a character is available from the keyboard or from
- * inbuf[]. msec == -1 will block forever.
- * When a GUI is being used, this will never get called -- webb
- */
-static int WaitForChar(msec)
-long msec;
-{
-  int avail;
-
-  if (input_available())            /* something in inbuf[] */
-    return 1;
-
-  /* May need to query the mouse position. */
-  if (WantQueryMouse) {
-    WantQueryMouse = FALSE;
-    mch_write((char_u *)IF_EB("\033[1'|", ESC_STR "[1'|"), 5);
-  }
-
-  /*
-   * For FEAT_MOUSE_GPM and FEAT_XCLIPBOARD we loop here to process mouse
-   * events.  This is a bit complicated, because they might both be defined.
-   */
-  avail = RealWaitForChar(read_cmd_fd, msec, NULL);
-  return avail;
 }
 
 /*
@@ -2916,7 +2739,7 @@ int flags;                      /* EW_* flags */
   /* When running in the background, give it some time to create the temp
    * file, but don't wait for it to finish. */
   if (ampersent)
-    mch_delay(10L, TRUE);
+    os_delay(10L, TRUE);
 
   extra_shell_arg = NULL;               /* cleanup */
   show_shell_mess = TRUE;
@@ -3092,12 +2915,12 @@ int flags;                      /* EW_* flags */
       continue;
 
     /* check if this entry should be included */
-    dir = (mch_isdir((*file)[i]));
+    dir = (os_isdir((*file)[i]));
     if ((dir && !(flags & EW_DIR)) || (!dir && !(flags & EW_FILE)))
       continue;
 
     /* Skip files that are not executable if we check for that. */
-    if (!dir && (flags & EW_EXEC) && !mch_can_exe((*file)[i]))
+    if (!dir && (flags & EW_EXEC) && !os_can_exe((*file)[i]))
       continue;
 
     p = alloc((unsigned)(STRLEN((*file)[i]) + 1 + dir));

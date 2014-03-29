@@ -8,6 +8,8 @@
  */
 
 #define EXTERN
+#include <string.h>
+
 #include "vim.h"
 #include "main.h"
 #include "blowfish.h"
@@ -165,10 +167,6 @@ static char *(main_errors[]) =
    * functions without a lot of arguments.  "argc" and "argv" are also
    * copied, so that they can be changed. */
   init_params(&params, argc, argv);
-
-#ifdef MEM_PROFILE
-  atexit(vim_mem_profile_dump);
-#endif
 
   init_startuptime(&params);
 
@@ -1435,8 +1433,8 @@ scripterror:
       if (ga_grow(&global_alist.al_ga, 1) == FAIL
           || (p = vim_strsave((char_u *)argv[0])) == NULL)
         mch_exit(2);
-      if (parmp->diff_mode && mch_isdir(p) && GARGCOUNT > 0
-          && !mch_isdir(alist_name(&GARGLIST[0]))) {
+      if (parmp->diff_mode && os_isdir(p) && GARGCOUNT > 0
+          && !os_isdir(alist_name(&GARGLIST[0]))) {
         char_u      *r;
 
         r = concat_fnames(p, gettail(alist_name(&GARGLIST[0])), TRUE);
@@ -1492,7 +1490,7 @@ scripterror:
  * copied, so that they can be changed. */
 static void init_params(mparm_T *paramp, int argc, char **argv)
 {
-  vim_memset(paramp, 0, sizeof(*paramp));
+  memset(paramp, 0, sizeof(*paramp));
   paramp->argc = argc;
   paramp->argv = argv;
   paramp->want_full_screen = TRUE;
@@ -2116,7 +2114,7 @@ process_env (
   linenr_T save_sourcing_lnum;
   scid_T save_sid;
 
-  initstr = (char_u *)mch_getenv((char *)env);
+  initstr = (char_u *)os_getenv((char *)env);
   if (initstr != NULL && *initstr != NUL) {
     if (is_viminit)
       vimrc_found(NULL, NULL);
@@ -2391,15 +2389,3 @@ time_msg (
 }
 
 #endif
-
-
-
-/*
- * When FEAT_FKMAP is defined, also compile the Farsi source code.
- */
-# include "farsi.c"
-
-/*
- * When FEAT_ARABIC is defined, also compile the Arabic source code.
- */
-# include "arabic.c"

@@ -16,6 +16,8 @@
  * mappings and abbreviations
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "getchar.h"
 #include "charset.h"
@@ -23,6 +25,7 @@
 #include "eval.h"
 #include "ex_docmd.h"
 #include "ex_getln.h"
+#include "farsi.h"
 #include "main.h"
 #include "mbyte.h"
 #include "memline.h"
@@ -266,7 +269,7 @@ add_buff (
     EMSG(_("E222: Add to read buffer"));
     return;
   } else if (buf->bh_index != 0)
-    mch_memmove(buf->bh_first.b_next->b_str,
+    memmove(buf->bh_first.b_next->b_str,
         buf->bh_first.b_next->b_str + buf->bh_index,
         STRLEN(buf->bh_first.b_next->b_str + buf->bh_index) + 1);
   buf->bh_index = 0;
@@ -844,7 +847,7 @@ int ins_typebuf(char_u *str, int noremap, int offset, int nottyped, int silent)
    */
   if (offset == 0 && addlen <= typebuf.tb_off) {
     typebuf.tb_off -= addlen;
-    mch_memmove(typebuf.tb_buf + typebuf.tb_off, str, (size_t)addlen);
+    memmove(typebuf.tb_buf + typebuf.tb_off, str, (size_t)addlen);
   }
   /*
    * Need to allocate a new buffer.
@@ -871,22 +874,22 @@ int ins_typebuf(char_u *str, int noremap, int offset, int nottyped, int silent)
     typebuf.tb_buflen = newlen;
 
     /* copy the old chars, before the insertion point */
-    mch_memmove(s1 + newoff, typebuf.tb_buf + typebuf.tb_off,
+    memmove(s1 + newoff, typebuf.tb_buf + typebuf.tb_off,
         (size_t)offset);
     /* copy the new chars */
-    mch_memmove(s1 + newoff + offset, str, (size_t)addlen);
+    memmove(s1 + newoff + offset, str, (size_t)addlen);
     /* copy the old chars, after the insertion point, including the	NUL at
      * the end */
-    mch_memmove(s1 + newoff + offset + addlen,
+    memmove(s1 + newoff + offset + addlen,
         typebuf.tb_buf + typebuf.tb_off + offset,
         (size_t)(typebuf.tb_len - offset + 1));
     if (typebuf.tb_buf != typebuf_init)
       vim_free(typebuf.tb_buf);
     typebuf.tb_buf = s1;
 
-    mch_memmove(s2 + newoff, typebuf.tb_noremap + typebuf.tb_off,
+    memmove(s2 + newoff, typebuf.tb_noremap + typebuf.tb_off,
         (size_t)offset);
-    mch_memmove(s2 + newoff + offset + addlen,
+    memmove(s2 + newoff + offset + addlen,
         typebuf.tb_noremap + typebuf.tb_off + offset,
         (size_t)(typebuf.tb_len - offset));
     if (typebuf.tb_noremap != noremapbuf_init)
@@ -1021,18 +1024,18 @@ void del_typebuf(int len, int offset)
      * Leave some extra room at the end to avoid reallocation.
      */
     if (typebuf.tb_off > MAXMAPLEN) {
-      mch_memmove(typebuf.tb_buf + MAXMAPLEN,
+      memmove(typebuf.tb_buf + MAXMAPLEN,
           typebuf.tb_buf + typebuf.tb_off, (size_t)offset);
-      mch_memmove(typebuf.tb_noremap + MAXMAPLEN,
+      memmove(typebuf.tb_noremap + MAXMAPLEN,
           typebuf.tb_noremap + typebuf.tb_off, (size_t)offset);
       typebuf.tb_off = MAXMAPLEN;
     }
     /* adjust typebuf.tb_buf (include the NUL at the end) */
-    mch_memmove(typebuf.tb_buf + typebuf.tb_off + offset,
+    memmove(typebuf.tb_buf + typebuf.tb_off + offset,
         typebuf.tb_buf + i + len,
         (size_t)(typebuf.tb_len - offset + 1));
     /* adjust typebuf.tb_noremap[] */
-    mch_memmove(typebuf.tb_noremap + typebuf.tb_off + offset,
+    memmove(typebuf.tb_noremap + typebuf.tb_off + offset,
         typebuf.tb_noremap + i + len,
         (size_t)(typebuf.tb_len - offset));
   }
@@ -2517,7 +2520,7 @@ fix_input_buffer (
                         && (i < 2 || p[1] != KS_EXTRA || p[2] !=
                             (int)KE_CURSORHOLD)
                         )) {
-      mch_memmove(p + 3, p + 1, (size_t)i);
+      memmove(p + 3, p + 1, (size_t)i);
       p[2] = K_THIRD(p[0]);
       p[1] = K_SECOND(p[0]);
       p[0] = K_SPECIAL;
@@ -3074,7 +3077,7 @@ static void map_free(mapblock_T **mpp)
 static void validate_maphash(void)
 {
   if (!maphash_valid) {
-    vim_memset(maphash, 0, sizeof(maphash));
+    memset(maphash, 0, sizeof(maphash));
     maphash_valid = TRUE;
   }
 }

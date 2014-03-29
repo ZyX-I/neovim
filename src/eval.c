@@ -11,6 +11,8 @@
  * eval.c: Expression evaluation.
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "eval.h"
 #include "buffer.h"
@@ -1103,7 +1105,7 @@ void var_redir_str(char_u *value, int value_len)
     len = value_len;                    /* Append only "value_len" characters */
 
   if (ga_grow(&redir_ga, len) == OK) {
-    mch_memmove((char *)redir_ga.ga_data + redir_ga.ga_len, value, len);
+    memmove((char *)redir_ga.ga_data + redir_ga.ga_len, value, len);
     redir_ga.ga_len += len;
   } else
     var_redir_stop();
@@ -2333,7 +2335,7 @@ get_lval (
   int quiet = flags & GLV_QUIET;
 
   /* Clear everything in "lp". */
-  vim_memset(lp, 0, sizeof(lval_T));
+  memset(lp, 0, sizeof(lval_T));
 
   if (skip) {
     /* When skipping just find the end of the name. */
@@ -7319,7 +7321,7 @@ call_func (
       if (fname == NULL)
         error = ERROR_OTHER;
       else {
-        mch_memmove(fname, fname_buf, (size_t)i);
+        memmove(fname, fname_buf, (size_t)i);
         STRCPY(fname + i, name + llen);
       }
     }
@@ -8547,7 +8549,7 @@ static void f_eventhandler(typval_T *argvars, typval_T *rettv)
  */
 static void f_executable(typval_T *argvars, typval_T *rettv)
 {
-  rettv->vval.v_number = mch_can_exe(get_tv_string(&argvars[0]));
+  rettv->vval.v_number = os_can_exe(get_tv_string(&argvars[0]));
 }
 
 /*
@@ -8563,7 +8565,7 @@ static void f_exists(typval_T *argvars, typval_T *rettv)
   p = get_tv_string(&argvars[0]);
   if (*p == '$') {                      /* environment variable */
     /* first try "normal" environment variables (fast) */
-    if (mch_getenv((char *)(p + 1)) != NULL)
+    if (os_getenv((char *)(p + 1)) != NULL)
       n = TRUE;
     else {
       /* try expanding things like $VIM and ${HOME} */
@@ -8860,7 +8862,7 @@ static void f_filereadable(typval_T *argvars, typval_T *rettv)
 # define O_NONBLOCK 0
 #endif
   p = get_tv_string(&argvars[0]);
-  if (*p && !mch_isdir(p) && (fd = mch_open((char *)p,
+  if (*p && !os_isdir(p) && (fd = mch_open((char *)p,
                                   O_RDONLY | O_NONBLOCK, 0)) >= 0) {
     n = TRUE;
     close(fd);
@@ -9658,7 +9660,7 @@ static void f_getcwd(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_string = NULL;
   cwd = alloc(MAXPATHL);
   if (cwd != NULL) {
-    if (mch_dirname(cwd, MAXPATHL) != FAIL) {
+    if (os_dirname(cwd, MAXPATHL) != FAIL) {
       rettv->vval.v_string = vim_strsave(cwd);
 #ifdef BACKSLASH_IN_FILENAME
       if (rettv->vval.v_string != NULL)
@@ -9717,7 +9719,7 @@ static void f_getfsize(typval_T *argvars, typval_T *rettv)
   rettv->v_type = VAR_NUMBER;
 
   if (mch_stat((char *)fname, &st) >= 0) {
-    if (mch_isdir(fname))
+    if (os_isdir(fname))
       rettv->vval.v_number = 0;
     else {
       rettv->vval.v_number = (varnumber_T)st.st_size;
@@ -9810,7 +9812,7 @@ static void f_getftype(typval_T *argvars, typval_T *rettv)
     default: t = "other";
     }
 # else
-    if (mch_isdir(fname))
+    if (os_isdir(fname))
       t = "dir";
     else
       t = "file";
@@ -10250,6 +10252,7 @@ static void f_has(typval_T *argvars, typval_T *rettv)
     "extra_search",
     "farsi",
     "file_in_path",
+    "filterpipe",
     "find_in_path",
     "float",
     "folding",
@@ -10883,7 +10886,7 @@ static void f_invert(typval_T *argvars, typval_T *rettv)
  */
 static void f_isdirectory(typval_T *argvars, typval_T *rettv)
 {
-  rettv->vval.v_number = mch_isdir(get_tv_string(&argvars[0]));
+  rettv->vval.v_number = os_isdir(get_tv_string(&argvars[0]));
 }
 
 /*
@@ -11662,7 +11665,7 @@ static int mkdir_recurse(char_u *dir, int prot)
   updir = vim_strnsave(dir, (int)(p - dir));
   if (updir == NULL)
     return FAIL;
-  if (mch_isdir(updir))
+  if (os_isdir(updir))
     r = OK;
   else if (mkdir_recurse(updir, prot) == OK)
     r = vim_mkdir_emsg(updir, prot);
@@ -12014,8 +12017,8 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
           /* Change "prev" buffer to be the right size.  This way
            * the bytes are only copied once, and very long lines are
            * allocated only once.  */
-          if ((s = vim_realloc(prev, prevlen + len + 1)) != NULL) {
-            mch_memmove(s + prevlen, start, len);
+          if ((s = realloc(prev, prevlen + len + 1)) != NULL) {
+            memmove(s + prevlen, start, len);
             s[prevlen + len] = NUL;
             prev = NULL;             /* the list will own the string */
             prevlen = prevsize = 0;
@@ -12070,7 +12073,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
               dest = buf;
             }
             if (readlen > p - buf + 1)
-              mch_memmove(dest, p + 1, readlen - (p - buf) - 1);
+              memmove(dest, p + 1, readlen - (p - buf) - 1);
             readlen -= 3 - adjust_prevlen;
             prevlen -= adjust_prevlen;
             p = dest - 1;
@@ -12099,7 +12102,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
           prevsize = grow50pc > growmin ? grow50pc : growmin;
         }
         newprev = prev == NULL ? alloc(prevsize)
-                  : vim_realloc(prev, prevsize);
+                  : realloc(prev, prevsize);
         if (newprev == NULL) {
           do_outofmem_msg((long_u)prevsize);
           failed = TRUE;
@@ -12108,7 +12111,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
         prev = newprev;
       }
       /* Add the line part to end of "prev". */
-      mch_memmove(prev + prevlen, start, p - start);
+      memmove(prev + prevlen, start, p - start);
       prevlen += (long)(p - start);
     }
   }   /* while */
@@ -12371,7 +12374,7 @@ static void f_repeat(typval_T *argvars, typval_T *rettv)
     r = alloc(len + 1);
     if (r != NULL) {
       for (i = 0; i < n; i++)
-        mch_memmove(r + i * slen, p, (size_t)slen);
+        memmove(r + i * slen, p, (size_t)slen);
       r[len] = NUL;
     }
 
@@ -12477,7 +12480,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
           q[-1] = NUL;
           q = gettail(p);
         }
-        if (q > p && !mch_is_absolute_path(buf)) {
+        if (q > p && !os_is_absolute_path(buf)) {
           /* symlink is relative to directory of argument */
           cpy = alloc((unsigned)(STRLEN(p) + STRLEN(buf) + 1));
           if (cpy != NULL) {
@@ -14432,7 +14435,7 @@ static void f_synconcealed(typval_T *argvars, typval_T *rettv)
   lnum = get_tv_lnum(argvars);                  /* -1 on type error */
   col = get_tv_number(&argvars[1]) - 1;         /* -1 on type error */
 
-  vim_memset(str, NUL, sizeof(str));
+  memset(str, NUL, sizeof(str));
 
   if (rettv_list_alloc(rettv) != FAIL) {
     if (lnum >= 1 && lnum <= curbuf->b_ml.ml_line_count
@@ -14904,7 +14907,7 @@ error:
       }
 
       ga_grow(&ga, cplen);
-      mch_memmove((char *)ga.ga_data + ga.ga_len, cpstr, (size_t)cplen);
+      memmove((char *)ga.ga_data + ga.ga_len, cpstr, (size_t)cplen);
       ga.ga_len += cplen;
 
       in_str += inlen;
@@ -16113,7 +16116,7 @@ void clear_tv(typval_T *varp)
 static void init_tv(typval_T *varp)
 {
   if (varp != NULL)
-    vim_memset(varp, 0, sizeof(typval_T));
+    memset(varp, 0, sizeof(typval_T));
 }
 
 /*
@@ -17692,7 +17695,7 @@ trans_function_name (
   lval_T lv;
 
   if (fdp != NULL)
-    vim_memset(fdp, 0, sizeof(funcdict_T));
+    memset(fdp, 0, sizeof(funcdict_T));
   start = *pp;
 
   /* Check for hard coded <SNR>: already translated function ID (from a user
@@ -17828,7 +17831,7 @@ trans_function_name (
       if (lead > 3)             /* If it's "<SID>" */
         STRCPY(name + 3, sid_buf);
     }
-    mch_memmove(name + lead, lv.ll_name, (size_t)len);
+    memmove(name + lead, lv.ll_name, (size_t)len);
     name[len + lead] = NUL;
   }
   *pp = end;
@@ -18477,7 +18480,7 @@ call_user_func (
   v->di_tv.v_type = VAR_LIST;
   v->di_tv.v_lock = VAR_FIXED;
   v->di_tv.vval.v_list = &fc->l_varlist;
-  vim_memset(&fc->l_varlist, 0, sizeof(list_T));
+  memset(&fc->l_varlist, 0, sizeof(list_T));
   fc->l_varlist.lv_refcount = DO_NOT_FREE_CNT;
   fc->l_varlist.lv_lock = VAR_FIXED;
 
@@ -19343,7 +19346,7 @@ repeat:
     }
 
     /* Append a path separator to a directory. */
-    if (mch_isdir(*fnamep)) {
+    if (os_isdir(*fnamep)) {
       /* Make room for one or two extra characters. */
       *fnamep = vim_strnsave(*fnamep, (int)STRLEN(*fnamep) + 2);
       vim_free(*bufp);          /* free any allocated file name */
@@ -19377,7 +19380,7 @@ repeat:
 
     if (p != NULL) {
       if (c == '.') {
-        mch_dirname(dirname, MAXPATHL);
+        os_dirname(dirname, MAXPATHL);
         s = shorten_fname(p, dirname);
         if (s != NULL) {
           *fnamep = s;
@@ -19586,7 +19589,7 @@ char_u *do_string_sub(char_u *str, char_u *pat, char_u *sub, char_u *flags)
 
       /* copy the text up to where the match is */
       i = (int)(regmatch.startp[0] - tail);
-      mch_memmove((char_u *)ga.ga_data + ga.ga_len, tail, (size_t)i);
+      memmove((char_u *)ga.ga_data + ga.ga_len, tail, (size_t)i);
       /* add the substituted text */
       (void)vim_regsub(&regmatch, sub, (char_u *)ga.ga_data
           + ga.ga_len + i, TRUE, TRUE, FALSE);

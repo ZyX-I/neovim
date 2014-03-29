@@ -10,6 +10,8 @@
 /*
  * misc2.c: Various functions.
  */
+#include <string.h>
+
 #include "vim.h"
 #include "misc2.h"
 #include "file_search.h"
@@ -596,108 +598,6 @@ int leftcol_changed(void)
  * Various routines dealing with allocation and deallocation of memory.
  */
 
-#if defined(MEM_PROFILE) || defined(PROTO)
-
-# define MEM_SIZES  8200
-static long_u mem_allocs[MEM_SIZES];
-static long_u mem_frees[MEM_SIZES];
-static long_u mem_allocated;
-static long_u mem_freed;
-static long_u mem_peak;
-static long_u num_alloc;
-static long_u num_freed;
-
-static void mem_pre_alloc_s(size_t *sizep);
-static void mem_pre_alloc_l(long_u *sizep);
-static void mem_post_alloc(void **pp, size_t size);
-static void mem_pre_free(void **pp);
-
-static void mem_pre_alloc_s(size_t *sizep)
-{
-  *sizep += sizeof(size_t);
-}
-
-static void mem_pre_alloc_l(long_u *sizep)
-{
-  *sizep += sizeof(size_t);
-}
-
-static void mem_post_alloc(void **pp, size_t size)
-{
-  if (*pp == NULL)
-    return;
-  size -= sizeof(size_t);
-  *(long_u *)*pp = size;
-  if (size <= MEM_SIZES-1)
-    mem_allocs[size-1]++;
-  else
-    mem_allocs[MEM_SIZES-1]++;
-  mem_allocated += size;
-  if (mem_allocated - mem_freed > mem_peak)
-    mem_peak = mem_allocated - mem_freed;
-  num_alloc++;
-  *pp = (void *)((char *)*pp + sizeof(size_t));
-}
-
-static void mem_pre_free(void **pp)
-{
-  long_u size;
-
-  *pp = (void *)((char *)*pp - sizeof(size_t));
-  size = *(size_t *)*pp;
-  if (size <= MEM_SIZES-1)
-    mem_frees[size-1]++;
-  else
-    mem_frees[MEM_SIZES-1]++;
-  mem_freed += size;
-  num_freed++;
-}
-
-/*
- * called on exit via atexit()
- */
-void vim_mem_profile_dump(void)
-{
-  int i, j;
-
-  printf("\r\n");
-  j = 0;
-  for (i = 0; i < MEM_SIZES - 1; i++) {
-    if (mem_allocs[i] || mem_frees[i]) {
-      if (mem_frees[i] > mem_allocs[i])
-        printf("\r\n%s", _("ERROR: "));
-      printf("[%4d / %4lu-%-4lu] ", i + 1, mem_allocs[i], mem_frees[i]);
-      j++;
-      if (j > 3) {
-        j = 0;
-        printf("\r\n");
-      }
-    }
-  }
-
-  i = MEM_SIZES - 1;
-  if (mem_allocs[i]) {
-    printf("\r\n");
-    if (mem_frees[i] > mem_allocs[i])
-      puts(_("ERROR: "));
-    printf("[>%d / %4lu-%-4lu]", i, mem_allocs[i], mem_frees[i]);
-  }
-
-  printf(_("\n[bytes] total alloc-freed %lu-%lu, in use %lu, peak use %lu\n"),
-      mem_allocated, mem_freed, mem_allocated - mem_freed, mem_peak);
-  printf(_("[calls] total re/malloc()'s %lu, total free()'s %lu\n\n"),
-      num_alloc, num_freed);
-}
-
-#endif /* MEM_PROFILE */
-
-/*
- * Some memory is reserved for error messages and for being able to
- * call mf_release_all(), which needs some memory for mf_trans_add().
- */
-# define KEEP_ROOM (2 * 8192L)
-#define KEEP_ROOM_KB (KEEP_ROOM / 1024L)
-
 /*
  * Note: if unsigned is 16 bits we can only allocate up to 64K with alloc().
  * Use lalloc for larger blocks.
@@ -716,7 +616,7 @@ char_u *alloc_clear(unsigned size)
 
   p = lalloc((long_u)size, TRUE);
   if (p != NULL)
-    (void)vim_memset(p, 0, (size_t)size);
+    (void)memset(p, 0, (size_t)size);
   return p;
 }
 
@@ -745,7 +645,7 @@ char_u *lalloc_clear(long_u size, int message)
 
   p = (lalloc(size, message));
   if (p != NULL)
-    (void)vim_memset(p, 0, (size_t)size);
+    (void)memset(p, 0, (size_t)size);
   return p;
 }
 
@@ -758,9 +658,6 @@ char_u *lalloc(long_u size, int message)
   char_u      *p;                   /* pointer to new storage space */
   static int releasing = FALSE;     /* don't do mf_release_all() recursive */
   int try_again;
-#if defined(HAVE_AVAIL_MEM) && !defined(SMALL_MEM)
-  static long_u allocated = 0;      /* allocated since last avail check */
-#endif
 
   /* Safety check for allocating zero bytes */
   if (size == 0) {
@@ -770,43 +667,14 @@ char_u *lalloc(long_u size, int message)
     return NULL;
   }
 
-#ifdef MEM_PROFILE
-  mem_pre_alloc_l(&size);
-#endif
-
-
   /*
    * Loop when out of memory: Try to release some memfile blocks and
    * if some blocks are released call malloc again.
    */
   for (;; ) {
-    /*
-     * Handle three kind of systems:
-     * 1. No check for available memory: Just return.
-     * 2. Slow check for available memory: call mch_avail_mem() after
-     *    allocating KEEP_ROOM amount of memory.
-     * 3. Strict check for available memory: call mch_avail_mem()
-     */
     if ((p = (char_u *)malloc((size_t)size)) != NULL) {
-#ifndef HAVE_AVAIL_MEM
-      /* 1. No check for available memory: Just return. */
+      /* No check for available memory: Just return. */
       goto theend;
-#else
-# ifndef SMALL_MEM
-      /* 2. Slow check for available memory: call mch_avail_mem() after
-       *    allocating (KEEP_ROOM / 2) amount of memory. */
-      allocated += size;
-      if (allocated < KEEP_ROOM / 2)
-        goto theend;
-      allocated = 0;
-# endif
-      /* 3. check for available memory: call mch_avail_mem() */
-      if (mch_avail_mem(TRUE) < KEEP_ROOM_KB && !releasing) {
-        free((char *)p);                /* System is low... no go! */
-        p = NULL;
-      } else
-        goto theend;
-#endif
     }
     /*
      * Remember that mf_release_all() is being called to avoid an endless
@@ -829,30 +697,8 @@ char_u *lalloc(long_u size, int message)
     do_outofmem_msg(size);
 
 theend:
-#ifdef MEM_PROFILE
-  mem_post_alloc((void **)&p, (size_t)size);
-#endif
   return p;
 }
-
-#if defined(MEM_PROFILE) || defined(PROTO)
-/*
- * realloc() with memory profiling.
- */
-void *mem_realloc(void *ptr, size_t size)
-{
-  void *p;
-
-  mem_pre_free(&ptr);
-  mem_pre_alloc_s(&size);
-
-  p = realloc(ptr, size);
-
-  mem_post_alloc(&p, size);
-
-  return p;
-}
-#endif
 
 /*
  * Avoid repeating the error message many times (they take 1 second each).
@@ -1032,7 +878,7 @@ char_u *vim_strsave(char_u *string)
   len = (unsigned)STRLEN(string) + 1;
   p = alloc(len);
   if (p != NULL)
-    mch_memmove(p, string, (size_t)len);
+    memmove(p, string, (size_t)len);
   return p;
 }
 
@@ -1096,7 +942,7 @@ char_u *vim_strsave_escaped_ext(char_u *string, char_u *esc_chars, int cc, int b
     p2 = escaped_string;
     for (p = string; *p; p++) {
       if (has_mbyte && (l = (*mb_ptr2len)(p)) > 1) {
-        mch_memmove(p2, p, (size_t)l);
+        memmove(p2, p, (size_t)l);
         p2 += l;
         p += l - 1;                     /* skip multibyte char  */
         continue;
@@ -1273,7 +1119,7 @@ char_u *strup_save(char_u *orig)
           s = alloc((unsigned)STRLEN(res) + 1 + newl - l);
           if (s == NULL)
             break;
-          mch_memmove(s, res, p - res);
+          memmove(s, res, p - res);
           STRCPY(s + (p - res) + newl, p + l);
           p = s + (p - res);
           vim_free(res);
@@ -1350,7 +1196,7 @@ void vim_strcat(char_u *to, char_u *from, size_t tosize)
   size_t fromlen = STRLEN(from);
 
   if (tolen + fromlen + 1 > tosize) {
-    mch_memmove(to + tolen, from, tosize - tolen - 1);
+    memmove(to + tolen, from, tosize - tolen - 1);
     to[tosize - 1] = NUL;
   } else
     STRCPY(to + tolen, from);
@@ -1399,74 +1245,9 @@ int copy_option_part(char_u **option, char_u *buf, int maxlen, char *sep_chars)
 void vim_free(void *x)
 {
   if (x != NULL && !really_exiting) {
-#ifdef MEM_PROFILE
-    mem_pre_free(&x);
-#endif
     free(x);
   }
 }
-
-#ifndef HAVE_MEMSET
-void * vim_memset(ptr, c, size)
-void    *ptr;
-int c;
-size_t size;
-{
-  char *p = ptr;
-
-  while (size-- > 0)
-    *p++ = c;
-  return ptr;
-}
-#endif
-
-#ifdef VIM_MEMCMP
-/*
- * Return zero when "b1" and "b2" are the same for "len" bytes.
- * Return non-zero otherwise.
- */
-int vim_memcmp(b1, b2, len)
-void    *b1;
-void    *b2;
-size_t len;
-{
-  char_u  *p1 = (char_u *)b1, *p2 = (char_u *)b2;
-
-  for (; len > 0; --len) {
-    if (*p1 != *p2)
-      return 1;
-    ++p1;
-    ++p2;
-  }
-  return 0;
-}
-#endif
-
-#ifdef VIM_MEMMOVE
-/*
- * Version of memmove() that handles overlapping source and destination.
- * For systems that don't have a function that is guaranteed to do that (SYSV).
- */
-void mch_memmove(dst_arg, src_arg, len)
-void    *src_arg, *dst_arg;
-size_t len;
-{
-  /*
-   * A void doesn't have a size, we use char pointers.
-   */
-  char *dst = dst_arg, *src = src_arg;
-
-  /* overlap, copy backwards */
-  if (dst > src && dst < src + len) {
-    src += len;
-    dst += len;
-    while (len-- > 0)
-      *--dst = *--src;
-  } else                                /* copy forwards */
-    while (len-- > 0)
-      *dst++ = *src++;
-}
-#endif
 
 #if (!defined(HAVE_STRCASECMP) && !defined(HAVE_STRICMP)) || defined(PROTO)
 /*
@@ -1847,7 +1628,7 @@ int vim_chdirfile(char_u *fname)
 
   vim_strncpy(dir, fname, MAXPATHL - 1);
   *gettail_sep(dir) = NUL;
-  return mch_chdir((char *)dir) == 0 ? OK : FAIL;
+  return os_chdir((char *)dir) == 0 ? OK : FAIL;
 }
 #endif
 
@@ -1863,7 +1644,7 @@ int illegal_slash(char *name)
     return FALSE;           /* no file name is not illegal */
   if (name[strlen(name) - 1] != '/')
     return FALSE;           /* no trailing slash */
-  if (mch_isdir((char_u *)name))
+  if (os_isdir((char_u *)name))
     return FALSE;           /* trailing slash for a directory */
   return TRUE;
 }
@@ -1871,7 +1652,7 @@ int illegal_slash(char *name)
 
 /*
  * Change directory to "new_dir".  If FEAT_SEARCHPATH is defined, search
- * 'cdpath' for relative directory names, otherwise just mch_chdir().
+ * 'cdpath' for relative directory names, otherwise just os_chdir().
  */
 int vim_chdir(char_u *new_dir)
 {
@@ -1882,7 +1663,7 @@ int vim_chdir(char_u *new_dir)
       FNAME_MESS, curbuf->b_ffname);
   if (dir_name == NULL)
     return -1;
-  r = mch_chdir((char *)dir_name);
+  r = os_chdir((char *)dir_name);
   vim_free(dir_name);
   return r;
 }
@@ -1917,9 +1698,9 @@ int (*cmp)(const void *, const void *);
         if ((*cmp)((void *)p1, (void *)p2) <= 0)
           break;
         /* Exchange the elements. */
-        mch_memmove(buf, p1, elm_size);
-        mch_memmove(p1, p2, elm_size);
-        mch_memmove(p2, buf, elm_size);
+        memmove(buf, p1, elm_size);
+        memmove(p1, p2, elm_size);
+        memmove(p2, buf, elm_size);
       }
 
   vim_free(buf);
@@ -2021,7 +1802,7 @@ int filewritable(char_u *fname)
 #endif
 
 #if defined(UNIX) || defined(VMS)
-  perm = mch_getperm(fname);
+  perm = os_getperm(fname);
 #endif
   if (
 # if defined(UNIX) || defined(VMS)
@@ -2030,7 +1811,7 @@ int filewritable(char_u *fname)
     mch_access((char *)fname, W_OK) == 0
     ) {
     ++retval;
-    if (mch_isdir(fname))
+    if (os_isdir(fname))
       ++retval;
   }
   return retval;

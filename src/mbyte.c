@@ -77,6 +77,8 @@
  * some commands, like ":menutrans"
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "mbyte.h"
 #include "charset.h"
@@ -1530,34 +1532,6 @@ int mb_cptr2char_adv(char_u **pp)
   else
     *pp += (*mb_ptr2len)(*pp);
   return c;
-}
-
-/*
- * Check whether we are dealing with Arabic combining characters.
- * Note: these are NOT really composing characters!
- */
-int arabic_combine(
-    int one,                    /* first character */
-    int two                     /* character just after "one" */
-    )
-{
-  if (one == a_LAM)
-    return arabic_maycombine(two);
-  return FALSE;
-}
-
-/*
- * Check whether we are dealing with a character that could be regarded as an
- * Arabic combining character, need to check the character before this.
- */
-int arabic_maycombine(int two)
-{
-  if (p_arshape && !p_tbidi)
-    return two == a_ALEF_MADDA
-      || two == a_ALEF_HAMZA_ABOVE
-      || two == a_ALEF_HAMZA_BELOW
-      || two == a_ALEF;
-  return FALSE;
 }
 
 /*
@@ -3076,7 +3050,7 @@ void mb_copy_char(char_u **fp, char_u **tp)
 {
   int l = (*mb_ptr2len)(*fp);
 
-  mch_memmove(*tp, *fp, (size_t)l);
+  memmove(*tp, *fp, (size_t)l);
   *tp += l;
   *fp += l;
 }
@@ -3489,9 +3463,9 @@ char_u * enc_locale()
 #  if defined(HAVE_LOCALE_H) || defined(X_LOCALE)
     if ((s = setlocale(LC_CTYPE, NULL)) == NULL || *s == NUL)
 #  endif
-      if ((s = (char *)mch_getenv("LC_ALL")) == NULL || *s == NUL)
-        if ((s = (char *)mch_getenv("LC_CTYPE")) == NULL || *s == NUL)
-          s = (char *)mch_getenv("LANG");
+      if ((s = (char *)os_getenv("LC_ALL")) == NULL || *s == NUL)
+        if ((s = (char *)os_getenv("LC_CTYPE")) == NULL || *s == NUL)
+          s = (char *)os_getenv("LANG");
 
   if (s == NULL || *s == NUL)
     return FAIL;
@@ -3611,7 +3585,7 @@ static char_u * iconv_string(vimconv_T *vcp, char_u *str, int slen, int *unconvl
       len = len + fromlen * 2 + 40;
       p = alloc((unsigned)len);
       if (p != NULL && done > 0)
-        mch_memmove(p, result, done);
+        memmove(p, result, done);
       vim_free(result);
       result = p;
       if (result == NULL)       /* out of memory */
@@ -3930,10 +3904,10 @@ int convert_input_safe(ptr, len, maxlen, restp, restlenp)
         /* Move the unconverted characters to allocated memory. */
         *restp = alloc(unconvertlen);
         if (*restp != NULL)
-          mch_memmove(*restp, ptr + len - unconvertlen, unconvertlen);
+          memmove(*restp, ptr + len - unconvertlen, unconvertlen);
         *restlenp = unconvertlen;
       }
-      mch_memmove(ptr, d, dlen);
+      memmove(ptr, d, dlen);
     } else
       /* result is too long, keep the unconverted text (the caller must
        * have done something wrong!) */

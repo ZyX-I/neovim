@@ -87,7 +87,10 @@
  *   update_screen() called to redraw.
  */
 
+#include <string.h>
+
 #include "vim.h"
+#include "arabic.h"
 #include "screen.h"
 #include "buffer.h"
 #include "charset.h"
@@ -95,6 +98,7 @@
 #include "eval.h"
 #include "ex_cmds2.h"
 #include "ex_getln.h"
+#include "farsi.h"
 #include "fileio.h"
 #include "fold.h"
 #include "getchar.h"
@@ -305,23 +309,23 @@ int redraw_asap(int type)
   if (ret != 2) {
     /* Save the text displayed in the command line area. */
     for (r = 0; r < rows; ++r) {
-      mch_memmove(screenline + r * Columns,
+      memmove(screenline + r * Columns,
           ScreenLines + LineOffset[cmdline_row + r],
           (size_t)Columns * sizeof(schar_T));
-      mch_memmove(screenattr + r * Columns,
+      memmove(screenattr + r * Columns,
           ScreenAttrs + LineOffset[cmdline_row + r],
           (size_t)Columns * sizeof(sattr_T));
       if (enc_utf8) {
-        mch_memmove(screenlineUC + r * Columns,
+        memmove(screenlineUC + r * Columns,
             ScreenLinesUC + LineOffset[cmdline_row + r],
             (size_t)Columns * sizeof(u8char_T));
         for (i = 0; i < p_mco; ++i)
-          mch_memmove(screenlineC[i] + r * Columns,
+          memmove(screenlineC[i] + r * Columns,
               ScreenLinesC[r] + LineOffset[cmdline_row + r],
               (size_t)Columns * sizeof(u8char_T));
       }
       if (enc_dbcs == DBCS_JPNU)
-        mch_memmove(screenline2 + r * Columns,
+        memmove(screenline2 + r * Columns,
             ScreenLines2 + LineOffset[cmdline_row + r],
             (size_t)Columns * sizeof(schar_T));
     }
@@ -334,23 +338,23 @@ int redraw_asap(int type)
 
       /* Restore the text displayed in the command line area. */
       for (r = 0; r < rows; ++r) {
-        mch_memmove(current_ScreenLine,
+        memmove(current_ScreenLine,
             screenline + r * Columns,
             (size_t)Columns * sizeof(schar_T));
-        mch_memmove(ScreenAttrs + off,
+        memmove(ScreenAttrs + off,
             screenattr + r * Columns,
             (size_t)Columns * sizeof(sattr_T));
         if (enc_utf8) {
-          mch_memmove(ScreenLinesUC + off,
+          memmove(ScreenLinesUC + off,
               screenlineUC + r * Columns,
               (size_t)Columns * sizeof(u8char_T));
           for (i = 0; i < p_mco; ++i)
-            mch_memmove(ScreenLinesC[i] + off,
+            memmove(ScreenLinesC[i] + off,
                 screenlineC[i] + r * Columns,
                 (size_t)Columns * sizeof(u8char_T));
         }
         if (enc_dbcs == DBCS_JPNU)
-          mch_memmove(ScreenLines2 + off,
+          memmove(ScreenLines2 + off,
               screenline2 + r * Columns,
               (size_t)Columns * sizeof(schar_T));
         SCREEN_LINE(cmdline_row + r, 0, Columns, Columns, FALSE);
@@ -1868,7 +1872,7 @@ static void fold_line(win_T *wp, long fold_count, foldinfo_T *foldinfo, linenr_T
           ScreenLinesUC[idx] = 0;
           prev_c = u8c;
         } else {
-          if (p_arshape && !p_tbidi && ARABIC_CHAR(u8c)) {
+          if (p_arshape && !p_tbidi && arabic_char(u8c)) {
             /* Do Arabic shaping. */
             int pc, pc1, nc;
             int pcc[MAX_MCO];
@@ -2030,9 +2034,9 @@ static void copy_text_attr(int off, char_u *buf, int len, int attr)
 {
   int i;
 
-  mch_memmove(ScreenLines + off, buf, (size_t)len);
+  memmove(ScreenLines + off, buf, (size_t)len);
   if (enc_utf8)
-    vim_memset(ScreenLinesUC + off, 0, sizeof(u8char_T) * (size_t)len);
+    memset(ScreenLinesUC + off, 0, sizeof(u8char_T) * (size_t)len);
   for (i = 0; i < len; ++i)
     ScreenAttrs[off + i] = attr;
 }
@@ -2430,13 +2434,13 @@ win_line (
         /* Short line, use it completely and append the start of the
          * next line. */
         nextlinecol = 0;
-        mch_memmove(nextline, line, (size_t)v);
+        memmove(nextline, line, (size_t)v);
         STRMOVE(nextline + v, nextline + SPWORDLEN);
         nextline_idx = v + 1;
       } else {
         /* Long line, use only the last SPWORDLEN bytes. */
         nextlinecol = v - SPWORDLEN;
-        mch_memmove(nextline, line + nextlinecol, SPWORDLEN);
+        memmove(nextline, line + nextlinecol, SPWORDLEN);
         nextline_idx = SPWORDLEN + 1;
       }
     }
@@ -3049,7 +3053,7 @@ win_line (
             }
           } else if (mb_l == 0)          /* at the NUL at end-of-line */
             mb_l = 1;
-          else if (p_arshape && !p_tbidi && ARABIC_CHAR(mb_c)) {
+          else if (p_arshape && !p_tbidi && arabic_char(mb_c)) {
             /* Do Arabic shaping. */
             int pc, pc1, nc;
             int pcc[MAX_MCO];
@@ -5218,7 +5222,7 @@ void screen_puts_len(char_u *text, int len, int row, int col, int attr)
             attr = hl_attr(HLF_8);
         }
 # endif
-        if (p_arshape && !p_tbidi && ARABIC_CHAR(u8c)) {
+        if (p_arshape && !p_tbidi && arabic_char(u8c)) {
           /* Do Arabic shaping. */
           if (len >= 0 && (int)(ptr - text) + mbyte_blen >= len) {
             /* Past end of string to be displayed. */
@@ -6114,7 +6118,7 @@ retry:
 
   new_ScreenLines = (schar_T *)lalloc((long_u)(
         (Rows + 1) * Columns * sizeof(schar_T)), FALSE);
-  vim_memset(new_ScreenLinesC, 0, sizeof(u8char_T *) * MAX_MCO);
+  memset(new_ScreenLinesC, 0, sizeof(u8char_T *) * MAX_MCO);
   if (enc_utf8) {
     new_ScreenLinesUC = (u8char_T *)lalloc((long_u)(
           (Rows + 1) * Columns * sizeof(u8char_T)), FALSE);
@@ -6195,20 +6199,20 @@ give_up:
        * executing an external command, for the GUI).
        */
       if (!doclear) {
-        (void)vim_memset(new_ScreenLines + new_row * Columns,
+        (void)memset(new_ScreenLines + new_row * Columns,
             ' ', (size_t)Columns * sizeof(schar_T));
         if (enc_utf8) {
-          (void)vim_memset(new_ScreenLinesUC + new_row * Columns,
+          (void)memset(new_ScreenLinesUC + new_row * Columns,
               0, (size_t)Columns * sizeof(u8char_T));
           for (i = 0; i < p_mco; ++i)
-            (void)vim_memset(new_ScreenLinesC[i]
+            (void)memset(new_ScreenLinesC[i]
                 + new_row * Columns,
                 0, (size_t)Columns * sizeof(u8char_T));
         }
         if (enc_dbcs == DBCS_JPNU)
-          (void)vim_memset(new_ScreenLines2 + new_row * Columns,
+          (void)memset(new_ScreenLines2 + new_row * Columns,
               0, (size_t)Columns * sizeof(schar_T));
-        (void)vim_memset(new_ScreenAttrs + new_row * Columns,
+        (void)memset(new_ScreenAttrs + new_row * Columns,
             0, (size_t)Columns * sizeof(sattr_T));
         old_row = new_row + (screen_Rows - Rows);
         if (old_row >= 0 && ScreenLines != NULL) {
@@ -6220,25 +6224,25 @@ give_up:
            * may be invalid now.  Also when p_mco changes. */
           if (!(enc_utf8 && ScreenLinesUC == NULL)
               && p_mco == Screen_mco)
-            mch_memmove(new_ScreenLines + new_LineOffset[new_row],
+            memmove(new_ScreenLines + new_LineOffset[new_row],
                 ScreenLines + LineOffset[old_row],
                 (size_t)len * sizeof(schar_T));
           if (enc_utf8 && ScreenLinesUC != NULL
               && p_mco == Screen_mco) {
-            mch_memmove(new_ScreenLinesUC + new_LineOffset[new_row],
+            memmove(new_ScreenLinesUC + new_LineOffset[new_row],
                 ScreenLinesUC + LineOffset[old_row],
                 (size_t)len * sizeof(u8char_T));
             for (i = 0; i < p_mco; ++i)
-              mch_memmove(new_ScreenLinesC[i]
+              memmove(new_ScreenLinesC[i]
                   + new_LineOffset[new_row],
                   ScreenLinesC[i] + LineOffset[old_row],
                   (size_t)len * sizeof(u8char_T));
           }
           if (enc_dbcs == DBCS_JPNU && ScreenLines2 != NULL)
-            mch_memmove(new_ScreenLines2 + new_LineOffset[new_row],
+            memmove(new_ScreenLines2 + new_LineOffset[new_row],
                 ScreenLines2 + LineOffset[old_row],
                 (size_t)len * sizeof(schar_T));
-          mch_memmove(new_ScreenAttrs + new_LineOffset[new_row],
+          memmove(new_ScreenAttrs + new_LineOffset[new_row],
               ScreenAttrs + LineOffset[old_row],
               (size_t)len * sizeof(sattr_T));
         }
@@ -6358,11 +6362,11 @@ static void screenclear2(void)
  */
 static void lineclear(unsigned off, int width)
 {
-  (void)vim_memset(ScreenLines + off, ' ', (size_t)width * sizeof(schar_T));
+  (void)memset(ScreenLines + off, ' ', (size_t)width * sizeof(schar_T));
   if (enc_utf8)
-    (void)vim_memset(ScreenLinesUC + off, 0,
+    (void)memset(ScreenLinesUC + off, 0,
         (size_t)width * sizeof(u8char_T));
-  (void)vim_memset(ScreenAttrs + off, 0, (size_t)width * sizeof(sattr_T));
+  (void)memset(ScreenAttrs + off, 0, (size_t)width * sizeof(sattr_T));
 }
 
 /*
@@ -6371,7 +6375,7 @@ static void lineclear(unsigned off, int width)
  */
 static void lineinvalid(unsigned off, int width)
 {
-  (void)vim_memset(ScreenAttrs + off, -1, (size_t)width * sizeof(sattr_T));
+  (void)memset(ScreenAttrs + off, -1, (size_t)width * sizeof(sattr_T));
 }
 
 /*
@@ -6382,21 +6386,21 @@ static void linecopy(int to, int from, win_T *wp)
   unsigned off_to = LineOffset[to] + wp->w_wincol;
   unsigned off_from = LineOffset[from] + wp->w_wincol;
 
-  mch_memmove(ScreenLines + off_to, ScreenLines + off_from,
+  memmove(ScreenLines + off_to, ScreenLines + off_from,
       wp->w_width * sizeof(schar_T));
   if (enc_utf8) {
     int i;
 
-    mch_memmove(ScreenLinesUC + off_to, ScreenLinesUC + off_from,
+    memmove(ScreenLinesUC + off_to, ScreenLinesUC + off_from,
         wp->w_width * sizeof(u8char_T));
     for (i = 0; i < p_mco; ++i)
-      mch_memmove(ScreenLinesC[i] + off_to, ScreenLinesC[i] + off_from,
+      memmove(ScreenLinesC[i] + off_to, ScreenLinesC[i] + off_from,
           wp->w_width * sizeof(u8char_T));
   }
   if (enc_dbcs == DBCS_JPNU)
-    mch_memmove(ScreenLines2 + off_to, ScreenLines2 + off_from,
+    memmove(ScreenLines2 + off_to, ScreenLines2 + off_from,
         wp->w_width * sizeof(schar_T));
-  mch_memmove(ScreenAttrs + off_to, ScreenAttrs + off_from,
+  memmove(ScreenAttrs + off_to, ScreenAttrs + off_from,
       wp->w_width * sizeof(sattr_T));
 }
 

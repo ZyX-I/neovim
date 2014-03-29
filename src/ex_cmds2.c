@@ -11,6 +11,8 @@
  * ex_cmds2.c: some more functions for command line commands
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "version_defs.h"
 #include "ex_cmds2.h"
@@ -582,7 +584,7 @@ void ex_breakdel(exarg_T *eap)
       vim_regfree(DEBUGGY(gap, todel).dbg_prog);
       --gap->ga_len;
       if (todel < gap->ga_len)
-        mch_memmove(&DEBUGGY(gap, todel), &DEBUGGY(gap, todel + 1),
+        memmove(&DEBUGGY(gap, todel), &DEBUGGY(gap, todel + 1),
             (gap->ga_len - todel) * sizeof(struct debuggy));
       if (eap->cmdidx == CMD_breakdel)
         ++debug_tick;
@@ -1629,7 +1631,7 @@ do_arglist (
                 (colnr_T)0)) {
           didone = TRUE;
           vim_free(ARGLIST[match].ae_fname);
-          mch_memmove(ARGLIST + match, ARGLIST + match + 1,
+          memmove(ARGLIST + match, ARGLIST + match + 1,
               (ARGCOUNT - match - 1) * sizeof(aentry_T));
           --ALIST(curwin)->al_ga.ga_len;
           if (curwin->w_arg_idx > match)
@@ -1973,7 +1975,7 @@ void ex_argdelete(exarg_T *eap)
     else {
       for (i = eap->line1; i <= eap->line2; ++i)
         vim_free(ARGLIST[i - 1].ae_fname);
-      mch_memmove(ARGLIST + eap->line1 - 1, ARGLIST + eap->line2,
+      memmove(ARGLIST + eap->line1 - 1, ARGLIST + eap->line2,
           (size_t)((ARGCOUNT - eap->line2) * sizeof(aentry_T)));
       ALIST(curwin)->al_ga.ga_len -= n;
       if (curwin->w_arg_idx >= eap->line2)
@@ -2134,7 +2136,7 @@ alist_add_list (
     if (after > ARGCOUNT)
       after = ARGCOUNT;
     if (after < ARGCOUNT)
-      mch_memmove(&(ARGLIST[after + count]), &(ARGLIST[after]),
+      memmove(&(ARGLIST[after + count]), &(ARGLIST[after]),
           (ARGCOUNT - after) * sizeof(aentry_T));
     for (i = 0; i < count; ++i) {
       ARGLIST[after + i].ae_fname = files[i];
@@ -2491,7 +2493,7 @@ do_source (
   vim_free(p);
   if (fname_exp == NULL)
     return retval;
-  if (mch_isdir(fname_exp)) {
+  if (os_isdir(fname_exp)) {
     smsg((char_u *)_("Cannot source a directory: \"%s\""), fname);
     goto theend;
   }
@@ -3315,11 +3317,11 @@ char_u *get_mess_lang(void)
   p = (char_u *)get_locale_val(LC_COLLATE);
 #  endif
 # else
-  p = mch_getenv((char_u *)"LC_ALL");
+  p = os_getenv((char_u *)"LC_ALL");
   if (p == NULL || *p == NUL) {
-    p = mch_getenv((char_u *)"LC_MESSAGES");
+    p = os_getenv((char_u *)"LC_MESSAGES");
     if (p == NULL || *p == NUL)
-      p = mch_getenv((char_u *)"LANG");
+      p = os_getenv((char_u *)"LANG");
   }
 # endif
   return p;
@@ -3336,11 +3338,11 @@ static char_u *get_mess_env(void)
 {
   char_u      *p;
 
-  p = (char_u *)mch_getenv("LC_ALL");
+  p = (char_u *)os_getenv("LC_ALL");
   if (p == NULL || *p == NUL) {
-    p = (char_u *)mch_getenv("LC_MESSAGES");
+    p = (char_u *)os_getenv("LC_MESSAGES");
     if (p == NULL || *p == NUL) {
-      p = (char_u *)mch_getenv("LANG");
+      p = (char_u *)os_getenv("LANG");
       if (p != NULL && VIM_ISDIGIT(*p))
         p = NULL;                       /* ignore something like "1043" */
 # ifdef HAVE_GET_LOCALE_VAL

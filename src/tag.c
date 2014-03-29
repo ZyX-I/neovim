@@ -11,6 +11,8 @@
  * Code to handle tags and the tag stack
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "tag.h"
 #include "buffer.h"
@@ -1239,7 +1241,7 @@ find_tags (
 
   /* This is only to avoid a compiler warning for using search_info
    * uninitialised. */
-  vim_memset(&search_info, 0, (size_t)1);
+  memset(&search_info, 0, (size_t)1);
 
   /*
    * When finding a specified number of matches, first try with matching
@@ -1925,7 +1927,7 @@ parse_line:
                   mfp2 = ((struct match_found **)
                           (ga_match[mtt].ga_data))[i];
                   if (mfp2->len == mfp->len
-                      && vim_memcmp(mfp2->match, mfp->match,
+                      && memcmp(mfp2->match, mfp->match,
                           (size_t)mfp->len) == 0)
                     break;
                   line_breakcheck();
@@ -2024,7 +2026,7 @@ findtag_end:
         /* To avoid allocating memory again we turn the struct
          * match_found into a string.  For help the priority was not
          * included in the length. */
-        mch_memmove(mfp, mfp->match,
+        memmove(mfp, mfp->match,
             (size_t)(mfp->len + (help_only ? ML_HELP_LEN : 0)));
         matches[match_count++] = (char_u *)mfp;
       }
@@ -2087,7 +2089,7 @@ get_tagfname (
   char_u              *r_ptr;
 
   if (first)
-    vim_memset(tnp, 0, sizeof(tagname_T));
+    memset(tnp, 0, sizeof(tagname_T));
 
   if (curbuf->b_help) {
     /*
@@ -2982,14 +2984,14 @@ expand_tags (
     for (i = 0; i < *num_file; i++) {
       parse_match((*file)[i], &t_p);
       c = (int)(t_p.tagname_end - t_p.tagname);
-      mch_memmove(tagnm, t_p.tagname, (size_t)c);
+      memmove(tagnm, t_p.tagname, (size_t)c);
       tagnm[c++] = 0;
       tagnm[c++] = (t_p.tagkind != NULL && *t_p.tagkind)
                    ? *t_p.tagkind : 'f';
       tagnm[c++] = 0;
-      mch_memmove((*file)[i] + c, t_p.fname, t_p.fname_end - t_p.fname);
+      memmove((*file)[i] + c, t_p.fname, t_p.fname_end - t_p.fname);
       (*file)[i][c + (t_p.fname_end - t_p.fname)] = 0;
-      mch_memmove((*file)[i], tagnm, (size_t)c);
+      memmove((*file)[i], tagnm, (size_t)c);
     }
   }
   return ret;

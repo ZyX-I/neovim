@@ -16,6 +16,8 @@
  * 3. Input buffer stuff.
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "ui.h"
 #include "diff.h"
@@ -30,6 +32,8 @@
 #include "normal.h"
 #include "option.h"
 #include "os_unix.h"
+#include "os/time.h"
+#include "os/input.h"
 #include "screen.h"
 #include "term.h"
 #include "window.h"
@@ -77,11 +81,11 @@ void ui_inchar_undo(char_u *s, int len)
   new = alloc(newlen);
   if (new != NULL) {
     if (ta_str != NULL) {
-      mch_memmove(new, ta_str + ta_off, (size_t)(ta_len - ta_off));
-      mch_memmove(new + ta_len - ta_off, s, (size_t)len);
+      memmove(new, ta_str + ta_off, (size_t)(ta_len - ta_off));
+      memmove(new + ta_len - ta_off, s, (size_t)len);
       vim_free(ta_str);
     } else
-      mch_memmove(new, s, (size_t)len);
+      memmove(new, s, (size_t)len);
     ta_str = new;
     ta_len = newlen;
     ta_off = 0;
@@ -125,7 +129,7 @@ ui_inchar (
     static int count = 0;
 
 # ifndef NO_CONSOLE
-    retval = mch_inchar(buf, maxlen, (wtime >= 0 && wtime < 10)
+    retval = os_inchar(buf, maxlen, (wtime >= 0 && wtime < 10)
         ? 10L : wtime, tb_change_cnt);
     if (retval > 0 || typebuf_changed(tb_change_cnt) || wtime >= 0)
       goto theend;
@@ -151,7 +155,7 @@ ui_inchar (
 
 #ifndef NO_CONSOLE
   {
-    retval = mch_inchar(buf, maxlen, wtime, tb_change_cnt);
+    retval = os_inchar(buf, maxlen, wtime, tb_change_cnt);
   }
 #endif
 
@@ -179,7 +183,7 @@ int ui_char_avail(void)
   if (no_console_input())
     return 0;
 # endif
-  return mch_char_avail();
+  return os_char_avail();
 #else
   return 0;
 #endif
@@ -191,7 +195,7 @@ int ui_char_avail(void)
  */
 void ui_delay(long msec, int ignoreinput)
 {
-  mch_delay(msec, ignoreinput);
+  os_delay(msec, ignoreinput);
 }
 
 /*
@@ -268,7 +272,7 @@ void ui_new_shellsize(void)
 
 void ui_breakcheck(void)
 {
-  mch_breakcheck();
+  os_breakcheck();
 }
 
 /*****************************************************************************
@@ -357,7 +361,7 @@ char_u *get_input_buf(void)
     /* Add one to avoid a zero size. */
     gap->ga_data = alloc((unsigned)inbufcount + 1);
     if (gap->ga_data != NULL)
-      mch_memmove(gap->ga_data, inbuf, (size_t)inbufcount);
+      memmove(gap->ga_data, inbuf, (size_t)inbufcount);
     gap->ga_len = inbufcount;
   }
   trash_input_buf();
@@ -374,7 +378,7 @@ void set_input_buf(char_u *p)
 
   if (gap != NULL) {
     if (gap->ga_data != NULL) {
-      mch_memmove(inbuf, gap->ga_data, gap->ga_len);
+      memmove(inbuf, gap->ga_data, gap->ga_len);
       inbufcount = gap->ga_len;
       vim_free(gap->ga_data);
     }
@@ -460,10 +464,10 @@ int read_from_input_buf(char_u *buf, long maxlen)
     fill_input_buf(TRUE);
   if (maxlen > inbufcount)
     maxlen = inbufcount;
-  mch_memmove(buf, inbuf, (size_t)maxlen);
+  memmove(buf, inbuf, (size_t)maxlen);
   inbufcount -= maxlen;
   if (inbufcount)
-    mch_memmove(inbuf, inbuf + maxlen, (size_t)inbufcount);
+    memmove(inbuf, inbuf + maxlen, (size_t)inbufcount);
   return (int)maxlen;
 }
 
@@ -472,7 +476,6 @@ void fill_input_buf(int exit_on_error)
 #if defined(UNIX) || defined(OS2) || defined(VMS) || defined(MACOS_X_UNIX)
   int len;
   int try;
-  static int did_read_something = FALSE;
   static char_u *rest = NULL;       /* unconverted rest of previous read */
   static int restlen = 0;
   int unconverted;
@@ -496,13 +499,13 @@ void fill_input_buf(int exit_on_error)
       unconverted = INBUFLEN - inbufcount;
     else
       unconverted = restlen;
-    mch_memmove(inbuf + inbufcount, rest, unconverted);
+    memmove(inbuf + inbufcount, rest, unconverted);
     if (unconverted == restlen) {
       vim_free(rest);
       rest = NULL;
     } else {
       restlen -= unconverted;
-      mch_memmove(rest, rest + unconverted, restlen);
+      memmove(rest, rest + unconverted, restlen);
     }
     inbufcount += unconverted;
   } else
@@ -510,40 +513,20 @@ void fill_input_buf(int exit_on_error)
 
   len = 0;      /* to avoid gcc warning */
   for (try = 0; try < 100; ++try) {
-    len = read(read_cmd_fd,
-        (char *)inbuf + inbufcount, (size_t)((INBUFLEN - inbufcount)
-                                             / input_conv.vc_factor
-                                             ));
+    len = input_read(
+        (char *)inbuf + inbufcount,
+        (size_t)((INBUFLEN - inbufcount) / input_conv.vc_factor));
 
     if (len > 0 || got_int)
       break;
-    /*
-     * If reading stdin results in an error, continue reading stderr.
-     * This helps when using "foo | xargs vim".
-     */
-    if (!did_read_something && !isatty(read_cmd_fd) && read_cmd_fd == 0) {
-      int m = cur_tmode;
 
-      /* We probably set the wrong file descriptor to raw mode.  Switch
-       * back to cooked mode, use another descriptor and set the mode to
-       * what it was. */
-      settmode(TMODE_COOK);
-#ifdef HAVE_DUP
-      /* Use stderr for stdin, also works for shell commands. */
-      close(0);
-      ignored = dup(2);
-#else
-      read_cmd_fd = 2;          /* read from stderr instead of stdin */
-#endif
-      settmode(m);
-    }
     if (!exit_on_error)
       return;
   }
+
   if (len <= 0 && !got_int)
     read_error_exit();
-  if (len > 0)
-    did_read_something = TRUE;
+
   if (got_int) {
     /* Interrupted, pretend a CTRL-C was typed. */
     inbuf[0] = 3;
@@ -569,7 +552,7 @@ void fill_input_buf(int exit_on_error)
        */
       if (inbuf[inbufcount] == 3 && ctrl_c_interrupts) {
         /* remove everything typed before the CTRL-C */
-        mch_memmove(inbuf, inbuf + inbufcount, (size_t)(len + 1));
+        memmove(inbuf, inbuf + inbufcount, (size_t)(len + 1));
         inbufcount = 0;
         got_int = TRUE;
       }

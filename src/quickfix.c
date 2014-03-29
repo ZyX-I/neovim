@@ -11,6 +11,8 @@
  * quickfix.c: functions for quickfix mode, using a file with error messages
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "quickfix.h"
 #include "buffer.h"
@@ -857,7 +859,7 @@ static void qf_new_list(qf_info_T *qi, char_u *qf_title)
     qi->qf_curlist = LISTCOUNT - 1;
   } else
     qi->qf_curlist = qi->qf_listcount++;
-  vim_memset(&qi->qf_lists[qi->qf_curlist], 0, (size_t)(sizeof(qf_list_T)));
+  memset(&qi->qf_lists[qi->qf_curlist], 0, (size_t)(sizeof(qf_list_T)));
   if (qf_title != NULL) {
     char_u *p = alloc((int)STRLEN(qf_title) + 2);
 
@@ -984,7 +986,7 @@ static qf_info_T *ll_new_list(void)
 
   qi = (qf_info_T *)alloc((unsigned)sizeof(qf_info_T));
   if (qi != NULL) {
-    vim_memset(qi, 0, (size_t)(sizeof(qf_info_T)));
+    memset(qi, 0, (size_t)(sizeof(qf_info_T)));
     qi->qf_refcount++;
   }
 
@@ -1182,7 +1184,7 @@ static char_u *qf_push_dir(char_u *dirbuf, struct dir_stack_T **stackptr)
       vim_free((*stackptr)->dirname);
       (*stackptr)->dirname = concat_fnames(ds_new->dirname, dirbuf,
           TRUE);
-      if (mch_isdir((*stackptr)->dirname) == TRUE)
+      if (os_isdir((*stackptr)->dirname) == TRUE)
         break;
 
       ds_new = ds_new->next;
@@ -2864,7 +2866,7 @@ void ex_vimgrep(exarg_T *eap)
 
   /* Remember the current directory, because a BufRead autocommand that does
    * ":lcd %:p:h" changes the meaning of short path names. */
-  mch_dirname(dirname_start, MAXPATHL);
+  os_dirname(dirname_start, MAXPATHL);
 
   /* Remember the value of qf_start, so that we can check for autocommands
    * changing the current quickfix list. */
@@ -3131,7 +3133,7 @@ static void restore_start_dir(char_u *dirname_start)
   char_u *dirname_now = alloc(MAXPATHL);
 
   if (NULL != dirname_now) {
-    mch_dirname(dirname_now, MAXPATHL);
+    os_dirname(dirname_now, MAXPATHL);
     if (STRCMP(dirname_start, dirname_now) != 0) {
       /* If the directory has changed, change it back by building up an
        * appropriate ex command and executing it. */
@@ -3219,7 +3221,7 @@ load_dummy_buffer (
    * Let the caller know what the resulting dir was first, in case it is
    * important.
    */
-  mch_dirname(resulting_dir, MAXPATHL);
+  os_dirname(resulting_dir, MAXPATHL);
   restore_start_dir(dirname_start);
 
   if (!buf_valid(newbuf))

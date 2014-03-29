@@ -23,6 +23,8 @@
  */
 
 #define tgetstr tgetstr_defined_wrong
+#include <string.h>
+
 #include "vim.h"
 #include "term.h"
 #include "buffer.h"
@@ -46,6 +48,7 @@
 #include "ui.h"
 #include "window.h"
 #include "os/os.h"
+#include "os/time.h"
 
 #ifdef HAVE_TGETENT
 # ifdef HAVE_TERMIOS_H
@@ -376,7 +379,7 @@ static struct builtin_term builtin_termcaps[] =
   /*
    * These codes are valid when nansi.sys or equivalent has been installed.
    * Function keys on a PC are preceded with a NUL. These are converted into
-   * K_NUL '\316' in mch_inchar(), because we cannot handle NULs in key codes.
+   * K_NUL '\316' in os_inchar(), because we cannot handle NULs in key codes.
    * CTRL-arrow is used instead of SHIFT-arrow.
    */
   {(int)KS_NAME,      "pcansi"},
@@ -2022,7 +2025,7 @@ void termcapinit(char_u *name)
   term = name;
 
   if (term == NULL)
-    term = (char_u *)mch_getenv("TERM");
+    term = (char_u *)os_getenv("TERM");
   if (term == NULL || *term == NUL)
     term = DEFAULT_TERM;
   set_string_option_direct((char_u *)"term", -1, term, OPT_FREE, 0);
@@ -2032,7 +2035,7 @@ void termcapinit(char_u *name)
   set_string_default("ttytype", term);
 
   /*
-   * Avoid using "term" here, because the next mch_getenv() may overwrite it.
+   * Avoid using "term" here, because the next os_getenv() may overwrite it.
    */
   set_termname(T_NAME != NULL ? T_NAME : term);
 }
@@ -2671,7 +2674,7 @@ void stoptermcap(void)
       if (crv_status == CRV_SENT || u7_status == U7_SENT) {
 # ifdef UNIX
         /* Give the terminal a chance to respond. */
-        mch_delay(100L, FALSE);
+        os_delay(100L, FALSE);
 # endif
 # ifdef TCIFLUSH
         /* Discard data received but not read. */
@@ -4137,22 +4140,22 @@ int check_termcode(int max_offset, char_u *buf, int bufsize, int *buflen)
        * Careful: del_typebuf() and ins_typebuf() may have reallocated
        * typebuf.tb_buf[]!
        */
-      mch_memmove(typebuf.tb_buf + typebuf.tb_off + offset, string,
+      memmove(typebuf.tb_buf + typebuf.tb_off + offset, string,
           (size_t)new_slen);
     } else {
       if (extra < 0)
         /* remove matched characters */
-        mch_memmove(buf + offset, buf + offset - extra,
+        memmove(buf + offset, buf + offset - extra,
             (size_t)(*buflen + offset + extra));
       else if (extra > 0) {
         /* Insert the extra space we need.  If there is insufficient
          * space return -1. */
         if (*buflen + extra + new_slen >= bufsize)
           return -1;
-        mch_memmove(buf + offset + extra, buf + offset,
+        memmove(buf + offset + extra, buf + offset,
             (size_t)(*buflen - offset));
       }
-      mch_memmove(buf + offset, string, (size_t)new_slen);
+      memmove(buf + offset, string, (size_t)new_slen);
       *buflen = *buflen + extra + new_slen;
     }
     return retval == 0 ? (len + extra + offset) : retval;

@@ -2,6 +2,8 @@
 ///
 /// Functions for handling growing arrays.
 
+#include <string.h>
+
 #include "vim.h"
 #include "ascii.h"
 #include "misc2.h"
@@ -71,13 +73,13 @@ int ga_grow(garray_T *gap, int n)
     new_len = gap->ga_itemsize * (gap->ga_len + n);
     pp = (gap->ga_data == NULL)
          ? alloc((unsigned)new_len)
-         : vim_realloc(gap->ga_data, new_len);
+         : realloc(gap->ga_data, new_len);
 
     if (pp == NULL) {
       return FAIL;
     }
     old_len = gap->ga_itemsize * gap->ga_maxlen;
-    vim_memset(pp + old_len, 0, new_len - old_len);
+    memset(pp + old_len, 0, new_len - old_len);
     gap->ga_maxlen = gap->ga_len + n;
     gap->ga_data = pp;
   }
@@ -124,7 +126,7 @@ void ga_concat(garray_T *gap, char_u *s)
 {
   int len = (int)STRLEN(s);
   if (ga_grow(gap, len) == OK) {
-    mch_memmove((char *)gap->ga_data + gap->ga_len, s, (size_t)len);
+    memmove((char *)gap->ga_data + gap->ga_len, s, (size_t)len);
     gap->ga_len += len;
   }
 }

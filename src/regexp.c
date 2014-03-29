@@ -44,6 +44,8 @@
 /* #undef REGEXP_DEBUG */
 /* #define REGEXP_DEBUG */
 
+#include <string.h>
+
 #include "vim.h"
 #include "regexp.h"
 #include "charset.h"
@@ -1334,7 +1336,7 @@ regcomp_start (
 
   num_complex_braces = 0;
   regnpar = 1;
-  vim_memset(had_endbrace, 0, sizeof(had_endbrace));
+  memset(had_endbrace, 0, sizeof(had_endbrace));
   regnzpar = 1;
   re_has_z = 0;
   regsize = 0L;
@@ -5515,11 +5517,11 @@ static void cleanup_subexpr(void)
   if (need_clear_subexpr) {
     if (REG_MULTI) {
       /* Use 0xff to set lnum to -1 */
-      vim_memset(reg_startpos, 0xff, sizeof(lpos_T) * NSUBEXP);
-      vim_memset(reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP);
+      memset(reg_startpos, 0xff, sizeof(lpos_T) * NSUBEXP);
+      memset(reg_endpos, 0xff, sizeof(lpos_T) * NSUBEXP);
     } else {
-      vim_memset(reg_startp, 0, sizeof(char_u *) * NSUBEXP);
-      vim_memset(reg_endp, 0, sizeof(char_u *) * NSUBEXP);
+      memset(reg_startp, 0, sizeof(char_u *) * NSUBEXP);
+      memset(reg_endp, 0, sizeof(char_u *) * NSUBEXP);
     }
     need_clear_subexpr = FALSE;
   }
@@ -5530,11 +5532,11 @@ static void cleanup_zsubexpr(void)
   if (need_clear_zsubexpr) {
     if (REG_MULTI) {
       /* Use 0xff to set lnum to -1 */
-      vim_memset(reg_startzpos, 0xff, sizeof(lpos_T) * NSUBEXP);
-      vim_memset(reg_endzpos, 0xff, sizeof(lpos_T) * NSUBEXP);
+      memset(reg_startzpos, 0xff, sizeof(lpos_T) * NSUBEXP);
+      memset(reg_endzpos, 0xff, sizeof(lpos_T) * NSUBEXP);
     } else {
-      vim_memset(reg_startzp, 0, sizeof(char_u *) * NSUBEXP);
-      vim_memset(reg_endzp, 0, sizeof(char_u *) * NSUBEXP);
+      memset(reg_startzp, 0, sizeof(char_u *) * NSUBEXP);
+      memset(reg_endzp, 0, sizeof(char_u *) * NSUBEXP);
     }
     need_clear_zsubexpr = FALSE;
   }
@@ -6451,9 +6453,9 @@ char_u *regtilde(char_u *source, int magic)
         if (tmpsub != NULL) {
           /* copy prefix */
           len = (int)(p - newsub);              /* not including ~ */
-          mch_memmove(tmpsub, newsub, (size_t)len);
+          memmove(tmpsub, newsub, (size_t)len);
           /* interpret tilde */
-          mch_memmove(tmpsub + len, reg_prev_sub, (size_t)prevlen);
+          memmove(tmpsub + len, reg_prev_sub, (size_t)prevlen);
           /* copy postfix */
           if (!magic)
             ++p;                                /* back off \ */
@@ -6722,7 +6724,7 @@ static int vim_regsub_both(char_u *source, char_u *dest, int copy, int magic, in
              * are composing characters; copy them as-is. */
             if (clen < totlen) {
               if (copy)
-                mch_memmove(dst + 1, src - 1 + clen,
+                memmove(dst + 1, src - 1 + clen,
                     (size_t)(totlen - clen));
               dst += totlen - clen;
             }

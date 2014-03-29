@@ -10,6 +10,8 @@
  * search.c: code for normal mode searching commands
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "search.h"
 #include "charset.h"
@@ -18,6 +20,7 @@
 #include "ex_cmds.h"
 #include "ex_cmds2.h"
 #include "ex_getln.h"
+#include "farsi.h"
 #include "fileio.h"
 #include "fold.h"
 #include "getchar.h"
@@ -246,7 +249,7 @@ char_u *reverse_text(char_u *s)
 
         mb_len = (*mb_ptr2len)(s + s_i);
         rev_i -= mb_len;
-        mch_memmove(rev + rev_i, s + s_i, mb_len);
+        memmove(rev + rev_i, s + s_i, mb_len);
         s_i += mb_len - 1;
       } else
         rev[--rev_i] = s[s_i];
@@ -1363,7 +1366,7 @@ int searchc(cmdarg_T *cap, int t_cmd)
           if (p[col] == c && stop)
             break;
         } else {
-          if (vim_memcmp(p + col, bytes, bytelen) == 0 && stop)
+          if (memcmp(p + col, bytes, bytelen) == 0 && stop)
             break;
         }
         stop = TRUE;

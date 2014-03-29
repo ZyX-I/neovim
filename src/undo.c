@@ -81,6 +81,8 @@
 #define UH_MAGIC 0x18dade       /* value for uh_magic when in use */
 #define UE_MAGIC 0xabc123       /* value for ue_magic when in use */
 
+#include <string.h>
+
 #include "vim.h"
 #include "undo.h"
 #include "edit.h"
@@ -484,7 +486,7 @@ int u_savecommon(linenr_T top, linenr_T bot, linenr_T newbot, int reload)
                     ((curbuf->b_ml.ml_flags & ML_EMPTY) ? UH_EMPTYBUF : 0);
 
     /* save named marks and Visual marks for undo */
-    mch_memmove(uhp->uh_namedm, curbuf->b_namedm, sizeof(pos_T) * NMARKS);
+    memmove(uhp->uh_namedm, curbuf->b_namedm, sizeof(pos_T) * NMARKS);
     uhp->uh_visual = curbuf->b_visual;
 
     curbuf->b_u_newhead = uhp;
@@ -579,7 +581,7 @@ int u_savecommon(linenr_T top, linenr_T bot, linenr_T newbot, int reload)
   uep = (u_entry_T *)U_ALLOC_LINE(sizeof(u_entry_T));
   if (uep == NULL)
     goto nomem;
-  vim_memset(uep, 0, sizeof(u_entry_T));
+  memset(uep, 0, sizeof(u_entry_T));
 #ifdef U_DEBUG
   uep->ue_magic = UE_MAGIC;
 #endif
@@ -717,12 +719,12 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
       if (undo_file_name == NULL)
         break;
       p = gettail(undo_file_name);
-      mch_memmove(p + 1, p, STRLEN(p) + 1);
+      memmove(p + 1, p, STRLEN(p) + 1);
       *p = '.';
       STRCAT(p, ".un~");
     } else {
       dir_name[dir_len] = NUL;
-      if (mch_isdir(dir_name)) {
+      if (os_isdir(dir_name)) {
         if (munged_name == NULL) {
           munged_name = vim_strsave(ffname);
           if (munged_name == NULL)
@@ -919,7 +921,7 @@ static u_header_T *unserialize_uhp(FILE *fp, char_u *file_name)
   uhp = (u_header_T *)U_ALLOC_LINE(sizeof(u_header_T));
   if (uhp == NULL)
     return NULL;
-  vim_memset(uhp, 0, sizeof(u_header_T));
+  memset(uhp, 0, sizeof(u_header_T));
 #ifdef U_DEBUG
   uhp->uh_magic = UH_MAGIC;
 #endif
@@ -1017,7 +1019,7 @@ static u_entry_T *unserialize_uep(FILE *fp, int *error, char_u *file_name)
   uep = (u_entry_T *)U_ALLOC_LINE(sizeof(u_entry_T));
   if (uep == NULL)
     return NULL;
-  vim_memset(uep, 0, sizeof(u_entry_T));
+  memset(uep, 0, sizeof(u_entry_T));
 #ifdef U_DEBUG
   uep->ue_magic = UE_MAGIC;
 #endif
@@ -1031,7 +1033,7 @@ static u_entry_T *unserialize_uep(FILE *fp, int *error, char_u *file_name)
       *error = TRUE;
       return uep;
     }
-    vim_memset(array, 0, sizeof(char_u *) * uep->ue_size);
+    memset(array, 0, sizeof(char_u *) * uep->ue_size);
   } else
     array = NULL;
   uep->ue_array = array;
@@ -1165,7 +1167,7 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
       st_old_valid = TRUE;
     }
 #else
-    perm = mch_getperm(buf->b_ffname);
+    perm = os_getperm(buf->b_ffname);
     if (perm < 0)
       perm = 0600;
 #endif
@@ -1229,7 +1231,7 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
     EMSG2(_(e_not_open), file_name);
     goto theend;
   }
-  (void)mch_setperm(file_name, perm);
+  (void)os_setperm(file_name, perm);
   if (p_verbose > 0) {
     verbose_enter();
     smsg((char_u *)_("Writing undo file: %s"), file_name);
@@ -1254,7 +1256,7 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
       && fchown(fd, (uid_t)-1, st_old.st_gid) != 0
 # endif
       )
-    mch_setperm(file_name, (perm & 0707) | ((perm & 07) << 3));
+    os_setperm(file_name, (perm & 0707) | ((perm & 07) << 3));
 # ifdef HAVE_SELINUX
   if (buf->b_ffname != NULL)
     mch_copy_sec(buf->b_ffname, file_name);
@@ -2094,7 +2096,7 @@ static void u_undoredo(int undo)
   /*
    * save marks before undo/redo
    */
-  mch_memmove(namedm, curbuf->b_namedm, sizeof(pos_T) * NMARKS);
+  memmove(namedm, curbuf->b_namedm, sizeof(pos_T) * NMARKS);
   visualinfo = curbuf->b_visual;
   curbuf->b_op_start.lnum = curbuf->b_ml.ml_line_count;
   curbuf->b_op_start.col = 0;

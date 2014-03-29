@@ -11,6 +11,8 @@
  * ex_docmd.c: functions for executing an Ex command line.
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "ex_docmd.h"
 #include "blowfish.h"
@@ -590,7 +592,7 @@ int flags;
   if (flags & DOCMD_EXCRESET)
     save_dbg_stuff(&debug_saved);
   else
-    vim_memset(&debug_saved, 0, 1);
+    memset(&debug_saved, 0, 1);
 
   initial_trylevel = trylevel;
 
@@ -1310,7 +1312,7 @@ void                *cookie;                    /*argument for fgetline() */
   cmdmod_T save_cmdmod;
   int ni;                                       /* set when Not Implemented */
 
-  vim_memset(&ea, 0, sizeof(ea));
+  memset(&ea, 0, sizeof(ea));
   ea.line1 = 1;
   ea.line2 = 1;
   ++ex_nesting_level;
@@ -1329,7 +1331,7 @@ void                *cookie;                    /*argument for fgetline() */
    * recursive calls.
    */
   save_cmdmod = cmdmod;
-  vim_memset(&cmdmod, 0, sizeof(cmdmod));
+  memset(&cmdmod, 0, sizeof(cmdmod));
 
   /* "#!anything" is handled like a comment. */
   if ((*cmdlinep)[0] == '#' && (*cmdlinep)[1] == '!')
@@ -3870,9 +3872,9 @@ static char_u *repl_cmdline(exarg_T *eap, char_u *src, int srclen, char_u *repl,
    * Copy the next commands, if there are any.
    */
   i = (int)(src - *cmdlinep);   /* length of part before match */
-  mch_memmove(new_cmdline, *cmdlinep, (size_t)i);
+  memmove(new_cmdline, *cmdlinep, (size_t)i);
 
-  mch_memmove(new_cmdline + i, repl, (size_t)len);
+  memmove(new_cmdline + i, repl, (size_t)len);
   i += len;                             /* remember the end of the string */
   STRCPY(new_cmdline + i, src + srclen);
   src = new_cmdline + i;                /* remember where to continue */
@@ -4397,7 +4399,7 @@ static int uc_add_command(char_u *name, size_t name_len, char_u *rep, long argt,
       goto fail;
 
     cmd = USER_CMD_GA(gap, i);
-    mch_memmove(cmd + 1, cmd, (gap->ga_len - i) * sizeof(ucmd_T));
+    memmove(cmd + 1, cmd, (gap->ga_len - i) * sizeof(ucmd_T));
 
     ++gap->ga_len;
 
@@ -4815,7 +4817,7 @@ static void ex_delcommand(exarg_T *eap)
   --gap->ga_len;
 
   if (i < gap->ga_len)
-    mch_memmove(cmd, cmd + 1, (gap->ga_len - i) * sizeof(ucmd_T));
+    memmove(cmd, cmd + 1, (gap->ga_len - i) * sizeof(ucmd_T));
 }
 
 /*
@@ -5129,7 +5131,7 @@ static void do_ucmd(exarg_T *eap)
           * Also change K_SPECIAL KS_EXTRA KE_CSI into CSI. */
           len = ksp - p;
           if (len > 0) {
-            mch_memmove(q, p, len);
+            memmove(q, p, len);
             q += len;
           }
           *q++ = ksp[1] == KS_SPECIAL ? K_SPECIAL : CSI;
@@ -5150,7 +5152,7 @@ static void do_ucmd(exarg_T *eap)
       if (buf == NULL)
         totlen += len;
       else {
-        mch_memmove(q, p, len);
+        memmove(q, p, len);
         q += len;
       }
 
@@ -5797,7 +5799,7 @@ handle_drop (
    * Move to the first file.
    */
   /* Fake up a minimal "next" command for do_argfile() */
-  vim_memset(&ea, 0, sizeof(ea));
+  memset(&ea, 0, sizeof(ea));
   ea.cmd = (char_u *)"next";
   do_argfile(&ea, 0);
 
@@ -6089,7 +6091,7 @@ void tabpage_new(void)
 {
   exarg_T ea;
 
-  vim_memset(&ea, 0, sizeof(ea));
+  memset(&ea, 0, sizeof(ea));
   ea.cmdidx = CMD_tabnew;
   ea.cmd = (char_u *)"tabn";
   ea.arg = (char_u *)"";
@@ -6605,7 +6607,7 @@ void post_chdir(int local)
     if (globaldir == NULL && prev_dir != NULL)
       globaldir = vim_strsave(prev_dir);
     /* Remember this local directory for the window. */
-    if (mch_dirname(NameBuff, MAXPATHL) == OK)
+    if (os_dirname(NameBuff, MAXPATHL) == OK)
       curwin->w_localdir = vim_strsave(NameBuff);
   } else {
     /* We are now in the global directory, no need to remember its
@@ -6654,7 +6656,7 @@ void ex_cd(exarg_T *eap)
 
     /* Save current directory for next ":cd -" */
     tofree = prev_dir;
-    if (mch_dirname(NameBuff, MAXPATHL) == OK)
+    if (os_dirname(NameBuff, MAXPATHL) == OK)
       prev_dir = vim_strsave(NameBuff);
     else
       prev_dir = NULL;
@@ -6685,7 +6687,7 @@ void ex_cd(exarg_T *eap)
  */
 static void ex_pwd(exarg_T *eap)
 {
-  if (mch_dirname(NameBuff, MAXPATHL) == OK) {
+  if (os_dirname(NameBuff, MAXPATHL) == OK) {
 #ifdef BACKSLASH_IN_FILENAME
     slash_adjust(NameBuff);
 #endif
@@ -7279,7 +7281,7 @@ static void ex_mkrc(exarg_T *eap)
 
 #if defined(FEAT_SESSION) && defined(vim_mkdir)
   /* When using 'viewdir' may have to create the directory. */
-  if (using_vdir && !mch_isdir(p_vdir))
+  if (using_vdir && !os_isdir(p_vdir))
     vim_mkdir_emsg(p_vdir, 0755);
 #endif
 
@@ -7335,15 +7337,15 @@ static void ex_mkrc(exarg_T *eap)
           /*
            * Change to session file's dir.
            */
-          if (mch_dirname(dirnow, MAXPATHL) == FAIL
-              || mch_chdir((char *)dirnow) != 0)
+          if (os_dirname(dirnow, MAXPATHL) == FAIL
+              || os_chdir((char *)dirnow) != 0)
             *dirnow = NUL;
           if (*dirnow != NUL && (ssop_flags & SSOP_SESDIR)) {
             if (vim_chdirfile(fname) == OK)
               shorten_fnames(TRUE);
           } else if (*dirnow != NUL
                      && (ssop_flags & SSOP_CURDIR) && globaldir != NULL) {
-            if (mch_chdir((char *)globaldir) == 0)
+            if (os_chdir((char *)globaldir) == 0)
               shorten_fnames(TRUE);
           }
 
@@ -7353,7 +7355,7 @@ static void ex_mkrc(exarg_T *eap)
           if (*dirnow != NUL && ((ssop_flags & SSOP_SESDIR)
                                  || ((ssop_flags & SSOP_CURDIR) && globaldir !=
                                      NULL))) {
-            if (mch_chdir((char *)dirnow) != 0)
+            if (os_chdir((char *)dirnow) != 0)
               EMSG(_(e_prev_dir));
             shorten_fnames(TRUE);
           }
@@ -7426,7 +7428,7 @@ open_exfile (
 
 #ifdef UNIX
   /* with Unix it is possible to open a directory */
-  if (mch_isdir(fname)) {
+  if (os_isdir(fname)) {
     EMSG2(_(e_isadir2), fname);
     return NULL;
   }
@@ -8178,7 +8180,7 @@ char_u *expand_sfile(char_u *arg)
         vim_free(result);
         return NULL;
       }
-      mch_memmove(newres, result, (size_t)(p - result));
+      memmove(newres, result, (size_t)(p - result));
       STRCPY(newres + (p - result), repl);
       len = (int)STRLEN(newres);
       STRCAT(newres, p + srclen);

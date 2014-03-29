@@ -17,7 +17,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
-#include "os_unix.h"
+#include "os/time.h"
 #include "quickfix.h"
 #include "tag.h"
 #include "ui.h"
@@ -1330,7 +1330,7 @@ static int cs_insert_filelist(char *fname, char *ppath, char *flags, struct stat
     } else {
       /* Reallocate space for more connections. */
       csinfo_size *= 2;
-      csinfo = vim_realloc(csinfo, sizeof(csinfo_T)*csinfo_size);
+      csinfo = realloc(csinfo, sizeof(csinfo_T)*csinfo_size);
     }
     if (csinfo == NULL)
       return -1;
@@ -1870,7 +1870,7 @@ static void cs_print_tags_priv(char **matches, char **cntxts, int num_matches)
     /* hopefully 'num' (num of matches) will be less than 10^16 */
     newsize = (int)(strlen(csfmt_str) + 16 + strlen(lno));
     if (bufsize < newsize) {
-      buf = (char *)vim_realloc(buf, newsize);
+      buf = (char *)realloc(buf, newsize);
       if (buf == NULL)
         bufsize = 0;
       else
@@ -1891,7 +1891,7 @@ static void cs_print_tags_priv(char **matches, char **cntxts, int num_matches)
     newsize = (int)(strlen(context) + strlen(cntxformat));
 
     if (bufsize < newsize) {
-      buf = (char *)vim_realloc(buf, newsize);
+      buf = (char *)realloc(buf, newsize);
       if (buf == NULL)
         bufsize = 0;
       else
@@ -2073,7 +2073,7 @@ static void cs_release_csp(int i, int freefnpp)
       waitpid_errno = errno;
       if (pid != 0)
         break;          /* break unless the process is still running */
-      mch_delay(50L, FALSE);       /* sleep 50 ms */
+      os_delay(50L, FALSE);       /* sleep 50 ms */
     }
 # endif
     /*
@@ -2104,7 +2104,7 @@ static void cs_release_csp(int i, int freefnpp)
             alive = FALSE;             /* cscope process no longer exists */
             break;
           }
-          mch_delay(50L, FALSE);           /* sleep 50ms */
+          os_delay(50L, FALSE);           /* sleep 50ms */
         }
       }
       if (alive)

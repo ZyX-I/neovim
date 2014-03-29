@@ -32,6 +32,8 @@
  */
 
 #define IN_OPTION_C
+#include <string.h>
+
 #include "vim.h"
 #include "option.h"
 #include "blowfish.h"
@@ -1960,7 +1962,7 @@ void set_init_1(void)
   p_cp = TRUE;
 
   /* Use POSIX compatibility when $VIM_POSIX is set. */
-  if (mch_getenv("VIM_POSIX") != NULL) {
+  if (os_getenv("VIM_POSIX") != NULL) {
     set_string_default("cpo", (char_u *)CPO_ALL);
     set_string_default("shm", (char_u *)"A");
   }
@@ -1969,7 +1971,7 @@ void set_init_1(void)
    * Find default value for 'shell' option.
    * Don't use it if it is empty.
    */
-  if (((p = (char_u *)mch_getenv("SHELL")) != NULL && *p != NUL)
+  if (((p = (char_u *)os_getenv("SHELL")) != NULL && *p != NUL)
       )
     set_string_default("sh", p);
 
@@ -2022,25 +2024,20 @@ void set_init_1(void)
    */
   opt_idx = findoption((char_u *)"maxmemtot");
   if (opt_idx >= 0) {
-#if !defined(HAVE_AVAIL_MEM) && !defined(HAVE_TOTAL_MEM)
+#ifndef HAVE_TOTAL_MEM
     if (options[opt_idx].def_val[VI_DEFAULT] == (char_u *)0L)
 #endif
     {
-#ifdef HAVE_AVAIL_MEM
-      /* Use amount of memory available at this moment. */
-      n = (mch_avail_mem(FALSE) >> 1);
-#else
-# ifdef HAVE_TOTAL_MEM
+#ifdef HAVE_TOTAL_MEM
       /* Use amount of memory available to Vim. */
-      n = (mch_total_mem(FALSE) >> 1);
-# else
+      n = (os_total_mem(FALSE) >> 1);
+#else
       n = (0x7fffffff >> 11);
-# endif
 #endif
       options[opt_idx].def_val[VI_DEFAULT] = (char_u *)n;
       opt_idx = findoption((char_u *)"maxmem");
       if (opt_idx >= 0) {
-#if !defined(HAVE_AVAIL_MEM) && !defined(HAVE_TOTAL_MEM)
+#ifndef HAVE_TOTAL_MEM
         if ((long)options[opt_idx].def_val[VI_DEFAULT] > (long)n
             || (long)options[opt_idx].def_val[VI_DEFAULT] == 0L)
 #endif
@@ -2169,7 +2166,7 @@ void set_init_1(void)
    * NOTE: mlterm's author is being asked to 'set' a variable
    *       instead of an environment variable due to inheritance.
    */
-  if (mch_getenv("MLTERM") != NULL)
+  if (os_getenv("MLTERM") != NULL)
     set_option_value((char_u *)"tbidi", 1L, NULL, 0);
 
   /* Parse default for 'fillchars'. */
@@ -2447,7 +2444,7 @@ static char_u *term_bg_default(void)
       || STRCMP(T_NAME, "screen.linux") == 0
       || STRCMP(T_NAME, "cygwin") == 0
       || STRCMP(T_NAME, "putty") == 0
-      || ((p = (char_u *)mch_getenv("COLORFGBG")) != NULL
+      || ((p = (char_u *)os_getenv("COLORFGBG")) != NULL
           && (p = vim_strrchr(p, ';')) != NULL
           && ((p[1] >= '0' && p[1] <= '6') || p[1] == '8')
           && p[2] == NUL))
@@ -3161,7 +3158,7 @@ do_set (
                 if (has_mbyte
                     && (i = (*mb_ptr2len)(arg)) > 1) {
                   /* copy multibyte char */
-                  mch_memmove(s, arg, (size_t)i);
+                  memmove(s, arg, (size_t)i);
                   arg += i;
                   s += i;
                 } else
@@ -3228,9 +3225,9 @@ do_set (
                          && *newval != NUL);
                 if (adding) {
                   i = (int)STRLEN(origval);
-                  mch_memmove(newval + i + comma, newval,
+                  memmove(newval + i + comma, newval,
                       STRLEN(newval) + 1);
-                  mch_memmove(newval, origval, (size_t)i);
+                  memmove(newval, origval, (size_t)i);
                 } else {
                   i = (int)STRLEN(newval);
                   STRMOVE(newval + i + comma, origval);
@@ -3336,7 +3333,7 @@ skip:
       if (i + (arg - startarg) < IOSIZE) {
         /* append the argument with the error */
         STRCAT(IObuff, ": ");
-        mch_memmove(IObuff + i, startarg, (arg - startarg));
+        memmove(IObuff + i, startarg, (arg - startarg));
         IObuff[i + (arg - startarg)] = NUL;
       }
       /* make sure all characters are printable */
@@ -7677,7 +7674,7 @@ static void langmap_set_entry(int from, int to)
 
   /* insert new entry at position "a" */
   entries = (langmap_entry_T *)(langmap_mapga.ga_data) + a;
-  mch_memmove(entries + 1, entries,
+  memmove(entries + 1, entries,
       (langmap_mapga.ga_len - a) * sizeof(langmap_entry_T));
   ++langmap_mapga.ga_len;
   entries[0].from = from;

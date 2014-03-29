@@ -12,6 +12,8 @@
  *		the operators.
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "normal.h"
 #include "buffer.h"
@@ -24,6 +26,7 @@
 #include "ex_cmds2.h"
 #include "ex_docmd.h"
 #include "ex_getln.h"
+#include "farsi.h"
 #include "fileio.h"
 #include "fold.h"
 #include "getchar.h"
@@ -521,7 +524,7 @@ normal_cmd (
   int idx;
   int set_prevcount = FALSE;
 
-  vim_memset(&ca, 0, sizeof(ca));       /* also resets ca.retval */
+  memset(&ca, 0, sizeof(ca));       /* also resets ca.retval */
   ca.oap = oap;
 
   /* Use a count remembered from before entering an operator.  After typing
@@ -3107,7 +3110,7 @@ int add_to_showcmd(int c)
   extra_len = (int)STRLEN(p);
   overflow = old_len + extra_len - SHOWCMD_COLS;
   if (overflow > 0)
-    mch_memmove(showcmd_buf, showcmd_buf + overflow,
+    memmove(showcmd_buf, showcmd_buf + overflow,
         old_len - overflow + 1);
   STRCAT(showcmd_buf, p);
 
@@ -4338,7 +4341,7 @@ void do_nv_ident(int c1, int c2)
   cmdarg_T ca;
 
   clear_oparg(&oa);
-  vim_memset(&ca, 0, sizeof(ca));
+  memset(&ca, 0, sizeof(ca));
   ca.oap = &oa;
   ca.cmdchar = c1;
   ca.nchar = c2;
@@ -4493,7 +4496,7 @@ static void nv_ident(cmdarg_T *cap)
       vim_free(buf);
       return;
     }
-    newbuf = (char_u *)vim_realloc(buf, STRLEN(buf) + STRLEN(p) + 1);
+    newbuf = (char_u *)realloc(buf, STRLEN(buf) + STRLEN(p) + 1);
     if (newbuf == NULL) {
       vim_free(buf);
       vim_free(p);
@@ -6126,15 +6129,6 @@ static void nv_g_cmd(cmdarg_T *cap)
   int flag = FALSE;
 
   switch (cap->nchar) {
-#ifdef MEM_PROFILE
-  /*
-   * "g^A": dump log of used memory.
-   */
-  case Ctrl_A:
-    vim_mem_profile_dump();
-    break;
-#endif
-
   /*
    * "gR": Enter virtual replace mode.
    */

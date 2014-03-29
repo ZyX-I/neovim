@@ -11,6 +11,8 @@
  * edit.c: functions for Insert mode
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "edit.h"
 #include "buffer.h"
@@ -19,6 +21,7 @@
 #include "eval.h"
 #include "ex_docmd.h"
 #include "ex_getln.h"
+#include "farsi.h"
 #include "fileio.h"
 #include "fold.h"
 #include "getchar.h"
@@ -3503,7 +3506,7 @@ int ins_compl_add_tv(typval_T *tv, int dir)
       aempty = get_dict_number(tv->vval.v_dict, (char_u *)"empty");
   } else {
     word = get_tv_string_chk(tv);
-    vim_memset(cptext, 0, sizeof(cptext));
+    memset(cptext, 0, sizeof(cptext));
   }
   if (word == NULL || (!aempty && *word == NUL))
     return FAIL;
@@ -6295,7 +6298,7 @@ replace_push (
       return;
     }
     if (replace_stack != NULL) {
-      mch_memmove(p, replace_stack,
+      memmove(p, replace_stack,
           (size_t)(replace_stack_nr * sizeof(char_u)));
       vim_free(replace_stack);
     }
@@ -6303,7 +6306,7 @@ replace_push (
   }
   p = replace_stack + replace_stack_nr - replace_offset;
   if (replace_offset)
-    mch_memmove(p + 1, p, (size_t)(replace_offset * sizeof(char_u)));
+    memmove(p + 1, p, (size_t)(replace_offset * sizeof(char_u)));
   *p = c;
   ++replace_stack_nr;
 }
@@ -6349,7 +6352,7 @@ replace_join (
   for (i = replace_stack_nr; --i >= 0; )
     if (replace_stack[i] == NUL && off-- <= 0) {
       --replace_stack_nr;
-      mch_memmove(replace_stack + i, replace_stack + i + 1,
+      memmove(replace_stack + i, replace_stack + i + 1,
           (size_t)(replace_stack_nr - i));
       return;
     }

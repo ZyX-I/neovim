@@ -11,6 +11,8 @@
  * ex_cmds.c: some functions for command line commands
  */
 
+#include <string.h>
+
 #include "vim.h"
 #include "version_defs.h"
 #include "ex_cmds.h"
@@ -24,6 +26,7 @@
 #include "ex_docmd.h"
 #include "ex_eval.h"
 #include "ex_getln.h"
+#include "farsi.h"
 #include "fileio.h"
 #include "fold.h"
 #include "getchar.h"
@@ -624,8 +627,8 @@ void ex_retab(exarg_T *eap)
             if (new_line == NULL)
               break;
             if (start_col > 0)
-              mch_memmove(new_line, ptr, (size_t)start_col);
-            mch_memmove(new_line + start_col + len,
+              memmove(new_line, ptr, (size_t)start_col);
+            memmove(new_line + start_col + len,
                 ptr + col, (size_t)(old_len - col + 1));
             ptr = new_line + start_col;
             for (col = 0; col < len; col++)
@@ -1021,7 +1024,23 @@ do_filter (
   if (do_out)
     shell_flags |= SHELL_DOOUT;
 
-  if ((do_in && (itmp = vim_tempname('i')) == NULL)
+  if (!do_in && do_out && !p_stmp) {
+    // Use a pipe to fetch stdout of the command, do not use a temp file.
+    shell_flags |= SHELL_READ;
+    curwin->w_cursor.lnum = line2;
+  } else if (do_in && !do_out && !p_stmp) {
+    // Use a pipe to write stdin of the command, do not use a temp file.
+    shell_flags |= SHELL_WRITE;
+    curbuf->b_op_start.lnum = line1;
+    curbuf->b_op_end.lnum = line2;
+  } else if (do_in && do_out && !p_stmp) {
+    // Use a pipe to write stdin and fetch stdout of the command, do not
+    // use a temp file.
+    shell_flags |= SHELL_READ|SHELL_WRITE;
+    curbuf->b_op_start.lnum = line1;
+    curbuf->b_op_end.lnum = line2;
+    curwin->w_cursor.lnum = line2;
+  } else if ((do_in && (itmp = vim_tempname('i')) == NULL)
       || (do_out && (otmp = vim_tempname('o')) == NULL)) {
     EMSG(_(e_notmp));
     goto filterend;
@@ -1711,7 +1730,7 @@ static char_u *viminfo_filename(char_u *file)
     else if ((file = find_viminfo_parameter('n')) == NULL || *file == NUL) {
 #ifdef VIMINFO_FILE2
       /* don't use $HOME when not defined (turned into "c:/"!). */
-      if (mch_getenv((char_u *)"HOME") == NULL) {
+      if (os_getenv((char_u *)"HOME") == NULL) {
         /* don't use $VIM when not available. */
         expand_env((char_u *)"$VIM", NameBuff, MAXPATHL);
         if (STRCMP("$VIM", NameBuff) != 0)          /* $VIM was expanded */
@@ -2316,7 +2335,7 @@ check_overwrite (
     if (!eap->forceit && !eap->append) {
 #ifdef UNIX
       /* with UNIX it is possible to open a directory */
-      if (mch_isdir(ffname)) {
+      if (os_isdir(ffname)) {
         EMSG2(_(e_isadir2), ffname);
         return FAIL;
       }
@@ -4149,7 +4168,7 @@ void do_sub(exarg_T *eap)
               vim_free(new_start);
               goto outofmem;
             }
-            mch_memmove(p1, new_start, (size_t)(len + 1));
+            memmove(p1, new_start, (size_t)(len + 1));
             vim_free(new_start);
             new_start = p1;
           }
@@ -4159,7 +4178,7 @@ void do_sub(exarg_T *eap)
         /*
          * copy the text up to the part that matched
          */
-        mch_memmove(new_end, sub_firstline + copycol, (size_t)copy_len);
+        memmove(new_end, sub_firstline + copycol, (size_t)copy_len);
         new_end += copy_len;
 
         (void)vim_regsub_multi(&regmatch,
@@ -5087,16 +5106,16 @@ int find_help_tags(char_u *arg, int *num_matches, char_u ***matches, int keep_la
       if (*IObuff == '`') {
         if (d > IObuff + 2 && d[-1] == '`') {
           /* remove the backticks from `command` */
-          mch_memmove(IObuff, IObuff + 1, STRLEN(IObuff));
+          memmove(IObuff, IObuff + 1, STRLEN(IObuff));
           d[-2] = NUL;
         } else if (d > IObuff + 3 && d[-2] == '`' && d[-1] == ',') {
           /* remove the backticks and comma from `command`, */
-          mch_memmove(IObuff, IObuff + 1, STRLEN(IObuff));
+          memmove(IObuff, IObuff + 1, STRLEN(IObuff));
           d[-3] = NUL;
         } else if (d > IObuff + 4 && d[-3] == '`'
                    && d[-2] == '\\' && d[-1] == '.') {
           /* remove the backticks and dot from `command`\. */
-          mch_memmove(IObuff, IObuff + 1, STRLEN(IObuff));
+          memmove(IObuff, IObuff + 1, STRLEN(IObuff));
           d[-4] = NUL;
         }
       }
@@ -5365,7 +5384,7 @@ void ex_helptags(exarg_T *eap)
   xpc.xp_context = EXPAND_DIRECTORIES;
   dirname = ExpandOne(&xpc, eap->arg, NULL,
       WILD_LIST_NOTFOUND|WILD_SILENT, WILD_EXPAND_FREE);
-  if (dirname == NULL || !mch_isdir(dirname)) {
+  if (dirname == NULL || !os_isdir(dirname)) {
     EMSG2(_("E150: Not a directory: %s"), eap->arg);
     return;
   }
