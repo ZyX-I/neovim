@@ -45,11 +45,11 @@
     (*node)->end_position = end_pos; \
   }
 
-#define IS_SCOPE_CHAR(c) (   (c) == 'g' || (c) == 'b' || (c) == 'w' \
+#define IS_SCOPE_CHAR(c)    ((c) == 'g' || (c) == 'b' || (c) == 'w' \
                           || (c) == 't' || (c) == 'v' || (c) == 'a' \
                           || (c) == 'l' || (c) == 's')
 
-//{{{ Function declarations
+// {{{ Function declarations
 static ExpressionNode *expr_alloc(ExpressionType type);
 static bool isnamechar(int c);
 static char_u *find_id_end(char_u **arg);
@@ -120,7 +120,7 @@ static int parse1(char_u **arg,
                   ExpressionParserError *error);
 static size_t node_repr_len(ExpressionNode *node);
 static void node_repr(ExpressionNode *node, char **pp);
-//}}}
+// }}}
 
 /// Allocate new expression node and assign its type property
 ///
@@ -2068,7 +2068,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
   do {
     size_t digit = (offset >> ((i - 1) * 4)) & 0xF;
     *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
-  } while(--i);
+  } while (--i);
 
   *p++ = ':';
 
