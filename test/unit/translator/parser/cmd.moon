@@ -574,4 +574,10 @@ describe 'parse_cmd_sequence', ->
 
     t 'function Abc', 'fu Abc'
 
+    t '
+    function! Abc
+    echo "def"
+    ', '
+    fu!Abc|echo"def"'
+
 -- vim: sw=2 sts=2 et tw=80
