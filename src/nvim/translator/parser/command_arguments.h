@@ -105,9 +105,9 @@ typedef enum {
 #define FLAG_OPT_BIN        0x08
 #define FLAG_OPT_EDIT       0x10
 #define SHIFT_OPT_BAD       5
-#define FLAG_OPT_BAD_MASK   (0x1FF<<SHIFT_E_BAD)
-#define VAL_OPT_BAD_KEEP    (0x000<<SHIFT_E_BAD)
-#define VAL_OPT_BAD_DROP    (0x1FF<<SHIFT_E_BAD)
+#define FLAG_OPT_BAD_MASK   (0x1FF << SHIFT_E_BAD)
+#define VAL_OPT_BAD_KEEP    (0x000 << SHIFT_E_BAD)
+#define VAL_OPT_BAD_DROP    (0x1FF << SHIFT_E_BAD)
 // :gui/:gvim: -g/-b flag
 #define FLAG_OPT_GUI_FORK   0x20
 // :write/:update

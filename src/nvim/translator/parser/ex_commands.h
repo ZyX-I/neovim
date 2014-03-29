@@ -123,50 +123,50 @@ typedef enum {
 
 /// Structure for representing one command
 typedef struct command_node {
-  CommandType type;              ///< Command type. For built-in commands it 
-                                 ///< replaces name
-  char_u *name;                  ///< Name of the user command, unresolved
-  struct command_node *prev;     ///< Previous command of the same level
-  struct command_node *next;     ///< Next command of the same level
-  struct command_node *children; ///< Block (if/while/for/try/function), 
-                                 ///< modifier (like leftabove or silent) or 
-                                 ///< iterator (tabdo/windo/bufdo/argdo etc)
-                                 ///< subcommands
-  Range range;                   ///< Ex address range, if any
-  CommandPosition position;      ///< Position of the start of the command
-  colnr_T end_col;               ///< Last column occupied by this command
-  CountType cnt_type;            ///< Type of the argument in the next union
+  CommandType type;               ///< Command type. For built-in commands it 
+                                  ///< replaces name
+  char_u *name;                   ///< Name of the user command, unresolved
+  struct command_node *prev;      ///< Previous command of the same level
+  struct command_node *next;      ///< Next command of the same level
+  struct command_node *children;  ///< Block (if/while/for/try/function), 
+                                  ///< modifier (like leftabove or silent) or 
+                                  ///< iterator (tabdo/windo/bufdo/argdo etc)
+                                  ///< subcommands
+  Range range;                    ///< Ex address range, if any
+  CommandPosition position;       ///< Position of the start of the command
+  colnr_T end_col;                ///< Last column occupied by this command
+  CountType cnt_type;             ///< Type of the argument in the next union
   union {
-    int count;                   ///< Count (for kCntCount)
+    int count;                    ///< Count (for kCntCount)
     int bufnr;
     char_u reg;
     ExpressionNode *expr;
-  } cnt;                         ///< First simple argument
-  uint_least8_t exflags;         ///< Ex flags (for :print command and like)
-  bool bang;                     ///< TRUE if command was used with a bang
+  } cnt;                          ///< First simple argument
+  uint_least8_t exflags;          ///< Ex flags (for :print command and like)
+  bool bang;                      ///< TRUE if command was used with a bang
   struct command_argument {
     union {
       // least32 is essential to hold 24-bit color and additional 4 flag bits 
       // for :hi guifg/guibg/guisp
-      uint_least32_t flags;      ///< Command flags
-      unsigned unumber;          ///< Unsigned integer
-      colnr_T col;               ///< Column number (for syntax error)
-      int number;                ///< Signed integer
-      int *numbers;              ///< A sequence of numbers in allocated memory
-      char_u ch;                 ///< A single character
-      char_u *str;               ///< String in allocated memory
-      garray_T strs;             ///< Growarray
-      Pattern *pat;              ///< Pattern (like in :au)
-      Glob *glob;                ///< Glob (like in :e)
-      Regex *reg;                ///< Regular expression (like in :catch)
-      AuEvent event;             ///< A autocmd event
-      AuEvent *events;           ///< A sequence of autocommand events
-      MenuItem *menu_item;       ///< Menu item
-      Address *address;          ///< Ex mode address
+      uint_least32_t flags;       ///< Command flags
+      unsigned unumber;           ///< Unsigned integer
+      colnr_T col;                ///< Column number (for syntax error)
+      int number;                 ///< Signed integer
+      int *numbers;               ///< A sequence of numbers in allocated memory
+      char_u ch;                  ///< A single character
+      char_u *str;                ///< String in allocated memory
+      garray_T strs;              ///< Growarray
+      Pattern *pat;               ///< Pattern (like in :au)
+      Glob *glob;                 ///< Glob (like in :e)
+      Regex *reg;                 ///< Regular expression (like in :catch)
+      AuEvent event;              ///< A autocmd event
+      AuEvent *events;            ///< A sequence of autocommand events
+      MenuItem *menu_item;        ///< Menu item
+      Address *address;           ///< Ex mode address
       CmdComplete *complete;
-      ExpressionNode *expr;      ///< Expression (:if) or a list of expressions 
-                                 ///< (:echo) (uses expr->next to build a linked 
-                                 ///< list)
+      ExpressionNode *expr;       ///< Expression (:if) or a list of expressions 
+                                  ///< (:echo) (uses expr->next to build 
+                                  ///< a linked list)
       struct command_subargs {
         unsigned type;
         size_t num_args;
@@ -174,7 +174,7 @@ typedef struct command_node {
         struct command_argument *args;
       } args;
     } arg;
-  } args[1];                     ///< Command arguments
+  } args[1];                      ///< Command arguments
 } CommandNode;
 
 typedef struct command_argument CommandArg;

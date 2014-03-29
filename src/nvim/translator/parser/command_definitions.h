@@ -73,9 +73,9 @@
 #define ISEXPR      0x4000000L  // :if/:*expr commands
 #define LITERAL     0x8000000L  // Do not transform its arguments
 
-#define FILES   (XFILE | EXTRA) // multiple extra files allowed
-#define WORD1   (EXTRA | NOSPC) // one extra word allowed
-#define FILE1   (FILES | NOSPC) // 1 file allowed, defaults to current file
+#define FILES  (XFILE | EXTRA)  // multiple extra files allowed
+#define WORD1  (EXTRA | NOSPC)  // one extra word allowed
+#define FILE1  (FILES | NOSPC)  // 1 file allowed, defaults to current file
 
 #ifndef DO_DECLARE_EXCMD
 typedef struct command_definition CommandDefinition;
@@ -1335,7 +1335,7 @@ typedef enum
   EX(kCmdStartinsert,     "startinsert",  NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      BANG|TRLBAR|CMDWIN),
-  EX(kCmdStartgreplace,   "startgreplace",NOFUNC,
+  EX(kCmdStartgreplace,  "startgreplace", NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      BANG|TRLBAR|CMDWIN),
   EX(kCmdStartreplace,    "startreplace", NOFUNC,

@@ -50,7 +50,7 @@
     (*node)->end_position = end_pos; \
   }
 
-#define IS_SCOPE_CHAR(c) (   (c) == 'g' || (c) == 'b' || (c) == 'w' \
+#define IS_SCOPE_CHAR(c)    ((c) == 'g' || (c) == 'b' || (c) == 'w' \
                           || (c) == 't' || (c) == 'v' || (c) == 'a' \
                           || (c) == 'l' || (c) == 's')
 
@@ -2022,7 +2022,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
   do {
     size_t digit = (offset >> ((i - 1) * 4)) & 0xF;
     *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
-  } while(--i);
+  } while (--i);
 
   *p++ = ':';
 

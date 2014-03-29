@@ -1785,16 +1785,15 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
       }
       if (*p == NUL)        // stop at NUL after CTRL-V
         break;
-    }
     // Check for '"': start of comment or '|': next command
     // :@" and :*" do not start a comment!
     // :redir @" doesn't either.
-    else if ((*p == '"' && !(CMDDEF(type).flags & NOTRLCOM)
-              && ((type != kCmdAt && type != kCmdStar)
-                  || p != *arg)
-              && (type != kCmdRedir
-                  || p != *arg + 1 || p[-1] != '@'))
-             || *p == '|' || *p == '\n') {
+    } else if ((*p == '"' && !(CMDDEF(type).flags & NOTRLCOM)
+                && ((type != kCmdAt && type != kCmdStar)
+                    || p != *arg)
+                && (type != kCmdRedir
+                    || p != *arg + 1 || p[-1] != '@'))
+               || *p == '|' || *p == '\n') {
       // We remove the '\' before the '|', unless USECTRLV is used
       // AND 'b' is present in 'cpoptions'.
       if (((o.flags & FLAG_POC_CPO_BAR)
@@ -1814,7 +1813,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
 
   *next_cmd_offset += p - *arg;
 
-  if (!(CMDDEF(type).flags & NOTRLCOM)) // remove trailing spaces
+  if (!(CMDDEF(type).flags & NOTRLCOM))  // remove trailing spaces
     del_trailing_spaces(p);
 
   return OK;
@@ -2739,7 +2738,7 @@ static void number_repr(intmax_t number, char **pp)
   do {
     intmax_t digit = (num >> ((i - 1) * 4)) & 0xF;
     *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
-  } while(--i);
+  } while (--i);
 
   *pp = p;
 }
@@ -2752,7 +2751,7 @@ static void unumber_repr(uintmax_t number, char **pp)
   do {
     uintmax_t digit = (number >> ((i - 1) * 4)) & 0xF;
     *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
-  } while(--i);
+  } while (--i);
 
   *pp = p;
 }
@@ -3167,8 +3166,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
             len += STRLEN(((char_u **)ga->ga_data)[i]);
             if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS)
               len += 2;
-
           }
+
           if (flags&FLAG_FUNC_VARARGS)
             len += 3;
 
@@ -3670,8 +3669,8 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
       return NULL;
     vim_free(line);
   } else {
-    if ((node = parse_cmd_sequence(o, position, (line_getter) fgetline_test, pp))
-        == FAIL)
+    if ((node = parse_cmd_sequence(o, position, (line_getter) fgetline_test,
+                                   pp)) == FAIL)
       return NULL;
   }
 
