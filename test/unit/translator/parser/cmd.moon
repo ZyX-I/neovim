@@ -523,10 +523,12 @@ describe 'parse_cmd_sequence', ->
     silent if 1
     endif'
 
+  describe 'while block', ->
     t '
     while 1
     endwhile', 'while 1|endwhile'
 
+  describe 'for block', ->
     t '
     for x in [1]
     endfor
@@ -540,5 +542,34 @@ describe 'parse_cmd_sequence', ->
     ', '
     for [x,y] in [[1,2]]
     endfo'
+
+  describe 'function block', ->
+    t '
+    function Abc()
+    endfunction
+    ', '
+    function Abc()
+    endfunction'
+
+    t '
+    function Abc() range dict abort
+    endfunction
+    ', '
+    function Abc()dictabortrange
+    endfunction'
+
+    t '
+    function Abc(...)
+    endfunction
+    ', '
+    function Abc(...)
+    endfunction'
+
+    t '
+    function Abc(a, b, c, ...)
+    endfunction
+    ', '
+    fu Abc(a,b,c,...)
+    endfu'
 
 -- vim: sw=2 sts=2 et tw=80

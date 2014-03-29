@@ -62,7 +62,8 @@ typedef enum {
 #define ARGS_FIRST    {kArgFlags, kArgString}
 #define ARGS_WN       {kArgGlob, kArgFlags, kArgString}
 #define ARGS_ASSIGN   {kArgString, kArgAssignLhs, kArgExpression}
-#define ARGS_FUNC     {kArgAssignLhs, kArgStrings, kArgFlags}
+#define ARGS_FUNC     {kArgString, kArgRegex, kArgAssignLhs, kArgStrings, \
+                       kArgFlags}
 #define ARGS_G        {kArgRegex}
 #define ARGS_SHELL    {kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
@@ -300,9 +301,11 @@ typedef enum {
 #define ARG_ASSIGN_RHS     2
 
 // :func
-#define ARG_FUNC_NAME      0
-#define ARG_FUNC_ARGS      1
-#define ARG_FUNC_FLAGS     2
+#define ARG_FUNC_STR       0
+#define ARG_FUNC_REG       1
+#define ARG_FUNC_NAME      2
+#define ARG_FUNC_ARGS      3
+#define ARG_FUNC_FLAGS     4
 
 #define FLAG_FUNC_VARARGS  0x01
 #define FLAG_FUNC_RANGE    0x02

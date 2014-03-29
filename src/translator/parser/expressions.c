@@ -86,13 +86,15 @@ static int parse_subscript(char_u **arg,
                            ExpressionParserError *error);
 static int handle_subscript(char_u **arg,
                             ExpressionNode **node,
-                            ExpressionParserError *error);
+                            ExpressionParserError *error,
+                            bool parse_funccall);
 static void find_nr_end(char_u **arg, ExpressionType *type,
                         bool dooct, bool dohex);
 static int parse7(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
-                  bool want_string);
+                  bool want_string,
+                  bool parse_funccall);
 static int parse6(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
@@ -698,9 +700,11 @@ static int parse_subscript(char_u **arg,
 /// @return FAIL if parsing failed, OK otherwise.
 static int handle_subscript(char_u **arg,
                             ExpressionNode **node,
-                            ExpressionParserError *error)
+                            ExpressionParserError *error,
+                            bool parse_funccall)
 {
-  while ((**arg == '[' || **arg == '.' || **arg == '(')
+  while ((**arg == '[' || **arg == '.'
+          || (parse_funccall && **arg == '('))
          && !vim_iswhite(*(*arg - 1))) {
     switch (**arg) {
       case '.': {
@@ -816,22 +820,28 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
 /// Also handles unary operators (logical NOT, unary minus, unary plus) and 
 /// subscripts ([], .key, func()).
 ///
-/// @param[in,out]  arg          Parsed string. Must point to the first 
-///                              non-white character. Advanced to the next 
-///                              non-white after the recognized expression.
-/// @param[out]     node         Location where parsing results are saved.
-/// @param[out]     error        Structure where errors are saved.
-/// @param[in]      want_string  True if the result should be string. Is used to 
-///                              preserve compatibility with vim: "a".1.2 is 
-///                              a string "a12" (uses string concat), not 
-///                              floating-point value. This flag is set in 
-///                              parse5 that handles concats.
+/// @param[in,out]  arg             Parsed string. Must point to the first 
+///                                 non-white character. Advanced to the next 
+///                                 non-white after the recognized expression.
+/// @param[out]     node            Location where parsing results are saved.
+/// @param[out]     error           Structure where errors are saved.
+/// @param[in]      want_string     True if the result should be string. Is used 
+///                                 to preserve compatibility with vim: "a".1.2 
+///                                 is a string "a12" (uses string concat), not 
+///                                 floating-point value. This flag is set in 
+///                                 parse5 that handles concats.
+/// @param[in]      parse_funccall  Determines whether function calls should be 
+///                                 parsed. I.e. if this is TRUE then "abc(def)" 
+///                                 will be parsed as "call(abc, def)", if this 
+///                                 is FALSE it will parse this as "abc" and 
+///                                 stop at opening parenthesis.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
 static int parse7(char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
-                  bool want_string)
+                  bool want_string,
+                  bool parse_funccall)
 {
   ExpressionType type = kTypeUnknown;
   ExpressionNode *parse1_node = NULL;
@@ -1005,7 +1015,7 @@ static int parse7(char_u **arg,
 
     *arg = skipwhite(*arg);
 
-    if (**arg == '(')
+    if (**arg == '(' && parse_funccall)
       // Function call. First function call is not handled by handle_subscript 
       // for whatever reasons. Allows expressions like "tr   (1, 2, 3)"
       ret = parse_func_call(arg, node, error);
@@ -1016,7 +1026,7 @@ static int parse7(char_u **arg,
   // Handle following '[', '(' and '.' for expr[expr], expr.name,
   // expr(expr).
   if (ret == OK)
-    ret = handle_subscript(arg, node, error);
+    ret = handle_subscript(arg, node, error, parse_funccall);
 
   // Apply logical NOT and unary '-', from right to left, ignore '+'.
   if (ret == OK && end_leader > start_leader) {
@@ -1047,6 +1057,22 @@ static int parse7(char_u **arg,
   return ret;
 }
 
+ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
+{
+  ExpressionNode *result = NULL;
+
+  error->message = NULL;
+  error->position = NULL;
+
+  *arg = skipwhite(*arg);
+  if (parse7(arg, &result, error, FALSE, FALSE) == FAIL) {
+    free_expr(result);
+    return NULL;
+  }
+
+  return result;
+}
+
 /// Handle sixths level expression: multiplication/division/modulo
 ///
 /// Operators supported:
@@ -1074,7 +1100,7 @@ static int parse6(char_u **arg,
   ExpressionNode **next_node = node;
 
   // Get the first variable.
-  if (parse7(arg, node, error, want_string) == FAIL)
+  if (parse7(arg, node, error, want_string, TRUE) == FAIL)
     return FAIL;
 
   // Repeat computing, until no '*', '/' or '%' is following.
@@ -1107,7 +1133,7 @@ static int parse6(char_u **arg,
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
-    if (parse7(arg, next_node, error, want_string) == FAIL)
+    if (parse7(arg, next_node, error, want_string, TRUE) == FAIL)
       return FAIL;
   }
   return OK;
