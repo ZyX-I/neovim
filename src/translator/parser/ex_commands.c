@@ -2692,6 +2692,10 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
 
       get_block_options(block_type, &bo);
 
+      if (block_type == kCmdFunction)
+        if (block_command_node->args[ARG_FUNC_ARGS].arg.strs.ga_growsize == 0)
+          memset(&bo, 0, sizeof(CommandBlockOptions));
+
       if (bo.find_in_stack != kCmdUnknown) {
         size_t initial_blockstack_len = blockstack_len;
 

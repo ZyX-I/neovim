@@ -543,7 +543,7 @@ describe 'parse_cmd_sequence', ->
     for [x,y] in [[1,2]]
     endfo'
 
-  describe 'function block', ->
+  describe 'function', ->
     t '
     function Abc()
     endfunction
@@ -571,5 +571,7 @@ describe 'parse_cmd_sequence', ->
     ', '
     fu Abc(a,b,c,...)
     endfu'
+
+    t 'function Abc', 'fu Abc'
 
 -- vim: sw=2 sts=2 et tw=80
