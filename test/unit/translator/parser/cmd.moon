@@ -580,4 +580,6 @@ describe 'parse_cmd_sequence', ->
     ', '
     fu!Abc|echo"def"'
 
+    t 'function', 'fu'
+
 -- vim: sw=2 sts=2 et tw=80
