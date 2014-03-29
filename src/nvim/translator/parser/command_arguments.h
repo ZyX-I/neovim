@@ -121,13 +121,17 @@ typedef enum {
 #define ARG_NO_ARGS -1
 
 // :append/:insert
-#define ARG_APPEND_LINES   0
+enum {
+  ARG_APPEND_LINES  = 0,
+};
 
 // :*map/:*abbrev
-#define ARG_MAP_FLAGS      0
-#define ARG_MAP_LHS        1
-#define ARG_MAP_RHS        2
-#define ARG_MAP_EXPR       3
+enum {
+  ARG_MAP_FLAGS     = 0,
+  ARG_MAP_LHS,
+  ARG_MAP_RHS,
+  ARG_MAP_EXPR,
+};
 
 #define FLAG_MAP_BUFFER    0x01
 #define FLAG_MAP_NOWAIT    0x02
@@ -138,12 +142,14 @@ typedef enum {
 #define FLAG_MAP_UNIQUE    0x40
 
 // :*menu
-#define ARG_MENU_FLAGS     0
-#define ARG_MENU_ICON      1
-#define ARG_MENU_PRI       2
-#define ARG_MENU_NAME      3
-#define ARG_MENU_TEXT      4
-#define ARG_MENU_RHS       5
+enum {
+  ARG_MENU_FLAGS    = 0,
+  ARG_MENU_ICON,
+  ARG_MENU_PRI,
+  ARG_MENU_NAME,
+  ARG_MENU_TEXT,
+  ARG_MENU_RHS,
+};
 
 #define FLAG_MENU_SILENT   0x01
 #define FLAG_MENU_SPECIAL  0x02
@@ -152,7 +158,9 @@ typedef enum {
 #define FLAG_MENU_ENABLE   0x10
 
 // :*mapclear/:*abclear
-#define ARG_CLEAR_BUFFER   0
+enum {
+  ARG_CLEAR_BUFFER  = 0,
+};
 
 // :aboveleft and friends
 #define ARG_MODIFIER_CMD   ARG_NO_ARGS
@@ -161,58 +169,84 @@ typedef enum {
 #define ARG_DO_CMD         ARG_NO_ARGS
 
 // :args/:e
-#define ARG_E_FILES        0
-#define ARG_E_OPT          1
-#define ARG_E_ENC          2
+enum {
+  ARG_E_FILES       = 0,
+  ARG_E_OPT,
+  ARG_E_ENC,
+};
 
 // :argadd/:argdelete/:source
-#define ARG_SO_FILES       0
+enum {
+  ARG_SO_FILES      = 0,
+};
 
 // :au
-#define ARG_AU_GROUP       0
-#define ARG_AU_EVENTS      1
-#define ARG_AU_PATTERNS    2
-#define ARG_AU_NESTED      3
+enum {
+  ARG_AU_GROUP      = 0,
+  ARG_AU_EVENTS,
+  ARG_AU_PATTERNS,
+  ARG_AU_NESTED,
+};
 
 // :aug/:behave/:colorscheme
-#define ARG_NAME_NAME      0
+enum {
+  ARG_NAME_NAME     = 0,
+};
 
 // :*unmap/:*unabbrev
-#define ARG_UNMAP_BUFFER   0
-#define ARG_UNMAP_LHS      1
+enum {
+  ARG_UNMAP_BUFFER  = 0,
+  ARG_UNMAP_LHS,
+};
 
 // :*unmenu
-#define ARG_UNMENU_LHS     0
+enum {
+  ARG_UNMENU_LHS    = 0,
+};
 
 // :breakadd/:breakdel
 // lnum is recorded in range
-#define ARG_BREAK_FLAGS    0
-#define ARG_BREAK_NAME     1
+enum {
+  ARG_BREAK_FLAGS   = 0,
+  ARG_BREAK_NAME,
+};
 
 #define FLAG_BREAK_FUNC    0x01
 #define FLAG_BREAK_FILE    0x02
 #define FLAG_BREAK_HERE    0x04
 
 // :caddexpr/:laddexpr/:call
-#define ARG_EXPR_STR       0
-#define ARG_EXPR_EXPR      1
+enum {
+  ARG_EXPR_STR      = 0,
+  ARG_EXPR_EXPR,
+};
 
 // :catch/:djump
-#define ARG_REG_REG        0
+enum {
+  ARG_REG_REG       = 0,
+};
 
 // :center
-#define ARG_CENTER_WIDTH   0
+enum {
+  ARG_CENTER_WIDTH  = 0,
+};
 
 // :clist
-#define ARG_CLIST_FIRST    0
-#define ARG_CLIST_LAST     1
+enum {
+  ARG_CLIST_FIRST   = 0,
+  ARG_CLIST_LAST,
+};
 
 // :copy/:move
-#define ARG_ADDR_ADDR      0
+enum {
+  ARG_ADDR_ADDR     = 0,
+};
 
 // :command
-#define ARG_CMD_FLAGS      0
-#define ARG_CMD_COMPLETE   1
+enum {
+  ARG_CMD_FLAGS     = 0,
+  ARG_CMD_COMPLETE,
+};
 
 #define FLAG_CMD_NARGS_MASK 0x007
 #define VAL_CMD_NARGS_NO    0x000
@@ -232,7 +266,9 @@ typedef enum {
 #define FLAG_CMD_BUFFER     0x100
 
 // :cscope/:sign
-#define ARG_SUBCMD         0
+enum {
+  ARG_SUBCMD        = 0,
+};
 
 // :cscope
 typedef enum {
@@ -263,49 +299,67 @@ typedef enum {
 #define CSCOPE_ARGS_FIND {kArgFlags, kArgString}
 
 // :cstag
-#define ARG_CSTAG_TAG      0
+enum {
+  ARG_CSTAG_TAG     = 0,
+};
 
 // :digraphs
-#define ARG_DIG_DIGRAPHS   0
-#define ARG_DIG_CHARS      1
+enum {
+  ARG_DIG_DIGRAPHS  = 0,
+  ARG_DIG_CHARS,
+};
 
 // :doautocmd/:doautoall
-#define ARG_DOAU_NOMDLINE  0
-#define ARG_DOAU_GROUP     1
-#define ARG_DOAU_EVENT     2
-#define ARG_DOAU_FNAME     3
+enum {
+  ARG_DOAU_NOMDLINE = 0,
+  ARG_DOAU_GROUP,
+  ARG_DOAU_EVENT,
+  ARG_DOAU_FNAME,
+};
 
 // :echo*/:execute
-#define ARG_EXPRS_STR      0
-#define ARG_EXPRS_EXPRS    1
-// :lockvar
-#define ARG_LOCKVAR_DEPTH  (ARG_EXPRS_EXPRS+1)
+enum {
+  ARG_EXPRS_STR     = 0,
+  ARG_EXPRS_EXPRS,
+  // :lockvar
+  ARG_LOCKVAR_DEPTH,
+};
 
 // :exit
-#define ARG_EXIT_FILES     0
-#define ARG_EXIT_OPT       1
-#define ARG_EXIT_ENC       2
+enum {
+  ARG_EXIT_FILES    = 0,
+  ARG_EXIT_OPT,
+  ARG_EXIT_ENC,
+};
 
 // :first/:rewind/:last/:next
-#define ARG_FIRST_OPT      0
-#define ARG_FIRST_ENC      1
+enum {
+  ARG_FIRST_OPT     = 0,
+  ARG_FIRST_ENC,
+};
 
 // :wnext/:wNext/:wprevious
-#define ARG_WN_FILES       0
-#define ARG_WN_OPT         1
-#define ARG_WN_ENC         2
+enum {
+  ARG_WN_FILES      = 0,
+  ARG_WN_OPT,
+  ARG_WN_ENC,
+};
 
 // :for/:let
-#define ARG_ASSIGN_STR     0
-#define ARG_ASSIGN_LHS     1
-#define ARG_ASSIGN_RHS     2
+enum {
+  ARG_ASSIGN_STR    = 0,
+  ARG_ASSIGN_LHS,
+  ARG_ASSIGN_RHS,
+};
 
 // :func
-#define ARG_FUNC_STR       0
-#define ARG_FUNC_REG       1
-#define ARG_FUNC_NAME      2
-#define ARG_FUNC_ARGS      3
-#define ARG_FUNC_FLAGS     4
+enum {
+  ARG_FUNC_STR      = 0,
+  ARG_FUNC_REG,
+  ARG_FUNC_NAME,
+  ARG_FUNC_ARGS,
+  ARG_FUNC_FLAGS,
+};
 
 #define FLAG_FUNC_VARARGS  0x01
 #define FLAG_FUNC_RANGE    0x02
@@ -313,29 +367,37 @@ typedef enum {
 #define FLAG_FUNC_DICT     0x08
 
 // :global
-#define ARG_G_REG          0
+enum {
+  ARG_G_REG         = 0,
+};
 
 // :grep/:make/:!
-#define ARG_SHELL_ARGS     0
+enum {
+  ARG_SHELL_ARGS    = 0,
+};
 
 // :helpg/:lhelpg
-#define ARG_HELPG_REG      0
-#define ARG_HELPG_LANG     1
+enum {
+  ARG_HELPG_REG     = 0,
+  ARG_HELPG_LANG,
+};
 
 // :highlight
-#define ARG_HI_FLAGS       0
-#define ARG_HI_GROUP       1
-#define ARG_HI_TERM        2
-#define ARG_HI_START       3
-#define ARG_HI_STOP        4
-#define ARG_HI_CTERM       5
-#define ARG_HI_CTERMFG     6
-#define ARG_HI_CTERMBG     7
-#define ARG_HI_GUI         8
-#define ARG_HI_FONT        9
-#define ARG_HI_GUIFG      10
-#define ARG_HI_GUIBG      11
-#define ARG_HI_GUISP      12
+enum {
+  ARG_HI_FLAGS      = 0,
+  ARG_HI_GROUP,
+  ARG_HI_TERM,
+  ARG_HI_START,
+  ARG_HI_STOP,
+  ARG_HI_CTERM,
+  ARG_HI_CTERMFG,
+  ARG_HI_CTERMBG,
+  ARG_HI_GUI,
+  ARG_HI_FONT,
+  ARG_HI_GUIFG,
+  ARG_HI_GUIBG,
+  ARG_HI_GUISP,
+};
 
 #define FLAG_HI_TERM_BOLD      0x01
 #define FLAG_HI_TERM_UNDERLINE 0x02
@@ -355,9 +417,11 @@ typedef enum {
 #define FLAG_HI_LINK       0x04
 
 // :history
-#define ARG_HIST_FLAGS     0
-#define ARG_HIST_FIRST     1
-#define ARG_HIST_LAST      2
+enum {
+  ARG_HIST_FLAGS    = 0,
+  ARG_HIST_FIRST,
+  ARG_HIST_LAST,
+};
 
 #define FLAG_HIST_CMD      0x01
 #define FLAG_HIST_SEARCH   0x02
@@ -368,42 +432,58 @@ typedef enum {
 #define FLAG_HIST_HAS_LST  0x40
 
 // :language
-#define ARG_LANG_FLAGS     0
-#define ARG_LANG_LANG      1
+enum {
+  ARG_LANG_FLAGS    = 0,
+  ARG_LANG_LANG,
+};
 
 #define FLAG_LANG_MESSAGES 0x01
 #define FLAG_LANG_CTYPE    0x02
 #define FLAG_LANG_TIME     0x04
 
 // :*vimgrep*
-#define ARG_VIMG_FLAGS     0
-#define ARG_VIMG_REG       1
-#define ARG_VIMG_FILES     2
+enum {
+  ARG_VIMG_FLAGS    = 0,
+  ARG_VIMG_REG,
+  ARG_VIMG_FILES,
+};
 
 #define FLAG_VIMG_EVERY    0x01
 #define FLAG_VIMG_NOJUMP   0x02
 
 // :k/:mark
-#define ARG_MARK_CHAR      0
+enum {
+  ARG_MARK_CHAR     = 0,
+};
 
 // :simalt
-#define ARG_SIMALT_CHAR    0
+enum {
+  ARG_SIMALT_CHAR   = 0,
+};
 
 // :match
-#define ARG_MATCH_GROUP    0
-#define ARG_MATCH_REG      1
+enum {
+  ARG_MATCH_GROUP   = 0,
+  ARG_MATCH_REG,
+};
 
 // :menutranslate
-#define ARG_MT_FROM        0
-#define ARG_MT_TO          1
+enum {
+  ARG_MT_FROM       = 0,
+  ARG_MT_TO,
+};
 
 // :normal
-#define ARG_NORMAL_STR     0
+enum {
+  ARG_NORMAL_STR    = 0,
+};
 
 // :profile/:profdel
-#define ARG_PROFILE_FLAGS  0
-#define ARG_PROFILE_FILE   1
-#define ARG_PROFILE_PAT    2
+enum {
+  ARG_PROFILE_FLAGS = 0,
+  ARG_PROFILE_FILE,
+  ARG_PROFILE_PAT,
+};
 
 #define FLAG_PROFILE_ACTION_MASK  0x07
 #define VAL_PROFILE_ACTION_START  0x00
@@ -413,23 +493,29 @@ typedef enum {
 #define VAL_PROFILE_ACTION_FILE   0x04
 
 // :write/:read/:update
-#define ARG_W_FILE         0
-#define ARG_W_OPT          1
-#define ARG_W_ENC          2
-#define ARG_W_SHELL        3
+enum {
+  ARG_W_FILE        = 0,
+  ARG_W_OPT,
+  ARG_W_ENC,
+  ARG_W_SHELL,
+};
 
 // :redir
-#define ARG_REDIR_FLAGS    0
-#define ARG_REDIR_FILE     1
-#define ARG_REDIR_VAR      2
+enum {
+  ARG_REDIR_FLAGS   = 0,
+  ARG_REDIR_FILE,
+  ARG_REDIR_VAR,
+};
 
 #define FLAG_REDIR_REG_MASK 0x0FF
 #define FLAG_REDIR_APPEND   0x100
 
 // :substitute
-#define ARG_S_REG          0
-#define ARG_S_REP          1
-#define ARG_S_FLAGS        2
+enum {
+  ARG_S_REG         = 0,
+  ARG_S_REP,
+  ARG_S_FLAGS,
+};
 
 #define FLAG_S_KEEP        0x001
 #define FLAG_S_CONFIRM     0x002
@@ -445,9 +531,11 @@ typedef enum {
 #define FLAG_S_R           0x800
 
 // :set
-#define ARG_SET_OPTIONS    0
-#define ARG_SET_FLAGSS     1
-#define ARG_SET_VALUES     2
+enum {
+  ARG_SET_OPTIONS   = 0,
+  ARG_SET_FLAGSS,
+  ARG_SET_VALUES,
+};
 
 #define FLAG_SET_SET       0x001
 #define FLAG_SET_UNSET     0x002
@@ -461,7 +549,9 @@ typedef enum {
 #define FLAG_SET_SUBTRACT  0x200
 
 // :filetype
-#define ARG_FT_FLAGS       0
+enum {
+  ARG_FT_FLAGS      = 0,
+};
 
 #define FLAG_FT_ON         0x01
 #define FLAG_FT_PLUGIN     0x02
@@ -472,14 +562,20 @@ typedef enum {
 // FIXME
 
 // :sleep
-#define ARG_SLEEP_SECONDS  0
+enum {
+  ARG_SLEEP_SECONDS = 0,
+};
 
 // :sniff
-#define ARG_SNIFF_SYMBOL   0
+enum {
+  ARG_SNIFF_SYMBOL  = 0,
+};
 
 // :sort
-#define ARG_SORT_FLAGS     0
-#define ARG_SORT_REG       1
+enum {
+  ARG_SORT_FLAGS    = 0,
+  ARG_SORT_REG,
+};
 
 #define FLAG_SORT_IC       0x01
 #define FLAG_SORT_DECIMAL  0x02
@@ -492,7 +588,9 @@ typedef enum {
 // FIXME
 
 // :syntime
-#define ARG_SYNTIME_ACTION 0
+enum {
+  ARG_SYNTIME_ACTION= 0,
+};
 
 #define ACT_SYNTIME_ON     0x01
 #define ACT_SYNTIME_OFF    0x02
@@ -500,22 +598,32 @@ typedef enum {
 #define ACT_SYNTIME_REPORT 0x04
 
 // :winsize
-#define ARG_WINSIZE_WIDTH  0
-#define ARG_WINSIZE_HEIGHT 1
+enum {
+  ARG_WINSIZE_WIDTH = 0,
+  ARG_WINSIZE_HEIGHT,
+};
 
 // :wincmd
-#define ARG_WINCMD_CHAR    0
+enum {
+  ARG_WINCMD_CHAR   = 0,
+};
 
 // :wqall
-#define ARG_WQA_OPT        0
-#define ARG_WQA_ENC        1
+enum {
+  ARG_WQA_OPT       = 0,
+  ARG_WQA_ENC,
+};
 
 // syntax error
-#define ARG_ERROR_LINESTR  0
-#define ARG_ERROR_MESSAGE  1
-#define ARG_ERROR_OFFSET   2
+enum {
+  ARG_ERROR_LINESTR = 0,
+  ARG_ERROR_MESSAGE,
+  ARG_ERROR_OFFSET,
+};
 
 // User-defined commands
-#define ARG_USER_ARG       0
+enum {
+  ARG_USER_ARG      = 0,
+};
 
 #endif  // NEOVIM_TRANSLATOR_PARSER_COMMAND_ARGUMENTS_H_
