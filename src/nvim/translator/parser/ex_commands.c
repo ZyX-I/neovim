@@ -14,7 +14,7 @@
 #include "nvim/globals.h"
 #include "nvim/garray.h"
 #include "nvim/term.h"
-#include "nvim/main.h"
+#include "nvim/farsi.h"
 #include "nvim/menu.h"
 #include "nvim/memory.h"
 
@@ -42,6 +42,9 @@ typedef struct {
 #undef DO_DECLARE_EXCMD
 
 #define NODE_IS_ALLOCATED(node) ((node) != NULL && (node) != &nocmd)
+
+#define ENDS_EXCMD(ch) ((ch) == NUL || (ch) == '|' || (ch) == '"' \
+                        || (ch) == '\n')
 
 /// Allocate new command node and assign its type property
 ///
@@ -1129,7 +1132,12 @@ static int parse_lval(char_u **pp,
   ExpressionNode *next;
   char_u *expr_start = *pp;
 
-  if ((*expr = parse0_err(pp, &expr_error, allowmult && !listmult)) == NULL) {
+  if (allowmult)
+    *expr = parse0_err(pp, &expr_error, !listmult);
+  else
+    *expr = parse7_nofunc(pp, &expr_error);
+
+  if (*expr == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1261,6 +1269,151 @@ static int parse_for(char_u **pp,
 
   *pp += expr_str - expr_str_start;
 
+  return OK;
+}
+
+static int parse_function(char_u **pp,
+                          CommandNode *node,
+                          CommandParserError *error,
+                          CommandParserOptions o,
+                          CommandPosition *position,
+                          line_getter fgetline,
+                          void *cookie)
+{
+  char_u *p = *pp;
+  ExpressionNode *expr;
+  int ret;
+  char_u *expr_str;
+  char_u *expr_str_start;
+  garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.strs);
+  uint_least32_t flags = 0;
+  bool mustend = FALSE;
+
+  if (ENDS_EXCMD(*p))
+    return OK;
+
+  if (*p == '/')
+    return get_regex(&p, error, &(node->args[ARG_FUNC_REG].arg.reg), '/');
+
+  if ((expr_str = vim_strsave(*pp)) == NULL)
+    return FAIL;
+
+  node->args[ARG_FUNC_STR].arg.str = expr_str;
+
+  expr_str_start = expr_str;
+
+  if ((ret = parse_lval(&expr_str, error, o, &expr, FALSE, FALSE, FALSE))
+      == FAIL)
+    return FAIL;
+
+  node->args[ARG_FUNC_NAME].arg.expr = expr;
+
+  if (ret == NOTDONE) {
+    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    return NOTDONE;
+  }
+
+  p = skipwhite(p + (expr_str - expr_str_start));
+
+  if (*p != '(') {
+    if (!ENDS_EXCMD(*p)) {
+      error->message = N_("E124: Missing '('");
+      error->position = p;
+      return NOTDONE;
+    }
+    *pp = (p + (expr_str - expr_str_start));
+    return OK;
+  }
+
+  p = skipwhite(p + 1);
+
+  ga_init2(args, (int) sizeof(char_u *), 3);
+
+  while (*p != ')') {
+    char *notend_message = N_("E475: Expected end of arguments list");
+    if (p[0] == '.' && p[1] == '.' && p[2] == '.') {
+      flags |= FLAG_FUNC_VARARGS;
+      p += 3;
+      mustend = TRUE;
+    } else {
+      char_u *arg_start = p;
+      char_u *arg;
+      int i;
+
+      while (ASCII_ISALNUM(*p) || *p == '_')
+        p++;
+
+      if (arg_start == p)
+        error->message = N_("E125: Argument expected, got nothing");
+      else if (VIM_ISDIGIT(*arg_start))
+        error->message =
+            N_("E125: Function argument cannot start with a digit");
+      else if ((p - arg_start == 9 && STRNCMP(arg_start, "firstline", 9) == 0)
+               ||
+               (p - arg_start == 8 && STRNCMP(arg_start, "lastline", 8) == 0))
+        error->message =
+            N_("E125: Names \"firstline\" and \"lastline\" are reserved");
+      else
+        error->message = NULL;
+
+      if (error->message != NULL) {
+        error->position = arg_start;
+        return NOTDONE;
+      }
+
+      if ((arg = vim_strnsave(arg_start, p - arg_start)) == NULL)
+        return FAIL;
+
+      for (i = 0; i < args->ga_len; i++)
+        if (STRCMP(((char_u **)(args->ga_data))[i], arg) == 0) {
+          error->message = N_("E853: Duplicate argument name: %s");
+          error->position = arg_start;
+          return FAIL;
+        }
+
+      if (ga_grow(args, 1) == FAIL) {
+        ga_clear_strings(args);
+        vim_free(arg);
+        return FAIL;
+      }
+
+      ((char_u **)(args->ga_data))[args->ga_len++] = arg;
+    }
+    if (*p == ',') {
+      p++;
+    } else {
+      mustend = TRUE;
+      notend_message = N_("E475: Expected end of arguments list or comma");
+    }
+    p = skipwhite(p);
+    if (mustend && *p != ')') {
+      error->message = notend_message;
+      error->position = p;
+      return NOTDONE;
+    }
+  }
+  p++;  // Skip the ')'
+
+  // find extra arguments "range", "dict" and "abort"
+  for (;;) {
+    p = skipwhite(p);
+    if (STRNCMP(p, "range", 5) == 0) {
+      flags |= FLAG_FUNC_RANGE;
+      p += 5;
+    } else if (STRNCMP(p, "dict", 4) == 0) {
+      flags |= FLAG_FUNC_DICT;
+      p += 4;
+    } else if (STRNCMP(p, "abort", 5) == 0) {
+      flags |= FLAG_FUNC_ABORT;
+      p += 5;
+    } else {
+      break;
+    }
+  }
+
+  node->args[ARG_FUNC_FLAGS].arg.flags = flags;
+
+  *pp = p + (expr_str - expr_str_start);
   return OK;
 }
 
@@ -3000,6 +3153,36 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     if (node->args[ARG_LOCKVAR_DEPTH].arg.number)
       len += 1 + unumber_repr_len(node->args[ARG_LOCKVAR_DEPTH].arg.number);
     len += 1 + expr_node_dump_len(node->args[ARG_EXPRS_EXPRS].arg.expr);
+  } else if (CMDDEF(node->type).parse == &parse_function) {
+    if (node->args[ARG_FUNC_REG].arg.reg == NULL) {
+      if (node->args[ARG_FUNC_NAME].arg.expr != NULL) {
+        len++;
+        len += expr_node_dump_len(node->args[ARG_FUNC_NAME].arg.expr);
+        if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
+          uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
+          garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
+
+          len++;
+          for (int i = 0; i < ga->ga_len; i++) {
+            len += STRLEN(((char_u **)ga->ga_data)[i]);
+            if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS)
+              len += 2;
+
+          }
+          if (flags&FLAG_FUNC_VARARGS)
+            len += 3;
+
+          len++;
+
+          if (flags&FLAG_FUNC_RANGE)
+            len += 1 + 5;
+          if (flags&FLAG_FUNC_DICT)
+            len += 1 + 4;
+          if (flags&FLAG_FUNC_ABORT)
+            len += 1 + 5;
+        }
+      }
+    }
   } else {
     start_from_arg = 0;
     do_arg_dump = TRUE;
@@ -3358,6 +3541,48 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     }
     *p++ = ' ';
     expr_node_dump(node->args[ARG_EXPRS_EXPRS].arg.expr, &p);
+  } else if (CMDDEF(node->type).parse == &parse_function) {
+    if (node->args[ARG_FUNC_REG].arg.reg == NULL) {
+      if (node->args[ARG_FUNC_NAME].arg.expr != NULL) {
+        *p++ = ' ';
+        expr_node_dump(node->args[ARG_FUNC_NAME].arg.expr, &p);
+        if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
+          uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
+          garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
+          *p++ = '(';
+          for (int i = 0; i < ga->ga_len; i++) {
+            len = STRLEN(((char_u **)ga->ga_data)[i]);
+            memcpy(p, ((char_u **)ga->ga_data)[i], len);
+            p += len;
+            if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
+              *p++ = ',';
+              *p++ = ' ';
+            }
+          }
+          if (flags&FLAG_FUNC_VARARGS) {
+            *p++ = '.';
+            *p++ = '.';
+            *p++ = '.';
+          }
+          *p++ = ')';
+          if (flags&FLAG_FUNC_RANGE) {
+            *p++ = ' ';
+            memcpy(p, "range", 5);
+            p += 5;
+          }
+          if (flags&FLAG_FUNC_DICT) {
+            *p++ = ' ';
+            memcpy(p, "dict", 4);
+            p += 4;
+          }
+          if (flags&FLAG_FUNC_ABORT) {
+            *p++ = ' ';
+            memcpy(p, "abort", 5);
+            p += 5;
+          }
+        }
+      }
+    }
   } else {
     start_from_arg = 0;
     do_arg_dump = TRUE;
