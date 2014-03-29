@@ -1321,7 +1321,7 @@ static int parse_function(char_u **pp,
       error->position = p;
       return NOTDONE;
     }
-    *pp = (p + (expr_str - expr_str_start));
+    *pp = p;
     return OK;
   }
 
@@ -1413,7 +1413,7 @@ static int parse_function(char_u **pp,
 
   node->args[ARG_FUNC_FLAGS].arg.flags = flags;
 
-  *pp = p + (expr_str - expr_str_start);
+  *pp = p;
   return OK;
 }
 
