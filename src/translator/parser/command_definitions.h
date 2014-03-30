@@ -106,7 +106,7 @@ static struct command_definition {
   uint_least32_t flags;       // flags declared above
   size_t num_args;            // number of arguments
   CommandArgType *arg_types;  // argument types
-  args_parser parse;          // argument parsing function
+  CommandArgsParser parse;    // argument parsing function
 }
 #define NOFUNC NULL
 cmddefs[] =

@@ -192,13 +192,13 @@ typedef struct {
 
 typedef char_u *(*line_getter)(int, void *, int);
 
-typedef int (*args_parser)(char_u **,
-                           CommandNode *,
-                           CommandParserError *,
-                           CommandParserOptions,
-                           CommandPosition *,
-                           line_getter,
-                           void *);
+typedef int (*CommandArgsParser)(char_u **,
+                                 CommandNode *,
+                                 CommandParserError *,
+                                 CommandParserOptions,
+                                 CommandPosition *,
+                                 line_getter,
+                                 void *);
 
 // flags for parse_one_cmd
 #define FLAG_POC_EXMODE      0x01
