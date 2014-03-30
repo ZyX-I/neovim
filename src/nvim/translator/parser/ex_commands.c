@@ -1870,7 +1870,7 @@ int parse_one_cmd(char_u **pp,
   uint_least8_t exflags = 0;
   size_t len;
   size_t i;
-  args_parser parser = NULL;
+  CommandArgsParser parse = NULL;
   CountType cnt_type = kCntMissing;
   int count = 0;
 
@@ -2250,9 +2250,9 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->cnt_type = cnt_type;
   (*next_node)->cnt.count = count;
 
-  parser = CMDDEF(type).parse;
+  parse = CMDDEF(type).parse;
 
-  if (parser != NULL) {
+  if (parse != NULL) {
     int ret;
     bool used_get_cmd_arg = FALSE;
     char_u *cmd_arg = p;
@@ -2271,8 +2271,8 @@ int parse_one_cmd(char_u **pp,
       }
       cmd_arg = cmd_arg_start;
     }
-    if ((ret = parser(&cmd_arg, *next_node, &error, o, position, fgetline,
-                      cookie))
+    if ((ret = parse(&cmd_arg, *next_node, &error, o, position, fgetline,
+                     cookie))
         == FAIL) {
       if (used_get_cmd_arg)
         vim_free(cmd_arg_start);
