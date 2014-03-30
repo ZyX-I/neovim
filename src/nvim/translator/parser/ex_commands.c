@@ -2654,7 +2654,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       char_u *parse_start = line;
       CommandBlockOptions bo;
       int ret;
-      CommandType block_type;
+      CommandType block_type = kCmdMissing;
       CommandNode *block_command_node;
 
       position.col = line - line_start + 1;
@@ -2673,7 +2673,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
              && (CMDDEF(block_command_node->type).flags&ISMODIFIER))
         block_command_node = block_command_node->children;
 
-      block_type = block_command_node->type;
+      if (block_command_node != NULL)
+        block_type = block_command_node->type;
 
       get_block_options(block_type, &bo);
 
@@ -2748,7 +2749,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
             break;
           }
         }
-      } else {
+      } else if ((*next_node) != NULL && (*next_node) != &nocmd) {
         (*next_node)->prev = prev_node;
         if (bo.push_stack) {
           blockstack_len++;
