@@ -1041,17 +1041,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
-    case kTypeVariableName: {
-      if (!allow_lower && expr->children->type == kTypeVariableName
-          && ASCII_ISLOWER(*expr->children->position)) {
-        error->message =
-            N_("E128: Function name must start with a capital "
-               "or contain a colon or a hash");
-        error->position = expr->children->position;
-        return TRUE;
-      }
-      break;
-    }
+    case kTypeVariableName:
     case kTypeConcatOrSubscript:
     case kTypeSubscript: {
       ExpressionNode *root = expr;
