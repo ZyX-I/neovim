@@ -1057,7 +1057,19 @@ static int parse7(char_u **arg,
   return ret;
 }
 
-ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
+/// Parse value (actually used for lvals)
+///
+/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
+///                        advanced to the next non-white after the recognized 
+///                        expression.
+/// @param[out]     error  Structure where errors are saved.
+/// @param[in]      multi  Determines whether it should parse a sequence of 
+///                        expressions (e.g. for ":echo").
+///
+/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+///         allocated expression node otherwise.
+ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error,
+                              bool multi)
 {
   ExpressionNode *result = NULL;
 
@@ -1068,6 +1080,18 @@ ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
   if (parse7(arg, &result, error, FALSE, FALSE) == FAIL) {
     free_expr(result);
     return NULL;
+  }
+
+  if (multi) {
+    ExpressionNode **next = &(result->next);
+    while (**arg && **arg != '\n' && **arg != '|') {
+      *arg = skipwhite(*arg);
+      if (parse7(arg, next, error, FALSE, FALSE) == FAIL) {
+        free_expr(result);
+        return NULL;
+      }
+      next = &((*next)->next);
+    }
   }
 
   return result;

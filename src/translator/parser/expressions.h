@@ -119,6 +119,7 @@ TestExprResult *parse0_test(char_u *arg);
 char *parse0_repr(char_u *arg, bool dump_as_expr);
 size_t expr_node_dump_len(ExpressionNode *node);
 void expr_node_dump(ExpressionNode *node, char **pp);
-ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error);
+ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error,
+                              bool multi);
 
 #endif  // NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H
