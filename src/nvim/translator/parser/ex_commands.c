@@ -2777,7 +2777,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       if (ret == NOTDONE)
         break;
       line = skipwhite(line);
-      if (*line == '|' || *line == '\n' || *line == '"')
+      if (*line == '|' || *line == '\n')
         line++;
     }
     position.lnr++;
