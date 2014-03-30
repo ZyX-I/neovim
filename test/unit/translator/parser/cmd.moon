@@ -592,12 +592,32 @@ describe 'parse_cmd_sequence', ->
 
     t 'function', 'fu'
 
-  describe 'comments', ->
+  describe 'comments, empty lines', ->
     t '
     unlet a b
     " echo 1+1
     ', '
     unlet a b
     "echo 1+1'
+
+    t '
+    "  !
+    unlet a b
+    ', '
+    " !
+    \t
+    \t
+    \t
+    \t
+    \t
+    unlet a b'
+
+    t '
+    unlet a b
+    ', '
+    \t
+    \t
+    \t
+    unlet a b'
 
 -- vim: sw=2 sts=2 et tw=80
