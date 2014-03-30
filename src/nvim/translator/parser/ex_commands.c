@@ -3325,8 +3325,8 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
     if (offset < len) {
       if (offset) {
-        memcpy(p, line, offset - 1);
-        p += offset - 1;
+        memcpy(p, line, offset);
+        p += offset;
       }
       *p++ = '!';
       *p++ = '!';
