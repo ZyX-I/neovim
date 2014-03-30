@@ -612,7 +612,7 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
     expr_error.position = NULL;
     expr_error.message = NULL;
 
-    if ((expr = parse0_err(&rhs_end, &expr_error, FALSE)) == NULL) {
+    if ((expr = parse0_err(&rhs_end, &expr_error)) == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
         vim_free(rhs);
@@ -1081,7 +1081,12 @@ static int do_parse_expr(char_u **pp,
   node->args[ARG_EXPR_STR].arg.str = expr_str;
   expr_str_start = expr_str;
 
-  if ((expr = parse0_err(&expr_str, &expr_error, multi)) == NULL) {
+  if (multi)
+    expr = parse_mult(&expr_str, &expr_error, &parse0_err);
+  else
+    expr = parse0_err(&expr_str, &expr_error);
+
+  if (expr == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1286,8 +1291,12 @@ static int parse_lval(char_u **pp,
   ExpressionNode *next;
   char_u *expr_start = *pp;
 
-  if ((*expr = parse7_nofunc(pp, &expr_error, allowmult && !listmult))
-      == NULL) {
+  if (allowmult && !listmult)
+    *expr = parse_mult(pp, &expr_error, &parse7_nofunc);
+  else
+    *expr = parse7_nofunc(pp, &expr_error);
+
+  if (*expr == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
@@ -1407,7 +1416,7 @@ static int parse_for(char_u **pp,
 
   expr_str = skipwhite(expr_str + 2);
 
-  if ((list_expr = parse0_err(&expr_str, &expr_error, FALSE)) == NULL) {
+  if ((list_expr = parse0_err(&expr_str, &expr_error)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;

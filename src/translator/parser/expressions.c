@@ -1057,46 +1057,6 @@ static int parse7(char_u **arg,
   return ret;
 }
 
-/// Parse value (actually used for lvals)
-///
-/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
-///                        advanced to the next non-white after the recognized 
-///                        expression.
-/// @param[out]     error  Structure where errors are saved.
-/// @param[in]      multi  Determines whether it should parse a sequence of 
-///                        expressions (e.g. for ":echo").
-///
-/// @return NULL if parsing failed or memory was exhausted, pointer to the 
-///         allocated expression node otherwise.
-ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error,
-                              bool multi)
-{
-  ExpressionNode *result = NULL;
-
-  error->message = NULL;
-  error->position = NULL;
-
-  *arg = skipwhite(*arg);
-  if (parse7(arg, &result, error, FALSE, FALSE) == FAIL) {
-    free_expr(result);
-    return NULL;
-  }
-
-  if (multi) {
-    ExpressionNode **next = &(result->next);
-    while (**arg && **arg != '\n' && **arg != '|') {
-      *arg = skipwhite(*arg);
-      if (parse7(arg, next, error, FALSE, FALSE) == FAIL) {
-        free_expr(result);
-        return NULL;
-      }
-      next = &((*next)->next);
-    }
-  }
-
-  return result;
-}
-
 /// Handle sixths level expression: multiplication/division/modulo
 ///
 /// Operators supported:
@@ -1484,13 +1444,10 @@ static int parse1(char_u **arg,
 ///                        advanced to the next non-white after the recognized 
 ///                        expression.
 /// @param[out]     error  Structure where errors are saved.
-/// @param[in]      multi  Determines whether it should parse a sequence of 
-///                        expressions (e.g. for ":echo").
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error,
-                           bool multi)
+ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
 {
   ExpressionNode *result = NULL;
 
@@ -1503,16 +1460,60 @@ ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error,
     return NULL;
   }
 
-  if (multi) {
-    ExpressionNode **next = &(result->next);
-    while (**arg && **arg != '\n' && **arg != '|') {
-      *arg = skipwhite(*arg);
-      if (parse1(arg, next, error) == FAIL) {
-        free_expr(result);
-        return NULL;
-      }
-      next = &((*next)->next);
+  return result;
+}
+
+/// Parse value (actually used for lvals)
+///
+/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
+///                        advanced to the next non-white after the recognized 
+///                        expression.
+/// @param[out]     error  Structure where errors are saved.
+///
+/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+///         allocated expression node otherwise.
+ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
+{
+  ExpressionNode *result = NULL;
+
+  error->message = NULL;
+  error->position = NULL;
+
+  *arg = skipwhite(*arg);
+  if (parse7(arg, &result, error, FALSE, FALSE) == FAIL) {
+    free_expr(result);
+    return NULL;
+  }
+
+  return result;
+}
+
+/// Parse a whitespace-separated sequence of expressions
+///
+/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
+///                        advanced to the next non-white after the recognized 
+///                        expression.
+/// @param[out]     error  Structure where errors are saved.
+/// @param[in]      parse  Parser used to parse one expression in sequence.
+///
+/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+///         allocated expression node otherwise.
+ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
+                           ExpressionParser parse)
+{
+  ExpressionNode *result = NULL;
+  ExpressionNode **next = &result;
+
+  error->message = NULL;
+  error->position = NULL;
+
+  while (**arg && **arg != '\n' && **arg != '|') {
+    *arg = skipwhite(*arg);
+    if ((*next = parse(arg, error)) == NULL) {
+      free_expr(result);
+      return NULL;
     }
+    next = &((*next)->next);
   }
 
   return result;
@@ -1532,7 +1533,7 @@ TestExprResult *parse0_test(char_u *arg)
     return NULL;
 
   result->end = arg;
-  result->node = parse0_err(&(result->end), &(result->error), FALSE);
+  result->node = parse0_err(&(result->end), &(result->error));
 
   return result;
 }
