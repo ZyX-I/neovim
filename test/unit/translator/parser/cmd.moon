@@ -498,6 +498,62 @@ describe 'parse_one_cmd', ->
     itn 'let a += 1', 'let a+=\t1'
     itn 'let $A .= 1', 'let$A.=1'
 
+  opts = {
+    ['++encoding=UTF-8']: '++enc=utf-8'
+    ['++enc=UtF-8']: '++enc=utf-8'
+    ['++bin']: '++bin'
+    ['++binary']: '++bin'
+    ['++nobin']: '++nobin'
+    ['++nobinary']: '++nobin'
+    ['++bad=kEeP']: '++bad=keep'
+    ['++bad=DROP']: '++bad=drop'
+    ['++bad=!']: '++bad=!'
+    ['++ff=unix']: '++ff=unix'
+    ['++ff=dos']: '++ff=dos'
+    ['++ff=mac']: '++ff=mac'
+    ['++fileformat=unix']: '++ff=unix'
+    ['++fileformat=dos']: '++ff=dos'
+    ['++fileformat=mac']: '++ff=mac'
+    ['++edit']: '++edit'
+    ['++binary ++ff=dos ++edit']: '++bin ++edit ++ff=dos'
+  }
+
+  describe '! ++opt +cmd commands', ->
+    for trunc, full in pairs {
+      fir: 'first'
+      la: 'last'
+      rew: 'rewind'
+      sfir: 'sfirst'
+      sre: 'srewind'
+      sla: 'slast'
+    }
+      itn full, trunc
+      itn full .. '!', trunc .. '!'
+      itn full .. ' +let\\ a\\ =\\ 1', trunc .. '+let\\ a=1'
+      for used, expected in pairs opts
+        itn full .. ' ' .. expected, trunc .. used
+        itn full .. '! ' .. expected, trunc .. '!' .. used
+
+  describe '! count ++opt +cmd commands', ->
+    for trunc, full in pairs {
+      N: 'Next'
+      prev: 'previous'
+      sN: 'sNext'
+      sa: 'sargument'
+      spr: 'sprevious'
+    }
+      -- FIXME Test count support
+      itn full, trunc
+      itn full .. '!', trunc .. '!'
+      itn full .. ' +let\\ a\\ =\\ 1', trunc .. '+let\\ a=1'
+      for used, expected in pairs opts
+        itn full .. ' ' .. expected, trunc .. used
+        itn full .. '! ' .. expected, trunc .. '!' .. used
+
+  describe '! ++opt commands', ->
+    itn 'wqall', 'wqa'
+    itn 'wqall!', 'wqa!'
+
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
     t '

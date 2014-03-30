@@ -39,7 +39,7 @@ typedef enum {
 #define ARGS_MENU     {kArgFlags, kArgString, kArgNumbers, kArgMenuName, \
                        kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
-#define ARGS_E        {kArgGlob, kArgFlags, kArgString}
+#define ARGS_E        {kArgGlob}
 #define ARGS_SO       {kArgGlob}
 #define ARGS_AU       {kArgString, kArgAuEvents, kArgPattern, kArgFlags}
 #define ARGS_NAME     {kArgString}
@@ -58,9 +58,8 @@ typedef enum {
 #define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
 #define ARGS_EXPRS    {kArgString, kArgExpressions}
 #define ARGS_LOCKVAR  {kArgString, kArgExpressions, kArgUNumber}
-#define ARGS_EXIT     {kArgGlob, kArgFlags, kArgString}
-#define ARGS_FIRST    {kArgFlags, kArgString}
-#define ARGS_WN       {kArgGlob, kArgFlags, kArgString}
+#define ARGS_EXIT     {kArgGlob}
+#define ARGS_WN       {kArgGlob}
 #define ARGS_FOR      {kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_LET      {kArgFlags, kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_FUNC     {kArgString, kArgRegex, kArgAssignLhs, kArgStrings, \
@@ -81,7 +80,7 @@ typedef enum {
 #define ARGS_MT       {kArgString, kArgString}
 #define ARGS_NORMAL   {kArgString}
 #define ARGS_PROFILE  {kArgFlags, kArgGlob, kArgPattern}
-#define ARGS_W        {kArgGlob, kArgFlags, kArgString, kArgString}
+#define ARGS_W        {kArgGlob, kArgString}
 #define ARGS_REDIR    {kArgFlags, kArgGlob, kArgAssignLhs}
 #define ARGS_S        {kArgRegex, kArgReplacement, kArgFlags}
 #define ARGS_SET      {kArgStrings, kArgNumbers, kArgStrings}
@@ -92,31 +91,31 @@ typedef enum {
 #define ARGS_SYNTIME  {kArgFlags}
 #define ARGS_WINSIZE  {kArgUNumber, kArgUNumber}
 #define ARGS_WINCMD   {kArgChar}
-#define ARGS_WQA      {kArgFlags, kArgString}
 #define ARGS_ERROR    {kArgString, kArgString, kArgColumn}
 #define ARGS_USER     {kArgString}
 
 // ++opt flags
-#define FLAG_OPT_FF_MASK    0x03
-#define VAL_OPT_FF_USEOPT   0x00
-#define VAL_OPT_FF_DOS      0x01
-#define VAL_OPT_FF_UNIX     0x02
-#define VAL_OPT_FF_MAC      0x03
-#define FLAG_OPT_BIN_USEOPT 0x04
-#define FLAG_OPT_BIN        0x08
-#define FLAG_OPT_EDIT       0x10
-#define SHIFT_OPT_BAD       5
-#define FLAG_OPT_BAD_MASK   (0x1FF << SHIFT_E_BAD)
-#define VAL_OPT_BAD_KEEP    (0x000 << SHIFT_E_BAD)
-#define VAL_OPT_BAD_DROP    (0x1FF << SHIFT_E_BAD)
+#define FLAG_OPT_FF_MASK      0x0003
+#define VAL_OPT_FF_USEOPT     0x0000
+#define VAL_OPT_FF_DOS        0x0001
+#define VAL_OPT_FF_UNIX       0x0002
+#define VAL_OPT_FF_MAC        0x0003
+#define FLAG_OPT_BIN_USE_FLAG 0x0004
+#define FLAG_OPT_BIN          0x0008
+#define FLAG_OPT_EDIT         0x0010
+#define FLAG_OPT_BAD_USE_FLAG 0x0020
+#define SHIFT_OPT_BAD         6
+#define FLAG_OPT_BAD_MASK     (0x001FF << SHIFT_OPT_BAD)
+#define VAL_OPT_BAD_KEEP      (0x00100 << SHIFT_OPT_BAD)
+#define VAL_OPT_BAD_DROP      (0x001FF << SHIFT_OPT_BAD)
 // :gui/:gvim: -g/-b flag
-#define FLAG_OPT_GUI_FORK   0x20
+#define FLAG_OPT_GUI_USE_FLAG 0x0200
+#define FLAG_OPT_GUI_FORK     0x0400
 // :write/:update
-#define FLAG_OPT_W_APPEND   0x20
+#define FLAG_OPT_W_APPEND     0x0800
 
-#define DEFAULT_OPT_FLAGS   (VAL_OPT_FF_UNKNOWN \
-                             | (FLAG_OPT_BIN_USEOPT) \
-                             | (((unsigned)'?')<<SHIFT_OPT_BAD))
+#define CHAR_TO_VAL_OPT_BAD(c) (((uint_least32_t) c) << SHIFT_OPT_BAD)
+#define VAL_OPT_BAD_TO_CHAR(f) ((char_u) ((f >> SHIFT_OPT_BAD) & 0xFF))
 
 // Constants to index arguments in CommandNode
 #define ARG_NO_ARGS -1
@@ -172,8 +171,6 @@ enum {
 // :args/:e
 enum {
   ARG_E_FILES       = 0,
-  ARG_E_OPT,
-  ARG_E_ENC,
 };
 
 // :argadd/:argdelete/:source
@@ -329,21 +326,11 @@ enum {
 // :exit
 enum {
   ARG_EXIT_FILES    = 0,
-  ARG_EXIT_OPT,
-  ARG_EXIT_ENC,
-};
-
-// :first/:rewind/:last/:next
-enum {
-  ARG_FIRST_OPT     = 0,
-  ARG_FIRST_ENC,
 };
 
 // :wnext/:wNext/:wprevious
 enum {
   ARG_WN_FILES      = 0,
-  ARG_WN_OPT,
-  ARG_WN_ENC,
 };
 
 // :for
@@ -512,8 +499,6 @@ enum {
 // :write/:read/:update
 enum {
   ARG_W_FILE        = 0,
-  ARG_W_OPT,
-  ARG_W_ENC,
   ARG_W_SHELL,
 };
 
@@ -623,12 +608,6 @@ enum {
 // :wincmd
 enum {
   ARG_WINCMD_CHAR   = 0,
-};
-
-// :wqall
-enum {
-  ARG_WQA_OPT       = 0,
-  ARG_WQA_ENC,
 };
 
 // syntax error

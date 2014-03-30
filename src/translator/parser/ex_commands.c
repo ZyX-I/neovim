@@ -16,6 +16,7 @@
 #include "term.h"
 #include "farsi.h"
 #include "menu.h"
+#include "option.h"
 
 #include "translator/parser/expressions.h"
 #include "translator/parser/ex_commands.h"
@@ -178,6 +179,17 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
                         CommandParserError *error);
 static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
                        char_u **arg, size_t *next_cmd_offset);
+static char_u *do_fgetline_allocated(int c, char_u **arg, int indent);
+static int parse_argcmd(char_u **pp,
+                        CommandNode **next_node,
+                        CommandParserOptions o,
+                        CommandPosition *position,
+                        char_u *s);
+static int parse_argopt(char_u **pp,
+                        uint_least32_t *optflags,
+                        char_u **enc,
+                        CommandParserOptions o,
+                        CommandParserError *error);
 static char *get_missing_message(CommandType type);
 static void get_block_options(CommandType type, CommandBlockOptions *bo);
 static char_u *fgetline_test(int c, char_u **arg, int indent);
@@ -2137,6 +2149,219 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
   return OK;
 }
 
+static char_u *do_fgetline_allocated(int c, char_u **arg, int indent)
+{
+  if (*arg) {
+    char_u *saved_arg = *arg;
+    *arg = NULL;
+    return saved_arg;
+  } else {
+    return NULL;
+  }
+}
+
+/// Parse +cmd
+///
+/// @param[in,out]  pp         Command to parse.
+/// @param[out]     next_node  Location where parsing results are saved.
+/// @param[in]      o          Options that control parsing behavior.
+/// @param[in]      position   Position of input.
+/// @param[in]      s          Address of position->col. Used to adjust position 
+///                            in case of error.
+///
+/// @return OK if everything was parsed correctly, FAIL if out of memory.
+///
+/// @note Syntax errors in parsed command only happen *after* opening buffer.
+static int parse_argcmd(char_u **pp,
+                        CommandNode **next_node,
+                        CommandParserOptions o,
+                        CommandPosition *position,
+                        char_u *s)
+{
+  char_u *p = *pp;
+
+  if (*p == '+') {
+    p++;
+    if (vim_isspace(*p) || !*p) {
+      if ((*next_node = cmd_alloc(kCmdMissing, position)) == NULL)
+        return FAIL;
+      (*next_node)->range.address.type = kAddrEnd;
+      (*next_node)->end_col = position->col + (p - s);
+    } else {
+      char_u *cmd_start = p;
+      char_u *arg;
+      char_u *arg_start;
+      CommandPosition new_position = {
+        position->lnr,
+        position->col + (p - s),
+        position->fname,
+      };
+
+      while (*p && !vim_isspace(*p)) {
+        if (*p == '\\' && p[1] != NUL)
+          p++;
+        mb_ptr_adv(p);
+      }
+
+      if ((arg = vim_strnsave(cmd_start, p - cmd_start)) == NULL)
+        return FAIL;
+
+      arg_start = arg;
+
+      while (*arg) {
+        if (*arg == '\\' && arg[1] != NUL)
+          STRMOVE(arg, arg + 1);
+        mb_ptr_adv(arg);
+      }
+
+      if ((*next_node = parse_cmd_sequence(o, new_position,
+                                           (line_getter) &do_fgetline_allocated,
+                                           &arg_start))
+          == NULL)
+        return FAIL;
+
+      assert(arg_start == NULL);
+    }
+    *pp = p;
+  }
+  return OK;
+}
+
+/// Parse ++opt
+///
+/// @param[in,out]  pp         Option to parse. Must point to the first +.
+/// @param[out]     optflags   Opt flags.
+/// @param[out]     enc        Encoding.
+/// @param[in]      o          Options that control parsing behavior.
+/// @param[out]     error      Structure where errors are saved.
+///
+/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+///         FAIL if out of memory.
+static int parse_argopt(char_u **pp,
+                        uint_least32_t *optflags,
+                        char_u **enc,
+                        CommandParserOptions o,
+                        CommandParserError *error)
+{
+  bool do_ff = FALSE;
+  bool do_enc = FALSE;
+  bool do_bad = FALSE;
+  char_u *arg_start;
+
+  *pp += 2;
+  if (STRNCMP(*pp, "bin", 3) == 0 || STRNCMP(*pp, "nobin", 5) == 0) {
+    if (**pp == 'n') {
+      *pp += 2;
+      *optflags |= FLAG_OPT_BIN_USE_FLAG;
+    } else {
+      *optflags |= FLAG_OPT_BIN_USE_FLAG|FLAG_OPT_BIN;
+    }
+    if (!checkforcmd(pp, (char_u *) "binary", 3)) {
+      error->message = N_("E474: Expected ++[no]bin or ++[no]binary");
+      error->position = *pp + 3;
+      return NOTDONE;
+    }
+    *pp = skipwhite(*pp);
+    return OK;
+  }
+
+  if (STRNCMP(*pp, "edit", 4) == 0) {
+    *optflags |= FLAG_OPT_EDIT;
+    *pp = skipwhite(*pp + 4);
+    return OK;
+  }
+
+  if (STRNCMP(*pp, "ff", 2) == 0) {
+    *pp += 2;
+    do_ff = TRUE;
+  } else if (STRNCMP(*pp, "fileformat", 10) == 0) {
+    *pp += 10;
+    do_ff = TRUE;
+  } else if (STRNCMP(*pp, "enc", 3) == 0) {
+    if (STRNCMP(*pp, "encoding", 8) == 0)
+      *pp += 8;
+    else
+      *pp += 3;
+    do_enc = TRUE;
+  } else if (STRNCMP(*pp, "bad", 3) == 0) {
+    *pp += 3;
+    do_bad = TRUE;
+  } else {
+    error->message = N_("E474: Unknown ++opt");
+    error->position = *pp;
+    return NOTDONE;
+  }
+
+  if (**pp != '=') {
+    error->message = N_("E474: Option requires argument: use ++opt=arg");
+    error->position = *pp;
+    return NOTDONE;
+  }
+
+  (*pp)++;
+
+  arg_start = *pp;
+
+  while (**pp && !vim_isspace(**pp)) {
+    if (**pp == '\\' && (*pp)[1] != NUL)
+      (*pp)++;
+    mb_ptr_adv((*pp));
+  }
+
+  if (do_ff) {
+    char_u saved_char = **pp;
+    **pp = NUL;
+    if (check_ff_value(arg_start) == FAIL) {
+      error->message = N_("E474: Invalid ++ff argument");
+      error->position = arg_start;
+      **pp = saved_char;
+      return NOTDONE;
+    }
+    assert(STRCMP(arg_start, "dos") == 0 || STRCMP(arg_start, "unix") == 0
+           || STRCMP(arg_start, "mac") == 0);
+    **pp = saved_char;
+    switch (*arg_start) {
+      case 'd': {
+        *optflags |= VAL_OPT_FF_DOS;
+        break;
+      }
+      case 'u': {
+        *optflags |= VAL_OPT_FF_UNIX;
+        break;
+      }
+      case 'm': {
+        *optflags |= VAL_OPT_FF_MAC;
+        break;
+      }
+      default: {
+        assert(FALSE);
+      }
+    }
+  } else if (do_enc) {
+    char_u *e;
+    if ((*enc = vim_strnsave(arg_start, *pp - arg_start)) == NULL)
+      return FAIL;
+    for (e = *enc; *e != NUL; e++)
+      *e = TOLOWER_ASC(*e);
+  } else {
+    size_t len = *pp - arg_start;
+    if (STRNICMP(arg_start, "keep", len) == 0) {
+      *optflags |= VAL_OPT_BAD_KEEP;
+    } else if (STRNICMP(arg_start, "drop", len) == 0) {
+      *optflags |= VAL_OPT_BAD_DROP;
+    } else if (MB_BYTE2LEN(*arg_start) == 1 && *pp == arg_start + 1) {
+      *optflags |= CHAR_TO_VAL_OPT_BAD(*arg_start);
+    } else {
+      error->message = N_("E474: Invalid ++bad argument: use "
+                          "\"keep\", \"drop\" or a single-byte character");
+      error->position = arg_start;
+      return NOTDONE;
+    }
+  }
+  *pp = skipwhite(*pp);
+  return OK;
+}
+
 /// Parses one command
 ///
 /// @param[in,out]  pp        Command to parse.
@@ -2169,6 +2394,7 @@ int parse_one_cmd(char_u **pp,
                   void *cookie)
 {
   CommandNode **next_node = node;
+  CommandNode *children = NULL;
   CommandParserError error;
   CommandType type = kCmdUnknown;
   Range range;
@@ -2180,6 +2406,8 @@ int parse_one_cmd(char_u **pp,
   char_u *range_start = NULL;
   bool bang = FALSE;
   uint_least8_t exflags = 0;
+  uint_least32_t optflags = 0;
+  char_u *enc = NULL;
   size_t len;
   size_t i;
   CommandArgsParser parse = NULL;
@@ -2213,7 +2441,7 @@ int parse_one_cmd(char_u **pp,
     // in ex mode, an empty line works like :+ (switch to next line)
     if (*p == NUL && o.flags&FLAG_POC_EXMODE) {
       AddressFollowup *fw;
-      if ((*next_node = cmd_alloc(kCmdHashbangComment, position)) == NULL)
+      if ((*next_node = cmd_alloc(kCmdMissing, position)) == NULL)
         return FAIL;
       (*next_node)->range.address.type = kAddrCurrent;
       if ((fw = address_followup_alloc(kAddressFollowupShift)) == NULL) {
@@ -2503,6 +2731,25 @@ int parse_one_cmd(char_u **pp,
   if (type != kCmdBang)
     p = skipwhite(p);
 
+  if (CMDDEF(type).flags & ARGOPT) {
+    while (p[0] == '+' && p[1] == '+') {
+      int ret;
+      if ((ret = parse_argopt(&p, &optflags, &enc, o, &error)) == FAIL)
+        return FAIL;
+      if (ret == NOTDONE) {
+        free_range_data(&range);
+        if (create_error_node(next_node, &error, position, s) == FAIL)
+          return FAIL;
+        return NOTDONE;
+      }
+    }
+  }
+
+  if (CMDDEF(type).flags & EDITCMD) {
+    if (parse_argcmd(&p, &children, o, position, s) == FAIL)
+      return FAIL;
+  }
+
   if (CMDDEF(type).flags & COUNT) {
     if (VIM_ISDIGIT(*p)) {
       cnt_type = kCntCount;
@@ -2561,6 +2808,9 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->exflags = exflags;
   (*next_node)->cnt_type = cnt_type;
   (*next_node)->cnt.count = count;
+  (*next_node)->children = children;
+  (*next_node)->optflags = optflags;
+  (*next_node)->enc = enc;
 
   parse = CMDDEF(type).parse;
 
@@ -2778,6 +3028,8 @@ const CommandNode nocmd = {
   kCntMissing,
   {0},
   0,
+  0,
+  NULL,
   FALSE,
   {
     {{0}}
@@ -3274,6 +3526,7 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   size_t len = 0;
   size_t start_from_arg;
   bool do_arg_dump = FALSE;
+  bool did_children = FALSE;
 
   assert(node->end_col >= node->position.col
          || node->type == kCmdSyntaxError);
@@ -3327,6 +3580,63 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   if (node->exflags & FLAG_EX_PRINT)
     len++;
 
+  if (node->optflags & FLAG_OPT_BIN_USE_FLAG) {
+    if (node->optflags & FLAG_OPT_BIN)
+      len += 6;
+    else
+      len += 8;
+  }
+  if (node->optflags & FLAG_OPT_EDIT)
+    len += 7;
+
+  switch (node->optflags & FLAG_OPT_FF_MASK) {
+    case 0: {
+      break;
+    }
+    case VAL_OPT_FF_DOS: {
+      len += 9;
+      break;
+    }
+    case VAL_OPT_FF_MAC: {
+      len += 9;
+      break;
+    }
+    case VAL_OPT_FF_UNIX: {
+      len += 10;
+      break;
+    }
+    default: {
+      assert(FALSE);
+    }
+  }
+  switch (node->optflags & FLAG_OPT_BAD_MASK) {
+    case 0: {
+      break;
+    }
+    case VAL_OPT_BAD_KEEP: {
+      len += 11;
+      break;
+    }
+    case VAL_OPT_BAD_DROP: {
+      len += 11;
+      break;
+    }
+    default: {
+      len += 7;
+      len++;
+    }
+  }
+  if (node->enc != NULL) {
+    len += 7;
+    len += STRLEN(node->enc);
+  }
+
+  if (CMDDEF(node->type).flags & EDITCMD && node->children) {
+    did_children = TRUE;
+    // Worst case: we need to escape every single character
+    len += node_repr_len(node->children, indent, TRUE) * 2;
+  }
+
   if (node->type == kCmdSyntaxError) {
     char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
     char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
@@ -3379,6 +3689,7 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
         len += 1 + expr_node_dump_len(node->args[ARG_MAP_EXPR].arg.expr);
       } else if (node->children != NULL) {
         len += 1 + node_repr_len(node->children, indent, barnext);
+        did_children = TRUE;
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         len += 1 + STRLEN(node->args[ARG_MAP_RHS].arg.str);
       }
@@ -3562,7 +3873,7 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     }
   }
 
-  if (node->children) {
+  if (node->children && !did_children) {
     if (CMDDEF(node->type).flags & ISMODIFIER) {
       len += 1 + node_repr_len(node->children, indent, barnext);
     } else if (CMDDEF(node->type).parse == &parse_do) {
@@ -3587,12 +3898,15 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   return len;
 }
 
+#define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
+
 static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 {
   char *p = *pp;
   size_t len = 0;
   size_t start_from_arg;
   bool do_arg_dump = FALSE;
+  bool did_children = FALSE;
   char_u *name;
 
   if (node == NULL)
@@ -3650,17 +3964,88 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
   if (node->exflags & FLAG_EX_PRINT)
     *p++ = 'p';
 
+  if (node->optflags & FLAG_OPT_BIN_USE_FLAG) {
+    if (node->optflags & FLAG_OPT_BIN) {
+      ADD_STRING(p, " ++bin", 6);
+    } else {
+      ADD_STRING(p, " ++nobin", 8);
+    }
+  }
+  if (node->optflags & FLAG_OPT_EDIT) {
+    ADD_STRING(p, " ++edit", 7);
+  }
+  switch (node->optflags & FLAG_OPT_FF_MASK) {
+    case 0: {
+      break;
+    }
+    case VAL_OPT_FF_DOS: {
+      ADD_STRING(p, " ++ff=dos", 9);
+      break;
+    }
+    case VAL_OPT_FF_MAC: {
+      ADD_STRING(p, " ++ff=mac", 9);
+      break;
+    }
+    case VAL_OPT_FF_UNIX: {
+      ADD_STRING(p, " ++ff=unix", 10);
+      break;
+    }
+    default: {
+      assert(FALSE);
+    }
+  }
+  switch (node->optflags & FLAG_OPT_BAD_MASK) {
+    case 0: {
+      break;
+    }
+    case VAL_OPT_BAD_KEEP: {
+      ADD_STRING(p, " ++bad=keep", 11);
+      break;
+    }
+    case VAL_OPT_BAD_DROP: {
+      ADD_STRING(p, " ++bad=drop", 11);
+      break;
+    }
+    default: {
+      ADD_STRING(p, " ++bad=", 7);
+      *p++ = VAL_OPT_BAD_TO_CHAR(node->optflags);
+    }
+  }
+  if (node->enc != NULL) {
+    ADD_STRING(p, " ++enc=", 7);
+    len = STRLEN(node->enc);
+    ADD_STRING(p, node->enc, len);
+  }
+
+  if (CMDDEF(node->type).flags & EDITCMD && node->children) {
+    char *arg_start;
+    did_children = TRUE;
+    *p++ = ' ';
+    *p++ = '+';
+    arg_start = p;
+    node_repr(node->children, indent, TRUE, &p);
+    while (arg_start < p) {
+      if (vim_isspace(*arg_start) || *arg_start == '\\'
+          || ENDS_EXCMD(*arg_start)) {
+        STRMOVE(arg_start + 1, arg_start);
+        *arg_start = '\\';
+        arg_start += 2;
+        p++;
+      } else {
+        arg_start++;
+      }
+    }
+  }
+
   if (node->type == kCmdSyntaxError) {
     char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
     char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
     size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
 
-    memcpy(p, "\\ error: ", 9);
-    p += 9;
+    ADD_STRING(p, "\\ error: ", 9);
 
     len = STRLEN(message);
-    memcpy(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
-    p+= len;
+    ADD_STRING(p, node->args[ARG_ERROR_MESSAGE].arg.str, len);
 
     *p++ = ':';
     *p++ = ' ';
@@ -3669,8 +4054,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
     if (offset < len) {
       if (offset) {
-        memcpy(p, line, offset);
-        p += offset;
+        ADD_STRING(p, line, offset);
       }
       *p++ = '!';
       *p++ = '!';
@@ -3678,11 +4062,9 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       *p++ = '!';
       *p++ = '!';
 
-      memcpy(p, line + offset + 1, len - offset - 1);
-      p += len - offset - 1;
+      ADD_STRING(p, line + offset + 1, len - offset - 1);
     } else {
-      memcpy(p, line, len);
-      p += len;
+      ADD_STRING(p, line, len);
       *p++ = '!';
       *p++ = '!';
       *p++ = '!';
@@ -3695,8 +4077,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     for (i = 0; i < ga_len ; i++) {
       *p++ = '\n';
       len = STRLEN(((char_u **)ga->ga_data)[i]);
-      memcpy(p, ((char_u **)ga->ga_data)[i], len);
-      p += len;
+      ADD_STRING(p, ((char_u **)ga->ga_data)[i], len);
     }
     *p++ = '\n';
     *p++ = '.';
@@ -3710,32 +4091,25 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       *p++ = ' ';
 
     if (map_flags & FLAG_MAP_BUFFER) {
-      memcpy(p, "<buffer>", 8);
-      p += 8;
+      ADD_STRING(p, "<buffer>", 8);
     }
     if (map_flags & FLAG_MAP_NOWAIT) {
-      memcpy(p, "<nowait>", 8);
-      p += 8;
+      ADD_STRING(p, "<nowait>", 8);
     }
     if (map_flags & FLAG_MAP_SILENT) {
-      memcpy(p, "<silent>", 8);
-      p += 8;
+      ADD_STRING(p, "<silent>", 8);
     }
     if (map_flags & FLAG_MAP_SPECIAL) {
-      memcpy(p, "<special>", 9);
-      p += 9;
+      ADD_STRING(p, "<special>", 9);
     }
     if (map_flags & FLAG_MAP_SCRIPT) {
-      memcpy(p, "<script>", 8);
-      p += 8;
+      ADD_STRING(p, "<script>", 8);
     }
     if (map_flags & FLAG_MAP_EXPR) {
-      memcpy(p, "<expr>", 6);
-      p += 6;
+      ADD_STRING(p, "<expr>", 6);
     }
     if (map_flags & FLAG_MAP_UNIQUE) {
-      memcpy(p, "<unique>", 8);
-      p += 8;
+      ADD_STRING(p, "<unique>", 8);
     }
 
     if (node->args[ARG_MAP_LHS].arg.str != NULL) {
@@ -3743,8 +4117,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
       hs = node->args[ARG_MAP_LHS].arg.str;
       len = STRLEN(hs);
-      memcpy(p, hs, len);
-      p += len;
+      ADD_STRING(p, hs, len);
 
       if (unmap) {
       } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
@@ -3753,13 +4126,13 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       } else if (node->children != NULL) {
         *p++ = '\n';
         node_repr(node->children, indent, barnext, &p);
+        did_children = TRUE;
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         *p++ = ' ';
 
         hs = node->args[ARG_MAP_RHS].arg.str;
         len = STRLEN(hs);
-        memcpy(p, hs, len);
-        p += len;
+        ADD_STRING(p, hs, len);
       }
     }
     // FIXME untranslate mappings
@@ -3771,8 +4144,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
           node->args[ARG_MAP_LHS].arg.str, FALSE,
           0);
       len = STRLEN(hs);
-      memcpy(p, hs, len);
-      p += len;
+      ADD_STRING(p, hs, len);
       vim_free(hs);
 
       if (node->args[ARG_MAP_RHS].arg.str != NULL) {
@@ -3782,8 +4154,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
             node->args[ARG_MAP_LHS].arg.str, FALSE,
             0);
         len = STRLEN(hs);
-        memcpy(p, hs, len);
-        p += len;
+        ADD_STRING(p, hs, len);
         vim_free(hs);
       }
     }
@@ -3791,8 +4162,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
   } else if (CMDDEF(node->type).parse == &parse_mapclear) {
     if (node->args[ARG_CLEAR_BUFFER].arg.flags) {
       *p++ = ' ';
-      memcpy(p, "<buffer>", 8);
-      p += 8;
+      ADD_STRING(p, "<buffer>", 8);
     }
   } else if (CMDDEF(node->type).parse == &parse_menu) {
     uint_least32_t menu_flags = node->args[ARG_MENU_FLAGS].arg.flags;
@@ -3801,25 +4171,20 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       *p++ = ' ';
 
     if (menu_flags & FLAG_MENU_SILENT) {
-      memcpy(p, "<silent>", 8);
-      p += 8;
+      ADD_STRING(p, "<silent>", 8);
     }
     if (menu_flags & FLAG_MENU_SPECIAL) {
-      memcpy(p, "<special>", 9);
-      p += 9;
+      ADD_STRING(p, "<special>", 9);
     }
     if (menu_flags & FLAG_MENU_SCRIPT) {
-      memcpy(p, "<script>", 8);
-      p += 8;
+      ADD_STRING(p, "<script>", 8);
     }
 
     if (node->args[ARG_MENU_ICON].arg.str != NULL) {
       *p++ = ' ';
-      memcpy(p, "icon=", 5);
-      p += 5;
+      ADD_STRING(p, "icon=", 5);
       len = STRLEN(node->args[ARG_MENU_ICON].arg.str);
-      memcpy(p, node->args[ARG_MENU_ICON].arg.str, len);
-      p += len;
+      ADD_STRING(p, node->args[ARG_MENU_ICON].arg.str, len);
     }
 
     if (node->args[ARG_MENU_PRI].arg.numbers != NULL) {
@@ -3838,13 +4203,11 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
     if (menu_flags & FLAG_MENU_DISABLE) {
       *p++ = ' ';
-      memcpy(p, "disable", 7);
-      p += 7;
+      ADD_STRING(p, "disable", 7);
     }
     if (menu_flags & FLAG_MENU_ENABLE) {
       *p++ = ' ';
-      memcpy(p, "enable", 6);
-      p += 6;
+      ADD_STRING(p, "enable", 6);
     }
 
     if (node->args[ARG_MENU_NAME].arg.menu_item != NULL) {
@@ -3856,8 +4219,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
         else
           *p++ = '.';
         len = STRLEN(cur->name);
-        memcpy(p, cur->name, len);
-        p += len;
+        ADD_STRING(p, cur->name, len);
         cur = cur->subitem;
       }
 
@@ -3868,8 +4230,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
         *p++ = 'b';
         *p++ = '>';
         len = STRLEN(node->args[ARG_MENU_TEXT].arg.str);
-        memcpy(p, node->args[ARG_MENU_TEXT].arg.str, len);
-        p += len;
+        ADD_STRING(p, node->args[ARG_MENU_TEXT].arg.str, len);
       }
     }
 
@@ -3878,8 +4239,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
   } else if (CMDDEF(node->type).parse == &parse_for) {
     *p++ = ' ';
     expr_node_dump(node->args[ARG_FOR_LHS].arg.expr, &p);
-    memcpy(p, " in ", 4);
-    p += 4;
+    ADD_STRING(p, " in ", 4);
     expr_node_dump(node->args[ARG_FOR_RHS].arg.expr, &p);
   } else if (CMDDEF(node->type).parse == &parse_expr
              || CMDDEF(node->type).parse == &parse_exprs
@@ -3904,8 +4264,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
           *p++ = '(';
           for (int i = 0; i < ga->ga_len; i++) {
             len = STRLEN(((char_u **)ga->ga_data)[i]);
-            memcpy(p, ((char_u **)ga->ga_data)[i], len);
-            p += len;
+            ADD_STRING(p, ((char_u **)ga->ga_data)[i], len);
             if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
               *p++ = ',';
               *p++ = ' ';
@@ -3919,18 +4278,15 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
           *p++ = ')';
           if (flags&FLAG_FUNC_RANGE) {
             *p++ = ' ';
-            memcpy(p, "range", 5);
-            p += 5;
+            ADD_STRING(p, "range", 5);
           }
           if (flags&FLAG_FUNC_DICT) {
             *p++ = ' ';
-            memcpy(p, "dict", 4);
-            p += 4;
+            ADD_STRING(p, "dict", 4);
           }
           if (flags&FLAG_FUNC_ABORT) {
             *p++ = ' ';
-            memcpy(p, "abort", 5);
-            p += 5;
+            ADD_STRING(p, "abort", 5);
           }
         }
       }
@@ -3999,8 +4355,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
           if (node->args[i].arg.str != NULL) {
             *p++ = ' ';
             len = STRLEN(node->args[i].arg.str);
-            memcpy(p, node->args[i].arg.str, len);
-            p += len;
+            ADD_STRING(p, node->args[i].arg.str, len);
           }
           break;
         }
@@ -4011,7 +4366,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     }
   }
 
-  if (node->children) {
+  if (node->children && !did_children) {
     if (CMDDEF(node->type).flags & ISMODIFIER) {
       *p++ = ' ';
       node_repr(node->children, indent, barnext, &p);
@@ -4020,8 +4375,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       node_repr(node->children, indent, TRUE, &p);
     } else {
       if (barnext) {
-        memcpy(p, " | ", 3);
-        p += 3;
+        ADD_STRING(p, " | ", 3);
       } else {
         *p++ = '\n';
       }
@@ -4031,8 +4385,7 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 
   if (node->next != NULL) {
     if (barnext) {
-      memcpy(p, " | ", 3);
-      p += 3;
+      ADD_STRING(p, " | ", 3);
     } else {
       *p++ = '\n';
     }

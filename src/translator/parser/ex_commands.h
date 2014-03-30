@@ -143,6 +143,8 @@ typedef struct command_node {
     ExpressionNode *expr;
   } cnt;                          ///< First simple argument
   uint_least8_t exflags;          ///< Ex flags (for :print command and like)
+  uint_least32_t optflags;        ///< ++opt flags
+  char_u *enc;                    ///< Encoding from ++enc
   bool bang;                      ///< TRUE if command was used with a bang
   struct command_argument {
     union {
