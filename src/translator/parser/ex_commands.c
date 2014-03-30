@@ -1212,8 +1212,18 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
+    case kTypeEnvironmentVariable: {
+      if (allow_env) {
+        if (expr->position > expr->end_position) {
+          error->message = N_("E475: Cannot assign to environment variable "
+                              "with an empty name");
+          error->position = expr->end_position;
+          return TRUE;
+        }
+      }
+      // fallthrough
+    }
     case kTypeOption:
-    case kTypeEnvironmentVariable:
     case kTypeRegister: {
       if (!allow_env) {
         error->message = N_("E15: Only variable names are allowed");
