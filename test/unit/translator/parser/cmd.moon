@@ -487,6 +487,16 @@ describe 'parse_one_cmd', ->
     itn 'delfunction Abc', 'delf Abc'
     itn 'delfunction {"abc"}', 'delf{"abc"}'
 
+  describe ':let', ->
+    itn 'let a b c', 'let a   b\tc'
+    itn 'let', 'let'
+    itn 'let g:', 'let g:'
+    itn 'let [a, b, C] = [1, 2, 3]', 'let[a,b,C]=[1,2,3]'
+    itn 'let a = 1', 'let a\t=1'
+    itn 'let a .= 1', 'let a .= 1'
+    itn 'let a -= 1', 'let a -= 1'
+    itn 'let a += 1', 'let a+=\t1'
+
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
     t '
