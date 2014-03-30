@@ -1621,15 +1621,18 @@ static size_t node_dump_len(ExpressionNode *node)
       len += node_dump_len(node->children);
       break;
     }
+    case kTypeEnvironmentVariable:
+    case kTypeOption: {
+      len++;
+      // fallthrough
+    }
     case kTypeDecimalNumber:
     case kTypeOctalNumber:
     case kTypeHexNumber:
     case kTypeFloat:
     case kTypeDoubleQuotedString:
     case kTypeSingleQuotedString:
-    case kTypeOption:
     case kTypeRegister:
-    case kTypeEnvironmentVariable:
     case kTypeSimpleVariableName:
     case kTypeIdentifier: {
       assert(node->position != NULL);
@@ -1846,15 +1849,18 @@ static void node_dump(ExpressionNode *node, char **pp)
       node_dump(node->children, &p);
       break;
     }
+    case kTypeEnvironmentVariable:
+    case kTypeOption: {
+      *p++ = (node->type == kTypeEnvironmentVariable ? '$' : '&');
+      // fallthrough
+    }
     case kTypeDecimalNumber:
     case kTypeOctalNumber:
     case kTypeHexNumber:
     case kTypeFloat:
     case kTypeDoubleQuotedString:
     case kTypeSingleQuotedString:
-    case kTypeOption:
     case kTypeRegister:
-    case kTypeEnvironmentVariable:
     case kTypeSimpleVariableName:
     case kTypeIdentifier: {
       size_t len = node->end_position - node->position + 1;
