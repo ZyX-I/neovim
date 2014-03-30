@@ -122,6 +122,7 @@ size_t expr_node_dump_len(ExpressionNode *node);
 void expr_node_dump(ExpressionNode *node, char **pp);
 ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error);
 ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
-                           ExpressionParser parse);
+                           ExpressionParser parse, bool listends,
+                           char_u *endwith);
 
 #endif  // NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H

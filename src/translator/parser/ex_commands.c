@@ -131,9 +131,7 @@ static int parse_lval(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       ExpressionNode **expr,
-                      bool listmult,
-                      bool allowlist,
-                      bool allowlower);
+                      int flags);
 static int parse_lvals(char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
@@ -162,6 +160,13 @@ static int parse_function(char_u **pp,
                           CommandPosition *position,
                           line_getter fgetline,
                           void *cookie);
+static int parse_let(char_u **pp,
+                     CommandNode *node,
+                     CommandParserError *error,
+                     CommandParserOptions o,
+                     CommandPosition *position,
+                     line_getter fgetline,
+                     void *cookie);
 static int get_address(char_u **pp, Address *address,
                        CommandParserError *error);
 static int get_address_followups(char_u **pp, CommandParserError *error,
@@ -1082,7 +1087,8 @@ static int do_parse_expr(char_u **pp,
   expr_str_start = expr_str;
 
   if (multi)
-    expr = parse_mult(&expr_str, &expr_error, &parse0_err);
+    expr = parse_mult(&expr_str, &expr_error, &parse0_err, FALSE,
+                      (char_u *) "\n|");
   else
     expr = parse0_err(&expr_str, &expr_error);
 
@@ -1260,6 +1266,10 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
   return FALSE;
 }
 
+#define FLAG_PLVAL_SPACEMULT 0x01
+#define FLAG_PLVAL_LISTMULT  0x02
+#define FLAG_PLVAL_NOLOWER   0x04
+
 /// Parse left value of assignment
 ///
 /// @param[in,out]  pp          Parsed string. Is advanced to the next character 
@@ -1267,15 +1277,18 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 /// @param[out]     error       Structure where errors are saved.
 /// @param[in]      o           Options that control parsing behavior.
 /// @param[out]     expr        Location where result will be saved.
-/// @param[in]      listmult    Determines whether multiple lval values are 
-///                             supported in a form of a list ([a, b, c]) or 
-///                             just a number of space-separated expressions (a 
-///                             b c).
-/// @param[in]      allowmult   Determines whether muliple values are allowed at 
-///                             all.
-/// @param[in]      allowlower  Determines whether lval is allowed to start with 
-///                             lowercase letter (only used if top node is 
-///                             kTypeSimpleVariableName or kTypeVariableName).
+/// @param[in]      flags       Flags:
+/// @parblock
+///   Flag                 | Description
+///   -------------------- | -------------------------------------------------
+///   FLAG_PLVAL_SPACEMULT | Allow space-separated multiple values
+///   FLAG_PLVAL_LISTMULT  | Allow multiple values in a list ("[a, b]")
+///   FLAG_PLVAL_NOLOWER   | Do not allow name to start with a lowercase letter
+///
+///   @note If both FLAG_PLVAL_LISTMULT and FLAG_PLVAL_SPACEMULT were specified 
+///         then only either space-separated values or list will be allowed, but 
+///         not both.
+/// @endparblock
 ///
 /// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when out 
 ///         of memory.
@@ -1283,16 +1296,16 @@ static int parse_lval(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       ExpressionNode **expr,
-                      bool listmult,
-                      bool allowmult,
-                      bool allowlower)
+                      int flags)
 {
   ExpressionParserError expr_error;
   ExpressionNode *next;
   char_u *expr_start = *pp;
+  bool allow_list = (bool) (flags&FLAG_PLVAL_LISTMULT);
 
-  if (allowmult && !listmult)
-    *expr = parse_mult(pp, &expr_error, &parse7_nofunc);
+  if (flags&FLAG_PLVAL_SPACEMULT)
+    *expr = parse_mult(pp, &expr_error, &parse7_nofunc, TRUE,
+                       (char_u *) "\n\"|-.+=");
   else
     *expr = parse7_nofunc(pp, &expr_error);
 
@@ -1304,9 +1317,12 @@ static int parse_lval(char_u **pp,
     return NOTDONE;
   }
 
+  if ((*expr)->next != NULL)
+    allow_list = FALSE;
+
   next = *expr;
   while (next != NULL) {
-    if (check_lval(next, error, allowmult && listmult, allowlower)) {
+    if (check_lval(next, error, allow_list, !(flags&FLAG_PLVAL_NOLOWER))) {
       free_expr(*expr);
       *expr = NULL;
       if (error->message == NULL)
@@ -1341,9 +1357,10 @@ static int parse_lvals(char_u **pp,
 
   expr_str_start = expr_str;
 
-  if ((ret = parse_lval(&expr_str, error, o, &expr, FALSE,
-                        node->type != kCmdDelfunction,
-                        node->type != kCmdDelfunction)) == FAIL)
+  if ((ret = parse_lval(&expr_str, error, o, &expr,
+                        node->type == kCmdDelfunction
+                        ? FLAG_PLVAL_NOLOWER
+                        : FLAG_PLVAL_SPACEMULT)) == FAIL)
     return FAIL;
 
   node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
@@ -1392,14 +1409,15 @@ static int parse_for(char_u **pp,
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_ASSIGN_STR].arg.str = expr_str;
+  node->args[ARG_FOR_STR].arg.str = expr_str;
 
   expr_str_start = expr_str;
 
-  if ((ret = parse_lval(&expr_str, error, o, &expr, TRUE, TRUE, TRUE)) == FAIL)
+  if ((ret = parse_lval(&expr_str, error, o, &expr, FLAG_PLVAL_LISTMULT))
+      == FAIL)
     return FAIL;
 
-  node->args[ARG_ASSIGN_LHS].arg.expr = expr;
+  node->args[ARG_FOR_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
     error->position = *pp + (((char_u *) error->position) - expr_str_start);
@@ -1424,7 +1442,7 @@ static int parse_for(char_u **pp,
     return NOTDONE;
   }
 
-  node->args[ARG_ASSIGN_RHS].arg.expr = list_expr;
+  node->args[ARG_FOR_RHS].arg.expr = list_expr;
 
   *pp += expr_str - expr_str_start;
 
@@ -1461,7 +1479,7 @@ static int parse_function(char_u **pp,
 
   expr_str_start = expr_str;
 
-  if ((ret = parse_lval(&expr_str, error, o, &expr, FALSE, FALSE, FALSE))
+  if ((ret = parse_lval(&expr_str, error, o, &expr, FLAG_PLVAL_NOLOWER))
       == FAIL)
     return FAIL;
 
@@ -1573,6 +1591,121 @@ static int parse_function(char_u **pp,
   node->args[ARG_FUNC_FLAGS].arg.flags = flags;
 
   *pp = p;
+  return OK;
+}
+
+static int parse_let(char_u **pp,
+                     CommandNode *node,
+                     CommandParserError *error,
+                     CommandParserOptions o,
+                     CommandPosition *position,
+                     line_getter fgetline,
+                     void *cookie)
+{
+  ExpressionNode *expr;
+  ExpressionParserError expr_error;
+  int ret;
+  char_u *expr_str;
+  char_u *expr_str_start;
+  ExpressionNode *rval_expr;
+  LetAssignmentType ass_type = 0;
+
+  if (ENDS_EXCMD(**pp))
+    return OK;
+
+  if ((expr_str = vim_strsave(*pp)) == NULL)
+    return FAIL;
+
+  node->args[ARG_LET_STR].arg.str = expr_str;
+
+  expr_str_start = expr_str;
+
+  if ((ret = parse_lval(&expr_str, error, o, &expr,
+                        FLAG_PLVAL_LISTMULT|FLAG_PLVAL_SPACEMULT))
+      == FAIL)
+    return FAIL;
+
+  node->args[ARG_LET_LHS].arg.expr = expr;
+
+  if (ret == NOTDONE) {
+    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    return NOTDONE;
+  }
+
+  expr_str = skipwhite(expr_str);
+
+  if (ENDS_EXCMD(*expr_str)) {
+    if (expr->type == kTypeList) {
+      error->message =
+          N_("E474: To list multiple variables use \":let var|let var2\", "
+                   "not \":let [var, var2]\"");
+      error->position = *pp + (expr->position - expr_str_start);
+      return NOTDONE;
+    }
+    *pp += expr_str - expr_str_start;
+    return OK;
+  } else {
+    if (expr->next != NULL) {
+      error->message = N_("E18: Expected end of command after last variable");
+      error->position = *pp + (expr_str - expr_str_start);
+      return NOTDONE;
+    }
+  }
+
+  switch (*expr_str) {
+    case '=': {
+      expr_str++;
+      ass_type = VAL_LET_ASSIGN;
+      break;
+    }
+    case '+':
+    case '-':
+    case '.': {
+      switch (*expr_str) {
+        case '+': {
+          ass_type = VAL_LET_ADD;
+          break;
+        }
+        case '-': {
+          ass_type = VAL_LET_SUBTRACT;
+          break;
+        }
+        case '.': {
+          ass_type = VAL_LET_APPEND;
+          break;
+        }
+      }
+      if (expr_str[1] != '=') {
+        error->message = N_("E18: '+', '-' and '.' must be followed by '='");
+        error->position = *pp + (expr_str + 1 - expr_str_start);
+        return NOTDONE;
+      }
+      expr_str += 2;
+      break;
+    }
+    default: {
+      error->message =
+          N_("E18: Expected assignment operation or end of command");
+      error->position = *pp + (expr_str + 1 - expr_str_start);
+      return NOTDONE;
+    }
+  }
+
+  node->args[ARG_LET_ASS_TYPE].arg.flags = (uint_least32_t) ass_type;
+
+  expr_str = skipwhite(expr_str);
+
+  if ((rval_expr = parse0_err(&expr_str, &expr_error)) == NULL) {
+    if (expr_error.message == NULL)
+      return FAIL;
+    error->message = expr_error.message;
+    error->position = *pp + (((char_u *) expr_error.position) - expr_str_start);
+    return NOTDONE;
+  }
+
+  node->args[ARG_LET_RHS].arg.expr = rval_expr;
+
+  *pp += expr_str - expr_str_start;
   return OK;
 }
 
@@ -3297,9 +3430,9 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     do_arg_dump = TRUE;
   } else if (CMDDEF(node->type).parse == &parse_for) {
     len++;
-    len += expr_node_dump_len(node->args[ARG_ASSIGN_LHS].arg.expr);
+    len += expr_node_dump_len(node->args[ARG_FOR_LHS].arg.expr);
     len += 4;
-    len += expr_node_dump_len(node->args[ARG_ASSIGN_RHS].arg.expr);
+    len += expr_node_dump_len(node->args[ARG_FOR_RHS].arg.expr);
   } else if (CMDDEF(node->type).parse == &parse_expr
              || CMDDEF(node->type).parse == &parse_exprs
              || CMDDEF(node->type).parse == &parse_lvals) {
@@ -3338,6 +3471,37 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
             len += 1 + 5;
         }
       }
+    }
+  } else if (CMDDEF(node->type).parse == &parse_let) {
+    if (node->args[ARG_LET_LHS].arg.expr != NULL) {
+      LetAssignmentType ass_type =
+          (LetAssignmentType) node->args[ARG_LET_ASS_TYPE].arg.flags;
+      bool add_rval = TRUE;
+
+      len++;
+      len += expr_node_dump_len(node->args[ARG_LET_LHS].arg.expr);
+      switch (ass_type) {
+        case VAL_LET_NO_ASS: {
+          add_rval = FALSE;
+          break;
+        }
+        case VAL_LET_ASSIGN: {
+          len += 2;
+          break;
+        }
+        case VAL_LET_ADD:
+        case VAL_LET_SUBTRACT:
+        case VAL_LET_APPEND: {
+          len += 3;
+          break;
+        }
+      }
+      if (add_rval) {
+        assert(node->args[ARG_LET_RHS].arg.expr != NULL);
+        len++;
+        len += expr_node_dump_len(node->args[ARG_LET_RHS].arg.expr);
+      }
+      assert(add_rval || node->args[ARG_LET_RHS].arg.expr == NULL);
     }
   } else {
     start_from_arg = 0;
@@ -3681,10 +3845,10 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
     do_arg_dump = TRUE;
   } else if (CMDDEF(node->type).parse == &parse_for) {
     *p++ = ' ';
-    expr_node_dump(node->args[ARG_ASSIGN_LHS].arg.expr, &p);
+    expr_node_dump(node->args[ARG_FOR_LHS].arg.expr, &p);
     memcpy(p, " in ", 4);
     p += 4;
-    expr_node_dump(node->args[ARG_ASSIGN_RHS].arg.expr, &p);
+    expr_node_dump(node->args[ARG_FOR_RHS].arg.expr, &p);
   } else if (CMDDEF(node->type).parse == &parse_expr
              || CMDDEF(node->type).parse == &parse_exprs
              || CMDDEF(node->type).parse == &parse_lvals) {
@@ -3737,6 +3901,48 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
             p += 5;
           }
         }
+      }
+    }
+  } else if (CMDDEF(node->type).parse == &parse_let) {
+    if (node->args[ARG_LET_LHS].arg.expr != NULL) {
+      LetAssignmentType ass_type =
+          (LetAssignmentType) node->args[ARG_LET_ASS_TYPE].arg.flags;
+      bool add_rval = TRUE;
+
+      *p++ = ' ';
+      expr_node_dump(node->args[ARG_LET_LHS].arg.expr, &p);
+      switch (ass_type) {
+        case VAL_LET_NO_ASS: {
+          add_rval = FALSE;
+          break;
+        }
+        case VAL_LET_ASSIGN: {
+          *p++ = ' ';
+          *p++ = '=';
+          break;
+        }
+        case VAL_LET_ADD: {
+          *p++ = ' ';
+          *p++ = '+';
+          *p++ = '=';
+          break;
+        }
+        case VAL_LET_SUBTRACT: {
+          *p++ = ' ';
+          *p++ = '-';
+          *p++ = '=';
+          break;
+        }
+        case VAL_LET_APPEND: {
+          *p++ = ' ';
+          *p++ = '.';
+          *p++ = '=';
+          break;
+        }
+      }
+      if (add_rval) {
+        *p++ = ' ';
+        expr_node_dump(node->args[ARG_LET_RHS].arg.expr, &p);
       }
     }
   } else {

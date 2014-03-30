@@ -61,7 +61,8 @@ typedef enum {
 #define ARGS_EXIT     {kArgGlob, kArgFlags, kArgString}
 #define ARGS_FIRST    {kArgFlags, kArgString}
 #define ARGS_WN       {kArgGlob, kArgFlags, kArgString}
-#define ARGS_ASSIGN   {kArgString, kArgAssignLhs, kArgExpression}
+#define ARGS_FOR      {kArgString, kArgAssignLhs, kArgExpression}
+#define ARGS_LET      {kArgFlags, kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_FUNC     {kArgString, kArgRegex, kArgAssignLhs, kArgStrings, \
                        kArgFlags}
 #define ARGS_G        {kArgRegex}
@@ -345,12 +346,28 @@ enum {
   ARG_WN_ENC,
 };
 
-// :for/:let
+// :for
 enum {
-  ARG_ASSIGN_STR    = 0,
-  ARG_ASSIGN_LHS,
-  ARG_ASSIGN_RHS,
+  ARG_FOR_STR       = 0,
+  ARG_FOR_LHS,
+  ARG_FOR_RHS,
 };
+
+// :let
+enum {
+  ARG_LET_ASS_TYPE  = 0,
+  ARG_LET_STR,
+  ARG_LET_LHS,
+  ARG_LET_RHS,
+};
+
+typedef enum {
+  VAL_LET_NO_ASS = 0,
+  VAL_LET_ASSIGN,
+  VAL_LET_ADD,
+  VAL_LET_SUBTRACT,
+  VAL_LET_APPEND,
+} LetAssignmentType;
 
 // :func
 enum {

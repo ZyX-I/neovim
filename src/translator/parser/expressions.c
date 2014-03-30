@@ -1490,16 +1490,21 @@ ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
 
 /// Parse a whitespace-separated sequence of expressions
 ///
-/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
-///                        advanced to the next non-white after the recognized 
-///                        expression.
-/// @param[out]     error  Structure where errors are saved.
-/// @param[in]      parse  Parser used to parse one expression in sequence.
+/// @param[in,out]  arg       Parsed string. May point to whitespace character. 
+///                           Is advanced to the next non-white after the 
+///                           recognized expression.
+/// @param[out]     error     Structure where errors are saved.
+/// @param[in]      parse     Parser used to parse one expression in sequence.
+/// @param[in]      listends  Determines whether list literal should end parsing 
+///                           process.
+/// @param[in]      endwith   Determines what characters are allowed to stop 
+///                           parsing. NUL byte always stops parsing.
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
 ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
-                           ExpressionParser parse)
+                           ExpressionParser parse, bool listends,
+                           char_u *endwith)
 {
   ExpressionNode *result = NULL;
   ExpressionNode **next = &result;
@@ -1507,12 +1512,14 @@ ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
   error->message = NULL;
   error->position = NULL;
 
-  while (**arg && **arg != '\n' && **arg != '|') {
+  while (**arg && vim_strchr(endwith, **arg) == NULL) {
     *arg = skipwhite(*arg);
     if ((*next = parse(arg, error)) == NULL) {
       free_expr(result);
       return NULL;
     }
+    if (listends && (*next)->type == kTypeList)
+      break;
     next = &((*next)->next);
   }
 
