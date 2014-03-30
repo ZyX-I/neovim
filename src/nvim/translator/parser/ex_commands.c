@@ -1027,8 +1027,20 @@ static int parse_do(char_u **pp,
   return OK;
 }
 
+/// Check whether given expression node is a valid lvalue
+///
+/// @param[in]   expr         Checked expression.
+/// @param[out]  error        Structure where error information is saved.
+/// @param[in]   allow_list   Determines whether list nodes are allowed.
+/// @param[in]   allow_lower  Determines whether simple variable names are 
+///                           allowed to start with a lowercase letter.
+/// @param[in]   allow_env    Determines whether it is allowed to contain 
+///                           kTypeOption, kTypeRegister and 
+///                           kTypeEnvironmentVariable nodes.
+///
+/// @return TRUE if check failed, FALSE otherwise.
 static bool check_lval(ExpressionNode *expr, CommandParserError *error,
-                       bool allow_list, bool allow_lower)
+                       bool allow_list, bool allow_lower, bool allow_env)
 {
   switch (expr->type) {
     case kTypeSimpleVariableName: {
@@ -1041,7 +1053,19 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
-    case kTypeVariableName:
+    case kTypeOption:
+    case kTypeEnvironmentVariable:
+    case kTypeRegister: {
+      if (!allow_env) {
+        error->message = N_("E15: Only variable names are allowed");
+        error->position = expr->position;
+        return TRUE;
+      }
+      break;
+    }
+    case kTypeVariableName: {
+      break;
+    }
     case kTypeConcatOrSubscript:
     case kTypeSubscript: {
       ExpressionNode *root = expr;
@@ -1069,7 +1093,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
         }
 
         while (item != NULL) {
-          if (check_lval(item, error, FALSE, allow_lower))
+          if (check_lval(item, error, FALSE, allow_lower, allow_env))
             return TRUE;
           item = item->next;
         }
@@ -1100,6 +1124,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 #define FLAG_PLVAL_SPACEMULT 0x01
 #define FLAG_PLVAL_LISTMULT  0x02
 #define FLAG_PLVAL_NOLOWER   0x04
+#define FLAG_PLVAL_ALLOW_ENV 0x08
 
 /// Parse left value of assignment
 ///
@@ -1115,6 +1140,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 ///   FLAG_PLVAL_SPACEMULT | Allow space-separated multiple values
 ///   FLAG_PLVAL_LISTMULT  | Allow multiple values in a list ("[a, b]")
 ///   FLAG_PLVAL_NOLOWER   | Do not allow name to start with a lowercase letter
+///   FLAG_PLVAL_ALLOW_ENV | Allow options, env variables and registers
 ///
 ///   @note If both FLAG_PLVAL_LISTMULT and FLAG_PLVAL_SPACEMULT were specified 
 ///         then only either space-separated values or list will be allowed, but 
@@ -1133,6 +1159,7 @@ static int parse_lval(char_u **pp,
   ExpressionNode *next;
   char_u *expr_start = *pp;
   bool allow_list = (bool) (flags&FLAG_PLVAL_LISTMULT);
+  bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
   if (flags&FLAG_PLVAL_SPACEMULT)
     *expr = parse_mult(pp, &expr_error, &parse7_nofunc, TRUE,
@@ -1148,12 +1175,15 @@ static int parse_lval(char_u **pp,
     return NOTDONE;
   }
 
-  if ((*expr)->next != NULL)
+  if ((*expr)->next != NULL) {
     allow_list = FALSE;
+    allow_env = FALSE;
+  }
 
   next = *expr;
   while (next != NULL) {
-    if (check_lval(next, error, allow_list, !(flags&FLAG_PLVAL_NOLOWER))) {
+    if (check_lval(next, error, allow_list, !(flags&FLAG_PLVAL_NOLOWER),
+                   allow_env)) {
       free_expr(*expr);
       *expr = NULL;
       if (error->message == NULL)
@@ -1452,7 +1482,8 @@ static int parse_let(char_u **pp,
   expr_str_start = expr_str;
 
   if ((ret = parse_lval(&expr_str, error, o, &expr,
-                        FLAG_PLVAL_LISTMULT|FLAG_PLVAL_SPACEMULT))
+                        FLAG_PLVAL_LISTMULT|FLAG_PLVAL_SPACEMULT
+                        |FLAG_PLVAL_ALLOW_ENV))
       == FAIL)
     return FAIL;
 

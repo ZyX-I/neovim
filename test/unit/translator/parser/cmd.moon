@@ -496,6 +496,7 @@ describe 'parse_one_cmd', ->
     itn 'let a .= 1', 'let a .= 1'
     itn 'let a -= 1', 'let a -= 1'
     itn 'let a += 1', 'let a+=\t1'
+    itn 'let $A .= 1', 'let$A.=1'
 
 describe 'parse_cmd_sequence', ->
   describe 'if block', ->
