@@ -111,6 +111,8 @@ typedef struct {
   char_u *end;
 } TestExprResult;
 
+typedef ExpressionNode *(*ExpressionParser)(char_u **, ExpressionParserError *);
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/parser/expressions.h.generated.h"
 #endif
