@@ -1132,12 +1132,8 @@ static int parse_lval(char_u **pp,
   ExpressionNode *next;
   char_u *expr_start = *pp;
 
-  if (allowmult)
-    *expr = parse0_err(pp, &expr_error, !listmult);
-  else
-    *expr = parse7_nofunc(pp, &expr_error);
-
-  if (*expr == NULL) {
+  if ((*expr = parse7_nofunc(pp, &expr_error, allowmult && !listmult))
+      == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
