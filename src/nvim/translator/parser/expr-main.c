@@ -263,6 +263,11 @@ int vim_isxdigit(int c)
          || (c >= 'a' && c <= 'f')
          || (c >= 'A' && c <= 'F');
 }
+
+char_u *vim_strchr(char_u *s, int c)
+{
+  return (char_u *) strchr((char *) s, c);
+}
 #endif  // COMPILE_TEST_VERSION
 int abc() {
   return 0;
