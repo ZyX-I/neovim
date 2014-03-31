@@ -3388,34 +3388,6 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   if (node->bang)
     len++;
 
-  switch (node->cnt_type) {
-    case kCntMissing: {
-      break;
-    }
-    case kCntCount:
-    case kCntBuffer: {
-      len += 1 + unumber_repr_len((uintmax_t) node->cnt.count);
-      break;
-    }
-    case kCntReg: {
-      len += 2;
-      break;
-    }
-    case kCntExprReg: {
-      // FIXME
-      break;
-    }
-  }
-
-  if (node->exflags)
-    len++;
-  if (node->exflags & FLAG_EX_LIST)
-    len++;
-  if (node->exflags & FLAG_EX_LNR)
-    len++;
-  if (node->exflags & FLAG_EX_PRINT)
-    len++;
-
   if (node->optflags & FLAG_OPT_BIN_USE_FLAG) {
     if (node->optflags & FLAG_OPT_BIN)
       len += 6;
@@ -3472,6 +3444,34 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
     // Worst case: we need to escape every single character
     len += node_repr_len(node->children, indent, TRUE) * 2;
   }
+
+  switch (node->cnt_type) {
+    case kCntMissing: {
+      break;
+    }
+    case kCntCount:
+    case kCntBuffer: {
+      len += 1 + unumber_repr_len((uintmax_t) node->cnt.count);
+      break;
+    }
+    case kCntReg: {
+      len += 2;
+      break;
+    }
+    case kCntExprReg: {
+      // FIXME
+      break;
+    }
+  }
+
+  if (node->exflags)
+    len++;
+  if (node->exflags & FLAG_EX_LIST)
+    len++;
+  if (node->exflags & FLAG_EX_LNR)
+    len++;
+  if (node->exflags & FLAG_EX_PRINT)
+    len++;
 
   if (node->type == kCmdSyntaxError) {
     char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
@@ -3770,36 +3770,6 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
   if (node->bang)
     *p++ = '!';
 
-  switch (node->cnt_type) {
-    case kCntMissing: {
-      break;
-    }
-    case kCntCount:
-    case kCntBuffer: {
-      *p++ = ' ';
-      unumber_repr((uintmax_t) node->cnt.count, &p);
-      break;
-    }
-    case kCntReg: {
-      *p++ = ' ';
-      *p++ = node->cnt.reg;
-      break;
-    }
-    case kCntExprReg: {
-      // FIXME
-      break;
-    }
-  }
-
-  if (node->exflags)
-    *p++ = ' ';
-  if (node->exflags & FLAG_EX_LIST)
-    *p++ = 'l';
-  if (node->exflags & FLAG_EX_LNR)
-    *p++ = '#';
-  if (node->exflags & FLAG_EX_PRINT)
-    *p++ = 'p';
-
   if (node->optflags & FLAG_OPT_BIN_USE_FLAG) {
     if (node->optflags & FLAG_OPT_BIN) {
       ADD_STRING(p, " ++bin", 6);
@@ -3872,6 +3842,36 @@ static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
       }
     }
   }
+
+  switch (node->cnt_type) {
+    case kCntMissing: {
+      break;
+    }
+    case kCntCount:
+    case kCntBuffer: {
+      *p++ = ' ';
+      unumber_repr((uintmax_t) node->cnt.count, &p);
+      break;
+    }
+    case kCntReg: {
+      *p++ = ' ';
+      *p++ = node->cnt.reg;
+      break;
+    }
+    case kCntExprReg: {
+      // FIXME
+      break;
+    }
+  }
+
+  if (node->exflags)
+    *p++ = ' ';
+  if (node->exflags & FLAG_EX_LIST)
+    *p++ = 'l';
+  if (node->exflags & FLAG_EX_LNR)
+    *p++ = '#';
+  if (node->exflags & FLAG_EX_PRINT)
+    *p++ = 'p';
 
   if (node->type == kCmdSyntaxError) {
     char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;

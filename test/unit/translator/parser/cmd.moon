@@ -542,10 +542,11 @@ describe 'parse_one_cmd', ->
       sa: 'sargument'
       spr: 'sprevious'
     }
-      -- FIXME Test count support
       itn full, trunc
       itn full .. '!', trunc .. '!'
       itn full .. ' +let\\ a\\ =\\ 1', trunc .. '+let\\ a=1'
+      itn full .. ' ++bin 5', trunc .. '++bin5'
+      itn '5' .. full .. ' ++bin', '5' .. trunc .. '++bin'
       for used, expected in pairs opts
         itn full .. ' ' .. expected, trunc .. used
         itn full .. '! ' .. expected, trunc .. '!' .. used
