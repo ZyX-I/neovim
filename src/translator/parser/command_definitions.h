@@ -1212,7 +1212,7 @@ typedef enum
   EX(kCmdScriptnames,     "scriptnames",  NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      TRLBAR|CMDWIN),
-  EX(kCmdScriptencoding,  "scriptencoding", NULL,
+  EX(kCmdScriptencoding,  "scriptencoding", &parse_scriptencoding,
      ARG_NAME_NAME, ARGS_NAME,
      WORD1|TRLBAR|CMDWIN),
   EX(kCmdScscope,         "scscope",      NULL,

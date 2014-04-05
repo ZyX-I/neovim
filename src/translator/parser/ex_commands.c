@@ -172,6 +172,13 @@ static int parse_let(char_u **pp,
                      CommandPosition *position,
                      LineGetter fgetline,
                      void *cookie);
+static int parse_scriptencoding(char_u **pp,
+                                CommandNode *node,
+                                CommandParserError *error,
+                                CommandParserOptions o,
+                                CommandPosition *position,
+                                LineGetter fgetline,
+                                void *cookie);
 static int get_address(char_u **pp, Address *address,
                        CommandParserError *error);
 static int get_address_followups(char_u **pp, CommandParserError *error,
@@ -1785,6 +1792,23 @@ static int parse_let(char_u **pp,
   node->args[ARG_LET_RHS].arg.expr = rval_expr;
 
   *pp += expr_str - expr_str_start;
+  return OK;
+}
+
+static int parse_scriptencoding(char_u **pp,
+                                CommandNode *node,
+                                CommandParserError *error,
+                                CommandParserOptions o,
+                                CommandPosition *position,
+                                LineGetter fgetline,
+                                void *cookie)
+{
+  if (**pp == NUL)
+    return OK;
+  // TODO Setup conversion from parsed encoding
+  if ((node->args[0].arg.str = enc_canonize(*pp)) == NULL)
+    return FAIL;
+  *pp += STRLEN(*pp);
   return OK;
 }
 

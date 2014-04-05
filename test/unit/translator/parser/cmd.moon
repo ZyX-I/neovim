@@ -482,4 +482,12 @@ describe 'parse_one_cmd', ->
     itn 'let a += 1', 'let a+=\t1'
     itn 'let $A .= 1', 'let$A.=1'
 
+  describe ':scriptencoding', ->
+    itn 'scriptencoding', 'scripte'
+    itn 'scriptencoding utf-8', 'scriptencoding UTF-8'
+    itn 'scriptencoding utf-8', 'scriptencoding UTF8'
+    itn 'scriptencoding utf-8', 'scriptencoding utf8'
+    itn 'scriptencoding utf-8', 'scriptencoding utf-8'
+    itn 'scriptencoding ucs-2', 'scriptencoding ucs-2'
+
 -- vim: sw=2 sts=2 et tw=80
