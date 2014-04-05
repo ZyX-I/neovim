@@ -192,14 +192,14 @@ typedef struct {
   char *message;
 } CommandParserError;
 
-typedef char_u *(*line_getter)(int, void *, int);
+typedef char_u *(*LineGetter)(int, void *, int);
 
 typedef int (*CommandArgsParser)(char_u **,
                                  CommandNode *,
                                  CommandParserError *,
                                  CommandParserOptions,
                                  CommandPosition *,
-                                 line_getter,
+                                 LineGetter,
                                  void *);
 
 // flags for parse_one_cmd
@@ -232,11 +232,11 @@ int parse_one_cmd(char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition *position,
-                  line_getter fgetline,
+                  LineGetter fgetline,
                   void *cookie);
 CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 CommandPosition position,
-                                line_getter fgetline,
+                                LineGetter fgetline,
                                 void *cookie);
 
 const CommandNode nocmd;

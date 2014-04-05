@@ -53,7 +53,7 @@ static int parse_append(char_u **pp,
                         CommandParserError *error,
                         CommandParserOptions o,
                         CommandPosition *position,
-                        line_getter fgetline,
+                        LineGetter fgetline,
                         void *cookie);
 static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
@@ -63,7 +63,7 @@ static int do_parse_map(char_u **pp,
                         CommandParserError *error,
                         CommandParserOptions o,
                         CommandPosition *position,
-                        line_getter fgetline,
+                        LineGetter fgetline,
                         void *cookie,
                         bool unmap);
 static int parse_map(char_u **pp,
@@ -71,21 +71,21 @@ static int parse_map(char_u **pp,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
-                     line_getter fgetline,
+                     LineGetter fgetline,
                      void *cookie);
 static int parse_unmap(char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
-                       line_getter fgetline,
+                       LineGetter fgetline,
                        void *cookie);
 static int parse_mapclear(char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
                           CommandPosition *position,
-                          line_getter fgetline,
+                          LineGetter fgetline,
                           void *cookie);
 static void menu_unescape(char_u *p);
 static int parse_menu(char_u **pp,
@@ -93,7 +93,7 @@ static int parse_menu(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       CommandPosition *position,
-                      line_getter fgetline,
+                      LineGetter fgetline,
                       void *cookie);
 static int do_parse_expr(char_u **pp,
                          CommandNode *node,
@@ -105,28 +105,28 @@ static int parse_expr(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       CommandPosition *position,
-                      line_getter fgetline,
+                      LineGetter fgetline,
                       void *cookie);
 static int parse_exprs(char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
-                       line_getter fgetline,
+                       LineGetter fgetline,
                        void *cookie);
 static int parse_rest_line(char_u **pp,
                            CommandNode *node,
                            CommandParserError *error,
                            CommandParserOptions o,
                            CommandPosition *position,
-                           line_getter fgetline,
+                           LineGetter fgetline,
                            void *cookie);
 static int parse_do(char_u **pp,
                     CommandNode *node,
                     CommandParserError *error,
                     CommandParserOptions o,
                     CommandPosition *position,
-                    line_getter fgetline,
+                    LineGetter fgetline,
                     void *cookie);
 static bool check_lval(ExpressionNode *expr, CommandParserError *error,
                        bool allow_list, bool allow_lower, bool allow_env);
@@ -140,35 +140,35 @@ static int parse_lvals(char_u **pp,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
-                       line_getter fgetline,
+                       LineGetter fgetline,
                        void *cookie);
 static int parse_lockvar(char_u **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
                          CommandPosition *position,
-                         line_getter fgetline,
+                         LineGetter fgetline,
                          void *cookie);
 static int parse_for(char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
-                     line_getter fgetline,
+                     LineGetter fgetline,
                      void *cookie);
 static int parse_function(char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
                           CommandPosition *position,
-                          line_getter fgetline,
+                          LineGetter fgetline,
                           void *cookie);
 static int parse_let(char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
-                     line_getter fgetline,
+                     LineGetter fgetline,
                      void *cookie);
 static int get_address(char_u **pp, Address *address,
                        CommandParserError *error);
@@ -537,7 +537,7 @@ static int parse_append(char_u **pp,
                         CommandParserError *error,
                         CommandParserOptions o,
                         CommandPosition *position,
-                        line_getter fgetline,
+                        LineGetter fgetline,
                         void *cookie)
 {
   garray_T *strs = &(node->args[ARG_APPEND_LINES].arg.strs);
@@ -666,7 +666,7 @@ static int do_parse_map(char_u **pp,
                         CommandParserError *error,
                         CommandParserOptions o,
                         CommandPosition *position,
-                        line_getter fgetline,
+                        LineGetter fgetline,
                         void *cookie,
                         bool unmap)
 {
@@ -804,7 +804,7 @@ static int parse_map(char_u **pp,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
-                     line_getter fgetline,
+                     LineGetter fgetline,
                      void *cookie)
 {
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, FALSE);
@@ -815,7 +815,7 @@ static int parse_unmap(char_u **pp,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
-                       line_getter fgetline,
+                       LineGetter fgetline,
                        void *cookie)
 {
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, TRUE);
@@ -826,7 +826,7 @@ static int parse_mapclear(char_u **pp,
                           CommandParserError *error,
                           CommandParserOptions o,
                           CommandPosition *position,
-                          line_getter fgetline,
+                          LineGetter fgetline,
                           void *cookie)
 {
   bool local;
@@ -861,7 +861,7 @@ static int parse_menu(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       CommandPosition *position,
-                      line_getter fgetline,
+                      LineGetter fgetline,
                       void *cookie)
 {
   // FIXME "menu *" parses to something weird
@@ -1107,7 +1107,7 @@ static int parse_expr(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       CommandPosition *position,
-                      line_getter fgetline,
+                      LineGetter fgetline,
                       void *cookie)
 {
   return do_parse_expr(pp, node, error, o, FALSE);
@@ -1118,7 +1118,7 @@ static int parse_exprs(char_u **pp,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
-                       line_getter fgetline,
+                       LineGetter fgetline,
                        void *cookie)
 {
   if (!**pp)
@@ -1131,7 +1131,7 @@ static int parse_rest_line(char_u **pp,
                            CommandParserError *error,
                            CommandParserOptions o,
                            CommandPosition *position,
-                           line_getter fgetline,
+                           LineGetter fgetline,
                            void *cookie)
 {
   size_t len = STRLEN(*pp);
@@ -1158,7 +1158,7 @@ static int parse_do(char_u **pp,
                     CommandParserError *error,
                     CommandParserOptions o,
                     CommandPosition *position,
-                    line_getter fgetline,
+                    LineGetter fgetline,
                     void *cookie)
 {
   CommandNode *cmd;
@@ -1169,7 +1169,7 @@ static int parse_do(char_u **pp,
     (char_u *) "<*do argument>",
   };
 
-  if ((cmd = parse_cmd_sequence(o, new_position, (line_getter) &do_fgetline,
+  if ((cmd = parse_cmd_sequence(o, new_position, (LineGetter) &do_fgetline,
                                 &arg))
       == NULL)
     return FAIL;
@@ -1367,7 +1367,7 @@ static int parse_lvals(char_u **pp,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
-                       line_getter fgetline,
+                       LineGetter fgetline,
                        void *cookie)
 {
   ExpressionNode *expr;
@@ -1407,7 +1407,7 @@ static int parse_lockvar(char_u **pp,
                          CommandParserError *error,
                          CommandParserOptions o,
                          CommandPosition *position,
-                         line_getter fgetline,
+                         LineGetter fgetline,
                          void *cookie)
 {
   if (VIM_ISDIGIT(**pp))
@@ -1421,7 +1421,7 @@ static int parse_for(char_u **pp,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
-                     line_getter fgetline,
+                     LineGetter fgetline,
                      void *cookie)
 {
   ExpressionNode *expr;
@@ -1479,7 +1479,7 @@ static int parse_function(char_u **pp,
                           CommandParserError *error,
                           CommandParserOptions o,
                           CommandPosition *position,
-                          line_getter fgetline,
+                          LineGetter fgetline,
                           void *cookie)
 {
   char_u *p = *pp;
@@ -1624,7 +1624,7 @@ static int parse_let(char_u **pp,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
-                     line_getter fgetline,
+                     LineGetter fgetline,
                      void *cookie)
 {
   ExpressionNode *expr;
@@ -2198,7 +2198,7 @@ static int parse_argcmd(char_u **pp,
       }
 
       if ((*next_node = parse_cmd_sequence(o, new_position,
-                                           (line_getter) &do_fgetline_allocated,
+                                           (LineGetter) &do_fgetline_allocated,
                                            &arg_start))
           == NULL)
         return FAIL;
@@ -2373,7 +2373,7 @@ int parse_one_cmd(char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition *position,
-                  line_getter fgetline,
+                  LineGetter fgetline,
                   void *cookie)
 {
   CommandNode **next_node = node;
@@ -3053,7 +3053,7 @@ const CommandNode nocmd = {
 /// @param[in,out]  cookie    Second argument to fgetline.
 CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 CommandPosition position,
-                                line_getter fgetline,
+                                LineGetter fgetline,
                                 void *cookie)
 {
   char_u *line_start, *line;
