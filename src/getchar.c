@@ -29,6 +29,7 @@
 #include "main.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -3210,7 +3211,7 @@ char_u *map_mode_to_chars(int mode)
 {
   garray_T mapmode;
 
-  ga_init2(&mapmode, 1, 7);
+  ga_init(&mapmode, 1, 7);
 
   if ((mode & (INSERT + CMDLINE)) == INSERT + CMDLINE)
     ga_append(&mapmode, '!');                           /* :map! */

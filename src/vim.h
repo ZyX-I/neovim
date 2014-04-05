@@ -138,15 +138,9 @@ typedef unsigned long u8char_T;     /* long should be 32 bits or more */
 
 #include <assert.h>
 
-#ifdef HAVE_INTTYPES_H
-# include <inttypes.h>
-#endif
-#ifdef HAVE_WCTYPE_H
-# include <wctype.h>
-#endif
-#ifdef HAVE_STDARG_H
-# include <stdarg.h>
-#endif
+#include <inttypes.h>
+#include <wctype.h>
+#include <stdarg.h>
 
 #if defined(HAVE_SYS_SELECT_H) && \
   (!defined(HAVE_SYS_TIME_H) || defined(SYS_SELECT_WITH_SYS_TIME))
@@ -491,15 +485,6 @@ enum {
 #define REMAP_SCRIPT    -2      /* remap script-local mappings only */
 #define REMAP_SKIP      -3      /* no remapping for first char */
 
-/* Values for mch_call_shell() second argument */
-#define SHELL_FILTER    1       /* filtering text */
-#define SHELL_EXPAND    2       /* expanding wildcards */
-#define SHELL_COOKED    4       /* set term to cooked mode */
-#define SHELL_DOOUT     8       /* redirecting output */
-#define SHELL_SILENT    16      /* don't print error returned by command */
-#define SHELL_READ      32      /* read lines and insert into buffer */
-#define SHELL_WRITE     64      /* write lines from buffer */
-
 /* Values returned by mch_nodetype() */
 #define NODE_NORMAL     0       /* file or directory, check with os_isdir()*/
 #define NODE_WRITABLE   1       /* something we can write to (character
@@ -553,14 +538,6 @@ enum {
 /* values for reg_do_extmatch */
 # define REX_SET        1       /* to allow \z\(...\), */
 # define REX_USE        2       /* to allow \z\1 et al. */
-
-/* Return values for fullpathcmp() */
-/* Note: can use (fullpathcmp() & FPC_SAME) to check for equal files */
-#define FPC_SAME        1       /* both exist and are the same file. */
-#define FPC_DIFF        2       /* both exist and are different files. */
-#define FPC_NOTX        4       /* both don't exist. */
-#define FPC_DIFFX       6       /* one of them doesn't exist. */
-#define FPC_SAMEX       7       /* both don't exist and file names are same. */
 
 /* flags for do_ecmd() */
 #define ECMD_HIDE       0x01    /* don't free the current buffer */
@@ -1033,13 +1010,6 @@ typedef enum {
 # define O_NOFOLLOW 0
 #endif
 
-#ifndef W_OK
-# define W_OK 2         /* for systems that don't have W_OK in unistd.h */
-#endif
-#ifndef R_OK
-# define R_OK 4         /* for systems that don't have R_OK in unistd.h */
-#endif
-
 /*
  * defines to avoid typecasts from (char_u *) to (char *) and back
  * (vim_strchr() and vim_strrchr() are now in alloc.c)
@@ -1086,9 +1056,7 @@ typedef enum {
 #define STRCAT(d, s)        strcat((char *)(d), (char *)(s))
 #define STRNCAT(d, s, n)    strncat((char *)(d), (char *)(s), (size_t)(n))
 
-#ifdef HAVE_STRPBRK
 # define vim_strpbrk(s, cs) (char_u *)strpbrk((char *)(s), (char *)(cs))
-#endif
 
 #define MSG(s)                      msg((char_u *)(s))
 #define MSG_ATTR(s, attr)           msg_attr((char_u *)(s), (attr))
@@ -1108,13 +1076,8 @@ typedef enum {
 
 /* Prefer using emsg3(), because perror() may send the output to the wrong
  * destination and mess up the screen. */
-#ifdef HAVE_STRERROR
-# define PERROR(msg)                (void)emsg3((char_u *)"%s: %s", \
-    (char_u *)msg, (char_u *)strerror( \
-        errno))
-#else
-# define PERROR(msg)                perror(msg)
-#endif
+#define PERROR(msg) \
+  (void) emsg3((char_u *) "%s: %s", (char_u *)msg, (char_u *)strerror(errno))
 
 #define MAXLNUM (0x7fffffffL)           /* maximum (invalid) line number */
 
@@ -1452,14 +1415,6 @@ typedef int VimClipboard;       /* This is required for the prototypes. */
 
 # undef NBDEBUG
 # define nbdebug(a)
-
-
-/* values for vim_handle_signal() that are not a signal */
-#define SIGNAL_BLOCK    -1
-#define SIGNAL_UNBLOCK  -2
-#if !defined(UNIX) && !defined(VMS) && !defined(OS2)
-# define vim_handle_signal(x) 0
-#endif
 
 /* flags for skip_vimgrep_pat() */
 #define VGR_GLOBAL      1

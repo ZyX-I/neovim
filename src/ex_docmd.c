@@ -35,6 +35,7 @@
 #include "mark.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "menu.h"
 #include "message.h"
 #include "misc1.h"
@@ -48,6 +49,7 @@
 #include "ops.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "regexp.h"
 #include "screen.h"
@@ -154,7 +156,6 @@ static void ex_stop(exarg_T *eap);
 static void ex_exit(exarg_T *eap);
 static void ex_print(exarg_T *eap);
 static void ex_goto(exarg_T *eap);
-static void ex_shell(exarg_T *eap);
 static void ex_preserve(exarg_T *eap);
 static void ex_recover(exarg_T *eap);
 static void ex_mode(exarg_T *eap);
@@ -258,7 +259,6 @@ static void ex_folddo(exarg_T *eap);
 #ifndef HAVE_WORKING_LIBINTL
 # define ex_language            ex_ni
 #endif
-# define ex_sign                ex_ni
 # define ex_wsverb              ex_ni
 # define ex_nbclose             ex_ni
 # define ex_nbkey               ex_ni
@@ -555,7 +555,7 @@ int flags;
   cstack.cs_trylevel = 0;
   cstack.cs_emsg_silent_list = NULL;
   cstack.cs_lflags = 0;
-  ga_init2(&lines_ga, (int)sizeof(wcmd_T), 10);
+  ga_init(&lines_ga, (int)sizeof(wcmd_T), 10);
 
   real_cookie = getline_cookie(fgetline, cookie);
 
@@ -3101,6 +3101,9 @@ set_one_cmd_context (
   case CMD_scscope:
     set_context_in_cscope_cmd(xp, arg, ea.cmdidx);
     break;
+  case CMD_sign:
+    set_context_in_sign_cmd(xp, arg);
+    break;
   case CMD_bdelete:
   case CMD_bwipeout:
   case CMD_bunload:
@@ -4355,7 +4358,7 @@ static int uc_add_command(char_u *name, size_t name_len, char_u *rep, long argt,
   if (flags & UC_BUFFER) {
     gap = &curbuf->b_ucmds;
     if (gap->ga_itemsize == 0)
-      ga_init2(gap, (int)sizeof(ucmd_T), 4);
+      ga_init(gap, (int)sizeof(ucmd_T), 4);
   } else
     gap = &ucmds;
 
@@ -4459,6 +4462,7 @@ static struct {
   {EXPAND_SYNTIME, "syntime"},
   {EXPAND_SETTINGS, "option"},
   {EXPAND_SHELLCMD, "shellcmd"},
+  {EXPAND_SIGN, "sign"},
   {EXPAND_TAGS, "tag"},
   {EXPAND_TAGS_LISTFILES, "tag_listfiles"},
   {EXPAND_USER, "user"},
@@ -5718,14 +5722,6 @@ static void ex_goto(exarg_T *eap)
   goto_byte(eap->line2);
 }
 
-/*
- * ":shell".
- */
-static void ex_shell(exarg_T *eap)
-{
-  do_shell(NULL, 0);
-}
-
 #if (defined(FEAT_WINDOWS) && defined(HAVE_DROP_FILE)) \
   || (defined(FEAT_GUI_GTK) && defined(FEAT_DND)) \
   || defined(FEAT_GUI_MSWIN) \
@@ -5829,7 +5825,7 @@ void alist_clear(alist_T *al)
  */
 void alist_init(alist_T *al)
 {
-  ga_init2(&al->al_ga, (int)sizeof(aentry_T), 5);
+  ga_init(&al->al_ga, (int)sizeof(aentry_T), 5);
 }
 
 
@@ -6713,7 +6709,7 @@ static void ex_sleep(exarg_T *eap)
   if (cursor_valid()) {
     n = W_WINROW(curwin) + curwin->w_wrow - msg_scrolled;
     if (n >= 0)
-      windgoto((int)n, curwin->w_wcol);
+      windgoto((int)n, W_WINCOL(curwin) + curwin->w_wcol);
   }
 
   len = eap->line2;
@@ -8054,7 +8050,7 @@ eval_vars (
     resultlen = (int)STRLEN(result);            /* length of new string */
     if (src[*usedlen] == '<') {         /* remove the file name extension */
       ++*usedlen;
-      if ((s = vim_strrchr(result, '.')) != NULL && s >= gettail(result))
+      if ((s = vim_strrchr(result, '.')) != NULL && s >= path_tail(result))
         resultlen = (int)(s - result);
     } else if (!skip_mod) {
       valid |= modify_fname(src, usedlen, &result, &resultbuf,

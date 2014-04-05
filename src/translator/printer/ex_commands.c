@@ -2,6 +2,7 @@
 #include <stdbool.h>
 
 #include "vim.h"
+#include "memory.h"
 #include "misc2.h"
 
 #include "translator/printer/expressions.h"

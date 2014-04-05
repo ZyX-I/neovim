@@ -12,6 +12,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "arabic.h"
@@ -37,6 +38,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "memory.h"
 #include "cursor_shape.h"
 #include "keymap.h"
 #include "garray.h"
@@ -44,6 +46,7 @@
 #include "ops.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "regexp.h"
 #include "screen.h"
 #include "search.h"
@@ -1143,7 +1146,7 @@ getcmdline (
            * command line has no uppercase characters, convert
            * the character to lowercase */
           if (p_ic && p_scs && !pat_has_uppercase(ccline.cmdbuff))
-            c = MB_TOLOWER(c);
+            c = vim_tolower(c);
           if (c != NUL) {
             if (c == firstc || vim_strchr((char_u *)(
                       p_magic ? "\\^$.*[" : "\\^$"), c)
@@ -1777,7 +1780,7 @@ getexmodeline (
     startcol = msg_col;
   }
 
-  ga_init2(&line_ga, 1, 30);
+  ga_init(&line_ga, 1, 30);
 
   /* autoindent for :insert and :append is in the line itself */
   if (promptc <= 0) {
@@ -3301,7 +3304,7 @@ static int showmatches(expand_T *xp, int wildmenu)
 }
 
 /*
- * Private gettail for showmatches() (and win_redr_status_matches()):
+ * Private path_tail for showmatches() (and win_redr_status_matches()):
  * Find tail of file name path, but ignore trailing "/".
  */
 char_u *sm_gettail(char_u *s)
@@ -3342,7 +3345,7 @@ static int expand_showtail(expand_T *xp)
       && xp->xp_context != EXPAND_DIRECTORIES)
     return FALSE;
 
-  end = gettail(xp->xp_pattern);
+  end = path_tail(xp->xp_pattern);
   if (end == xp->xp_pattern)            /* there is no path separator */
     return FALSE;
 
@@ -3459,7 +3462,7 @@ addstar (
        * ` could be anywhere in the file name.
        * When the name ends in '$' don't add a star, remove the '$'.
        */
-      tail = gettail(retval);
+      tail = path_tail(retval);
       ends_in_star = (len > 0 && retval[len - 1] == '*');
 #ifndef BACKSLASH_IN_FILENAME
       for (i = len - 2; i >= 0; --i) {
@@ -3969,7 +3972,7 @@ expand_shellcmd (
    * Go over all directories in $PATH.  Expand matches in that directory and
    * collect them in "ga".
    */
-  ga_init2(&ga, (int)sizeof(char *), 10);
+  ga_init(&ga, (int)sizeof(char *), 10);
   for (s = path; *s != NUL; s = e) {
     if (*s == ' ')
       ++s;              /* Skip space used for absolute path name. */
@@ -4086,7 +4089,7 @@ static int ExpandUserDefined(expand_T *xp, regmatch_T *regmatch, int *num_file, 
   if (retstr == NULL)
     return FAIL;
 
-  ga_init2(&ga, (int)sizeof(char *), 3);
+  ga_init(&ga, (int)sizeof(char *), 3);
   for (s = retstr; *s != NUL; s = e) {
     e = vim_strchr(s, '\n');
     if (e == NULL)
@@ -4130,7 +4133,7 @@ static int ExpandUserList(expand_T *xp, int *num_file, char_u ***file)
   if (retlist == NULL)
     return FAIL;
 
-  ga_init2(&ga, (int)sizeof(char *), 3);
+  ga_init(&ga, (int)sizeof(char *), 3);
   /* Loop over the items in the list. */
   for (li = retlist->lv_first; li != NULL; li = li->li_next) {
     if (li->li_tv.v_type != VAR_STRING || li->li_tv.vval.v_string == NULL)
@@ -4167,7 +4170,7 @@ static int ExpandRTDir(char_u *pat, int *num_file, char_u ***file, char *dirname
   *num_file = 0;
   *file = NULL;
   pat_len = (int)STRLEN(pat);
-  ga_init2(&ga, (int)sizeof(char *), 10);
+  ga_init(&ga, (int)sizeof(char *), 10);
 
   for (i = 0; dirnames[i] != NULL; ++i) {
     s = alloc((unsigned)(STRLEN(dirnames[i]) + pat_len + 7));
@@ -4206,7 +4209,7 @@ static int ExpandRTDir(char_u *pat, int *num_file, char_u ***file, char *dirname
 
   /* Sort and remove duplicates which can happen when specifying multiple
    * directories in dirnames. */
-  remove_duplicates(&ga);
+  ga_remove_duplicate_strings(&ga);
 
   *file = ga.ga_data;
   *num_file = ga.ga_len;
@@ -4237,7 +4240,7 @@ char_u *globpath(char_u *path, char_u *file, int expand_options)
   ExpandInit(&xpc);
   xpc.xp_context = EXPAND_FILES;
 
-  ga_init2(&ga, 1, 100);
+  ga_init(&ga, 1, 100);
 
   /* Loop over all entries in {path}. */
   while (*path != NUL) {
@@ -5451,7 +5454,7 @@ char_u *script_get(exarg_T *eap, char_u *cmd)
   if (cmd[0] != '<' || cmd[1] != '<' || eap->getline == NULL)
     return NULL;
 
-  ga_init2(&ga, 1, 0x400);
+  ga_init(&ga, 1, 0x400);
 
   if (cmd[2] != NUL)
     end_pattern = (char *)skipwhite(cmd + 2);

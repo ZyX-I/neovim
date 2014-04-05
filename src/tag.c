@@ -33,9 +33,11 @@
 #include "misc2.h"
 #include "file_search.h"
 #include "garray.h"
+#include "memory.h"
 #include "move.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "regexp.h"
 #include "screen.h"
@@ -1199,7 +1201,7 @@ find_tags (
   lbuf = alloc(lbuf_size);
   tag_fname = alloc(MAXPATHL + 1);
   for (mtt = 0; mtt < MT_COUNT; ++mtt)
-    ga_init2(&ga_match[mtt], (int)sizeof(struct match_found *), 100);
+    ga_init(&ga_match[mtt], (int)sizeof(struct match_found *), 100);
 
   /* check for out of memory situation */
   if (lbuf == NULL || tag_fname == NULL
@@ -2099,7 +2101,7 @@ get_tagfname (
      */
     if (first) {
       ga_clear_strings(&tag_fnames);
-      ga_init2(&tag_fnames, (int)sizeof(char_u *), 10);
+      ga_init(&tag_fnames, (int)sizeof(char_u *), 10);
       do_in_runtimepath((char_u *)
           "doc/tags doc/tags-??"
           , TRUE, found_tagfile_cb, NULL);
@@ -2112,7 +2114,7 @@ get_tagfname (
         return FAIL;
       ++tnp->tn_hf_idx;
       STRCPY(buf, p_hf);
-      STRCPY(gettail(buf), "tags");
+      STRCPY(path_tail(buf), "tags");
     } else
       vim_strncpy(buf, ((char_u **)(tag_fnames.ga_data))[
             tnp->tn_hf_idx++], MAXPATHL - 1);
@@ -2161,7 +2163,7 @@ get_tagfname (
       r_ptr = vim_findfile_stopdir(buf);
       /* move the filename one char forward and truncate the
        * filepath with a NUL */
-      filename = gettail(buf);
+      filename = path_tail(buf);
       STRMOVE(filename + 1, filename);
       *filename++ = NUL;
 
@@ -2701,7 +2703,7 @@ static char_u *expand_tag_fname(char_u *fname, char_u *tag_fname, int expand)
 
   if ((p_tr || curbuf->b_help)
       && !vim_isAbsName(fname)
-      && (p = gettail(tag_fname)) != tag_fname) {
+      && (p = path_tail(tag_fname)) != tag_fname) {
     retval = alloc(MAXPATHL);
     if (retval != NULL) {
       STRCPY(retval, tag_fname);
@@ -2721,177 +2723,8 @@ static char_u *expand_tag_fname(char_u *fname, char_u *tag_fname, int expand)
 }
 
 /*
- * Converts a file name into a canonical form. It simplifies a file name into
- * its simplest form by stripping out unneeded components, if any.  The
- * resulting file name is simplified in place and will either be the same
- * length as that supplied, or shorter.
- */
-void simplify_filename(char_u *filename)
-{
-  int components = 0;
-  char_u      *p, *tail, *start;
-  int stripping_disabled = FALSE;
-  int relative = TRUE;
-
-  p = filename;
-#ifdef BACKSLASH_IN_FILENAME
-  if (p[1] == ':')          /* skip "x:" */
-    p += 2;
-#endif
-
-  if (vim_ispathsep(*p)) {
-    relative = FALSE;
-    do
-      ++p;
-    while (vim_ispathsep(*p));
-  }
-  start = p;        /* remember start after "c:/" or "/" or "///" */
-
-  do {
-    /* At this point "p" is pointing to the char following a single "/"
-     * or "p" is at the "start" of the (absolute or relative) path name. */
-    if (vim_ispathsep(*p))
-      STRMOVE(p, p + 1);                /* remove duplicate "/" */
-    else if (p[0] == '.' && (vim_ispathsep(p[1]) || p[1] == NUL)) {
-      if (p == start && relative)
-        p += 1 + (p[1] != NUL);         /* keep single "." or leading "./" */
-      else {
-        /* Strip "./" or ".///".  If we are at the end of the file name
-         * and there is no trailing path separator, either strip "/." if
-         * we are after "start", or strip "." if we are at the beginning
-         * of an absolute path name . */
-        tail = p + 1;
-        if (p[1] != NUL)
-          while (vim_ispathsep(*tail))
-            mb_ptr_adv(tail);
-        else if (p > start)
-          --p;                          /* strip preceding path separator */
-        STRMOVE(p, tail);
-      }
-    } else if (p[0] == '.' && p[1] == '.' &&
-               (vim_ispathsep(p[2]) || p[2] == NUL)) {
-      /* Skip to after ".." or "../" or "..///". */
-      tail = p + 2;
-      while (vim_ispathsep(*tail))
-        mb_ptr_adv(tail);
-
-      if (components > 0) {             /* strip one preceding component */
-        int do_strip = FALSE;
-        char_u saved_char;
-        struct stat st;
-
-        /* Don't strip for an erroneous file name. */
-        if (!stripping_disabled) {
-          /* If the preceding component does not exist in the file
-           * system, we strip it.  On Unix, we don't accept a symbolic
-           * link that refers to a non-existent file. */
-          saved_char = p[-1];
-          p[-1] = NUL;
-#ifdef UNIX
-          if (mch_lstat((char *)filename, &st) < 0)
-#else
-          if (mch_stat((char *)filename, &st) < 0)
-#endif
-            do_strip = TRUE;
-          p[-1] = saved_char;
-
-          --p;
-          /* Skip back to after previous '/'. */
-          while (p > start && !after_pathsep(start, p))
-            mb_ptr_back(start, p);
-
-          if (!do_strip) {
-            /* If the component exists in the file system, check
-             * that stripping it won't change the meaning of the
-             * file name.  First get information about the
-             * unstripped file name.  This may fail if the component
-             * to strip is not a searchable directory (but a regular
-             * file, for instance), since the trailing "/.." cannot
-             * be applied then.  We don't strip it then since we
-             * don't want to replace an erroneous file name by
-             * a valid one, and we disable stripping of later
-             * components. */
-            saved_char = *tail;
-            *tail = NUL;
-            if (mch_stat((char *)filename, &st) >= 0)
-              do_strip = TRUE;
-            else
-              stripping_disabled = TRUE;
-            *tail = saved_char;
-#ifdef UNIX
-            if (do_strip) {
-              struct stat new_st;
-
-              /* On Unix, the check for the unstripped file name
-               * above works also for a symbolic link pointing to
-               * a searchable directory.  But then the parent of
-               * the directory pointed to by the link must be the
-               * same as the stripped file name.  (The latter
-               * exists in the file system since it is the
-               * component's parent directory.) */
-              if (p == start && relative)
-                (void)mch_stat(".", &new_st);
-              else {
-                saved_char = *p;
-                *p = NUL;
-                (void)mch_stat((char *)filename, &new_st);
-                *p = saved_char;
-              }
-
-              if (new_st.st_ino != st.st_ino ||
-                  new_st.st_dev != st.st_dev) {
-                do_strip = FALSE;
-                /* We don't disable stripping of later
-                 * components since the unstripped path name is
-                 * still valid. */
-              }
-            }
-#endif
-          }
-        }
-
-        if (!do_strip) {
-          /* Skip the ".." or "../" and reset the counter for the
-           * components that might be stripped later on. */
-          p = tail;
-          components = 0;
-        } else {
-          /* Strip previous component.  If the result would get empty
-           * and there is no trailing path separator, leave a single
-           * "." instead.  If we are at the end of the file name and
-           * there is no trailing path separator and a preceding
-           * component is left after stripping, strip its trailing
-           * path separator as well. */
-          if (p == start && relative && tail[-1] == '.') {
-            *p++ = '.';
-            *p = NUL;
-          } else {
-            if (p > start && tail[-1] == '.')
-              --p;
-            STRMOVE(p, tail);                   /* strip previous component */
-          }
-
-          --components;
-        }
-      } else if (p == start && !relative)       /* leading "/.." or "/../" */
-        STRMOVE(p, tail);                       /* strip ".." or "../" */
-      else {
-        if (p == start + 2 && p[-2] == '.') {           /* leading "./../" */
-          STRMOVE(p - 2, p);                            /* strip leading "./" */
-          tail -= 2;
-        }
-        p = tail;                       /* skip to char after ".." or "../" */
-      }
-    } else {
-      ++components;                     /* simple path component */
-      p = getnextcomp(p);
-    }
-  } while (*p != NUL);
-}
-
-/*
  * Check if we have a tag for the buffer with name "buf_ffname".
- * This is a bit slow, because of the full path compare in fullpathcmp().
+ * This is a bit slow, because of the full path compare in path_full_compare().
  * Return TRUE if tag for file "fname" if tag file "tag_fname" is for current
  * file.
  */
@@ -2908,7 +2741,7 @@ static int test_for_current(char_u *fname, char_u *fname_end, char_u *tag_fname,
     }
     fullname = expand_tag_fname(fname, tag_fname, TRUE);
     if (fullname != NULL) {
-      retval = (fullpathcmp(fullname, buf_ffname, TRUE) & FPC_SAME);
+      retval = (path_full_compare(fullname, buf_ffname, TRUE) & kEqualFiles);
       vim_free(fullname);
     }
     *fname_end = c;

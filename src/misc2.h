@@ -1,7 +1,8 @@
 #ifndef NEOVIM_MISC2_H
 #define NEOVIM_MISC2_H
 
-#include "vim.h"
+#include "func_attr.h"
+#include "os/shell.h"
 
 /* misc2.c */
 int virtual_active(void);
@@ -23,13 +24,6 @@ void check_cursor_col_win(win_T *win);
 void check_cursor(void);
 void adjust_cursor_col(void);
 int leftcol_changed(void);
-char_u *alloc(unsigned size);
-char_u *alloc_clear(unsigned size);
-char_u *alloc_check(unsigned size);
-char_u *lalloc_clear(long_u size, int message);
-char_u *lalloc(long_u size, int message);
-void do_outofmem_msg(long_u size);
-void free_all_mem(void);
 char_u *vim_strsave(char_u *string);
 char_u *vim_strnsave(char_u *string, int len);
 char_u *vim_strsave_escaped(char_u *string, char_u *esc_chars);
@@ -60,16 +54,12 @@ int get_fileformat(buf_T *buf);
 int get_fileformat_force(buf_T *buf, exarg_T *eap);
 void set_fileformat(int t, int opt_flags);
 int default_fileformat(void);
-int call_shell(char_u *cmd, int opt);
+int call_shell(char_u *cmd, ShellOpts opts, char_u *extra_shell_arg);
 int get_real_state(void);
-int after_pathsep(char_u *b, char_u *p);
-int same_directory(char_u *f1, char_u *f2);
 int vim_chdirfile(char_u *fname);
 int illegal_slash(char *name);
 int vim_chdir(char_u *new_dir);
 void sort_strings(char_u **files, int count);
-int pathcmp(const char *p, const char *q, int maxlen);
-int filewritable(char_u *fname);
 int emsg3(char_u *s, char_u *a1, char_u *a2);
 int emsgn(char_u *s, long n);
 int get2c(FILE *fd);
@@ -80,12 +70,5 @@ char_u *read_string(FILE *fd, int cnt);
 int put_bytes(FILE *fd, long_u nr, int len);
 void put_time(FILE *fd, time_t the_time);
 int has_non_ascii(char_u *s);
-
-#define ALLOC_NEW(type, number) \
-  ((type*) alloc(sizeof(type) * number))
-#define ALLOC_CLEAR_NEW(type, number) \
-  ((type*) alloc_clear(sizeof(type) * number))
-#define ALLOC_CHECK_NEW(type, number) \
-  ((type*) alloc_check(sizeof(type) * number))
 
 #endif /* NEOVIM_MISC2_H */

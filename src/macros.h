@@ -11,11 +11,6 @@
  */
 
 /*
- * pchar(lp, c) - put character 'c' at position 'lp'
- */
-#define pchar(lp, c) (*(ml_get_buf(curbuf, (lp).lnum, TRUE) + (lp).col) = (c))
-
-/*
  * Position comparisons
  */
 # define lt(a, b) (((a).lnum != (b).lnum) \
@@ -47,33 +42,17 @@
 
 /*
  * toupper() and tolower() that use the current locale.
- * On some systems toupper()/tolower() only work on lower/uppercase
- * characters, first use islower() or isupper() then.
  * Careful: Only call TOUPPER_LOC() and TOLOWER_LOC() with a character in the
  * range 0 - 255.  toupper()/tolower() on some systems can't handle others.
- * Note: It is often better to use MB_TOLOWER() and MB_TOUPPER(), because many
+ * Note: It is often better to use vim_tolower() and vim_toupper(), because many
  * toupper() and tolower() implementations only work for ASCII.
  */
-# ifdef BROKEN_TOUPPER
-#  define TOUPPER_LOC(c)        (islower(c) ? toupper(c) : (c))
-#  define TOLOWER_LOC(c)        (isupper(c) ? tolower(c) : (c))
-# else
-#  define TOUPPER_LOC           toupper
-#  define TOLOWER_LOC           tolower
-# endif
+#define TOUPPER_LOC toupper
+#define TOLOWER_LOC tolower
 
 /* toupper() and tolower() for ASCII only and ignore the current locale. */
 # define TOUPPER_ASC(c) (((c) < 'a' || (c) > 'z') ? (c) : (c) - ('a' - 'A'))
 # define TOLOWER_ASC(c) (((c) < 'A' || (c) > 'Z') ? (c) : (c) + ('a' - 'A'))
-
-/*
- * MB_ISLOWER() and MB_ISUPPER() are to be used on multi-byte characters.  But
- * don't use them for negative values!
- */
-# define MB_ISLOWER(c)  vim_islower(c)
-# define MB_ISUPPER(c)  vim_isupper(c)
-# define MB_TOLOWER(c)  vim_tolower(c)
-# define MB_TOUPPER(c)  vim_toupper(c)
 
 /* Use our own isdigit() replacement, because on MS-Windows isdigit() returns
  * non-zero for superscript 1.  Also avoids that isdigit() crashes for numbers
@@ -120,7 +99,6 @@
  * On VMS file names are different and require a translation.
  * On the Mac open() has only two arguments.
  */
-#   define mch_access(n, p)     access((n), (p))
 #  define mch_fopen(n, p)       fopen((n), (p))
 # define mch_fstat(n, p)        fstat((n), (p))
 #  ifdef STAT_IGNORES_SLASH
@@ -184,7 +162,5 @@
 # define MB_CHARLEN(p)      (has_mbyte ? mb_charlen(p) : (int)STRLEN(p))
 # define MB_CHAR2LEN(c)     (has_mbyte ? mb_char2len(c) : 1)
 # define PTR2CHAR(p)        (has_mbyte ? mb_ptr2char(p) : (int)*(p))
-
-# define DO_AUTOCHDIR if (p_acd) do_autochdir();
 
 # define RESET_BINDING(wp)  (wp)->w_p_scb = FALSE; (wp)->w_p_crb = FALSE

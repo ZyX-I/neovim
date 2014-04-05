@@ -31,10 +31,12 @@
 #include "misc1.h"
 #include "misc2.h"
 #include "garray.h"
+#include "memory.h"
 #include "move.h"
 #include "normal.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "regexp.h"
 #include "screen.h"
@@ -42,6 +44,7 @@
 #include "undo.h"
 #include "window.h"
 #include "os/os.h"
+#include "os/shell.h"
 
 static void cmd_source(char_u *fname, exarg_T *eap);
 
@@ -822,9 +825,7 @@ proftime_T *tm;
 }
 
 
-# if defined(HAVE_MATH_H)
-#  include <math.h>
-# endif
+#include <math.h>
 
 /*
  * Divide the time "tm" by "count" and store in "tm2".
@@ -1051,7 +1052,7 @@ static void script_do_profile(scriptitem_T *si)
   profile_zero(&si->sn_pr_total);
   profile_zero(&si->sn_pr_self);
 
-  ga_init2(&si->sn_prl_ga, sizeof(sn_prl_T), 100);
+  ga_init(&si->sn_prl_ga, sizeof(sn_prl_T), 100);
   si->sn_prl_idx = -1;
   si->sn_prof_on = TRUE;
   si->sn_pr_nest = 0;
@@ -1540,7 +1541,7 @@ static char_u *do_one_arg(char_u *str)
  */
 int get_arglist(garray_T *gap, char_u *str)
 {
-  ga_init2(gap, (int)sizeof(char_u *), 20);
+  ga_init(gap, (int)sizeof(char_u *), 20);
   while (*str != NUL) {
     if (ga_grow(gap, 1) == FAIL) {
       ga_clear(gap);
@@ -1691,9 +1692,9 @@ static int editing_arg_idx(win_T *win)
            || (win->w_buffer->b_fnum
                != WARGLIST(win)[win->w_arg_idx].ae_fnum
                && (win->w_buffer->b_ffname == NULL
-                   || !(fullpathcmp(
+                   || !(path_full_compare(
                             alist_name(&WARGLIST(win)[win->w_arg_idx]),
-                            win->w_buffer->b_ffname, TRUE) & FPC_SAME))));
+                            win->w_buffer->b_ffname, TRUE) & kEqualFiles))));
 }
 
 /*
@@ -1712,8 +1713,8 @@ void check_arg_idx(win_T *win)
         && win->w_arg_idx < GARGCOUNT
         && (win->w_buffer->b_fnum == GARGLIST[GARGCOUNT - 1].ae_fnum
             || (win->w_buffer->b_ffname != NULL
-                && (fullpathcmp(alist_name(&GARGLIST[GARGCOUNT - 1]),
-                        win->w_buffer->b_ffname, TRUE) & FPC_SAME))))
+                && (path_full_compare(alist_name(&GARGLIST[GARGCOUNT - 1]),
+                        win->w_buffer->b_ffname, TRUE) & kEqualFiles))))
       arg_had_last = TRUE;
   } else {
     /* We are editing the current entry in the argument list.
@@ -2519,10 +2520,10 @@ do_source (
      * Try again, replacing file name ".vimrc" by "_vimrc" or vice versa,
      * and ".exrc" by "_exrc" or vice versa.
      */
-    p = gettail(fname_exp);
+    p = path_tail(fname_exp);
     if ((*p == '.' || *p == '_')
-        && (STRICMP(p + 1, "vimrc") == 0
-            || STRICMP(p + 1, "gvimrc") == 0
+        && (STRICMP(p + 1, "nvimrc") == 0
+            || STRICMP(p + 1, "ngvimrc") == 0
             || STRICMP(p + 1, "exrc") == 0)) {
       if (*p == '_')
         *p = '.';
@@ -2920,7 +2921,7 @@ char_u *getsourceline(int c, void *cookie, int indent)
     if (sp->nextline != NULL && *(p = skipwhite(sp->nextline)) == '\\') {
       garray_T ga;
 
-      ga_init2(&ga, (int)sizeof(char_u), 400);
+      ga_init(&ga, (int)sizeof(char_u), 400);
       ga_concat(&ga, line);
       ga_concat(&ga, p + 1);
       for (;; ) {
@@ -2984,7 +2985,7 @@ static char_u *get_one_sourceline(struct source_cookie *sp)
   int have_read = FALSE;
 
   /* use a growarray to store the sourced line */
-  ga_init2(&ga, 1, 250);
+  ga_init(&ga, 1, 250);
 
   /*
    * Loop until there is a finished line (or end-of-file).
@@ -3517,10 +3518,10 @@ static char_u **find_locales(void)
   /* Find all available locales by running command "locale -a".  If this
    * doesn't work we won't have completion. */
   char_u *locale_a = get_cmd_output((char_u *)"locale -a",
-      NULL, SHELL_SILENT);
+      NULL, kShellOptSilent);
   if (locale_a == NULL)
     return NULL;
-  ga_init2(&locales_ga, sizeof(char_u *), 20);
+  ga_init(&locales_ga, sizeof(char_u *), 20);
 
   /* Transform locale_a string where each locale is separated by "\n"
    * into an array of locale strings. */

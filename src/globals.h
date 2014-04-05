@@ -592,7 +592,6 @@ EXTERN int orig_line_count INIT(= 0);       /* Line count when "gR" started */
 EXTERN int vr_lines_changed INIT(= 0);      /* #Lines changed by "gR" so far */
 
 
-#if defined(HAVE_SETJMP_H)
 /*
  * Stuff for setjmp() and longjmp().
  * Used to protect areas where we could crash.
@@ -605,7 +604,6 @@ EXTERN volatile int lc_signal;  /* caught signal number, 0 when no was signal
 # endif
 /* volatile because it is used in signal handler deathtrap(). */
 EXTERN volatile int lc_active INIT(= FALSE); /* TRUE when lc_jump_env is valid. */
-#endif
 
 /*
  * These flags are set based upon 'fileencoding'.
@@ -1081,6 +1079,7 @@ EXTERN char_u e_screenmode[] INIT(= N_(
 #endif
 EXTERN char_u e_scroll[] INIT(= N_("E49: Invalid scroll size"));
 EXTERN char_u e_shellempty[] INIT(= N_("E91: 'shell' option is empty"));
+EXTERN char_u e_signdata[] INIT(= N_("E255: Couldn't read in sign data!"));
 EXTERN char_u e_swapclose[] INIT(= N_("E72: Close error on swap file"));
 EXTERN char_u e_tagstack[] INIT(= N_("E73: tag stack empty"));
 EXTERN char_u e_toocompl[] INIT(= N_("E74: Command too complex"));

@@ -31,12 +31,14 @@
 #include "mbyte.h"
 #include "memfile.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "move.h"
 #include "option.h"
 #include "ops.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "regexp.h"
 #include "screen.h"
@@ -594,279 +596,6 @@ int leftcol_changed(void)
   return retval;
 }
 
-/**********************************************************************
- * Various routines dealing with allocation and deallocation of memory.
- */
-
-/*
- * Note: if unsigned is 16 bits we can only allocate up to 64K with alloc().
- * Use lalloc for larger blocks.
- */
-char_u *alloc(unsigned size)
-{
-  return lalloc((long_u)size, TRUE);
-}
-
-/*
- * Allocate memory and set all bytes to zero.
- */
-char_u *alloc_clear(unsigned size)
-{
-  char_u *p;
-
-  p = lalloc((long_u)size, TRUE);
-  if (p != NULL)
-    (void)memset(p, 0, (size_t)size);
-  return p;
-}
-
-/*
- * alloc() with check for maximum line length
- */
-char_u *alloc_check(unsigned size)
-{
-#if !defined(UNIX) && !defined(__EMX__)
-  if (sizeof(int) == 2 && size > 0x7fff) {
-    /* Don't hide this message */
-    emsg_silent = 0;
-    EMSG(_("E340: Line is becoming too long"));
-    return NULL;
-  }
-#endif
-  return lalloc((long_u)size, TRUE);
-}
-
-/*
- * Allocate memory like lalloc() and set all bytes to zero.
- */
-char_u *lalloc_clear(long_u size, int message)
-{
-  char_u *p;
-
-  p = (lalloc(size, message));
-  if (p != NULL)
-    (void)memset(p, 0, (size_t)size);
-  return p;
-}
-
-/*
- * Low level memory allocation function.
- * This is used often, KEEP IT FAST!
- */
-char_u *lalloc(long_u size, int message)
-{
-  char_u      *p;                   /* pointer to new storage space */
-  static int releasing = FALSE;     /* don't do mf_release_all() recursive */
-  int try_again;
-
-  /* Safety check for allocating zero bytes */
-  if (size == 0) {
-    /* Don't hide this message */
-    emsg_silent = 0;
-    EMSGN(_("E341: Internal error: lalloc(%ld, )"), size);
-    return NULL;
-  }
-
-  /*
-   * Loop when out of memory: Try to release some memfile blocks and
-   * if some blocks are released call malloc again.
-   */
-  for (;; ) {
-    if ((p = (char_u *)malloc((size_t)size)) != NULL) {
-      /* No check for available memory: Just return. */
-      goto theend;
-    }
-    /*
-     * Remember that mf_release_all() is being called to avoid an endless
-     * loop, because mf_release_all() may call alloc() recursively.
-     */
-    if (releasing)
-      break;
-    releasing = TRUE;
-
-    clear_sb_text();                  /* free any scrollback text */
-    try_again = mf_release_all();     /* release as many blocks as possible */
-    try_again |= garbage_collect();     /* cleanup recursive lists/dicts */
-
-    releasing = FALSE;
-    if (!try_again)
-      break;
-  }
-
-  if (message && p == NULL)
-    do_outofmem_msg(size);
-
-theend:
-  return p;
-}
-
-/*
- * Avoid repeating the error message many times (they take 1 second each).
- * Did_outofmem_msg is reset when a character is read.
- */
-void do_outofmem_msg(long_u size)
-{
-  if (!did_outofmem_msg) {
-    /* Don't hide this message */
-    emsg_silent = 0;
-
-    /* Must come first to avoid coming back here when printing the error
-     * message fails, e.g. when setting v:errmsg. */
-    did_outofmem_msg = TRUE;
-
-    EMSGN(_("E342: Out of memory!  (allocating %lu bytes)"), size);
-  }
-}
-
-#if defined(EXITFREE) || defined(PROTO)
-
-/*
- * Free everything that we allocated.
- * Can be used to detect memory leaks, e.g., with ccmalloc.
- * NOTE: This is tricky!  Things are freed that functions depend on.  Don't be
- * surprised if Vim crashes...
- * Some things can't be freed, esp. things local to a library function.
- */
-void free_all_mem(void)
-{
-  buf_T       *buf, *nextbuf;
-  static int entered = FALSE;
-
-  /* When we cause a crash here it is caught and Vim tries to exit cleanly.
-   * Don't try freeing everything again. */
-  if (entered)
-    return;
-  entered = TRUE;
-
-  block_autocmds();         /* don't want to trigger autocommands here */
-
-  /* Close all tabs and windows.  Reset 'equalalways' to avoid redraws. */
-  p_ea = FALSE;
-  if (first_tabpage->tp_next != NULL)
-    do_cmdline_cmd((char_u *)"tabonly!");
-  if (firstwin != lastwin)
-    do_cmdline_cmd((char_u *)"only!");
-
-  /* Free all spell info. */
-  spell_free_all();
-
-  /* Clear user commands (before deleting buffers). */
-  ex_comclear(NULL);
-
-  /* Clear menus. */
-  do_cmdline_cmd((char_u *)"aunmenu *");
-  do_cmdline_cmd((char_u *)"menutranslate clear");
-
-  /* Clear mappings, abbreviations, breakpoints. */
-  do_cmdline_cmd((char_u *)"lmapclear");
-  do_cmdline_cmd((char_u *)"xmapclear");
-  do_cmdline_cmd((char_u *)"mapclear");
-  do_cmdline_cmd((char_u *)"mapclear!");
-  do_cmdline_cmd((char_u *)"abclear");
-  do_cmdline_cmd((char_u *)"breakdel *");
-  do_cmdline_cmd((char_u *)"profdel *");
-  do_cmdline_cmd((char_u *)"set keymap=");
-
-  free_titles();
-  free_findfile();
-
-  /* Obviously named calls. */
-  free_all_autocmds();
-  clear_termcodes();
-  free_all_options();
-  free_all_marks();
-  alist_clear(&global_alist);
-  free_homedir();
-  free_users();
-  free_search_patterns();
-  free_old_sub();
-  free_last_insert();
-  free_prev_shellcmd();
-  free_regexp_stuff();
-  free_tag_stuff();
-  free_cd_dir();
-  set_expr_line(NULL);
-  diff_clear(curtab);
-  clear_sb_text();            /* free any scrollback text */
-
-  /* Free some global vars. */
-  vim_free(last_cmdline);
-  vim_free(new_last_cmdline);
-  set_keep_msg(NULL, 0);
-
-  /* Clear cmdline history. */
-  p_hi = 0;
-  init_history();
-
-  {
-    win_T       *win;
-    tabpage_T   *tab;
-
-    qf_free_all(NULL);
-    /* Free all location lists */
-    FOR_ALL_TAB_WINDOWS(tab, win)
-    qf_free_all(win);
-  }
-
-  /* Close all script inputs. */
-  close_all_scripts();
-
-  /* Destroy all windows.  Must come before freeing buffers. */
-  win_free_all();
-
-  /* Free all buffers.  Reset 'autochdir' to avoid accessing things that
-   * were freed already. */
-  p_acd = FALSE;
-  for (buf = firstbuf; buf != NULL; ) {
-    nextbuf = buf->b_next;
-    close_buffer(NULL, buf, DOBUF_WIPE, FALSE);
-    if (buf_valid(buf))
-      buf = nextbuf;            /* didn't work, try next one */
-    else
-      buf = firstbuf;
-  }
-
-  free_cmdline_buf();
-
-  /* Clear registers. */
-  clear_registers();
-  ResetRedobuff();
-  ResetRedobuff();
-
-
-  /* highlight info */
-  free_highlight();
-
-  reset_last_sourcing();
-
-  free_tabpage(first_tabpage);
-  first_tabpage = NULL;
-
-# ifdef UNIX
-  /* Machine-specific free. */
-  mch_free_mem();
-# endif
-
-  /* message history */
-  for (;; )
-    if (delete_first_msg() == FAIL)
-      break;
-
-  eval_clear();
-
-  free_termoptions();
-
-  /* screenlines (can't display anything now!) */
-  free_screenlines();
-
-  clear_hl_tables();
-
-  vim_free(IObuff);
-  vim_free(NameBuff);
-}
-
-#endif
-
 /*
  * Copy "string" into newly allocated memory.
  */
@@ -961,7 +690,7 @@ char_u *vim_strsave_escaped_ext(char_u *string, char_u *esc_chars, int cc, int b
  */
 int csh_like_shell(void)
 {
-  return strstr((char *)gettail(p_sh), "csh") != NULL;
+  return strstr((char *)path_tail(p_sh), "csh") != NULL;
 }
 
 /*
@@ -1378,25 +1107,6 @@ char_u *vim_strrchr(char_u *string, int c)
 }
 
 /*
- * Vim's version of strpbrk(), in case it's missing.
- * Don't generate a prototype for this, causes problems when it's not used.
- */
-# ifndef HAVE_STRPBRK
-#  ifdef vim_strpbrk
-#   undef vim_strpbrk
-#  endif
-char_u *vim_strpbrk(char_u *s, char_u *charset)
-{
-  while (*s) {
-    if (vim_strchr(charset, *s) != NULL)
-      return s;
-    mb_ptr_adv(s);
-  }
-  return NULL;
-}
-# endif
-
-/*
  * Vim has its own isspace() function, because on some machines isspace()
  * can't handle characters above 128.
  */
@@ -1498,7 +1208,7 @@ int default_fileformat(void)
 /*
  * Call shell.	Calls mch_call_shell, with 'shellxquote' added.
  */
-int call_shell(char_u *cmd, int opt)
+int call_shell(char_u *cmd, ShellOpts opts, char_u *extra_shell_arg)
 {
   char_u      *ncmd;
   int retval;
@@ -1524,7 +1234,7 @@ int call_shell(char_u *cmd, int opt)
     tag_freematch();
 
     if (cmd == NULL || *p_sxq == NUL)
-      retval = mch_call_shell(cmd, opt);
+      retval = mch_call_shell(cmd, opts, extra_shell_arg);
     else {
       char_u *ecmd = cmd;
 
@@ -1542,7 +1252,7 @@ int call_shell(char_u *cmd, int opt)
         STRCAT(ncmd, STRCMP(p_sxq, "(") == 0 ? (char_u *)")"
             : STRCMP(p_sxq, "\"(") == 0 ? (char_u *)")\""
             : p_sxq);
-        retval = mch_call_shell(ncmd, opt);
+        retval = mch_call_shell(ncmd, opts, extra_shell_arg);
         vim_free(ncmd);
       } else
         retval = -1;
@@ -1580,38 +1290,6 @@ int get_real_state(void)
   return State;
 }
 
-/*
- * Return TRUE if "p" points to just after a path separator.
- * Takes care of multi-byte characters.
- * "b" must point to the start of the file name
- */
-int after_pathsep(char_u *b, char_u *p)
-{
-  return p > b && vim_ispathsep(p[-1])
-         && (!has_mbyte || (*mb_head_off)(b, p - 1) == 0);
-}
-
-/*
- * Return TRUE if file names "f1" and "f2" are in the same directory.
- * "f1" may be a short name, "f2" must be a full path.
- */
-int same_directory(char_u *f1, char_u *f2)
-{
-  char_u ffname[MAXPATHL];
-  char_u      *t1;
-  char_u      *t2;
-
-  /* safety check */
-  if (f1 == NULL || f2 == NULL)
-    return FALSE;
-
-  (void)vim_FullName(f1, ffname, MAXPATHL, FALSE);
-  t1 = gettail_sep(ffname);
-  t2 = gettail_sep(f2);
-  return t1 - ffname == t2 - f2
-         && pathcmp((char *)ffname, (char *)f2, (int)(t1 - ffname)) == 0;
-}
-
 #if defined(FEAT_SESSION) || defined(MSWIN) || defined(FEAT_GUI_MAC) \
   || ((defined(FEAT_GUI_GTK)) \
   && ( defined(FEAT_WINDOWS) || defined(FEAT_DND)) ) \
@@ -1627,7 +1305,7 @@ int vim_chdirfile(char_u *fname)
   char_u dir[MAXPATHL];
 
   vim_strncpy(dir, fname, MAXPATHL - 1);
-  *gettail_sep(dir) = NUL;
+  *path_tail_with_sep(dir) = NUL;
   return os_chdir((char *)dir) == 0 ? OK : FAIL;
 }
 #endif
@@ -1668,45 +1346,6 @@ int vim_chdir(char_u *new_dir)
   return r;
 }
 
-#ifndef HAVE_QSORT
-/*
- * Our own qsort(), for systems that don't have it.
- * It's simple and slow.  From the K&R C book.
- */
-void qsort(base, elm_count, elm_size, cmp)
-void        *base;
-size_t elm_count;
-size_t elm_size;
-int (*cmp)(const void *, const void *);
-{
-  char_u      *buf;
-  char_u      *p1;
-  char_u      *p2;
-  int i, j;
-  int gap;
-
-  buf = alloc((unsigned)elm_size);
-  if (buf == NULL)
-    return;
-
-  for (gap = elm_count / 2; gap > 0; gap /= 2)
-    for (i = gap; i < elm_count; ++i)
-      for (j = i - gap; j >= 0; j -= gap) {
-        /* Compare the elements. */
-        p1 = (char_u *)base + j * elm_size;
-        p2 = (char_u *)base + (j + gap) * elm_size;
-        if ((*cmp)((void *)p1, (void *)p2) <= 0)
-          break;
-        /* Exchange the elements. */
-        memmove(buf, p1, elm_size);
-        memmove(p1, p2, elm_size);
-        memmove(p2, buf, elm_size);
-      }
-
-  vim_free(buf);
-}
-#endif
-
 /*
  * Sort an array of strings.
  */
@@ -1723,100 +1362,6 @@ void sort_strings(char_u **files, int count)
   qsort((void *)files, (size_t)count, sizeof(char_u *), sort_compare);
 }
 
-#if !defined(NO_EXPANDPATH) || defined(PROTO)
-/*
- * Compare path "p[]" to "q[]".
- * If "maxlen" >= 0 compare "p[maxlen]" to "q[maxlen]"
- * Return value like strcmp(p, q), but consider path separators.
- */
-int pathcmp(const char *p, const char *q, int maxlen)
-{
-  int i;
-  int c1, c2;
-  const char  *s = NULL;
-
-  for (i = 0; maxlen < 0 || i < maxlen; i += MB_PTR2LEN((char_u *)p + i)) {
-    c1 = PTR2CHAR((char_u *)p + i);
-    c2 = PTR2CHAR((char_u *)q + i);
-
-    /* End of "p": check if "q" also ends or just has a slash. */
-    if (c1 == NUL) {
-      if (c2 == NUL)        /* full match */
-        return 0;
-      s = q;
-      break;
-    }
-
-    /* End of "q": check if "p" just has a slash. */
-    if (c2 == NUL) {
-      s = p;
-      break;
-    }
-
-    if ((p_fic ? MB_TOUPPER(c1) != MB_TOUPPER(c2) : c1 != c2)
-#ifdef BACKSLASH_IN_FILENAME
-        /* consider '/' and '\\' to be equal */
-        && !((c1 == '/' && c2 == '\\')
-             || (c1 == '\\' && c2 == '/'))
-#endif
-        ) {
-      if (vim_ispathsep(c1))
-        return -1;
-      if (vim_ispathsep(c2))
-        return 1;
-      return p_fic ? MB_TOUPPER(c1) - MB_TOUPPER(c2)
-             : c1 - c2;         /* no match */
-    }
-  }
-  if (s == NULL)        /* "i" ran into "maxlen" */
-    return 0;
-
-  c1 = PTR2CHAR((char_u *)s + i);
-  c2 = PTR2CHAR((char_u *)s + i + MB_PTR2LEN((char_u *)s + i));
-  /* ignore a trailing slash, but not "//" or ":/" */
-  if (c2 == NUL
-      && i > 0
-      && !after_pathsep((char_u *)s, (char_u *)s + i)
-#ifdef BACKSLASH_IN_FILENAME
-      && (c1 == '/' || c1 == '\\')
-#else
-      && c1 == '/'
-#endif
-      )
-    return 0;       /* match with trailing slash */
-  if (s == q)
-    return -1;              /* no match */
-  return 1;
-}
-#endif
-
-/*
- * Return 0 for not writable, 1 for writable file, 2 for a dir which we have
- * rights to write into.
- */
-int filewritable(char_u *fname)
-{
-  int retval = 0;
-#if defined(UNIX) || defined(VMS)
-  int perm = 0;
-#endif
-
-#if defined(UNIX) || defined(VMS)
-  perm = os_getperm(fname);
-#endif
-  if (
-# if defined(UNIX) || defined(VMS)
-    (perm & 0222) &&
-#  endif
-    mch_access((char *)fname, W_OK) == 0
-    ) {
-    ++retval;
-    if (os_isdir(fname))
-      ++retval;
-  }
-  return retval;
-}
-
 /*
  * Print an error message with one or two "%s" and one or two string arguments.
  * This is not in message.c to avoid a warning for prototypes.
@@ -1825,11 +1370,7 @@ int emsg3(char_u *s, char_u *a1, char_u *a2)
 {
   if (emsg_not_now())
     return TRUE;                /* no error messages at the moment */
-#ifdef HAVE_STDARG_H
   vim_snprintf((char *)IObuff, IOSIZE, (char *)s, a1, a2);
-#else
-  vim_snprintf((char *)IObuff, IOSIZE, (char *)s, (long_u)a1, (long_u)a2);
-#endif
   return emsg(IObuff);
 }
 

@@ -29,12 +29,14 @@
 #include "mark.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "move.h"
 #include "normal.h"
 #include "option.h"
+#include "path.h"
 #include "screen.h"
 #include "search.h"
 #include "term.h"
@@ -1697,6 +1699,14 @@ static void mb_adjust_opend(oparg_T *oap)
 }
 
 /*
+ * Put character 'c' at position 'lp'
+ */
+static inline void pchar(pos_T lp, int c)
+{
+    *(ml_get_buf(curbuf, lp.lnum, TRUE) + lp.col) = c;;
+}
+
+/*
  * Replace a whole area with one character.
  */
 int op_replace(oparg_T *oap, int c)
@@ -2030,16 +2040,16 @@ int swapchar(int op_type, pos_T *pos)
   if (enc_dbcs != 0 && c >= 0x100)      /* No lower/uppercase letter */
     return FALSE;
   nc = c;
-  if (MB_ISLOWER(c)) {
+  if (vim_islower(c)) {
     if (op_type == OP_ROT13)
       nc = ROT13(c, 'a');
     else if (op_type != OP_LOWER)
-      nc = MB_TOUPPER(c);
-  } else if (MB_ISUPPER(c)) {
+      nc = vim_toupper(c);
+  } else if (vim_isupper(c)) {
     if (op_type == OP_ROT13)
       nc = ROT13(c, 'A');
     else if (op_type != OP_UPPER)
-      nc = MB_TOLOWER(c);
+      nc = vim_tolower(c);
   }
   if (nc != c) {
     if (enc_utf8 && (c >= 0x80 || nc >= 0x80)) {
@@ -3287,7 +3297,7 @@ void ex_display(exarg_T *eap)
     } else
       yb = &(y_regs[i]);
 
-    if (name == MB_TOLOWER(redir_reg)
+    if (name == vim_tolower(redir_reg)
         || (redir_reg == '"' && yb == y_previous))
       continue;             /* do not list register being written to, the
                              * pointer can be freed */

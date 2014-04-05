@@ -3,6 +3,8 @@
 /// Code related to character sets.
 
 #include <string.h>
+#include <wctype.h>
+#include <wchar.h>  // for towupper() and towlower()
 
 #include "vim.h"
 #include "charset.h"
@@ -10,6 +12,7 @@
 #include "main.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "garray.h"
@@ -18,9 +21,6 @@
 
 static int win_chartabsize(win_T *wp, char_u *p, colnr_T col);
 
-#if defined(HAVE_WCHAR_H)
-# include <wchar.h>  // for towupper() and towlower()
-#endif  // if defined(HAVE_WCHAR_H)
 static int win_nolbr_chartabsize(win_T *wp, char_u *s, colnr_T col,
                                  int *headp);
 
@@ -222,8 +222,8 @@ int buf_init_chartab(buf_T *buf, int global)
         // work properly when 'encoding' is "latin1" and the locale is
         // "C".
         if (!do_isalpha
-            || MB_ISLOWER(c)
-            || MB_ISUPPER(c)
+            || vim_islower(c)
+            || vim_isupper(c)
             || (p_altkeymap && (F_isalpha(c) || F_isdigit(c)))) {
           if (i == 0) {
             // (re)set ID flag
@@ -422,7 +422,7 @@ char_u* str_foldcase(char_u *str, int orglen, char_u *buf, int buflen)
 
   // Copy "str" into "buf" or allocated memory, unmodified.
   if (buf == NULL) {
-    ga_init2(&ga, 1, 10);
+    ga_init(&ga, 1, 10);
 
     if (ga_grow(&ga, len + 1) == FAIL) {
       return NULL;
@@ -1552,12 +1552,9 @@ int vim_islower(int c)
     }
 
     if (c >= 0x100) {
-#ifdef HAVE_ISWLOWER
-
       if (has_mbyte) {
         return iswlower(c);
       }
-#endif  // ifdef HAVE_ISWLOWER
 
       // islower() can't handle these chars and may crash
       return FALSE;
@@ -1582,12 +1579,9 @@ int vim_isupper(int c)
     }
 
     if (c >= 0x100) {
-#ifdef HAVE_ISWUPPER
-
       if (has_mbyte) {
         return iswupper(c);
       }
-#endif  // ifdef HAVE_ISWUPPER
 
       // islower() can't handle these chars and may crash
       return FALSE;
@@ -1612,12 +1606,9 @@ int vim_toupper(int c)
     }
 
     if (c >= 0x100) {
-#ifdef HAVE_TOWUPPER
-
       if (has_mbyte) {
         return towupper(c);
       }
-#endif  // ifdef HAVE_TOWUPPER
 
       // toupper() can't handle these chars and may crash
       return c;
@@ -1642,12 +1633,9 @@ int vim_tolower(int c)
     }
 
     if (c >= 0x100) {
-#ifdef HAVE_TOWLOWER
-
       if (has_mbyte) {
         return towlower(c);
       }
-#endif  // ifdef HAVE_TOWLOWER
 
       // tolower() can't handle these chars and may crash
       return c;

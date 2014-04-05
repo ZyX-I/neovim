@@ -33,11 +33,13 @@
 #include "misc2.h"
 #include "crypt.h"
 #include "garray.h"
+#include "memory.h"
 #include "move.h"
 #include "normal.h"
 #include "ops.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "screen.h"
 #include "syntax.h"
@@ -46,6 +48,7 @@
 #include "version.h"
 #include "window.h"
 #include "os/os.h"
+#include "os/signal.h"
 
 /* Maximum number of commands from + or -c arguments. */
 #define MAX_ARG_CMDS 10
@@ -832,7 +835,7 @@ void getout(int exitval)
     apply_autocmds(EVENT_VIMLEAVEPRE, NULL, NULL, FALSE, curbuf);
   }
 
-  if (*p_viminfo != NUL)
+  if (p_viminfo && *p_viminfo != NUL)
     /* Write out the registers, history, marks etc, to the viminfo file */
     write_viminfo(NULL, FALSE);
 
@@ -928,7 +931,7 @@ static void parse_command_name(mparm_T *parmp)
 {
   char_u      *initstr;
 
-  initstr = gettail((char_u *)parmp->argv[0]);
+  initstr = path_tail((char_u *)parmp->argv[0]);
 
 
   set_vim_var_string(VV_PROGNAME, initstr, -1);
@@ -1437,7 +1440,7 @@ scripterror:
           && !os_isdir(alist_name(&GARGLIST[0]))) {
         char_u      *r;
 
-        r = concat_fnames(p, gettail(alist_name(&GARGLIST[0])), TRUE);
+        r = concat_fnames(p, path_tail(alist_name(&GARGLIST[0])), TRUE);
         if (r != NULL) {
           vim_free(p);
           p = r;
@@ -2045,19 +2048,19 @@ static void source_startup_scripts(mparm_T *parmp)
         secure = p_secure;
 
       i = FAIL;
-      if (fullpathcmp((char_u *)USR_VIMRC_FILE,
-            (char_u *)VIMRC_FILE, FALSE) != FPC_SAME
+      if (path_full_compare((char_u *)USR_VIMRC_FILE,
+            (char_u *)VIMRC_FILE, FALSE) != kEqualFiles
 #ifdef USR_VIMRC_FILE2
-          && fullpathcmp((char_u *)USR_VIMRC_FILE2,
-            (char_u *)VIMRC_FILE, FALSE) != FPC_SAME
+          && path_full_compare((char_u *)USR_VIMRC_FILE2,
+            (char_u *)VIMRC_FILE, FALSE) != kEqualFiles
 #endif
 #ifdef USR_VIMRC_FILE3
-          && fullpathcmp((char_u *)USR_VIMRC_FILE3,
-            (char_u *)VIMRC_FILE, FALSE) != FPC_SAME
+          && path_full_compare((char_u *)USR_VIMRC_FILE3,
+            (char_u *)VIMRC_FILE, FALSE) != kEqualFiles
 #endif
 #ifdef SYS_VIMRC_FILE
-          && fullpathcmp((char_u *)SYS_VIMRC_FILE,
-            (char_u *)VIMRC_FILE, FALSE) != FPC_SAME
+          && path_full_compare((char_u *)SYS_VIMRC_FILE,
+            (char_u *)VIMRC_FILE, FALSE) != kEqualFiles
 #endif
          )
         i = do_source((char_u *)VIMRC_FILE, TRUE, DOSO_VIMRC);
@@ -2070,11 +2073,11 @@ static void source_startup_scripts(mparm_T *parmp)
         else
           secure = 0;
 #endif
-        if (       fullpathcmp((char_u *)USR_EXRC_FILE,
-              (char_u *)EXRC_FILE, FALSE) != FPC_SAME
+        if (       path_full_compare((char_u *)USR_EXRC_FILE,
+              (char_u *)EXRC_FILE, FALSE) != kEqualFiles
 #ifdef USR_EXRC_FILE2
-            && fullpathcmp((char_u *)USR_EXRC_FILE2,
-              (char_u *)EXRC_FILE, FALSE) != FPC_SAME
+            && path_full_compare((char_u *)USR_EXRC_FILE2,
+              (char_u *)EXRC_FILE, FALSE) != kEqualFiles
 #endif
            )
           (void)do_source((char_u *)EXRC_FILE, FALSE, DOSO_NONE);
@@ -2165,9 +2168,7 @@ mainerr (
     char_u *str       /* extra argument or NULL */
 )
 {
-#if defined(UNIX) || defined(__EMX__) || defined(VMS)
-  reset_signals();              /* kill us with CTRL-C here, if you like */
-#endif
+  signal_stop();              /* kill us with CTRL-C here, if you like */
 
   mch_errmsg(longVersion);
   mch_errmsg("\n");
@@ -2212,9 +2213,7 @@ static void usage(void)
     N_("-q [errorfile]  edit file with first error")
   };
 
-#if defined(UNIX) || defined(__EMX__) || defined(VMS)
-  reset_signals();              /* kill us with CTRL-C here, if you like */
-#endif
+  signal_stop();              /* kill us with CTRL-C here, if you like */
 
   mch_msg(longVersion);
   mch_msg(_("\n\nusage:"));

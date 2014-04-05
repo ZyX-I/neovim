@@ -1,9 +1,9 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "misc2.h"
-#include "translator/parser/expressions.h"
 #include "vim.h"
+#include "memory.h"
+#include "translator/parser/expressions.h"
 
 // {{{ Function declarations
 static size_t node_dump_len(ExpressionNode *node);

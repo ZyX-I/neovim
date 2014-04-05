@@ -24,11 +24,13 @@
 #include "fileio.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "garray.h"
 #include "option.h"
+#include "path.h"
 #include "screen.h"
 #include "syntax.h"
 #include "term.h"
@@ -1576,7 +1578,7 @@ static void prt_flush_buffer(void)
       prt_write_string("s\n");
 
     ga_clear(&prt_ps_buffer);
-    ga_init2(&prt_ps_buffer, (int)sizeof(char), prt_bufsiz);
+    ga_init(&prt_ps_buffer, (int)sizeof(char), prt_bufsiz);
   }
 }
 
@@ -2440,7 +2442,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
   prt_bufsiz = psettings->chars_per_line;
   if (prt_out_mbyte)
     prt_bufsiz *= 2;
-  ga_init2(&prt_ps_buffer, (int)sizeof(char), prt_bufsiz);
+  ga_init(&prt_ps_buffer, (int)sizeof(char), prt_bufsiz);
 
   prt_page_num = 0;
 

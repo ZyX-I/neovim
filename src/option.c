@@ -33,6 +33,7 @@
 
 #define IN_OPTION_C
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "option.h"
@@ -53,6 +54,7 @@
 #include "mbyte.h"
 #include "memfile.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -63,6 +65,7 @@
 #include "move.h"
 #include "normal.h"
 #include "os_unix.h"
+#include "path.h"
 #include "regexp.h"
 #include "screen.h"
 #include "spell.h"
@@ -1989,7 +1992,7 @@ void set_init_1(void)
     garray_T ga;
     int mustfree;
 
-    ga_init2(&ga, 1, 100);
+    ga_init(&ga, 1, 100);
     for (n = 0; n < (long)(sizeof(names) / sizeof(char *)); ++n) {
       mustfree = FALSE;
 # ifdef UNIX
@@ -2491,7 +2494,7 @@ void set_init_3(void)
   p = skiptowhite(p_sh);
   if (*p == NUL) {
     /* No white space, use the tail. */
-    p = vim_strsave(gettail(p_sh));
+    p = vim_strsave(path_tail(p_sh));
   } else {
     char_u  *p1, *p2;
 
@@ -2968,13 +2971,9 @@ do_set (
               i = 0;
               if (*arg == '-')
                 i = 1;
-#ifdef HAVE_STRTOL
               value = strtol((char *)arg, NULL, 0);
               if (arg[i] == '0' && TOLOWER_ASC(arg[i + 1]) == 'x')
                 i += 2;
-#else
-              value = atol((char *)arg);
-#endif
               while (VIM_ISDIGIT(arg[i]))
                 ++i;
               if (arg[i] != NUL && !vim_iswhite(arg[i])) {
@@ -5352,7 +5351,7 @@ set_bool_option (
     p_wiv = (*T_XS != NUL);
   } else if ((int *)varp == &p_acd) {
     /* Change directories when the 'acd' option is set now. */
-    DO_AUTOCHDIR
+    do_autochdir();
   }
   /* 'diff' */
   else if ((int *)varp == &curwin->w_p_diff) {
@@ -7710,7 +7709,7 @@ static void langmap_init(void)
 
   for (i = 0; i < 256; i++)
     langmap_mapchar[i] = i;      /* we init with a one-to-one map */
-  ga_init2(&langmap_mapga, sizeof(langmap_entry_T), 8);
+  ga_init(&langmap_mapga, sizeof(langmap_entry_T), 8);
 }
 
 /*

@@ -12,6 +12,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "syntax.h"
@@ -25,6 +26,7 @@
 #include "indent_c.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -1386,7 +1388,7 @@ static synstate_T *store_current_state(void)
     if (current_state.ga_len > SST_FIX_STATES) {
       /* Need to clear it, might be something remaining from when the
        * length was less than SST_FIX_STATES. */
-      ga_init2(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
+      ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
       if (ga_grow(&sp->sst_union.sst_ga, current_state.ga_len) == FAIL)
         sp->sst_stacksize = 0;
       else
@@ -1776,7 +1778,7 @@ syn_current_attr (
 
   /* Init the list of zero-width matches with a nextlist.  This is used to
    * avoid matching the same item in the same position twice. */
-  ga_init2(&zero_width_next_ga, (int)sizeof(int), 10);
+  ga_init(&zero_width_next_ga, (int)sizeof(int), 10);
 
   /*
    * Repeat matching keywords and patterns, to find contained items at the
@@ -5861,7 +5863,7 @@ static void syntime_report(void)
     return;
   }
 
-  ga_init2(&ga, sizeof(time_entry_T), 50);
+  ga_init(&ga, sizeof(time_entry_T), 50);
   profile_zero(&total_total);
   for (idx = 0; idx < curwin->w_s->b_syn_patterns.ga_len; ++idx) {
     spp = &(SYN_ITEMS(curwin->w_s)[idx]);
@@ -6014,6 +6016,8 @@ static char *(highlight_init_light[]) =
   CENT(
       "FoldColumn term=standout ctermbg=Grey ctermfg=DarkBlue",
       "FoldColumn term=standout ctermbg=Grey ctermfg=DarkBlue guibg=Grey guifg=DarkBlue"),
+  CENT("SignColumn term=standout ctermbg=Grey ctermfg=DarkBlue",
+       "SignColumn term=standout ctermbg=Grey ctermfg=DarkBlue guibg=Grey guifg=DarkBlue"),
   CENT("Visual term=reverse",
       "Visual term=reverse guibg=LightGrey"),
   CENT("DiffAdd term=bold ctermbg=LightBlue",
@@ -6084,6 +6088,8 @@ static char *(highlight_init_dark[]) =
   CENT(
       "FoldColumn term=standout ctermbg=DarkGrey ctermfg=Cyan",
       "FoldColumn term=standout ctermbg=DarkGrey ctermfg=Cyan guibg=Grey guifg=Cyan"),
+  CENT("SignColumn term=standout ctermbg=DarkGrey ctermfg=Cyan",
+      "SignColumn term=standout ctermbg=DarkGrey ctermfg=Cyan guibg=Grey guifg=Cyan"),
   CENT("Visual term=reverse",
       "Visual term=reverse guibg=DarkGrey"),
   CENT("DiffAdd term=bold ctermbg=DarkBlue",
@@ -7847,6 +7853,7 @@ static void highlight_list_two(int cnt, int attr)
  */
 char_u *get_highlight_name(expand_T *xp, int idx)
 {
+  //TODO: 'xp' is unused
   if (idx == highlight_ga.ga_len && include_none != 0)
     return (char_u *)"none";
   if (idx == highlight_ga.ga_len + include_none && include_default != 0)

@@ -30,6 +30,7 @@
 #include "mbyte.h"
 #include "memfile.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -39,6 +40,7 @@
 #include "normal.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "regexp.h"
 #include "screen.h"
@@ -69,9 +71,6 @@ static int crypt_salt_len[] = {0, 8};
 static int crypt_seed_len[] = {0, 8};
 #define CRYPT_SALT_LEN_MAX 8
 #define CRYPT_SEED_LEN_MAX 8
-
-/* Is there any system that doesn't have access()? */
-#define USE_MCH_ACCESS
 
 static char_u *next_fenc(char_u **pp);
 static char_u *readfile_charconvert(char_u *fname, char_u *fenc,
@@ -252,7 +251,6 @@ readfile (
   context_sha256_T sha_ctx;
   int read_undo_file = FALSE;
   int split = 0;                        /* number of split lines */
-#define UNKNOWN  0x0fffffff             /* file size is unknown */
   linenr_T linecnt;
   int error = FALSE;                    /* errors encountered */
   int ff_error = EOL_UNKNOWN;           /* file format with errors */
@@ -474,29 +472,21 @@ readfile (
   }
 
   /*
-   * for UNIX: check readonly with perm and mch_access()
-   * for MSDOS and Amiga: check readonly by trying to open the file for writing
+   * Check readonly by trying to open the file for writing.
+   * If this fails, we know that the file is readonly.
    */
   file_readonly = FALSE;
-  if (read_stdin) {
-  } else if (!read_buffer) {
-#ifdef USE_MCH_ACCESS
-    if (
-# ifdef UNIX
-      !(perm & 0222) ||
-# endif
-      mch_access((char *)fname, W_OK))
+  if (!read_buffer && !read_stdin) {
+    if (!newfile || readonlymode) {
       file_readonly = TRUE;
-    fd = mch_open((char *)fname, O_RDONLY | O_EXTRA, 0);
-#else
-    if (!newfile
-        || readonlymode
-        || (fd = mch_open((char *)fname, O_RDWR | O_EXTRA, 0)) < 0) {
+    } else if ((fd = mch_open((char *)fname, O_RDWR | O_EXTRA, 0)) < 0) {
+      // opening in readwrite mode failed => file is readonly
       file_readonly = TRUE;
-      /* try to open ro */
+    }
+    if (file_readonly == TRUE) {
+      // try to open readonly
       fd = mch_open((char *)fname, O_RDONLY | O_EXTRA, 0);
     }
-#endif
   }
 
   if (fd < 0) {                     /* cannot open at all */
@@ -2453,34 +2443,6 @@ set_file_time (
 }
 #endif /* UNIX */
 
-
-/*
- * Return TRUE if a file appears to be read-only from the file permissions.
- */
-int 
-check_file_readonly (
-    char_u *fname,             /* full path to file */
-    int perm                       /* known permissions on file */
-)
-{
-#ifndef USE_MCH_ACCESS
-  int fd = 0;
-#endif
-
-  return
-#ifdef USE_MCH_ACCESS
-# ifdef UNIX
-    (perm & 0222) == 0 ||
-# endif
-    mch_access((char *)fname, W_OK)
-#else
-    (fd = mch_open((char *)fname, O_RDWR | O_EXTRA, 0)) < 0
-    ? TRUE : (close(fd), FALSE)
-#endif
-  ;
-}
-
-
 /*
  * buf_write() - write to file "fname" lines "start" through "end"
  *
@@ -2897,7 +2859,7 @@ buf_write (
      * Check if the file is really writable (when renaming the file to
      * make a backup we won't discover it later).
      */
-    file_readonly = check_file_readonly(fname, (int)perm);
+    file_readonly = os_file_is_readonly((char *)fname);
 
     if (!forceit && file_readonly) {
       if (vim_strchr(p_cpo, CPO_FWRITE) != NULL) {
@@ -2995,7 +2957,7 @@ buf_write (
          */
         STRCPY(IObuff, fname);
         for (i = 4913;; i += 123) {
-          sprintf((char *)gettail(IObuff), "%d", i);
+          sprintf((char *)path_tail(IObuff), "%d", i);
           if (mch_lstat((char *)IObuff, &st) < 0)
             break;
         }
@@ -4701,58 +4663,6 @@ static int make_bom(char_u *buf, char_u *name)
   return (int)(p - buf);
 }
 
-#if defined(FEAT_VIMINFO) || defined(FEAT_BROWSE) || \
-  defined(FEAT_QUICKFIX) || defined(FEAT_AUTOCMD) || defined(PROTO)
-/*
- * Try to find a shortname by comparing the fullname with the current
- * directory.
- * Returns "full_path" or pointer into "full_path" if shortened.
- */
-char_u *shorten_fname1(char_u *full_path)
-{
-  char_u      *dirname;
-  char_u      *p = full_path;
-
-  dirname = alloc(MAXPATHL);
-  if (dirname == NULL)
-    return full_path;
-  if (os_dirname(dirname, MAXPATHL) == OK) {
-    p = shorten_fname(full_path, dirname);
-    if (p == NULL || *p == NUL)
-      p = full_path;
-  }
-  vim_free(dirname);
-  return p;
-}
-#endif
-
-/*
- * Try to find a shortname by comparing the fullname with the current
- * directory.
- * Returns NULL if not shorter name possible, pointer into "full_path"
- * otherwise.
- */
-char_u *shorten_fname(char_u *full_path, char_u *dir_name)
-{
-  int len;
-  char_u      *p;
-
-  if (full_path == NULL)
-    return NULL;
-  len = (int)STRLEN(dir_name);
-  if (fnamencmp(dir_name, full_path, len) == 0) {
-    p = full_path + len;
-    {
-      if (vim_ispathsep(*p))
-        ++p;
-      else
-        p = NULL;
-    }
-  } else
-    p = NULL;
-  return p;
-}
-
 /*
  * Shorten filenames for all buffers.
  * When "force" is TRUE: Use full path from now on for files currently being
@@ -4794,35 +4704,6 @@ void shorten_fnames(int force)
   status_redraw_all();
   redraw_tabline = TRUE;
 }
-
-#if (defined(FEAT_DND) && defined(FEAT_GUI_GTK)) \
-  || defined(FEAT_GUI_MSWIN) \
-  || defined(FEAT_GUI_MAC) \
-  || defined(PROTO)
-/*
- * Shorten all filenames in "fnames[count]" by current directory.
- */
-void shorten_filenames(char_u **fnames, int count)
-{
-  int i;
-  char_u dirname[MAXPATHL];
-  char_u      *p;
-
-  if (fnames == NULL || count < 1)
-    return;
-  os_dirname(dirname, sizeof(dirname));
-  for (i = 0; i < count; ++i) {
-    if ((p = shorten_fname(fnames[i], dirname)) != NULL) {
-      /* shorten_fname() returns pointer in given "fnames[i]".  If free
-       * "fnames[i]" first, "p" becomes invalid.  So we need to copy
-       * "p" first then free fnames[i]. */
-      p = vim_strsave(p);
-      vim_free(fnames[i]);
-      fnames[i] = p;
-    }
-  }
-}
-#endif
 
 /*
  * add extension to file name - change path/fo.o.h to path/fo.o.h.ext or
@@ -4991,7 +4872,7 @@ buf_modname (
   /*
    * Prepend the dot.
    */
-  if (prepend_dot && !shortname && *(e = gettail(retval)) != '.'
+  if (prepend_dot && !shortname && *(e = path_tail(retval)) != '.'
 #ifdef USE_LONG_FNAME
       && USE_LONG_FNAME
 #endif
@@ -5089,7 +4970,7 @@ int tag_fgets(char_u *buf, int size, FILE *fp)
 #endif
 
 /*
- * rename() only works if both files are on the same file system, this
+ * os_rename() only works if both files are on the same file system, this
  * function will (attempts to?) copy the file across if rename fails -- webb
  * Return -1 for failure, 0 for success.
  */
@@ -5113,7 +4994,7 @@ int vim_rename(char_u *from, char_u *to)
    * the file name differs we need to go through a temp file.
    */
   if (fnamecmp(from, to) == 0) {
-    if (p_fic && STRCMP(gettail(from), gettail(to)) != 0)
+    if (p_fic && STRCMP(path_tail(from), path_tail(to)) != 0)
       use_tmp_file = TRUE;
     else
       return 0;
@@ -5140,7 +5021,7 @@ int vim_rename(char_u *from, char_u *to)
 #endif
 
   if (use_tmp_file) {
-    char tempname[MAXPATHL + 1];
+    char_u tempname[MAXPATHL + 1];
 
     /*
      * Find a name that doesn't exist and is in the same directory.
@@ -5150,14 +5031,14 @@ int vim_rename(char_u *from, char_u *to)
       return -1;
     STRCPY(tempname, from);
     for (n = 123; n < 99999; ++n) {
-      sprintf((char *)gettail((char_u *)tempname), "%d", n);
-      if (mch_stat(tempname, &st) < 0) {
-        if (mch_rename((char *)from, tempname) == 0) {
-          if (mch_rename(tempname, (char *)to) == 0)
+      sprintf((char *)path_tail(tempname), "%d", n);
+      if (os_file_exists(tempname) == FALSE) {
+        if (os_rename(from, tempname) == OK) {
+          if (os_rename(tempname, to) == OK)
             return 0;
           /* Strange, the second step failed.  Try moving the
            * file back and return failure. */
-          mch_rename(tempname, (char *)from);
+          os_rename(tempname, from);
           return -1;
         }
         /* If it fails for one temp name it will most likely fail
@@ -5170,8 +5051,8 @@ int vim_rename(char_u *from, char_u *to)
 
   /*
    * Delete the "to" file, this is required on some systems to make the
-   * mch_rename() work, on other systems it makes sure that we don't have
-   * two files when the mch_rename() fails.
+   * os_rename() work, on other systems it makes sure that we don't have
+   * two files when the os_rename() fails.
    */
 
   mch_remove(to);
@@ -5179,7 +5060,7 @@ int vim_rename(char_u *from, char_u *to)
   /*
    * First try a normal rename, return if it works.
    */
-  if (mch_rename((char *)from, (char *)to) == 0)
+  if (os_rename(from, to) == OK)
     return 0;
 
   /*
@@ -5759,7 +5640,7 @@ void vim_deltempdir(void)
         mch_remove(files[i]);
       FreeWild(file_count, files);
     }
-    gettail(NameBuff)[-1] = NUL;
+    path_tail(NameBuff)[-1] = NUL;
     (void)mch_rmdir(NameBuff);
 
     vim_free(vim_tempdir);
@@ -7601,7 +7482,7 @@ apply_autocmds_group (
   if (event == EVENT_FILETYPE)
     did_filetype = TRUE;
 
-  tail = gettail(fname);
+  tail = path_tail(fname);
 
   /* Find first autocommand that matches */
   patcmd.curpat = first_autopat[(int)event];
@@ -7858,7 +7739,7 @@ int has_autocmd(event_T event, char_u *sfname, buf_T *buf)
 {
   AutoPat     *ap;
   char_u      *fname;
-  char_u      *tail = gettail(sfname);
+  char_u      *tail = path_tail(sfname);
   int retval = FALSE;
 
   fname = FullName_save(sfname, FALSE);
@@ -8183,7 +8064,7 @@ int match_file_list(char_u *list, char_u *sfname, char_u *ffname)
   int match;
   char_u      *p;
 
-  tail = gettail(sfname);
+  tail = path_tail(sfname);
 
   /* try all patterns in 'wildignore' */
   p = list;

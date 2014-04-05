@@ -12,6 +12,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "version_defs.h"
@@ -39,11 +40,13 @@
 #include "misc1.h"
 #include "misc2.h"
 #include "garray.h"
+#include "memory.h"
 #include "move.h"
 #include "normal.h"
 #include "ops.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "regexp.h"
 #include "screen.h"
@@ -56,6 +59,7 @@
 #include "undo.h"
 #include "window.h"
 #include "os/os.h"
+#include "os/shell.h"
 
 static int linelen(int *has_tab);
 static void do_filter(linenr_T line1, linenr_T line2, exarg_T *eap,
@@ -1022,21 +1026,21 @@ do_filter (
    */
 
   if (do_out)
-    shell_flags |= SHELL_DOOUT;
+    shell_flags |= kShellOptDoOut;
 
   if (!do_in && do_out && !p_stmp) {
     // Use a pipe to fetch stdout of the command, do not use a temp file.
-    shell_flags |= SHELL_READ;
+    shell_flags |= kShellOptRead;
     curwin->w_cursor.lnum = line2;
   } else if (do_in && !do_out && !p_stmp) {
     // Use a pipe to write stdin of the command, do not use a temp file.
-    shell_flags |= SHELL_WRITE;
+    shell_flags |= kShellOptWrite;
     curbuf->b_op_start.lnum = line1;
     curbuf->b_op_end.lnum = line2;
   } else if (do_in && do_out && !p_stmp) {
     // Use a pipe to write stdin and fetch stdout of the command, do not
     // use a temp file.
-    shell_flags |= SHELL_READ|SHELL_WRITE;
+    shell_flags |= kShellOptRead | kShellOptWrite;
     curbuf->b_op_start.lnum = line1;
     curbuf->b_op_end.lnum = line2;
     curwin->w_cursor.lnum = line2;
@@ -1099,9 +1103,13 @@ do_filter (
    * 'u' to fix the text
    * Switch to cooked mode when not redirecting stdin, avoids that something
    * like ":r !cat" hangs.
-   * Pass on the SHELL_DOOUT flag when the output is being redirected.
+   * Pass on the kShellDoOut flag when the output is being redirected.
    */
-  if (call_shell(cmd_buf, SHELL_FILTER | SHELL_COOKED | shell_flags)) {
+  if (call_shell(
+        cmd_buf,
+        kShellOptFilter | kShellOptCooked | shell_flags,
+        NULL
+        )) {
     redraw_later_clear();
     wait_return(FALSE);
   }
@@ -1132,7 +1140,7 @@ do_filter (
 
     read_linecount = curbuf->b_ml.ml_line_count - read_linecount;
 
-    if (shell_flags & SHELL_READ) {
+    if (shell_flags & kShellOptRead) {
       curbuf->b_op_start.lnum = line2 + 1;
       curbuf->b_op_end.lnum = curwin->w_cursor.lnum;
       appended_lines_mark(line2, read_linecount);
@@ -1255,7 +1263,7 @@ do_shell (
   if (!swapping_screen())
     windgoto(msg_row, msg_col);
   cursor_on();
-  (void)call_shell(cmd, SHELL_COOKED | flags);
+  (void)call_shell(cmd, kShellOptCooked | flags, NULL);
   did_check_timestamps = FALSE;
   need_check_timestamps = TRUE;
 
@@ -1614,8 +1622,8 @@ void write_viminfo(char_u *file, int forceit)
          * the same file as the original.
          */
         wp = tempname + STRLEN(tempname) - 5;
-        if (wp < gettail(tempname))                 /* empty file name? */
-          wp = gettail(tempname);
+        if (wp < path_tail(tempname))                 /* empty file name? */
+          wp = path_tail(tempname);
         for (*wp = 'z'; mch_stat((char *)tempname, &st_new) == 0;
              --*wp) {
           /*
@@ -2098,7 +2106,7 @@ int rename_buffer(char_u *new_fname)
   vim_free(sfname);
   apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, FALSE, curbuf);
   /* Change directories when the 'acd' option is set. */
-  DO_AUTOCHDIR
+  do_autochdir();
   return OK;
 }
 
@@ -2295,7 +2303,7 @@ int do_write(exarg_T *eap)
         redraw_tabline = TRUE;
       }
       /* Change directories when the 'acd' option is set. */
-      DO_AUTOCHDIR
+      do_autochdir();
     }
   }
 
@@ -2489,15 +2497,11 @@ int not_writing(void)
  */
 static int check_readonly(int *forceit, buf_T *buf)
 {
-  struct stat st;
-
   /* Handle a file being readonly when the 'readonly' option is set or when
-   * the file exists and permissions are read-only.
-   * We will send 0777 to check_file_readonly(), as the "perm" variable is
-   * important for device checks but not here. */
+   * the file exists and permissions are read-only. */
   if (!*forceit && (buf->b_p_ro
-                    || (mch_stat((char *)buf->b_ffname, &st) >= 0
-                        && check_file_readonly(buf->b_ffname, 0777)))) {
+                    || (os_file_exists(buf->b_ffname)
+                        && os_file_is_readonly((char *)buf->b_ffname)))) {
     if ((p_confirm || cmdmod.confirm) && buf->b_fname != NULL) {
       char_u buff[DIALOG_MSG_SIZE];
 
@@ -3042,7 +3046,7 @@ do_ecmd (
     }
 
     /* Change directories when the 'acd' option is set. */
-    DO_AUTOCHDIR
+    do_autochdir();
 
     /*
      * Careful: open_buffer() and apply_autocmds() may change the current
@@ -3181,7 +3185,7 @@ do_ecmd (
     need_start_insertmode = TRUE;
 
   /* Change directories when the 'acd' option is set. */
-  DO_AUTOCHDIR
+  do_autochdir();
 
 
 theend:
@@ -4975,14 +4979,18 @@ int find_help_tags(char_u *arg, int *num_matches, char_u ***matches, int keep_la
                              "?", ":?", "?<CR>", "g?", "g?g?", "g??", "z?",
                              "/\\?", "/\\z(\\)", "\\=", ":s\\=",
                              "[count]", "[quotex]", "[range]",
-                             "[pattern]", "\\|", "\\%$"};
+                             "[pattern]", "\\|", "\\%$",
+                             "s/\\~", "s/\\U", "s/\\L",
+                             "s/\\1", "s/\\2", "s/\\3", "s/\\9"};
   static char *(rtable[]) = {"star", "gstar", "[star", "]star", ":star",
                              "/star", "/\\\\star", "quotestar", "starstar",
                              "cpo-star", "/\\\\(\\\\)", "/\\\\%(\\\\)",
                              "?", ":?", "?<CR>", "g?", "g?g?", "g??", "z?",
                              "/\\\\?", "/\\\\z(\\\\)", "\\\\=", ":s\\\\=",
                              "\\[count]", "\\[quotex]", "\\[range]",
-                             "\\[pattern]", "\\\\bar", "/\\\\%\\$"};
+                             "\\[pattern]", "\\\\bar", "/\\\\%\\$",
+                             "s/\\\\\\~", "s/\\\\U", "s/\\\\L",
+                             "s/\\\\1", "s/\\\\2", "s/\\\\3", "s/\\\\9"};
   int flags;
 
   d = IObuff;               /* assume IObuff is long enough! */
@@ -5016,7 +5024,7 @@ int find_help_tags(char_u *arg, int *num_matches, char_u ***matches, int keep_la
       /* Replace:
        * "[:...:]" with "\[:...:]"
        * "[++...]" with "\[++...]"
-       * "\{" with "\\{"
+       * "\{" with "\\{"               -- matching "} \}"
        */
       if ((arg[0] == '[' && (arg[1] == ':'
                              || (arg[1] == '+' && arg[2] == '+')))
@@ -5190,7 +5198,7 @@ void fix_help_buffer(void)
    * In the "help.txt" and "help.abx" file, add the locally added help
    * files.  This uses the very first line in the help file.
    */
-  fname = gettail(curbuf->b_fname);
+  fname = path_tail(curbuf->b_fname);
   if (fnamecmp(fname, "help.txt") == 0
       || (fnamencmp(fname, "help.", 5) == 0
           && ASCII_ISALPHA(fname[5])
@@ -5210,7 +5218,7 @@ void fix_help_buffer(void)
         copy_option_part(&p, NameBuff, MAXPATHL, ",");
         mustfree = FALSE;
         rt = vim_getenv((char_u *)"VIMRUNTIME", &mustfree);
-        if (fullpathcmp(rt, NameBuff, FALSE) != FPC_SAME) {
+        if (path_full_compare(rt, NameBuff, FALSE) != kEqualFiles) {
           int fcount;
           char_u      **fnames;
           FILE        *fd;
@@ -5243,11 +5251,11 @@ void fix_help_buffer(void)
                   continue;
                 f1 = fnames[i1];
                 f2 = fnames[i2];
-                t1 = gettail(f1);
+                t1 = path_tail(f1);
                 if (fnamencmp(f1, f2, t1 - f1) != 0)
                   continue;
                 e1 = vim_strrchr(t1, '.');
-                e2 = vim_strrchr(gettail(f2), '.');
+                e2 = vim_strrchr(path_tail(f2), '.');
                 if (e1 == NUL || e2 == NUL)
                   continue;
                 if (fnamecmp(e1, ".txt") != 0
@@ -5403,7 +5411,7 @@ void ex_helptags(exarg_T *eap)
 
   /* Go over all files in the directory to find out what languages are
    * present. */
-  ga_init2(&ga, 1, 10);
+  ga_init(&ga, 1, 10);
   for (i = 0; i < filecount; ++i) {
     len = (int)STRLEN(files[i]);
     if (len > 4) {
@@ -5518,9 +5526,9 @@ helptags_one (
    * If using the "++t" argument or generating tags for "$VIMRUNTIME/doc"
    * add the "help-tags" tag.
    */
-  ga_init2(&ga, (int)sizeof(char_u *), 100);
-  if (add_help_tags || fullpathcmp((char_u *)"$VIMRUNTIME/doc",
-          dir, FALSE) == FPC_SAME) {
+  ga_init(&ga, (int)sizeof(char_u *), 100);
+  if (add_help_tags || path_full_compare((char_u *)"$VIMRUNTIME/doc",
+          dir, FALSE) == kEqualFiles) {
     if (ga_grow(&ga, 1) == FAIL)
       got_int = TRUE;
     else {
@@ -5685,4 +5693,762 @@ helptags_one (
   fclose(fd_tags);          /* there is no check for an error... */
 }
 
+/*
+ * Struct to hold the sign properties.
+ */
+typedef struct sign sign_T;
+
+struct sign
+{
+    sign_T      *sn_next;       /* next sign in list */
+    int         sn_typenr;      /* type number of sign */
+    char_u      *sn_name;       /* name of sign */
+    char_u      *sn_icon;       /* name of pixmap */
+    char_u      *sn_text;       /* text used instead of pixmap */
+    int         sn_line_hl;     /* highlight ID for line */
+    int         sn_text_hl;     /* highlight ID for text */
+};
+
+static sign_T   *first_sign = NULL;
+static int      next_sign_typenr = 1;
+
+static int sign_cmd_idx (char_u *begin_cmd, char_u *end_cmd);
+static void sign_list_defined (sign_T *sp);
+static void sign_undefine (sign_T *sp, sign_T *sp_prev);
+
+static char *cmds[] = {
+			"define",
+#define SIGNCMD_DEFINE	0
+			"undefine",
+#define SIGNCMD_UNDEFINE 1
+			"list",
+#define SIGNCMD_LIST	2
+			"place",
+#define SIGNCMD_PLACE	3
+			"unplace",
+#define SIGNCMD_UNPLACE	4
+			"jump",
+#define SIGNCMD_JUMP	5
+			NULL
+#define SIGNCMD_LAST	6
+};
+
+/*
+ * Find index of a ":sign" subcmd from its name.
+ * "*end_cmd" must be writable.
+ */
+static int sign_cmd_idx(
+    char_u      *begin_cmd,     /* begin of sign subcmd */
+    char_u      *end_cmd        /* just after sign subcmd */
+    )
+{
+    int  idx;
+    char save = *end_cmd;
+
+    *end_cmd = NUL;
+    for (idx = 0; ; ++idx) {
+        if (cmds[idx] == NULL || STRCMP(begin_cmd, cmds[idx]) == 0) {
+            break;
+        }
+    }
+    *end_cmd = save;
+    return idx;
+}
+
+/*
+ * ":sign" command
+ */
+void ex_sign(exarg_T *eap)
+{
+    char_u	*arg = eap->arg;
+    char_u	*p;
+    int		idx;
+    sign_T	*sp;
+    sign_T	*sp_prev;
+    buf_T	*buf;
+
+    /* Parse the subcommand. */
+    p = skiptowhite(arg);
+    idx = sign_cmd_idx(arg, p);
+    if (idx == SIGNCMD_LAST)
+    {
+	EMSG2(_("E160: Unknown sign command: %s"), arg);
+	return;
+    }
+    arg = skipwhite(p);
+
+    if (idx <= SIGNCMD_LIST)
+    {
+	/*
+	 * Define, undefine or list signs.
+	 */
+	if (idx == SIGNCMD_LIST && *arg == NUL)
+	{
+	    /* ":sign list": list all defined signs */
+	    for (sp = first_sign; sp != NULL && !got_int; sp = sp->sn_next)
+		sign_list_defined(sp);
+	}
+	else if (*arg == NUL)
+	    EMSG(_("E156: Missing sign name"));
+	else
+	{
+	    /* Isolate the sign name.  If it's a number skip leading zeroes,
+	     * so that "099" and "99" are the same sign.  But keep "0". */
+	    p = skiptowhite(arg);
+	    if (*p != NUL)
+		*p++ = NUL;
+	    while (arg[0] == '0' && arg[1] != NUL)
+		++arg;
+
+	    sp_prev = NULL;
+	    for (sp = first_sign; sp != NULL; sp = sp->sn_next)
+	    {
+		if (STRCMP(sp->sn_name, arg) == 0)
+		    break;
+		sp_prev = sp;
+	    }
+	    if (idx == SIGNCMD_DEFINE)
+	    {
+		/* ":sign define {name} ...": define a sign */
+		if (sp == NULL)
+		{
+		    sign_T	*lp;
+		    int		start = next_sign_typenr;
+
+		    /* Allocate a new sign. */
+		    sp = (sign_T *)alloc_clear((unsigned)sizeof(sign_T));
+		    if (sp == NULL)
+			return;
+
+		    /* Check that next_sign_typenr is not already being used.
+		     * This only happens after wrapping around.  Hopefully
+		     * another one got deleted and we can use its number. */
+		    for (lp = first_sign; lp != NULL; )
+		    {
+			if (lp->sn_typenr == next_sign_typenr)
+			{
+			    ++next_sign_typenr;
+			    if (next_sign_typenr == MAX_TYPENR)
+				next_sign_typenr = 1;
+			    if (next_sign_typenr == start)
+			    {
+				vim_free(sp);
+				EMSG(_("E612: Too many signs defined"));
+				return;
+			    }
+			    lp = first_sign;  /* start all over */
+			    continue;
+			}
+			lp = lp->sn_next;
+		    }
+
+		    sp->sn_typenr = next_sign_typenr;
+		    if (++next_sign_typenr == MAX_TYPENR)
+			next_sign_typenr = 1; /* wrap around */
+
+		    sp->sn_name = vim_strsave(arg);
+		    if (sp->sn_name == NULL)  /* out of memory */
+		    {
+			vim_free(sp);
+			return;
+		    }
+
+		    /* add the new sign to the list of signs */
+		    if (sp_prev == NULL)
+			first_sign = sp;
+		    else
+			sp_prev->sn_next = sp;
+		}
+
+		/* set values for a defined sign. */
+		for (;;)
+		{
+		    arg = skipwhite(p);
+		    if (*arg == NUL)
+			break;
+		    p = skiptowhite_esc(arg);
+		    if (STRNCMP(arg, "icon=", 5) == 0)
+		    {
+			arg += 5;
+			vim_free(sp->sn_icon);
+			sp->sn_icon = vim_strnsave(arg, (int)(p - arg));
+			backslash_halve(sp->sn_icon);
+		    }
+		    else if (STRNCMP(arg, "text=", 5) == 0)
+		    {
+			char_u	*s;
+			int	cells;
+			int	len;
+
+			arg += 5;
+
+			/* Count cells and check for non-printable chars */
+			if (has_mbyte)
+			{
+			    cells = 0;
+			    for (s = arg; s < p; s += (*mb_ptr2len)(s))
+			    {
+				if (!vim_isprintc((*mb_ptr2char)(s)))
+				    break;
+				cells += (*mb_ptr2cells)(s);
+			    }
+			}
+			else
+
+			{
+			    for (s = arg; s < p; ++s)
+				if (!vim_isprintc(*s))
+				    break;
+			    cells = (int)(s - arg);
+			}
+			/* Currently must be one or two display cells */
+			if (s != p || cells < 1 || cells > 2)
+			{
+			    *p = NUL;
+			    EMSG2(_("E239: Invalid sign text: %s"), arg);
+			    return;
+			}
+
+			vim_free(sp->sn_text);
+			/* Allocate one byte more if we need to pad up
+			 * with a space. */
+			len = (int)(p - arg + ((cells == 1) ? 1 : 0));
+			sp->sn_text = vim_strnsave(arg, len);
+
+			if (sp->sn_text != NULL && cells == 1)
+			    STRCPY(sp->sn_text + len - 1, " ");
+		    }
+		    else if (STRNCMP(arg, "linehl=", 7) == 0)
+		    {
+			arg += 7;
+			sp->sn_line_hl = syn_check_group(arg, (int)(p - arg));
+		    }
+		    else if (STRNCMP(arg, "texthl=", 7) == 0)
+		    {
+			arg += 7;
+			sp->sn_text_hl = syn_check_group(arg, (int)(p - arg));
+		    }
+		    else
+		    {
+			EMSG2(_(e_invarg2), arg);
+			return;
+		    }
+		}
+	    }
+	    else if (sp == NULL)
+		EMSG2(_("E155: Unknown sign: %s"), arg);
+	    else if (idx == SIGNCMD_LIST)
+		/* ":sign list {name}" */
+		sign_list_defined(sp);
+	    else
+		/* ":sign undefine {name}" */
+		sign_undefine(sp, sp_prev);
+	}
+    }
+    else
+    {
+	int		id = -1;
+	linenr_T	lnum = -1;
+	char_u		*sign_name = NULL;
+	char_u		*arg1;
+
+	if (*arg == NUL)
+	{
+	    if (idx == SIGNCMD_PLACE)
+	    {
+		/* ":sign place": list placed signs in all buffers */
+		sign_list_placed(NULL);
+	    }
+	    else if (idx == SIGNCMD_UNPLACE)
+	    {
+		/* ":sign unplace": remove placed sign at cursor */
+		id = buf_findsign_id(curwin->w_buffer, curwin->w_cursor.lnum);
+		if (id > 0)
+		{
+		    buf_delsign(curwin->w_buffer, id);
+		    update_debug_sign(curwin->w_buffer, curwin->w_cursor.lnum);
+		}
+		else
+		    EMSG(_("E159: Missing sign number"));
+	    }
+	    else
+		EMSG(_(e_argreq));
+	    return;
+	}
+
+	if (idx == SIGNCMD_UNPLACE && arg[0] == '*' && arg[1] == NUL)
+	{
+	    /* ":sign unplace *": remove all placed signs */
+	    buf_delete_all_signs();
+	    return;
+	}
+
+	/* first arg could be placed sign id */
+	arg1 = arg;
+	if (VIM_ISDIGIT(*arg))
+	{
+	    id = getdigits(&arg);
+	    if (!vim_iswhite(*arg) && *arg != NUL)
+	    {
+		id = -1;
+		arg = arg1;
+	    }
+	    else
+	    {
+		arg = skipwhite(arg);
+		if (idx == SIGNCMD_UNPLACE && *arg == NUL)
+		{
+		    /* ":sign unplace {id}": remove placed sign by number */
+		    for (buf = firstbuf; buf != NULL; buf = buf->b_next)
+			if ((lnum = buf_delsign(buf, id)) != 0)
+			    update_debug_sign(buf, lnum);
+		    return;
+		}
+	    }
+	}
+
+	/*
+	 * Check for line={lnum} name={name} and file={fname} or buffer={nr}.
+	 * Leave "arg" pointing to {fname}.
+	 */
+	for (;;)
+	{
+	    if (STRNCMP(arg, "line=", 5) == 0)
+	    {
+		arg += 5;
+		lnum = atoi((char *)arg);
+		arg = skiptowhite(arg);
+	    }
+	    else if (STRNCMP(arg, "*", 1) == 0 && idx == SIGNCMD_UNPLACE)
+	    {
+		if (id != -1)
+		{
+		    EMSG(_(e_invarg));
+		    return;
+		}
+		id = -2;
+		arg = skiptowhite(arg + 1);
+	    }
+	    else if (STRNCMP(arg, "name=", 5) == 0)
+	    {
+		arg += 5;
+		sign_name = arg;
+		arg = skiptowhite(arg);
+		if (*arg != NUL)
+		    *arg++ = NUL;
+		while (sign_name[0] == '0' && sign_name[1] != NUL)
+		    ++sign_name;
+	    }
+	    else if (STRNCMP(arg, "file=", 5) == 0)
+	    {
+		arg += 5;
+		buf = buflist_findname(arg);
+		break;
+	    }
+	    else if (STRNCMP(arg, "buffer=", 7) == 0)
+	    {
+		arg += 7;
+		buf = buflist_findnr((int)getdigits(&arg));
+		if (*skipwhite(arg) != NUL)
+		    EMSG(_(e_trailing));
+		break;
+	    }
+	    else
+	    {
+		EMSG(_(e_invarg));
+		return;
+	    }
+	    arg = skipwhite(arg);
+	}
+
+	if (buf == NULL)
+	{
+	    EMSG2(_("E158: Invalid buffer name: %s"), arg);
+	}
+	else if (id <= 0 && !(idx == SIGNCMD_UNPLACE && id == -2))
+	{
+	    if (lnum >= 0 || sign_name != NULL)
+		EMSG(_(e_invarg));
+	    else
+		/* ":sign place file={fname}": list placed signs in one file */
+		sign_list_placed(buf);
+	}
+	else if (idx == SIGNCMD_JUMP)
+	{
+	    /* ":sign jump {id} file={fname}" */
+	    if (lnum >= 0 || sign_name != NULL)
+		EMSG(_(e_invarg));
+	    else if ((lnum = buf_findsign(buf, id)) > 0)
+	    {				/* goto a sign ... */
+		if (buf_jump_open_win(buf) != NULL)
+		{			/* ... in a current window */
+		    curwin->w_cursor.lnum = lnum;
+		    check_cursor_lnum();
+		    beginline(BL_WHITE);
+		}
+		else
+		{			/* ... not currently in a window */
+		    char_u	*cmd;
+
+		    cmd = alloc((unsigned)STRLEN(buf->b_fname) + 25);
+		    if (cmd == NULL)
+			return;
+		    sprintf((char *)cmd, "e +%ld %s", (long)lnum, buf->b_fname);
+		    do_cmdline_cmd(cmd);
+		    vim_free(cmd);
+		}
+
+		foldOpenCursor();
+	    }
+	    else
+		EMSGN(_("E157: Invalid sign ID: %ld"), id);
+	}
+	else if (idx == SIGNCMD_UNPLACE)
+	{
+	    if (lnum >= 0 || sign_name != NULL)
+		EMSG(_(e_invarg));
+	    else if (id == -2)
+	    {
+		/* ":sign unplace * file={fname}" */
+		redraw_buf_later(buf, NOT_VALID);
+		buf_delete_signs(buf);
+	    }
+	    else
+	    {
+		/* ":sign unplace {id} file={fname}" */
+		lnum = buf_delsign(buf, id);
+		update_debug_sign(buf, lnum);
+	    }
+	}
+	    /* idx == SIGNCMD_PLACE */
+	else if (sign_name != NULL)
+	{
+	    for (sp = first_sign; sp != NULL; sp = sp->sn_next)
+		if (STRCMP(sp->sn_name, sign_name) == 0)
+		    break;
+	    if (sp == NULL)
+	    {
+		EMSG2(_("E155: Unknown sign: %s"), sign_name);
+		return;
+	    }
+	    if (lnum > 0)
+		/* ":sign place {id} line={lnum} name={name} file={fname}":
+		 * place a sign */
+		buf_addsign(buf, id, lnum, sp->sn_typenr);
+	    else
+		/* ":sign place {id} file={fname}": change sign type */
+		lnum = buf_change_sign_type(buf, id, sp->sn_typenr);
+	    update_debug_sign(buf, lnum);
+	}
+	else
+	    EMSG(_(e_invarg));
+    }
+}
+
+/*
+ * List one sign.
+ */
+    static void
+sign_list_defined(sp)
+    sign_T	*sp;
+{
+    char_u	*p;
+
+    smsg((char_u *)"sign %s", sp->sn_name);
+    if (sp->sn_icon != NULL)
+    {
+	MSG_PUTS(" icon=");
+	msg_outtrans(sp->sn_icon);
+	MSG_PUTS(_(" (not supported)"));
+    }
+    if (sp->sn_text != NULL)
+    {
+	MSG_PUTS(" text=");
+	msg_outtrans(sp->sn_text);
+    }
+    if (sp->sn_line_hl > 0)
+    {
+	MSG_PUTS(" linehl=");
+	p = get_highlight_name(NULL, sp->sn_line_hl - 1);
+	if (p == NULL)
+	    MSG_PUTS("NONE");
+	else
+	    msg_puts(p);
+    }
+    if (sp->sn_text_hl > 0)
+    {
+	MSG_PUTS(" texthl=");
+	p = get_highlight_name(NULL, sp->sn_text_hl - 1);
+	if (p == NULL)
+	    MSG_PUTS("NONE");
+	else
+	    msg_puts(p);
+    }
+}
+
+/*
+ * Undefine a sign and free its memory.
+ */
+    static void
+sign_undefine(sp, sp_prev)
+    sign_T	*sp;
+    sign_T	*sp_prev;
+{
+    vim_free(sp->sn_name);
+    vim_free(sp->sn_icon);
+    vim_free(sp->sn_text);
+    if (sp_prev == NULL)
+	first_sign = sp->sn_next;
+    else
+	sp_prev->sn_next = sp->sn_next;
+    vim_free(sp);
+}
+
+/*
+ * Get highlighting attribute for sign "typenr".
+ * If "line" is TRUE: line highl, if FALSE: text highl.
+ */
+    int
+sign_get_attr(typenr, line)
+    int		typenr;
+    int		line;
+{
+    sign_T	*sp;
+
+    for (sp = first_sign; sp != NULL; sp = sp->sn_next)
+	if (sp->sn_typenr == typenr)
+	{
+	    if (line)
+	    {
+		if (sp->sn_line_hl > 0)
+		    return syn_id2attr(sp->sn_line_hl);
+	    }
+	    else
+	    {
+		if (sp->sn_text_hl > 0)
+		    return syn_id2attr(sp->sn_text_hl);
+	    }
+	    break;
+	}
+    return 0;
+}
+
+/*
+ * Get text mark for sign "typenr".
+ * Returns NULL if there isn't one.
+ */
+    char_u *
+sign_get_text(typenr)
+    int		typenr;
+{
+    sign_T	*sp;
+
+    for (sp = first_sign; sp != NULL; sp = sp->sn_next)
+	if (sp->sn_typenr == typenr)
+	    return sp->sn_text;
+    return NULL;
+}
+
+
+/*
+ * Get the name of a sign by its typenr.
+ */
+    char_u *
+sign_typenr2name(typenr)
+    int		typenr;
+{
+    sign_T	*sp;
+
+    for (sp = first_sign; sp != NULL; sp = sp->sn_next)
+	if (sp->sn_typenr == typenr)
+	    return sp->sn_name;
+    return (char_u *)_("[Deleted]");
+}
+
+#if defined(EXITFREE) || defined(PROTO)
+/*
+ * Undefine/free all signs.
+ */
+    void
+free_signs()
+{
+    while (first_sign != NULL)
+	sign_undefine(first_sign, NULL);
+}
+#endif
+
+static enum
+{
+    EXP_SUBCMD,		/* expand :sign sub-commands */
+    EXP_DEFINE,		/* expand :sign define {name} args */
+    EXP_PLACE,		/* expand :sign place {id} args */
+    EXP_UNPLACE,	/* expand :sign unplace" */
+    EXP_SIGN_NAMES	/* expand with name of placed signs */
+} expand_what;
+
+/*
+ * Function given to ExpandGeneric() to obtain the sign command
+ * expansion.
+ */
+char_u * get_sign_name(expand_T *xp, int idx)
+{
+    sign_T	*sp;
+    int		current_idx;
+
+    switch (expand_what)
+    {
+    case EXP_SUBCMD:
+	return (char_u *)cmds[idx];
+    case EXP_DEFINE:
+	{
+	    char *define_arg[] =
+	    {
+		"icon=", "linehl=", "text=", "texthl=", NULL
+	    };
+	    return (char_u *)define_arg[idx];
+	}
+    case EXP_PLACE:
+	{
+	    char *place_arg[] =
+	    {
+		"line=", "name=", "file=", "buffer=", NULL
+	    };
+	    return (char_u *)place_arg[idx];
+	}
+    case EXP_UNPLACE:
+	{
+	    char *unplace_arg[] = { "file=", "buffer=", NULL };
+	    return (char_u *)unplace_arg[idx];
+	}
+    case EXP_SIGN_NAMES:
+	/* Complete with name of signs already defined */
+	current_idx = 0;
+	for (sp = first_sign; sp != NULL; sp = sp->sn_next)
+	    if (current_idx++ == idx)
+		return sp->sn_name;
+	return NULL;
+    default:
+	return NULL;
+    }
+}
+
+/*
+ * Handle command line completion for :sign command.
+ */
+    void
+set_context_in_sign_cmd(xp, arg)
+    expand_T	*xp;
+    char_u	*arg;
+{
+    char_u	*p;
+    char_u	*end_subcmd;
+    char_u	*last;
+    int		cmd_idx;
+    char_u	*begin_subcmd_args;
+
+    /* Default: expand subcommands. */
+    xp->xp_context = EXPAND_SIGN;
+    expand_what = EXP_SUBCMD;
+    xp->xp_pattern = arg;
+
+    end_subcmd = skiptowhite(arg);
+    if (*end_subcmd == NUL)
+	/* expand subcmd name
+	 * :sign {subcmd}<CTRL-D>*/
+	return;
+
+    cmd_idx = sign_cmd_idx(arg, end_subcmd);
+
+    /* :sign {subcmd} {subcmd_args}
+     *		      |
+     *		      begin_subcmd_args */
+    begin_subcmd_args = skipwhite(end_subcmd);
+    p = skiptowhite(begin_subcmd_args);
+    if (*p == NUL)
+    {
+	/*
+	 * Expand first argument of subcmd when possible.
+	 * For ":jump {id}" and ":unplace {id}", we could
+	 * possibly expand the ids of all signs already placed.
+	 */
+	xp->xp_pattern = begin_subcmd_args;
+	switch (cmd_idx)
+	{
+	    case SIGNCMD_LIST:
+	    case SIGNCMD_UNDEFINE:
+		/* :sign list <CTRL-D>
+		 * :sign undefine <CTRL-D> */
+		expand_what = EXP_SIGN_NAMES;
+		break;
+	    default:
+		xp->xp_context = EXPAND_NOTHING;
+	}
+	return;
+    }
+
+    /* expand last argument of subcmd */
+
+    /* :sign define {name} {args}...
+     *		    |
+     *		    p */
+
+    /* Loop until reaching last argument. */
+    do
+    {
+	p = skipwhite(p);
+	last = p;
+	p = skiptowhite(p);
+    } while (*p != NUL);
+
+    p = vim_strchr(last, '=');
+
+    /* :sign define {name} {args}... {last}=
+     *				     |	   |
+     *				  last	   p */
+    if (p == NUL)
+    {
+        /* Expand last argument name (before equal sign). */
+        xp->xp_pattern = last;
+        switch (cmd_idx)
+        {
+            case SIGNCMD_DEFINE:
+                expand_what = EXP_DEFINE;
+                break;
+            case SIGNCMD_PLACE:
+                expand_what = EXP_PLACE;
+                break;
+            case SIGNCMD_JUMP:
+            case SIGNCMD_UNPLACE:
+                expand_what = EXP_UNPLACE;
+                break;
+            default:
+                xp->xp_context = EXPAND_NOTHING;
+        }
+    }
+    else
+    {
+        /* Expand last argument value (after equal sign). */
+        xp->xp_pattern = p + 1;
+        switch (cmd_idx)
+        {
+            case SIGNCMD_DEFINE:
+                if (STRNCMP(last, "texthl", p - last) == 0 ||
+                        STRNCMP(last, "linehl", p - last) == 0)
+                    xp->xp_context = EXPAND_HIGHLIGHT;
+                else if (STRNCMP(last, "icon", p - last) == 0)
+                    xp->xp_context = EXPAND_FILES;
+                else
+                    xp->xp_context = EXPAND_NOTHING;
+                break;
+            case SIGNCMD_PLACE:
+                if (STRNCMP(last, "name", p - last) == 0)
+                    expand_what = EXP_SIGN_NAMES;
+                else
+                    xp->xp_context = EXPAND_NOTHING;
+                break;
+            default:
+                xp->xp_context = EXPAND_NOTHING;
+        }
+    }
+}
 

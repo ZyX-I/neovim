@@ -29,12 +29,14 @@
 #include "mark.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "move.h"
 #include "normal.h"
 #include "option.h"
+#include "path.h"
 #include "regexp.h"
 #include "screen.h"
 #include "term.h"
@@ -363,7 +365,7 @@ int pat_has_uppercase(char_u *pat)
         p += 2;
       else
         p += 1;
-    } else if (MB_ISUPPER(*p))
+    } else if (vim_isupper(*p))
       return TRUE;
     else
       ++p;
@@ -4093,7 +4095,7 @@ find_pattern_in_path (
             i = old_files;
           if (i == max_path_depth)
             break;
-          if (fullpathcmp(new_fname, files[i].name, TRUE) & FPC_SAME) {
+          if (path_full_compare(new_fname, files[i].name, TRUE) & kEqualFiles) {
             if (type != CHECK_PATH &&
                 action == ACTION_SHOW_ALL && files[i].matched) {
               msg_putchar('\n');                    /* cursor below last one */

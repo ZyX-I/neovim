@@ -94,10 +94,12 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "memory.h"
 #include "crypt.h"
 #include "garray.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "quickfix.h"
 #include "screen.h"
 #include "sha256.h"
@@ -718,7 +720,7 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
       undo_file_name = vim_strnsave(ffname, (int)(STRLEN(ffname) + 5));
       if (undo_file_name == NULL)
         break;
-      p = gettail(undo_file_name);
+      p = path_tail(undo_file_name);
       memmove(p + 1, p, STRLEN(p) + 1);
       *p = '.';
       STRCAT(p, ".un~");
@@ -2417,7 +2419,7 @@ void ex_undolist(exarg_T *eap)
    */
   mark = ++lastmark;
   nomark = ++lastmark;
-  ga_init2(&ga, (int)sizeof(char *), 20);
+  ga_init(&ga, (int)sizeof(char *), 20);
 
   uhp = curbuf->b_u_oldhead;
   while (uhp != NULL) {
@@ -2496,7 +2498,6 @@ void ex_undolist(exarg_T *eap)
  */
 static void u_add_time(char_u *buf, size_t buflen, time_t tt)
 {
-#ifdef HAVE_STRFTIME
   struct tm   *curtime;
 
   if (time(NULL) - tt >= 100) {
@@ -2508,7 +2509,6 @@ static void u_add_time(char_u *buf, size_t buflen, time_t tt)
       /* longer ago */
       (void)strftime((char *)buf, buflen, "%Y/%m/%d %H:%M:%S", curtime);
   } else
-#endif
   vim_snprintf((char *)buf, buflen, _("%ld seconds ago"),
       (long)(time(NULL) - tt));
 }

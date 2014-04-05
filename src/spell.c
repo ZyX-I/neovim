@@ -298,6 +298,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "spell.h"
@@ -313,6 +314,7 @@
 #include "hashtab.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -320,6 +322,7 @@
 #include "normal.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "regexp.h"
 #include "screen.h"
 #include "search.h"
@@ -962,37 +965,20 @@ static void close_spellbuf(buf_T *buf);
  * differ from what the .spl file uses.
  * These must not be called with negative number!
  */
-# if defined(HAVE_WCHAR_H)
-#  include <wchar.h>        /* for towupper() and towlower() */
-# endif
+#include <wchar.h>        /* for towupper() and towlower() */
 /* Multi-byte implementation.  For Unicode we can call utf_*(), but don't do
  * that for ASCII, because we don't want to use 'casemap' here.  Otherwise use
- * the "w" library function for characters above 255 if available. */
-# ifdef HAVE_TOWLOWER
-#  define SPELL_TOFOLD(c) (enc_utf8 && (c) >= 128 ? utf_fold(c) \
-                           : (c) < \
-                           256 ? (int)spelltab.st_fold[c] : (int)towlower(c))
-# else
-#  define SPELL_TOFOLD(c) (enc_utf8 && (c) >= 128 ? utf_fold(c) \
-                           : (c) < 256 ? (int)spelltab.st_fold[c] : (c))
-# endif
+ * the "w" library function for characters above 255. */
+#define SPELL_TOFOLD(c) (enc_utf8 && (c) >= 128 ? utf_fold(c) \
+                         : (c) < \
+                         256 ? (int)spelltab.st_fold[c] : (int)towlower(c))
 
-# ifdef HAVE_TOWUPPER
-#  define SPELL_TOUPPER(c) (enc_utf8 && (c) >= 128 ? utf_toupper(c) \
-                            : (c) < \
-                            256 ? (int)spelltab.st_upper[c] : (int)towupper(c))
-# else
-#  define SPELL_TOUPPER(c) (enc_utf8 && (c) >= 128 ? utf_toupper(c) \
-                            : (c) < 256 ? (int)spelltab.st_upper[c] : (c))
-# endif
+#define SPELL_TOUPPER(c) (enc_utf8 && (c) >= 128 ? utf_toupper(c) \
+                          : (c) < \
+                          256 ? (int)spelltab.st_upper[c] : (int)towupper(c))
 
-# ifdef HAVE_ISWUPPER
-#  define SPELL_ISUPPER(c) (enc_utf8 && (c) >= 128 ? utf_isupper(c) \
-                            : (c) < 256 ? spelltab.st_isu[c] : iswupper(c))
-# else
-#  define SPELL_ISUPPER(c) (enc_utf8 && (c) >= 128 ? utf_isupper(c) \
-                            : (c) < 256 ? spelltab.st_isu[c] : (FALSE))
-# endif
+#define SPELL_ISUPPER(c) (enc_utf8 && (c) >= 128 ? utf_isupper(c) \
+                          : (c) < 256 ? spelltab.st_isu[c] : iswupper(c))
 
 
 static char *e_format = N_("E759: Format error in spell file");
@@ -2380,8 +2366,8 @@ static slang_T *slang_alloc(char_u *lang)
   if (lp != NULL) {
     if (lang != NULL)
       lp->sl_name = vim_strsave(lang);
-    ga_init2(&lp->sl_rep, sizeof(fromto_T), 10);
-    ga_init2(&lp->sl_repsal, sizeof(fromto_T), 10);
+    ga_init(&lp->sl_rep, sizeof(fromto_T), 10);
+    ga_init(&lp->sl_repsal, sizeof(fromto_T), 10);
     lp->sl_compmax = MAXWLEN;
     lp->sl_compsylmax = MAXWLEN;
     hash_init(&lp->sl_wordcount);
@@ -2595,7 +2581,7 @@ spell_load_file (
       goto endFAIL;
 
     /* Check for .add.spl (_add.spl for VMS). */
-    lp->sl_add = strstr((char *)gettail(fname), SPL_FNAME_ADD) != NULL;
+    lp->sl_add = strstr((char *)path_tail(fname), SPL_FNAME_ADD) != NULL;
   } else
     lp = old_lp;
 
@@ -2979,7 +2965,7 @@ static int read_sal_section(FILE *fd, slang_T *slang)
     return SP_TRUNCERROR;
 
   gap = &slang->sl_sal;
-  ga_init2(gap, sizeof(salitem_T), 10);
+  ga_init(gap, sizeof(salitem_T), 10);
   if (ga_grow(gap, cnt + 1) == FAIL)
     return SP_OTHERERROR;
 
@@ -3282,7 +3268,7 @@ static int read_compound(FILE *fd, slang_T *slang, int len)
     gap = &slang->sl_comppat;
     c = get2c(fd);                                      /* <comppatcount> */
     todo -= 2;
-    ga_init2(gap, sizeof(char_u *), c);
+    ga_init(gap, sizeof(char_u *), c);
     if (ga_grow(gap, c) == OK)
       while (--c >= 0) {
         ((char_u **)(gap->ga_data))[gap->ga_len++] =
@@ -3439,7 +3425,7 @@ static int init_syl_tab(slang_T *slang)
   int l;
   syl_item_T  *syl;
 
-  ga_init2(&slang->sl_syl_items, sizeof(syl_item_T), 4);
+  ga_init(&slang->sl_syl_items, sizeof(syl_item_T), 4);
   p = vim_strchr(slang->sl_syllable, '/');
   while (p != NULL) {
     *p++ = NUL;
@@ -3535,7 +3521,7 @@ static int set_sofo(slang_T *lp, char_u *from, char_u *to)
      * The list contains from-to pairs with a terminating NUL.
      * sl_sal_first[] is used for latin1 "from" characters. */
     gap = &lp->sl_sal;
-    ga_init2(gap, sizeof(int *), 1);
+    ga_init(gap, sizeof(int *), 1);
     if (ga_grow(gap, 256) == FAIL)
       return SP_OTHERERROR;
     memset(gap->ga_data, 0, sizeof(int *) * 256);
@@ -3860,7 +3846,7 @@ char_u *did_set_spelllang(win_T *wp)
     return NULL;
   recursive = TRUE;
 
-  ga_init2(&ga, sizeof(langp_T), 2);
+  ga_init(&ga, sizeof(langp_T), 2);
   clear_midword(wp);
 
   /* Make a copy of 'spelllang', the SpellFileMissing autocommands may change
@@ -3890,7 +3876,7 @@ char_u *did_set_spelllang(win_T *wp)
       filename = TRUE;
 
       /* Locate a region and remove it from the file name. */
-      p = vim_strchr(gettail(lang), '_');
+      p = vim_strchr(path_tail(lang), '_');
       if (p != NULL && ASCII_ISALPHA(p[1]) && ASCII_ISALPHA(p[2])
           && !ASCII_ISALPHA(p[3])) {
         vim_strncpy(region_cp, p + 1, 2);
@@ -3902,7 +3888,7 @@ char_u *did_set_spelllang(win_T *wp)
 
       /* Check if we loaded this language before. */
       for (slang = first_lang; slang != NULL; slang = slang->sl_next)
-        if (fullpathcmp(lang, slang->sl_fname, FALSE) == FPC_SAME)
+        if (path_full_compare(lang, slang->sl_fname, FALSE) == kEqualFiles)
           break;
     } else {
       filename = FALSE;
@@ -3947,7 +3933,7 @@ char_u *did_set_spelllang(win_T *wp)
      * Loop over the languages, there can be several files for "lang".
      */
     for (slang = first_lang; slang != NULL; slang = slang->sl_next)
-      if (filename ? fullpathcmp(lang, slang->sl_fname, FALSE) == FPC_SAME
+      if (filename ? path_full_compare(lang, slang->sl_fname, FALSE) == kEqualFiles
           : STRICMP(lang, slang->sl_name) == 0) {
         region_mask = REGION_ALL;
         if (!filename && region != NULL) {
@@ -4003,7 +3989,7 @@ char_u *did_set_spelllang(win_T *wp)
       /* If it was already found above then skip it. */
       for (c = 0; c < ga.ga_len; ++c) {
         p = LANGP_ENTRY(ga, c)->lp_slang->sl_fname;
-        if (p != NULL && fullpathcmp(spf_name, p, FALSE) == FPC_SAME)
+        if (p != NULL && path_full_compare(spf_name, p, FALSE) == kEqualFiles)
           break;
       }
       if (c < ga.ga_len)
@@ -4012,7 +3998,7 @@ char_u *did_set_spelllang(win_T *wp)
 
     /* Check if it was loaded already. */
     for (slang = first_lang; slang != NULL; slang = slang->sl_next)
-      if (fullpathcmp(spf_name, slang->sl_fname, FALSE) == FPC_SAME)
+      if (path_full_compare(spf_name, slang->sl_fname, FALSE) == kEqualFiles)
         break;
     if (slang == NULL) {
       /* Not loaded, try loading it now.  The language name includes the
@@ -4021,7 +4007,7 @@ char_u *did_set_spelllang(win_T *wp)
       if (round == 0)
         STRCPY(lang, "internal wordlist");
       else {
-        vim_strncpy(lang, gettail(spf_name), MAXWLEN);
+        vim_strncpy(lang, path_tail(spf_name), MAXWLEN);
         p = vim_strchr(lang, '.');
         if (p != NULL)
           *p = NUL;             /* truncate at ".encoding.add" */
@@ -4349,7 +4335,7 @@ spell_reload_one (
   int didit = FALSE;
 
   for (slang = first_lang; slang != NULL; slang = slang->sl_next) {
-    if (fullpathcmp(fname, slang->sl_fname, FALSE) == FPC_SAME) {
+    if (path_full_compare(fname, slang->sl_fname, FALSE) == kEqualFiles) {
       slang_clear(slang);
       if (spell_load_file(fname, NULL, slang, FALSE) == NULL)
         /* reloading failed, clear the language */
@@ -7694,7 +7680,7 @@ static void spell_make_sugfile(spellinfo_T *spin, char_u *wfname)
    * It might have been done already by spell_reload_one().
    */
   for (slang = first_lang; slang != NULL; slang = slang->sl_next)
-    if (fullpathcmp(wfname, slang->sl_fname, FALSE) == FPC_SAME)
+    if (path_full_compare(wfname, slang->sl_fname, FALSE) == kEqualFiles)
       break;
   if (slang == NULL) {
     spell_message(spin, (char_u *)_("Reading back spell file..."));
@@ -7874,7 +7860,7 @@ static int sug_maketable(spellinfo_T *spin)
 
   /* Use a buffer to store the line info, avoids allocating many small
    * pieces of memory. */
-  ga_init2(&ga, 1, 100);
+  ga_init(&ga, 1, 100);
 
   /* recursively go through the tree */
   if (sug_filltable(spin, spin->si_foldroot->wn_sibling, 0, &ga) == -1)
@@ -8174,12 +8160,12 @@ mkspell (
   spin.si_ascii = ascii;
   spin.si_followup = TRUE;
   spin.si_rem_accents = TRUE;
-  ga_init2(&spin.si_rep, (int)sizeof(fromto_T), 20);
-  ga_init2(&spin.si_repsal, (int)sizeof(fromto_T), 20);
-  ga_init2(&spin.si_sal, (int)sizeof(fromto_T), 20);
-  ga_init2(&spin.si_map, (int)sizeof(char_u), 100);
-  ga_init2(&spin.si_comppat, (int)sizeof(char_u *), 20);
-  ga_init2(&spin.si_prefcond, (int)sizeof(char_u *), 50);
+  ga_init(&spin.si_rep, (int)sizeof(fromto_T), 20);
+  ga_init(&spin.si_repsal, (int)sizeof(fromto_T), 20);
+  ga_init(&spin.si_sal, (int)sizeof(fromto_T), 20);
+  ga_init(&spin.si_map, (int)sizeof(char_u), 100);
+  ga_init(&spin.si_comppat, (int)sizeof(char_u *), 20);
+  ga_init(&spin.si_prefcond, (int)sizeof(char_u *), 50);
   hash_init(&spin.si_commonwords);
   spin.si_newcompID = 127;      /* start compound ID at first maximum */
 
@@ -8214,17 +8200,17 @@ mkspell (
           fnames[0], spin.si_ascii ? (char_u *)"ascii" : spell_enc());
 
     /* Check for .ascii.spl. */
-    if (strstr((char *)gettail(wfname), SPL_FNAME_ASCII) != NULL)
+    if (strstr((char *)path_tail(wfname), SPL_FNAME_ASCII) != NULL)
       spin.si_ascii = TRUE;
 
     /* Check for .add.spl. */
-    if (strstr((char *)gettail(wfname), SPL_FNAME_ADD) != NULL)
+    if (strstr((char *)path_tail(wfname), SPL_FNAME_ADD) != NULL)
       spin.si_add = TRUE;
   }
 
   if (incount <= 0)
     EMSG(_(e_invarg));          /* need at least output and input names */
-  else if (vim_strchr(gettail(wfname), '_') != NULL)
+  else if (vim_strchr(path_tail(wfname), '_') != NULL)
     EMSG(_("E751: Output file name must not have region name"));
   else if (incount > 8)
     EMSG(_("E754: Only up to 8 regions supported"));
@@ -8253,7 +8239,7 @@ mkspell (
 
       if (incount > 1) {
         len = (int)STRLEN(innames[i]);
-        if (STRLEN(gettail(innames[i])) < 5
+        if (STRLEN(path_tail(innames[i])) < 5
             || innames[i][len - 3] != '_') {
           EMSG2(_("E755: Invalid region in %s"), innames[i]);
           goto theend;
@@ -8522,7 +8508,7 @@ spell_add_word (
        * file.  We may need to create the "spell" directory first.  We
        * already checked the runtime directory is writable in
        * init_spellfile(). */
-      if (!dir_of_file_exists(fname) && (p = gettail_sep(fname)) != fname) {
+      if (!dir_of_file_exists(fname) && (p = path_tail_with_sep(fname)) != fname) {
         int c = *p;
 
         /* The directory doesn't exist.  Try creating it and opening
@@ -8600,7 +8586,7 @@ static void init_spellfile(void)
       else
         /* Copy the path from 'runtimepath' to buf[]. */
         copy_option_part(&rtp, buf, MAXPATHL, ",");
-      if (filewritable(buf) == 2) {
+      if (os_file_is_writable((char *)buf) == 2) {
         /* Use the first language name from 'spelllang' and the
          * encoding used in the first loaded .spl file. */
         if (aspath)
@@ -8610,7 +8596,7 @@ static void init_spellfile(void)
           /* Create the "spell" directory if it doesn't exist yet. */
           l = (int)STRLEN(buf);
           vim_snprintf((char *)buf + l, MAXPATHL - l, "/spell");
-          if (filewritable(buf) != 2)
+          if (os_file_is_writable((char *)buf) != 2)
             vim_mkdir(buf, 0755);
 
           l = (int)STRLEN(buf);
@@ -8622,7 +8608,7 @@ static void init_spellfile(void)
                 ->lp_slang->sl_fname;
         vim_snprintf((char *)buf + l, MAXPATHL - l, ".%s.add",
             fname != NULL
-            && strstr((char *)gettail(fname), ".ascii.") != NULL
+            && strstr((char *)path_tail(fname), ".ascii.") != NULL
             ? (char_u *)"ascii" : spell_enc());
         set_option_value((char_u *)"spellfile", 0L, buf, OPT_LOCAL);
         break;
@@ -8699,13 +8685,13 @@ void init_spell_chartab(void)
   } else {
     /* Rough guess: use locale-dependent library functions. */
     for (i = 128; i < 256; ++i) {
-      if (MB_ISUPPER(i)) {
+      if (vim_isupper(i)) {
         spelltab.st_isw[i] = TRUE;
         spelltab.st_isu[i] = TRUE;
-        spelltab.st_fold[i] = MB_TOLOWER(i);
-      } else if (MB_ISLOWER(i))   {
+        spelltab.st_fold[i] = vim_tolower(i);
+      } else if (vim_islower(i))   {
         spelltab.st_isw[i] = TRUE;
-        spelltab.st_upper[i] = MB_TOUPPER(i);
+        spelltab.st_upper[i] = vim_toupper(i);
       }
     }
   }
@@ -9422,7 +9408,7 @@ spell_suggest_list (
   spell_find_suggest(word, 0, &sug, maxcount, FALSE, need_cap, interactive);
 
   /* Make room in "gap". */
-  ga_init2(gap, sizeof(char_u *), sug.su_ga.ga_len + 1);
+  ga_init(gap, sizeof(char_u *), sug.su_ga.ga_len + 1);
   if (ga_grow(gap, sug.su_ga.ga_len) == OK) {
     for (i = 0; i < sug.su_ga.ga_len; ++i) {
       stp = &SUG(sug.su_ga, i);
@@ -9474,8 +9460,8 @@ spell_find_suggest (
    * Set the info in "*su".
    */
   memset(su, 0, sizeof(suginfo_T));
-  ga_init2(&su->su_ga, (int)sizeof(suggest_T), 10);
-  ga_init2(&su->su_sga, (int)sizeof(suggest_T), 10);
+  ga_init(&su->su_ga, (int)sizeof(suggest_T), 10);
+  ga_init(&su->su_sga, (int)sizeof(suggest_T), 10);
   if (*badptr == NUL)
     return;
   hash_init(&su->su_banned);
@@ -9832,7 +9818,7 @@ someerror:
 
       /* Read all the wordnr lists into the buffer, one NUL terminated
        * list per line. */
-      ga_init2(&ga, 1, 100);
+      ga_init(&ga, 1, 100);
       for (wordnr = 0; wordnr < wcount; ++wordnr) {
         ga.ga_len = 0;
         for (;; ) {
@@ -11651,7 +11637,7 @@ static void score_combine(suginfo_T *su)
   check_suggestions(su, &su->su_sga);
   (void)cleanup_suggestions(&su->su_sga, su->su_maxscore, su->su_maxcount);
 
-  ga_init2(&ga, (int)sizeof(suginfo_T), 1);
+  ga_init(&ga, (int)sizeof(suginfo_T), 1);
   if (ga_grow(&ga, su->su_ga.ga_len + su->su_sga.ga_len) == FAIL)
     return;
 

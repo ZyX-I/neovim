@@ -40,10 +40,12 @@
 #include "main.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "garray.h"
+#include "path.h"
 #include "screen.h"
 #include "syntax.h"
 #include "term.h"
@@ -52,6 +54,8 @@
 #include "os/time.h"
 #include "os/event.h"
 #include "os/input.h"
+#include "os/shell.h"
+#include "os/signal.h"
 
 #include "os_unixx.h"       /* unix includes for os_unix.c only */
 
@@ -70,28 +74,6 @@ static int selinux_enabled = -1;
 extern int select(int, fd_set *, fd_set *, fd_set *, struct timeval *);
 #endif
 
-
-
-/*
- * end of autoconf section. To be extended...
- */
-
-/* Are the following #ifdefs still required? And why? Is that for X11? */
-
-#if defined(ESIX) || defined(M_UNIX) && !defined(SCO)
-# ifdef SIGWINCH
-#  undef SIGWINCH
-# endif
-# ifdef TIOCGWINSZ
-#  undef TIOCGWINSZ
-# endif
-#endif
-
-#if defined(SIGWINDOW) && !defined(SIGWINCH)    /* hpux 9.01 has it */
-# define SIGWINCH SIGWINDOW
-#endif
-
-
 static int get_x11_title(int);
 static int get_x11_icon(int);
 
@@ -99,8 +81,6 @@ static char_u   *oldtitle = NULL;
 static int did_set_title = FALSE;
 static char_u   *oldicon = NULL;
 static int did_set_icon = FALSE;
-
-static void may_core_dump(void);
 
 #ifdef HAVE_UNION_WAIT
 typedef union wait waitstatus;
@@ -111,132 +91,12 @@ static pid_t wait4pid(pid_t, waitstatus *);
 
 static int RealWaitForChar(int, long, int *);
 
-
-static void handle_resize(void);
-
-#if defined(SIGWINCH)
-static RETSIGTYPE sig_winch SIGPROTOARG;
-#endif
-#if defined(SIGINT)
-static RETSIGTYPE catch_sigint SIGPROTOARG;
-#endif
-#if defined(SIGPWR)
-static RETSIGTYPE catch_sigpwr SIGPROTOARG;
-#endif
-static RETSIGTYPE deathtrap SIGPROTOARG;
-
-static void catch_int_signal(void);
-static void set_signals(void);
-static void catch_signals
-    (RETSIGTYPE (*func_deadly)(), RETSIGTYPE (*func_other)());
 static int have_wildcard(int, char_u **);
 static int have_dollars(int, char_u **);
 
 static int save_patterns(int num_pat, char_u **pat, int *num_file,
                          char_u ***file);
 
-#ifndef SIG_ERR
-# define SIG_ERR        ((RETSIGTYPE (*)())-1)
-#endif
-
-/* volatile because it is used in signal handler sig_winch(). */
-static volatile int do_resize = FALSE;
-static char_u   *extra_shell_arg = NULL;
-static int show_shell_mess = TRUE;
-/* volatile because it is used in signal handler deathtrap(). */
-static volatile int deadly_signal = 0;      /* The signal we caught */
-
-
-#ifdef SYS_SIGLIST_DECLARED
-/*
- * I have seen
- *  extern char *_sys_siglist[NSIG];
- * on Irix, Linux, NetBSD and Solaris. It contains a nice list of strings
- * that describe the signals. That is nearly what we want here.  But
- * autoconf does only check for sys_siglist (without the underscore), I
- * do not want to change everything today.... jw.
- * This is why AC_DECL_SYS_SIGLIST is commented out in configure.in
- */
-#endif
-
-static struct signalinfo {
-  int sig;              /* Signal number, eg. SIGSEGV etc */
-  char    *name;        /* Signal name (not char_u!). */
-  char deadly;          /* Catch as a deadly signal? */
-} signal_info[] =
-{
-#ifdef SIGHUP
-  {SIGHUP,        "HUP",      TRUE},
-#endif
-#ifdef SIGQUIT
-  {SIGQUIT,       "QUIT",     TRUE},
-#endif
-#ifdef SIGILL
-  {SIGILL,        "ILL",      TRUE},
-#endif
-#ifdef SIGTRAP
-  {SIGTRAP,       "TRAP",     TRUE},
-#endif
-#ifdef SIGABRT
-  {SIGABRT,       "ABRT",     TRUE},
-#endif
-#ifdef SIGEMT
-  {SIGEMT,        "EMT",      TRUE},
-#endif
-#ifdef SIGFPE
-  {SIGFPE,        "FPE",      TRUE},
-#endif
-#ifdef SIGBUS
-  {SIGBUS,        "BUS",      TRUE},
-#endif
-#if defined(SIGSEGV)
-  /* MzScheme uses SEGV in its garbage collector */
-  {SIGSEGV,       "SEGV",     TRUE},
-#endif
-#ifdef SIGSYS
-  {SIGSYS,        "SYS",      TRUE},
-#endif
-#ifdef SIGALRM
-  {SIGALRM,       "ALRM",     FALSE},   /* Perl's alarm() can trigger it */
-#endif
-#ifdef SIGTERM
-  {SIGTERM,       "TERM",     TRUE},
-#endif
-#if defined(SIGVTALRM)
-  {SIGVTALRM,     "VTALRM",   TRUE},
-#endif
-#if defined(SIGPROF) && !defined(WE_ARE_PROFILING)
-  /* MzScheme uses SIGPROF for its own needs; On Linux with profiling
-   * this makes Vim exit.  WE_ARE_PROFILING is defined in Makefile.  */
-  {SIGPROF,       "PROF",     TRUE},
-#endif
-#ifdef SIGXCPU
-  {SIGXCPU,       "XCPU",     TRUE},
-#endif
-#ifdef SIGXFSZ
-  {SIGXFSZ,       "XFSZ",     TRUE},
-#endif
-#ifdef SIGUSR1
-  {SIGUSR1,       "USR1",     TRUE},
-#endif
-#if defined(SIGUSR2) && !defined(FEAT_SYSMOUSE)
-  /* Used for sysmouse handling */
-  {SIGUSR2,       "USR2",     TRUE},
-#endif
-#ifdef SIGINT
-  {SIGINT,        "INT",      FALSE},
-#endif
-#ifdef SIGWINCH
-  {SIGWINCH,      "WINCH",    FALSE},
-#endif
-#ifdef SIGTSTP
-  {SIGTSTP,       "TSTP",     FALSE},
-#endif
-#ifdef SIGPIPE
-  {SIGPIPE,       "PIPE",     FALSE},
-#endif
-  {-1,            "Unknown!", FALSE}
-};
 
 /*
  * Write s[len] to the screen.
@@ -248,99 +108,6 @@ void mch_write(char_u *s, int len)
     RealWaitForChar(read_cmd_fd, p_wd, NULL);
 }
 
-static void handle_resize()
-{
-  do_resize = FALSE;
-  shell_resized();
-}
-
-
-#if defined(HAVE_SIGALTSTACK) || defined(HAVE_SIGSTACK)
-/*
- * Support for using the signal stack.
- * This helps when we run out of stack space, which causes a SIGSEGV.  The
- * signal handler then must run on another stack, since the normal stack is
- * completely full.
- */
-
-
-#ifndef SIGSTKSZ
-# define SIGSTKSZ 8000    /* just a guess of how much stack is needed... */
-#endif
-
-# ifdef HAVE_SIGALTSTACK
-static stack_t sigstk;                  /* for sigaltstack() */
-# else
-static struct sigstack sigstk;          /* for sigstack() */
-# endif
-
-static void init_signal_stack(void);
-static char *signal_stack;
-
-static void init_signal_stack()
-{
-  if (signal_stack != NULL) {
-# ifdef HAVE_SIGALTSTACK
-    sigstk.ss_sp = signal_stack;
-    sigstk.ss_size = SIGSTKSZ;
-    sigstk.ss_flags = 0;
-    (void)sigaltstack(&sigstk, NULL);
-# else
-    sigstk.ss_sp = signal_stack;
-    if (stack_grows_downwards)
-      sigstk.ss_sp += SIGSTKSZ - 1;
-    sigstk.ss_onstack = 0;
-    (void)sigstack(&sigstk, NULL);
-# endif
-  }
-}
-
-#endif
-
-/*
- * We need correct prototypes for a signal function, otherwise mean compilers
- * will barf when the second argument to signal() is ``wrong''.
- * Let me try it with a few tricky defines from my own osdef.h	(jw).
- */
-#if defined(SIGWINCH)
-static RETSIGTYPE
-sig_winch SIGDEFARG(sigarg) {
-  /* this is not required on all systems, but it doesn't hurt anybody */
-  signal(SIGWINCH, (RETSIGTYPE (*)())sig_winch);
-  do_resize = TRUE;
-  SIGRETURN;
-}
-
-#endif
-
-#if defined(SIGINT)
-static RETSIGTYPE
-catch_sigint SIGDEFARG(sigarg) {
-  /* this is not required on all systems, but it doesn't hurt anybody */
-  signal(SIGINT, (RETSIGTYPE (*)())catch_sigint);
-  got_int = TRUE;
-  SIGRETURN;
-}
-
-#endif
-
-#if defined(SIGPWR)
-static RETSIGTYPE
-catch_sigpwr SIGDEFARG(sigarg) {
-  /* this is not required on all systems, but it doesn't hurt anybody */
-  signal(SIGPWR, (RETSIGTYPE (*)())catch_sigpwr);
-  /*
-   * I'm not sure we get the SIGPWR signal when the system is really going
-   * down or when the batteries are almost empty.  Just preserve the swap
-   * files and don't exit, that can't do any harm.
-   */
-  ml_sync_all(FALSE, FALSE);
-  SIGRETURN;
-}
-
-#endif
-
-#if (defined(HAVE_SETJMP_H) && defined(FEAT_LIBCALL)) || defined(PROTO)
 /*
  * A simplistic version of setjmp() that only allows one level of using.
  * Don't call twice before calling mch_endjmp()!.
@@ -363,9 +130,6 @@ catch_sigpwr SIGDEFARG(sigarg) {
  */
 void mch_startjmp()
 {
-#ifdef SIGHASARG
-  lc_signal = 0;
-#endif
   lc_active = TRUE;
 }
 
@@ -373,167 +137,6 @@ void mch_endjmp()
 {
   lc_active = FALSE;
 }
-
-void mch_didjmp()
-{
-# if defined(HAVE_SIGALTSTACK) || defined(HAVE_SIGSTACK)
-  /* On FreeBSD the signal stack has to be reset after using siglongjmp(),
-   * otherwise catching the signal only works once. */
-  init_signal_stack();
-# endif
-}
-
-#endif
-
-/*
- * This function handles deadly signals.
- * It tries to preserve any swap files and exit properly.
- * (partly from Elvis).
- * NOTE: Avoid unsafe functions, such as allocating memory, they can result in
- * a deadlock.
- */
-static RETSIGTYPE
-deathtrap SIGDEFARG(sigarg) {
-  static int entered = 0;           /* count the number of times we got here.
-                                       Note: when memory has been corrupted
-                                       this may get an arbitrary value! */
-#ifdef SIGHASARG
-  int i;
-#endif
-
-#if defined(HAVE_SETJMP_H)
-  /*
-   * Catch a crash in protected code.
-   * Restores the environment saved in lc_jump_env, which looks like
-   * SETJMP() returns 1.
-   */
-  if (lc_active) {
-# if defined(SIGHASARG)
-    lc_signal = sigarg;
-# endif
-    lc_active = FALSE;          /* don't jump again */
-    LONGJMP(lc_jump_env, 1);
-    /* NOTREACHED */
-  }
-#endif
-
-#ifdef SIGHASARG
-# ifdef SIGQUIT
-  /* While in os_delay() we go to cooked mode to allow a CTRL-C to
-   * interrupt us.  But in cooked mode we may also get SIGQUIT, e.g., when
-   * pressing CTRL-\, but we don't want Vim to exit then. */
-  if (in_os_delay && sigarg == SIGQUIT)
-    SIGRETURN;
-# endif
-
-  /* When SIGHUP, SIGQUIT, etc. are blocked: postpone the effect and return
-   * here.  This avoids that a non-reentrant function is interrupted, e.g.,
-   * free().  Calling free() again may then cause a crash. */
-  if (entered == 0
-      && (0
-# ifdef SIGHUP
-          || sigarg == SIGHUP
-# endif
-# ifdef SIGQUIT
-          || sigarg == SIGQUIT
-# endif
-# ifdef SIGTERM
-          || sigarg == SIGTERM
-# endif
-# ifdef SIGPWR
-          || sigarg == SIGPWR
-# endif
-# ifdef SIGUSR1
-          || sigarg == SIGUSR1
-# endif
-# ifdef SIGUSR2
-          || sigarg == SIGUSR2
-# endif
-          )
-      && !vim_handle_signal(sigarg))
-    SIGRETURN;
-#endif
-
-  /* Remember how often we have been called. */
-  ++entered;
-
-  /* Set the v:dying variable. */
-  set_vim_var_nr(VV_DYING, (long)entered);
-
-#ifdef SIGHASARG
-  /* try to find the name of this signal */
-  for (i = 0; signal_info[i].sig != -1; i++)
-    if (sigarg == signal_info[i].sig)
-      break;
-  deadly_signal = sigarg;
-#endif
-
-  full_screen = FALSE;          /* don't write message to the GUI, it might be
-                                 * part of the problem... */
-  /*
-   * If something goes wrong after entering here, we may get here again.
-   * When this happens, give a message and try to exit nicely (resetting the
-   * terminal mode, etc.)
-   * When this happens twice, just exit, don't even try to give a message,
-   * stack may be corrupt or something weird.
-   * When this still happens again (or memory was corrupted in such a way
-   * that "entered" was clobbered) use _exit(), don't try freeing resources.
-   */
-  if (entered >= 3) {
-    reset_signals();            /* don't catch any signals anymore */
-    may_core_dump();
-    if (entered >= 4)
-      _exit(8);
-    exit(7);
-  }
-  if (entered == 2) {
-    /* No translation, it may call malloc(). */
-    OUT_STR("Vim: Double signal, exiting\n");
-    out_flush();
-    getout(1);
-  }
-
-  /* No translation, it may call malloc(). */
-#ifdef SIGHASARG
-  sprintf((char *)IObuff, "Vim: Caught deadly signal %s\n",
-      signal_info[i].name);
-#else
-  sprintf((char *)IObuff, "Vim: Caught deadly signal\n");
-#endif
-
-  /* Preserve files and exit.  This sets the really_exiting flag to prevent
-   * calling free(). */
-  preserve_exit();
-
-
-  SIGRETURN;
-}
-
-#if defined(_REENTRANT) && defined(SIGCONT)
-/*
- * On Solaris with multi-threading, suspending might not work immediately.
- * Catch the SIGCONT signal, which will be used as an indication whether the
- * suspending has been done or not.
- *
- * On Linux, signal is not always handled immediately either.
- * See https://bugs.launchpad.net/bugs/291373
- *
- * volatile because it is used in signal handler sigcont_handler().
- */
-static volatile int sigcont_received;
-static RETSIGTYPE sigcont_handler SIGPROTOARG;
-
-/*
- * signal handler for SIGCONT
- */
-static RETSIGTYPE
-sigcont_handler SIGDEFARG(sigarg) {
-  sigcont_received = TRUE;
-  SIGRETURN;
-}
-
-#endif
-
 
 /*
  * If the machine has job control, use it to suspend the program,
@@ -591,166 +194,12 @@ void mch_init()
   Rows = 24;
 
   out_flush();
-  set_signals();
 
 #ifdef MACOS_CONVERT
   mac_conv_init();
 #endif
 
   event_init();
-}
-
-static void set_signals()
-{
-#if defined(SIGWINCH)
-  /*
-   * WINDOW CHANGE signal is handled with sig_winch().
-   */
-  signal(SIGWINCH, (RETSIGTYPE (*)())sig_winch);
-#endif
-
-  /*
-   * We want the STOP signal to work, to make mch_suspend() work.
-   * For "rvim" the STOP signal is ignored.
-   */
-#ifdef SIGTSTP
-  signal(SIGTSTP, restricted ? SIG_IGN : SIG_DFL);
-#endif
-#if defined(_REENTRANT) && defined(SIGCONT)
-  signal(SIGCONT, sigcont_handler);
-#endif
-
-  /*
-   * We want to ignore breaking of PIPEs.
-   */
-#ifdef SIGPIPE
-  signal(SIGPIPE, SIG_IGN);
-#endif
-
-#ifdef SIGINT
-  catch_int_signal();
-#endif
-
-  /*
-   * Ignore alarm signals (Perl's alarm() generates it).
-   */
-#ifdef SIGALRM
-  signal(SIGALRM, SIG_IGN);
-#endif
-
-  /*
-   * Catch SIGPWR (power failure?) to preserve the swap files, so that no
-   * work will be lost.
-   */
-#ifdef SIGPWR
-  signal(SIGPWR, (RETSIGTYPE (*)())catch_sigpwr);
-#endif
-
-  /*
-   * Arrange for other signals to gracefully shutdown Vim.
-   */
-  catch_signals(deathtrap, SIG_ERR);
-
-}
-
-#if defined(SIGINT) || defined(PROTO)
-/*
- * Catch CTRL-C (only works while in Cooked mode).
- */
-static void catch_int_signal()
-{
-  signal(SIGINT, (RETSIGTYPE (*)())catch_sigint);
-}
-
-#endif
-
-void reset_signals()
-{
-  catch_signals(SIG_DFL, SIG_DFL);
-#if defined(_REENTRANT) && defined(SIGCONT)
-  /* SIGCONT isn't in the list, because its default action is ignore */
-  signal(SIGCONT, SIG_DFL);
-#endif
-}
-
-static void catch_signals(
-        RETSIGTYPE (*func_deadly)(),
-        RETSIGTYPE (*func_other)()
-        )
-{
-  int i;
-
-  for (i = 0; signal_info[i].sig != -1; i++)
-    if (signal_info[i].deadly) {
-#if defined(HAVE_SIGALTSTACK) && defined(HAVE_SIGACTION)
-      struct sigaction sa;
-
-      /* Setup to use the alternate stack for the signal function. */
-      sa.sa_handler = func_deadly;
-      sigemptyset(&sa.sa_mask);
-# if defined(__linux__) && defined(_REENTRANT)
-      /* On Linux, with glibc compiled for kernel 2.2, there is a bug in
-       * thread handling in combination with using the alternate stack:
-       * pthread library functions try to use the stack pointer to
-       * identify the current thread, causing a SEGV signal, which
-       * recursively calls deathtrap() and hangs. */
-      sa.sa_flags = 0;
-# else
-      sa.sa_flags = SA_ONSTACK;
-# endif
-      sigaction(signal_info[i].sig, &sa, NULL);
-#else
-# if defined(HAVE_SIGALTSTACK) && defined(HAVE_SIGVEC)
-      struct sigvec sv;
-
-      /* Setup to use the alternate stack for the signal function. */
-      sv.sv_handler = func_deadly;
-      sv.sv_mask = 0;
-      sv.sv_flags = SV_ONSTACK;
-      sigvec(signal_info[i].sig, &sv, NULL);
-# else
-      signal(signal_info[i].sig, func_deadly);
-# endif
-#endif
-    } else if (func_other != SIG_ERR)
-      signal(signal_info[i].sig, func_other);
-}
-
-/*
- * Handling of SIGHUP, SIGQUIT and SIGTERM:
- * "when" == a signal:       when busy, postpone and return FALSE, otherwise
- *			     return TRUE
- * "when" == SIGNAL_BLOCK:   Going to be busy, block signals
- * "when" == SIGNAL_UNBLOCK: Going to wait, unblock signals, use postponed
- *			     signal
- * Returns TRUE when Vim should exit.
- */
-int vim_handle_signal(int sig)
-{
-  static int got_signal = 0;
-  static int blocked = TRUE;
-
-  switch (sig) {
-  case SIGNAL_BLOCK:   blocked = TRUE;
-    break;
-
-  case SIGNAL_UNBLOCK: blocked = FALSE;
-    if (got_signal != 0) {
-      kill(getpid(), got_signal);
-      got_signal = 0;
-    }
-    break;
-
-  default:             if (!blocked)
-      return TRUE;                              /* exit! */
-    got_signal = sig;
-#ifdef SIGPWR
-    if (sig != SIGPWR)
-#endif
-    got_int = TRUE;                                 /* break any loops */
-    break;
-  }
-  return FALSE;
 }
 
 /*
@@ -1155,26 +604,11 @@ int mch_nodetype(char_u *name)
 
 void mch_early_init()
 {
-  /*
-   * Setup an alternative stack for signals.  Helps to catch signals when
-   * running out of stack space.
-   * Use of sigaltstack() is preferred, it's more portable.
-   * Ignore any errors.
-   */
-#if defined(HAVE_SIGALTSTACK) || defined(HAVE_SIGSTACK)
-  signal_stack = (char *)alloc(SIGSTKSZ);
-  init_signal_stack();
-#endif
-
   time_init();
 }
 
 #if defined(EXITFREE) || defined(PROTO)
 void mch_free_mem()          {
-# if defined(HAVE_SIGALTSTACK) || defined(HAVE_SIGSTACK)
-  vim_free(signal_stack);
-  signal_stack = NULL;
-# endif
   vim_free(oldtitle);
   vim_free(oldicon);
 }
@@ -1241,7 +675,6 @@ void mch_exit(int r)
   }
   out_flush();
   ml_close_all(TRUE);           /* remove all memfiles */
-  may_core_dump();
 
 #ifdef MACOS_CONVERT
   mac_conv_cleanup();
@@ -1254,14 +687,6 @@ void mch_exit(int r)
 #endif
 
   exit(r);
-}
-
-static void may_core_dump()
-{
-  if (deadly_signal != 0) {
-    signal(deadly_signal, SIG_DFL);
-    kill(getpid(), deadly_signal);      /* Die using the signal we caught */
-  }
 }
 
 void mch_settmode(int tmode)
@@ -1680,16 +1105,13 @@ waitstatus  *status;
   return wait_pid;
 }
 
-int mch_call_shell(cmd, options)
-char_u      *cmd;
-int options;                    /* SHELL_*, see vim.h */
+int mch_call_shell(char_u *cmd, ShellOpts opts, char_u *extra_shell_arg)
 {
   int tmode = cur_tmode;
 
 # define EXEC_FAILED 122    /* Exit code when shell didn't execute.  Don't use
                                127, some shells use that already */
 
-  char_u      *newcmd = NULL;
   pid_t pid;
   pid_t wpid = 0;
   pid_t wait_pid = 0;
@@ -1700,100 +1122,29 @@ int options;                    /* SHELL_*, see vim.h */
 # endif
   int retval = -1;
   char        **argv = NULL;
-  int argc;
-  char_u      *p_shcf_copy = NULL;
   int i;
-  char_u      *p;
-  int inquote;
-  int pty_master_fd = -1;                   /* for pty's */
   int fd_toshell[2];                    /* for pipes */
   int fd_fromshell[2];
   int pipe_error = FALSE;
   char envbuf[50];
   int did_settmode = FALSE;             /* settmode(TMODE_RAW) called */
 
-  newcmd = vim_strsave(p_sh);
-  if (newcmd == NULL)           /* out of memory */
-    goto error;
-
   out_flush();
-  if (options & SHELL_COOKED)
+  if (opts & kShellOptCooked)
     settmode(TMODE_COOK);               /* set to normal mode */
 
-  /*
-   * Do this loop twice:
-   * 1: find number of arguments
-   * 2: separate them and build argv[]
-   */
-  for (i = 0; i < 2; ++i) {
-    p = newcmd;
-    inquote = FALSE;
-    argc = 0;
-    for (;; ) {
-      if (i == 1)
-        argv[argc] = (char *)p;
-      ++argc;
-      while (*p && (inquote || (*p != ' ' && *p != TAB))) {
-        if (*p == '"')
-          inquote = !inquote;
-        ++p;
-      }
-      if (*p == NUL)
-        break;
-      if (i == 1)
-        *p++ = NUL;
-      p = skipwhite(p);
-    }
-    if (argv == NULL) {
-      /*
-       * Account for possible multiple args in p_shcf.
-       */
-      p = p_shcf;
-      for (;; ) {
-        p = skiptowhite(p);
-        if (*p == NUL)
-          break;
-        ++argc;
-        p = skipwhite(p);
-      }
+  argv = shell_build_argv(cmd, extra_shell_arg);
 
-      argv = (char **)alloc((unsigned)((argc + 4) * sizeof(char *)));
-      if (argv == NULL)             /* out of memory */
-        goto error;
-    }
+  if (argv == NULL) {
+    goto error;
   }
-  if (cmd != NULL) {
-    char_u  *s;
 
-    if (extra_shell_arg != NULL)
-      argv[argc++] = (char *)extra_shell_arg;
-
-    /* Break 'shellcmdflag' into white separated parts.  This doesn't
-     * handle quoted strings, they are very unlikely to appear. */
-    p_shcf_copy = alloc((unsigned)STRLEN(p_shcf) + 1);
-    if (p_shcf_copy == NULL)        /* out of memory */
-      goto error;
-    s = p_shcf_copy;
-    p = p_shcf;
-    while (*p != NUL) {
-      argv[argc++] = (char *)s;
-      while (*p && *p != ' ' && *p != TAB)
-        *s++ = *p++;
-      *s++ = NUL;
-      p = skipwhite(p);
-    }
-
-    argv[argc++] = (char *)cmd;
-  }
-  argv[argc] = NULL;
-
-  /*
+ /*
    * For the GUI, when writing the output into the buffer and when reading
    * input from the buffer: Try using a pseudo-tty to get the stdin/stdout
    * of the executed command into the Vim window.  Or use a pipe.
    */
-  if ((options & (SHELL_READ|SHELL_WRITE))
-      ) {
+  if (opts & (kShellOptRead|kShellOptWrite)) {
     {
       pipe_error = (pipe(fd_toshell) < 0);
       if (!pipe_error) {                            /* pipe create OK */
@@ -1814,8 +1165,7 @@ int options;                    /* SHELL_*, see vim.h */
 
     if ((pid = fork()) == -1) {         /* maybe we should use vfork() */
       MSG_PUTS(_("\nCannot fork\n"));
-      if ((options & (SHELL_READ|SHELL_WRITE))
-          ) {
+      if (opts & (kShellOptRead | kShellOptWrite)) {
         {
           close(fd_toshell[0]);
           close(fd_toshell[1]);
@@ -1824,9 +1174,9 @@ int options;                    /* SHELL_*, see vim.h */
         }
       }
     } else if (pid == 0) {    /* child */
-      reset_signals();                  /* handle signals normally */
+      signal_stop();                  /* handle signals normally */
 
-      if (!show_shell_mess || (options & SHELL_EXPAND)) {
+      if (opts & (kShellOptHideMess | kShellOptExpand)) {
         int fd;
 
         /*
@@ -1859,8 +1209,7 @@ int options;                    /* SHELL_*, see vim.h */
           /* Don't need this now that we've duplicated it */
           close(fd);
         }
-      } else if ((options & (SHELL_READ|SHELL_WRITE))
-                 ) {
+      } else if (opts & (kShellOptRead|kShellOptWrite)) {
 
 # ifdef HAVE_SETSID
         /* Create our own process group, so that the child and all its
@@ -1922,16 +1271,14 @@ int options;                    /* SHELL_*, see vim.h */
        * While child is running, ignore terminating signals.
        * Do catch CTRL-C, so that "got_int" is set.
        */
-      catch_signals(SIG_IGN, SIG_ERR);
-      catch_int_signal();
+      signal_reject_deadly();
 
       /*
        * For the GUI we redirect stdin, stdout and stderr to our window.
        * This is also used to pipe stdin/stdout to/from the external
        * command.
        */
-      if ((options & (SHELL_READ|SHELL_WRITE))
-          ) {
+      if (opts & (kShellOptRead|kShellOptWrite)) {
 # define BUFLEN 100             /* length for buffer, pseudo tty limit is 128 */
         char_u buffer[BUFLEN + 1];
         int buffer_off = 0;                     /* valid bytes in buffer[] */
@@ -1940,7 +1287,6 @@ int options;                    /* SHELL_*, see vim.h */
         int len;
         int p_more_save;
         int old_State;
-        int c;
         int toshell_fd;
         int fromshell_fd;
         garray_T ga;
@@ -1977,7 +1323,7 @@ int options;                    /* SHELL_*, see vim.h */
         old_State = State;
         State = EXTERNCMD;              /* don't redraw at window resize */
 
-        if ((options & SHELL_WRITE) && toshell_fd >= 0) {
+        if ((opts & kShellOptWrite) && toshell_fd >= 0) {
           /* Fork a process that will write the lines to the
            * external program. */
           if ((wpid = fork()) == -1) {
@@ -2033,136 +1379,15 @@ int options;                    /* SHELL_*, see vim.h */
           }
         }
 
-        if (options & SHELL_READ)
-          ga_init2(&ga, 1, BUFLEN);
+        if (opts & kShellOptRead)
+          ga_init(&ga, 1, BUFLEN);
 
         noread_cnt = 0;
 # if defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)
         gettimeofday(&start_tv, NULL);
 # endif
         for (;; ) {
-          /*
-           * Check if keys have been typed, write them to the child
-           * if there are any.
-           * Don't do this if we are expanding wild cards (would eat
-           * typeahead).
-           * Don't do this when filtering and terminal is in cooked
-           * mode, the shell command will handle the I/O.  Avoids
-           * that a typed password is echoed for ssh or gpg command.
-           * Don't get characters when the child has already
-           * finished (wait_pid == 0).
-           * Don't read characters unless we didn't get output for a
-           * while (noread_cnt > 4), avoids that ":r !ls" eats
-           * typeahead.
-           */
           len = 0;
-          if (!(options & SHELL_EXPAND)
-              && ((options &
-                   (SHELL_READ|SHELL_WRITE|SHELL_COOKED))
-                  != (SHELL_READ|SHELL_WRITE|SHELL_COOKED)
-                  )
-              && wait_pid == 0
-              && (ta_len > 0 || noread_cnt > 4)) {
-            if (ta_len == 0) {
-              /* Get extra characters when we don't have any.
-               * Reset the counter and timer. */
-              noread_cnt = 0;
-# if defined(HAVE_GETTIMEOFDAY) && defined(HAVE_SYS_TIME_H)
-              gettimeofday(&start_tv, NULL);
-# endif
-              len = ui_inchar(ta_buf, BUFLEN, 10L, 0);
-            }
-            if (ta_len > 0 || len > 0) {
-              /*
-               * For pipes:
-               * Check for CTRL-C: send interrupt signal to child.
-               * Check for CTRL-D: EOF, close pipe to child.
-               */
-              if (len == 1 && (pty_master_fd < 0 || cmd != NULL)) {
-# ifdef SIGINT
-                /*
-                 * Send SIGINT to the child's group or all
-                 * processes in our group.
-                 */
-                if (ta_buf[ta_len] == Ctrl_C
-                    || ta_buf[ta_len] == intr_char) {
-#  ifdef HAVE_SETSID
-                  kill(-pid, SIGINT);
-#  else
-                  kill(0, SIGINT);
-#  endif
-                  if (wpid > 0)
-                    kill(wpid, SIGINT);
-                }
-# endif
-                if (pty_master_fd < 0 && toshell_fd >= 0
-                    && ta_buf[ta_len] == Ctrl_D) {
-                  close(toshell_fd);
-                  toshell_fd = -1;
-                }
-              }
-
-              /* replace K_BS by <BS> and K_DEL by <DEL> */
-              for (i = ta_len; i < ta_len + len; ++i) {
-                if (ta_buf[i] == CSI && len - i > 2) {
-                  c = TERMCAP2KEY(ta_buf[i + 1], ta_buf[i + 2]);
-                  if (c == K_DEL || c == K_KDEL || c == K_BS) {
-                    memmove(ta_buf + i + 1, ta_buf + i + 3,
-                        (size_t)(len - i - 2));
-                    if (c == K_DEL || c == K_KDEL)
-                      ta_buf[i] = DEL;
-                    else
-                      ta_buf[i] = Ctrl_H;
-                    len -= 2;
-                  }
-                } else if (ta_buf[i] == '\r')
-                  ta_buf[i] = '\n';
-                if (has_mbyte)
-                  i += (*mb_ptr2len_len)(ta_buf + i,
-                                         ta_len + len - i) - 1;
-              }
-
-              /*
-               * For pipes: echo the typed characters.
-               * For a pty this does not seem to work.
-               */
-              if (pty_master_fd < 0) {
-                for (i = ta_len; i < ta_len + len; ++i) {
-                  if (ta_buf[i] == '\n' || ta_buf[i] == '\b')
-                    msg_putchar(ta_buf[i]);
-                  else if (has_mbyte) {
-                    int l = (*mb_ptr2len)(ta_buf + i);
-
-                    msg_outtrans_len(ta_buf + i, l);
-                    i += l - 1;
-                  } else
-                    msg_outtrans_len(ta_buf + i, 1);
-                }
-                windgoto(msg_row, msg_col);
-                out_flush();
-              }
-
-              ta_len += len;
-
-              /*
-               * Write the characters to the child, unless EOF has
-               * been typed for pipes.  Write one character at a
-               * time, to avoid losing too much typeahead.
-               * When writing buffer lines, drop the typed
-               * characters (only check for CTRL-C).
-               */
-              if (options & SHELL_WRITE)
-                ta_len = 0;
-              else if (toshell_fd >= 0) {
-                len = write(toshell_fd, (char *)ta_buf, (size_t)1);
-                if (len > 0) {
-                  ta_len -= len;
-                  memmove(ta_buf, ta_buf + len, ta_len);
-                }
-              }
-            }
-          }
-
           if (got_int) {
             /* CTRL-C sends a signal to the child, we ignore it
              * ourselves */
@@ -2194,7 +1419,7 @@ int options;                    /* SHELL_*, see vim.h */
               goto finished;
 
             noread_cnt = 0;
-            if (options & SHELL_READ) {
+            if (opts & kShellOptRead) {
               /* Do NUL -> NL translation, append NL separated
                * lines to the current buffer. */
               for (i = 0; i < len; ++i) {
@@ -2205,44 +1430,6 @@ int options;                    /* SHELL_*, see vim.h */
                 else
                   ga_append(&ga, buffer[i]);
               }
-            } else if (has_mbyte) {
-              int l;
-
-              len += buffer_off;
-              buffer[len] = NUL;
-
-              /* Check if the last character in buffer[] is
-               * incomplete, keep these bytes for the next
-               * round. */
-              for (p = buffer; p < buffer + len; p += l) {
-                l = mb_cptr2len(p);
-                if (l == 0)
-                  l = 1;                    /* NUL byte? */
-                else if (MB_BYTE2LEN(*p) != l)
-                  break;
-              }
-              if (p == buffer) {                /* no complete character */
-                /* avoid getting stuck at an illegal byte */
-                if (len >= 12)
-                  ++p;
-                else {
-                  buffer_off = len;
-                  continue;
-                }
-              }
-              c = *p;
-              *p = NUL;
-              msg_puts(buffer);
-              if (p < buffer + len) {
-                *p = c;
-                buffer_off = (buffer + len) - p;
-                memmove(buffer, p, buffer_off);
-                continue;
-              }
-              buffer_off = 0;
-            } else {
-              buffer[len] = NUL;
-              msg_puts(buffer);
             }
 
             windgoto(msg_row, msg_col);
@@ -2297,7 +1484,7 @@ int options;                    /* SHELL_*, see vim.h */
         }
 finished:
         p_more = p_more_save;
-        if (options & SHELL_READ) {
+        if (opts & kShellOptRead) {
           if (ga.ga_len > 0) {
             append_ga_line(&ga);
             /* remember that the NL was missing */
@@ -2343,7 +1530,7 @@ finished:
       if (tmode == TMODE_RAW)
         settmode(TMODE_RAW);
       did_settmode = TRUE;
-      set_signals();
+      signal_accept_deadly();
 
       if (WIFEXITED(status)) {
         /* LINTED avoid "bitwise operation on signed value" */
@@ -2353,7 +1540,7 @@ finished:
             MSG_PUTS(_("\nCannot execute shell "));
             msg_outtrans(p_sh);
             msg_putchar('\n');
-          } else if (!(options & SHELL_SILENT)) {
+          } else if (!(opts & kShellOptSilent)) {
             MSG_PUTS(_("\nshell returned "));
             msg_outnum((long)retval);
             msg_putchar('\n');
@@ -2363,15 +1550,13 @@ finished:
         MSG_PUTS(_("\nCommand terminated\n"));
     }
   }
-  vim_free(argv);
-  vim_free(p_shcf_copy);
+  shell_free_argv(argv);
 
 error:
   if (!did_settmode)
     if (tmode == TMODE_RAW)
       settmode(TMODE_RAW);              /* set to raw mode */
   resettitle();
-  vim_free(newcmd);
 
   return retval;
 }
@@ -2444,9 +1629,7 @@ select_eintr:
 # ifdef EINTR
     if (ret == -1 && errno == EINTR) {
       /* Check whether window has been resized, EINTR may be caused by
-       * SIGWINCH. */
-      if (do_resize)
-        handle_resize();
+       * SIGWINCH. FIXME this is broken for now */
 
       /* Interrupted by a signal, need to try again.  We ignore msec
        * here, because we do want to check even after a timeout if
@@ -2485,22 +1668,6 @@ select_eintr:
   return ret > 0;
 }
 
-#ifndef NO_EXPANDPATH
-/*
- * Expand a path into all matching files and/or directories.  Handles "*",
- * "?", "[a-z]", "**", etc.
- * "path" has backslashes before chars that are not to be expanded.
- * Returns the number of matches found.
- */
-int mch_expandpath(gap, path, flags)
-garray_T    *gap;
-char_u      *path;
-int flags;                      /* EW_* flags */
-{
-  return unix_expandpath(gap, path, 0, flags, FALSE);
-}
-#endif
-
 /*
  * mch_expand_wildcards() - this code does wild-card pattern matching using
  * the shell
@@ -2534,6 +1701,8 @@ int flags;                      /* EW_* flags */
   size_t len;
   char_u      *p;
   int dir;
+  char_u *extra_shell_arg = NULL;
+  ShellOpts shellopts = kShellOptExpand | kShellOptSilent;
   /*
    * This is the non-OS/2 implementation (really Unix).
    */
@@ -2613,7 +1782,7 @@ int flags;                      /* EW_* flags */
     else if (STRCMP(p_sh + len - 3, "zsh") == 0)
       shell_style = STYLE_PRINT;
   }
-  if (shell_style == STYLE_ECHO && strstr((char *)gettail(p_sh),
+  if (shell_style == STYLE_ECHO && strstr((char *)path_tail(p_sh),
           "sh") != NULL)
     shell_style = STYLE_VIMGLOB;
 
@@ -2710,8 +1879,11 @@ int flags;                      /* EW_* flags */
       }
       *p = NUL;
     }
-  if (flags & EW_SILENT)
-    show_shell_mess = FALSE;
+
+  if (flags & EW_SILENT) {
+    shellopts |= kShellOptHideMess;
+  }
+
   if (ampersent)
     STRCAT(command, "&");               /* put the '&' after the redirection */
 
@@ -2734,15 +1906,17 @@ int flags;                      /* EW_* flags */
   /*
    * execute the shell command
    */
-  i = call_shell(command, SHELL_EXPAND | SHELL_SILENT);
+  i = call_shell(
+      command,
+      shellopts,
+      extra_shell_arg
+      );
 
   /* When running in the background, give it some time to create the temp
    * file, but don't wait for it to finish. */
   if (ampersent)
     os_delay(10L, TRUE);
 
-  extra_shell_arg = NULL;               /* cleanup */
-  show_shell_mess = TRUE;
   vim_free(command);
 
   if (i != 0) {                         /* mch_call_shell() failed */
@@ -3035,29 +2209,6 @@ char_u  **file;
   return FALSE;
 }
 
-#ifndef HAVE_RENAME
-/*
- * Scaled-down version of rename(), which is missing in Xenix.
- * This version can only move regular files and will fail if the
- * destination exists.
- */
-int mch_rename(src, dest)
-const char *src, *dest;
-{
-  struct stat st;
-
-  if (stat(dest, &st) >= 0)         /* fail if destination exists */
-    return -1;
-  if (link(src, dest) != 0)         /* link file to new name */
-    return -1;
-  if (mch_remove(src) == 0)         /* delete link to old name */
-    return 0;
-  return -1;
-}
-#endif /* !HAVE_RENAME */
-
-
-
 #if defined(FEAT_LIBCALL) || defined(PROTO)
 typedef char_u * (*STRPROCSTR)(char_u *);
 typedef char_u * (*INTPROCSTR)(int);
@@ -3113,7 +2264,6 @@ int         *number_result;
 
   /* If the handle is valid, try to get the function address. */
   if (hinstLib != NULL) {
-# ifdef HAVE_SETJMP_H
     /*
      * Catch a crash when calling the library function.  For example when
      * using a number where a string pointer is expected.
@@ -3121,12 +2271,10 @@ int         *number_result;
     mch_startjmp();
     if (SETJMP(lc_jump_env) != 0) {
       success = FALSE;
-#  if defined(USE_DLOPEN)
+# if defined(USE_DLOPEN)
       dlerr = NULL;
-#  endif
-      mch_didjmp();
-    } else
 # endif
+    } else
     {
       retval_str = NULL;
       retval_int = 0;
@@ -3181,9 +2329,8 @@ int         *number_result;
         *string_result = vim_strsave(retval_str);
     }
 
-# ifdef HAVE_SETJMP_H
     mch_endjmp();
-#  ifdef SIGHASARG
+# ifdef SIGHASARG
     if (lc_signal != 0) {
       int i;
 
@@ -3193,7 +2340,6 @@ int         *number_result;
           break;
       EMSG2("E368: got SIG%s in libcall()", signal_info[i].name);
     }
-#  endif
 # endif
 
 # if defined(USE_DLOPEN)
@@ -3216,8 +2362,6 @@ int         *number_result;
   return OK;
 }
 #endif
-
-
 
 
 

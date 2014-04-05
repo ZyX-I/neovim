@@ -54,12 +54,14 @@
 #include "mark.h"
 #include "mbyte.h"
 #include "memfile.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "crypt.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "screen.h"
 #include "sha256.h"
 #include "spell.h"
@@ -1588,7 +1590,7 @@ recover_names (
         } else
 #endif
         {
-          tail = gettail(fname_res);
+          tail = path_tail(fname_res);
           tail = concat_fnames(dir_name, tail, TRUE);
         }
         if (tail == NULL)
@@ -1645,7 +1647,7 @@ recover_names (
     if (curbuf->b_ml.ml_mfp != NULL
         && (p = curbuf->b_ml.ml_mfp->mf_fname) != NULL) {
       for (i = 0; i < num_files; ++i)
-        if (fullpathcmp(p, files[i], TRUE) & FPC_SAME) {
+        if (path_full_compare(p, files[i], TRUE) & kEqualFiles) {
           /* Remove the name from files[i].  Move further entries
            * down.  When the array becomes empty free it here, since
            * FreeWild() won't be called below. */
@@ -1681,7 +1683,7 @@ recover_names (
           /* print the swap file name */
           msg_outnum((long)++file_count);
           MSG_PUTS(".    ");
-          msg_puts(gettail(files[i]));
+          msg_puts(path_tail(files[i]));
           msg_putchar('\n');
           (void)swapfile_info(files[i]);
         }
@@ -3397,7 +3399,7 @@ int resolve_symlink(char_u *fname, char_u *buf)
     else {
       char_u *tail;
 
-      tail = gettail(tmp);
+      tail = path_tail(tmp);
       if (STRLEN(tail) + STRLEN(buf) >= MAXPATHL)
         return FAIL;
       STRCPY(tail, buf);
@@ -3491,7 +3493,7 @@ get_file_in_dir (
   char_u      *retval;
   int save_char;
 
-  tail = gettail(fname);
+  tail = path_tail(fname);
 
   if (dname[0] == '.' && dname[1] == NUL)
     retval = vim_strsave(fname);
@@ -3696,10 +3698,10 @@ findswapname (
        * It either contains two dots, is longer than 8 chars, or starts
        * with a dot.
        */
-      tail = gettail(buf_fname);
+      tail = path_tail(buf_fname);
       if (       vim_strchr(tail, '.') != NULL
                  || STRLEN(tail) > (size_t)8
-                 || *gettail(fname) == '.') {
+                 || *path_tail(fname) == '.') {
         fname2 = alloc(n + 2);
         if (fname2 != NULL) {
           STRCPY(fname2, fname);
@@ -3709,7 +3711,7 @@ findswapname (
            */
           if (vim_strchr(tail, '.') != NULL)
             fname2[n - 1] = 'x';
-          else if (*gettail(fname) == '.') {
+          else if (*path_tail(fname) == '.') {
             fname2[n] = 'x';
             fname2[n + 1] = NUL;
           } else
@@ -3834,8 +3836,8 @@ findswapname (
              * have a different mountpoint.
              */
             if (b0.b0_flags & B0_SAME_DIR) {
-              if (fnamecmp(gettail(buf->b_ffname),
-                      gettail(b0.b0_fname)) != 0
+              if (fnamecmp(path_tail(buf->b_ffname),
+                      path_tail(b0.b0_fname)) != 0
                   || !same_directory(fname, buf->b_ffname)) {
 #ifdef CHECK_INODE
                 /* Symlinks may point to the same file even
@@ -4371,7 +4373,7 @@ static void ml_updatechunk(buf_T *buf, linenr_T line, long len, int updtype)
     if (buf->b_ml.ml_usedchunks + 1 >= buf->b_ml.ml_numchunks) {
       buf->b_ml.ml_numchunks = buf->b_ml.ml_numchunks * 3 / 2;
       buf->b_ml.ml_chunksize = (chunksize_T *)
-                               realloc(buf->b_ml.ml_chunksize,
+                               xrealloc(buf->b_ml.ml_chunksize,
           sizeof(chunksize_T) * buf->b_ml.ml_numchunks);
       if (buf->b_ml.ml_chunksize == NULL) {
         /* Hmmmm, Give up on offset for this buffer */

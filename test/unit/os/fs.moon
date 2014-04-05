@@ -19,6 +19,9 @@ int os_can_exe(char_u *name);
 int32_t os_getperm(char_u *name);
 int os_setperm(char_u *name, long perm);
 int os_file_exists(const char_u *name);
+int os_file_is_readonly(char *fname);
+int os_file_is_writable(const char *name);
+int os_rename(const char_u *path, const char_u *new_path);
 ]]
 
 -- import constants parsed by ffi
@@ -282,6 +285,12 @@ describe 'fs function', ->
     os_setperm = (filename, perm) ->
       fs.os_setperm (to_cstr filename), perm
 
+    os_file_is_readonly = (filename) ->
+      fs.os_file_is_readonly (to_cstr filename)
+
+    os_file_is_writable = (filename) ->
+      fs.os_file_is_writable (to_cstr filename)
+
     bit_set = (number, check_bit) ->
       if 0 == (bit.band number, check_bit) then false else true
 
@@ -322,12 +331,74 @@ describe 'fs function', ->
         perm = ffi.C.kS_IXUSR
         eq FAIL, (os_setperm 'non-existing-file', perm)
 
-  describe 'os_file_exists', ->
+    describe 'os_file_is_readonly', ->
+      it 'returns TRUE if the file is readonly', ->
+        perm = os_getperm 'unit-test-directory/test.file'
+        perm_orig = perm
+        perm = unset_bit perm, ffi.C.kS_IWUSR
+        perm = unset_bit perm, ffi.C.kS_IWGRP
+        perm = unset_bit perm, ffi.C.kS_IWOTH
+        eq OK, (os_setperm 'unit-test-directory/test.file', perm)
+        eq TRUE, os_file_is_readonly 'unit-test-directory/test.file'
+        eq OK, (os_setperm 'unit-test-directory/test.file', perm_orig)
+
+      it 'returns FALSE if the file is writable', ->
+        eq FALSE, os_file_is_readonly 'unit-test-directory/test.file'
+
+    describe 'os_file_is_writable', ->
+      it 'returns FALSE if the file is readonly', ->
+        perm = os_getperm 'unit-test-directory/test.file'
+        perm_orig = perm
+        perm = unset_bit perm, ffi.C.kS_IWUSR
+        perm = unset_bit perm, ffi.C.kS_IWGRP
+        perm = unset_bit perm, ffi.C.kS_IWOTH
+        eq OK, (os_setperm 'unit-test-directory/test.file', perm)
+        eq FALSE, os_file_is_writable 'unit-test-directory/test.file'
+        eq OK, (os_setperm 'unit-test-directory/test.file', perm_orig)
+
+      it 'returns TRUE if the file is writable', ->
+        eq TRUE, os_file_is_writable 'unit-test-directory/test.file'
+
+      it 'returns 2 when given a folder with rights to write into', ->
+        eq 2, os_file_is_writable 'unit-test-directory'
+
+  describe 'file operations', ->
     os_file_exists = (filename) ->
       fs.os_file_exists (to_cstr filename)
 
-    it 'returns FALSE when given a non-existing file', ->
-      eq FALSE, (os_file_exists 'non-existing-file')
+    os_rename = (path, new_path) ->
+      fs.os_rename (to_cstr path), (to_cstr new_path)
 
-    it 'returns TRUE when given an existing file', ->
-      eq TRUE, (os_file_exists 'unit-test-directory/test.file')
+    describe 'os_file_exists', ->
+      it 'returns FALSE when given a non-existing file', ->
+        eq FALSE, (os_file_exists 'non-existing-file')
+
+      it 'returns TRUE when given an existing file', ->
+        eq TRUE, (os_file_exists 'unit-test-directory/test.file')
+
+    describe 'os_rename', ->
+      test = 'unit-test-directory/test.file'
+      not_exist = 'unit-test-directory/not_exist.file'
+
+      it 'can rename file if destination file does not exist', ->
+        eq OK, (os_rename test, not_exist)
+        eq FALSE, (os_file_exists test)
+        eq TRUE, (os_file_exists not_exist)
+        eq OK, (os_rename not_exist, test)  -- restore test file
+
+      it 'fail if source file does not exist', ->
+        eq FAIL, (os_rename not_exist, test)
+  
+      it 'can overwrite destination file if it exists', ->
+        other = 'unit-test-directory/other.file'
+        file = io.open other, 'w'
+        file\write 'other'
+        file\flush!
+        file\close!
+
+        eq OK, (os_rename other, test)
+        eq FALSE, (os_file_exists other)
+        eq TRUE, (os_file_exists test)
+        file = io.open test, 'r'
+        eq 'other', (file\read '*all')
+        file\close!

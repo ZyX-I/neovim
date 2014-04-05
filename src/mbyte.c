@@ -78,6 +78,7 @@
  */
 
 #include <string.h>
+# include <wchar.h>
 
 #include "vim.h"
 #include "mbyte.h"
@@ -87,6 +88,7 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "memory.h"
 #include "option.h"
 #include "screen.h"
 #include "spell.h"
@@ -94,15 +96,6 @@
 #include "os/os.h"
 
 # define WINBYTE BYTE
-
-
-
-
-#ifdef HAVE_WCHAR_H
-# include <wchar.h>
-#endif
-
-
 
 static int enc_canon_search(char_u *name);
 static int dbcs_char2len(int c);
@@ -2736,7 +2729,7 @@ int utf_toupper(int a)
   if (a < 128 && (cmp_flags & CMP_KEEPASCII))
     return TOUPPER_ASC(a);
 
-#if defined(HAVE_TOWUPPER) && defined(__STDC_ISO_10646__)
+#if defined(__STDC_ISO_10646__)
   /* If towupper() is available and handles Unicode, use it. */
   if (!(cmp_flags & CMP_INTERNAL))
     return towupper(a);
@@ -2766,7 +2759,7 @@ int utf_tolower(int a)
   if (a < 128 && (cmp_flags & CMP_KEEPASCII))
     return TOLOWER_ASC(a);
 
-#if defined(HAVE_TOWLOWER) && defined(__STDC_ISO_10646__)
+#if defined(__STDC_ISO_10646__)
   /* If towlower() is available and handles Unicode, use it. */
   if (!(cmp_flags & CMP_INTERNAL))
     return towlower(a);
@@ -2875,7 +2868,7 @@ int mb_strnicmp(char_u *s1, char_u *s2, size_t nn)
       if (l <= 1) {
         /* Single byte: first check normally, then with ignore case. */
         if (s1[i] != s2[i]) {
-          cdiff = MB_TOLOWER(s1[i]) - MB_TOLOWER(s2[i]);
+          cdiff = vim_tolower(s1[i]) - vim_tolower(s2[i]);
           if (cdiff != 0)
             return cdiff;
         }

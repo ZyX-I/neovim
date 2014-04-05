@@ -14,6 +14,7 @@
 #include <stddef.h>
 
 #include "vim.h"
+#include "memory.h"
 #include "misc2.h"
 #include "types.h"
 #include "charset.h"

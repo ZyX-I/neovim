@@ -50,10 +50,12 @@
 #include "file_search.h"
 #include "charset.h"
 #include "fileio.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "os_unix.h"
+#include "path.h"
 #include "tag.h"
 #include "ui.h"
 #include "window.h"
@@ -317,7 +319,7 @@ vim_findfile_init (
       && (vim_ispathsep(path[1]) || path[1] == NUL)
       && (!tagfile || vim_strchr(p_cpo, CPO_DOTTAG) == NULL)
       && rel_fname != NULL) {
-    int len = (int)(gettail(rel_fname) - rel_fname);
+    int len = (int)(path_tail(rel_fname) - rel_fname);
 
     if (!vim_isAbsName(rel_fname) && len + 1 < MAXPATHL) {
       /* Make the start dir an absolute path name. */
@@ -386,7 +388,7 @@ vim_findfile_init (
         void    *ptr;
 
         helper = walker;
-        ptr = realloc(search_ctx->ffsc_stopdirs_v,
+        ptr = xrealloc(search_ctx->ffsc_stopdirs_v,
             (dircount + 1) * sizeof(char_u *));
         if (ptr)
           search_ctx->ffsc_stopdirs_v = ptr;
@@ -502,7 +504,7 @@ vim_findfile_init (
       STRCAT(ff_expand_buffer, search_ctx->ffsc_fix_path);
       add_pathsep(ff_expand_buffer);
     } else {
-      char_u *p =  gettail(search_ctx->ffsc_fix_path);
+      char_u *p =  path_tail(search_ctx->ffsc_fix_path);
       char_u *wc_path = NULL;
       char_u *temp = NULL;
       int len = 0;
@@ -1121,7 +1123,7 @@ static int ff_wc_equal(char_u *s1, char_u *s2)
     int c1 = PTR2CHAR(s1 + i);
     int c2 = PTR2CHAR(s2 + i);
 
-    if ((p_fic ? MB_TOLOWER(c1) != MB_TOLOWER(c2) : c1 != c2)
+    if ((p_fic ? vim_tolower(c1) != vim_tolower(c2) : c1 != c2)
         && (prev1 != '*' || prev2 != '*'))
       return FAIL;
     prev2 = prev1;
@@ -1504,7 +1506,7 @@ find_file_in_path_option (
             && rel_fname != NULL
             && STRLEN(rel_fname) + l < MAXPATHL) {
           STRCPY(NameBuff, rel_fname);
-          STRCPY(gettail(NameBuff), ff_file_to_find);
+          STRCPY(path_tail(NameBuff), ff_file_to_find);
           l = (int)STRLEN(NameBuff);
         } else {
           STRCPY(NameBuff, ff_file_to_find);

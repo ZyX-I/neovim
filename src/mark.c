@@ -24,11 +24,13 @@
 #include "fold.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
 #include "normal.h"
 #include "option.h"
+#include "path.h"
 #include "quickfix.h"
 #include "search.h"
 #include "term.h"
@@ -941,8 +943,9 @@ void mark_adjust(linenr_T line1, linenr_T line2, long amount, long amount_after)
     qf_mark_adjust(NULL, line1, line2, amount, amount_after);
     /* location lists */
     FOR_ALL_TAB_WINDOWS(tab, win)
-    qf_mark_adjust(win, line1, line2, amount, amount_after);
+        qf_mark_adjust(win, line1, line2, amount, amount_after);
 
+    sign_mark_adjust(line1, line2, amount, amount_after);
   }
 
   /* previous context mark */

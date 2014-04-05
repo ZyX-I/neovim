@@ -28,12 +28,14 @@
 #include "misc1.h"
 #include "misc2.h"
 #include "garray.h"
+#include "memory.h"
 #include "move.h"
 #include "normal.h"
 #include "option.h"
 #include "os_unix.h"
 #include "os/time.h"
 #include "os/input.h"
+#include "os/signal.h"
 #include "screen.h"
 #include "term.h"
 #include "window.h"
@@ -145,7 +147,7 @@ ui_inchar (
   /* If we are going to wait for some time or block... */
   if (wtime == -1 || wtime > 100L) {
     /* ... allow signals to kill us. */
-    (void)vim_handle_signal(SIGNAL_UNBLOCK);
+    signal_accept_deadly();
 
     /* ... there is no need for CTRL-C to interrupt something, don't let
      * it set got_int when it was mapped. */
@@ -161,7 +163,7 @@ ui_inchar (
 
   if (wtime == -1 || wtime > 100L)
     /* block SIGHUP et al. */
-    (void)vim_handle_signal(SIGNAL_BLOCK);
+    signal_reject_deadly();
 
   ctrl_c_interrupts = TRUE;
 
@@ -207,23 +209,6 @@ void ui_suspend(void)
 {
   mch_suspend();
 }
-
-#if !defined(UNIX) || !defined(SIGTSTP) || defined(PROTO) || defined(__BEOS__)
-/*
- * When the OS can't really suspend, call this function to start a shell.
- * This is never called in the GUI.
- */
-void suspend_shell(void)
-{
-  if (*p_sh == NUL)
-    EMSG(_(e_shellempty));
-  else {
-    MSG_PUTS(_("new shell started\n"));
-    do_shell(NULL, 0);
-  }
-}
-
-#endif
 
 /*
  * Try to get the current Vim shell size.  Put the result in Rows and Columns.

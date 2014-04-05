@@ -10,6 +10,7 @@
 
 #include "vim.h"
 #include "types.h"
+#include "memory.h"
 #include "misc2.h"
 #include "charset.h"
 #include "globals.h"
@@ -545,7 +546,7 @@ static int parse_append(char_u **pp,
   int vcol = -1;
   int cur_vcol = -1;
 
-  ga_init2(strs, (int) sizeof(char_u *), 3);
+  ga_init(strs, (int) sizeof(char_u *), 3);
 
   while ((next_line = fgetline(':', cookie, vcol == -1 ? 0 : vcol)) != NULL) {
     first_nonblank = next_line;
@@ -1528,7 +1529,7 @@ static int parse_function(char_u **pp,
 
   p = skipwhite(p + 1);
 
-  ga_init2(args, (int) sizeof(char_u *), 3);
+  ga_init(args, (int) sizeof(char_u *), 3);
 
   while (*p != ')') {
     char *notend_message = N_("E475: Expected end of arguments list");

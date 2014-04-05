@@ -13,6 +13,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "normal.h"
@@ -35,6 +36,7 @@
 #include "main.h"
 #include "mark.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -4496,7 +4498,7 @@ static void nv_ident(cmdarg_T *cap)
       vim_free(buf);
       return;
     }
-    newbuf = (char_u *)realloc(buf, STRLEN(buf) + STRLEN(p) + 1);
+    newbuf = (char_u *)xrealloc(buf, STRLEN(buf) + STRLEN(p) + 1);
     if (newbuf == NULL) {
       vim_free(buf);
       vim_free(p);
@@ -7478,9 +7480,6 @@ static void nv_open(cmdarg_T *cap)
   else
     n_opencmd(cap);
 }
-
-
-
 
 /*
  * Trigger CursorHold event.

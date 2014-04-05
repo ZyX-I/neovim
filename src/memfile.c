@@ -41,7 +41,9 @@
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "memory.h"
 #include "os_unix.h"
+#include "path.h"
 #include "ui.h"
 
 /*

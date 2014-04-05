@@ -38,6 +38,7 @@
 #include "misc2.h"
 #include "garray.h"
 #include "keymap.h"
+#include "memory.h"
 #include "move.h"
 #include "normal.h"
 #include "option.h"
@@ -4718,9 +4719,7 @@ translate_mapping (
   int cpo_special;
   int cpo_keycode;
 
-  ga_init(&ga);
-  ga.ga_itemsize = 1;
-  ga.ga_growsize = 40;
+  ga_init(&ga, 1, 40);
 
   cpo_bslash = !(cpo_flags&FLAG_CPO_BSLASH);
   cpo_special = !(cpo_flags&FLAG_CPO_SPECI);

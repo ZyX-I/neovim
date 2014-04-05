@@ -16,15 +16,7 @@
 # include <sys/types.h>
 # include <sys/stat.h>
 
-#ifdef HAVE_STDLIB_H
 # include <stdlib.h>
-#endif
-
-
-
-/* On AIX 4.2 there is a conflicting prototype for ioctl() in stropts.h and
- * unistd.h.  This hack should fix that (suggested by Jeff George).
- * But on AIX 4.3 it's alright (suggested by Jake Hamby). */
 
 #ifdef HAVE_UNISTD_H
 # include <unistd.h>
@@ -125,10 +117,10 @@
  * Unix system-dependent file names
  */
 #ifndef SYS_VIMRC_FILE
-# define SYS_VIMRC_FILE "$VIM/vimrc"
+# define SYS_VIMRC_FILE "$VIM/nvimrc"
 #endif
 #ifndef SYS_GVIMRC_FILE
-# define SYS_GVIMRC_FILE "$VIM/gvimrc"
+# define SYS_GVIMRC_FILE "$VIM/ngvimrc"
 #endif
 #ifndef DFLT_HELPFILE
 # define DFLT_HELPFILE  "$VIMRUNTIME/doc/help.txt"
@@ -166,7 +158,7 @@
 
 
 #if !defined(USR_EXRC_FILE2)
-#    define USR_VIMRC_FILE2     "~/.nvim/vimrc"
+#    define USR_VIMRC_FILE2     "~/.nvim/nvimrc"
 #endif
 
 
@@ -175,7 +167,7 @@
 #endif
 
 #ifndef USR_GVIMRC_FILE2
-#   define USR_GVIMRC_FILE2     "~/.nvim/gvimrc"
+#   define USR_GVIMRC_FILE2     "~/.nvim/ngvimrc"
 #endif
 
 
@@ -253,12 +245,6 @@
 #  define DFLT_MAXMEMTOT        (10*1024)    /* use up to 10 Mbyte for Vim */
 # endif
 
-# ifdef HAVE_RENAME
-#  define mch_rename(src, dst) rename(src, dst)
-# else
-int mch_rename(const char *src, const char *dest);
-# endif
-
 #if !defined(S_ISDIR) && defined(S_IFDIR)
 # define        S_ISDIR(m) (((m) & S_IFMT) == S_IFDIR)
 #endif
@@ -280,24 +266,20 @@ int mch_rename(const char *src, const char *dest);
 
 /* Note: Some systems need both string.h and strings.h (Savage).  However,
  * some systems can't handle both, only use string.h in that case. */
-#ifdef HAVE_STRING_H
 # include <string.h>
-#endif
 #if defined(HAVE_STRINGS_H) && !defined(NO_STRINGS_WITH_STRING_H)
 # include <strings.h>
 #endif
 
-#if defined(HAVE_SETJMP_H)
-# include <setjmp.h>
-# ifdef HAVE_SIGSETJMP
-#  define JMP_BUF sigjmp_buf
-#  define SETJMP(x) sigsetjmp((x), 1)
-#  define LONGJMP siglongjmp
-# else
-#  define JMP_BUF jmp_buf
-#  define SETJMP(x) setjmp(x)
-#  define LONGJMP longjmp
-# endif
+#include <setjmp.h>
+#ifdef HAVE_SIGSETJMP
+# define JMP_BUF sigjmp_buf
+# define SETJMP(x) sigsetjmp((x), 1)
+# define LONGJMP siglongjmp
+#else
+# define JMP_BUF jmp_buf
+# define SETJMP(x) setjmp(x)
+# define LONGJMP longjmp
 #endif
 
 #define HAVE_DUP                /* have dup() */

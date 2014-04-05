@@ -12,6 +12,7 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 
 #include "vim.h"
 #include "eval.h"
@@ -34,6 +35,7 @@
 #include "mark.h"
 #include "mbyte.h"
 #include "memline.h"
+#include "memory.h"
 #include "message.h"
 #include "misc1.h"
 #include "misc2.h"
@@ -45,6 +47,7 @@
 #include "ops.h"
 #include "option.h"
 #include "os_unix.h"
+#include "path.h"
 #include "popupmnu.h"
 #include "quickfix.h"
 #include "regexp.h"
@@ -60,8 +63,9 @@
 #include "version.h"
 #include "window.h"
 #include "os/os.h"
+#include "os/shell.h"
 
-#if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
+#if defined(FEAT_FLOAT)
 # include <math.h>
 #endif
 
@@ -713,9 +717,7 @@ static void f_sqrt(typval_T *argvars, typval_T *rettv);
 static void f_str2float(typval_T *argvars, typval_T *rettv);
 static void f_str2nr(typval_T *argvars, typval_T *rettv);
 static void f_strchars(typval_T *argvars, typval_T *rettv);
-#ifdef HAVE_STRFTIME
 static void f_strftime(typval_T *argvars, typval_T *rettv);
-#endif
 static void f_stridx(typval_T *argvars, typval_T *rettv);
 static void f_string(typval_T *argvars, typval_T *rettv);
 static void f_strlen(typval_T *argvars, typval_T *rettv);
@@ -1043,7 +1045,7 @@ var_redir_start (
   }
 
   /* The output is stored in growarray "redir_ga" until redirection ends. */
-  ga_init2(&redir_ga, (int)sizeof(char), 500);
+  ga_init(&redir_ga, (int)sizeof(char), 500);
 
   /* Parse the variable name (can be a dict or list entry). */
   redir_endp = get_lval(redir_varname, NULL, redir_lval, FALSE, FALSE, 0,
@@ -1300,7 +1302,7 @@ char_u *eval_to_string(char_u *arg, char_u **nextcmd, int convert)
     retval = NULL;
   else {
     if (convert && tv.v_type == VAR_LIST) {
-      ga_init2(&ga, (int)sizeof(char), 80);
+      ga_init(&ga, (int)sizeof(char), 80);
       if (tv.vval.v_list != NULL) {
         list_join(&ga, tv.vval.v_list, (char_u *)"\n", TRUE, 0);
         if (tv.vval.v_list->lv_len > 0)
@@ -4513,7 +4515,7 @@ eval7 (
       if (**arg == '(') {               /* recursive! */
         /* If "s" is the name of a variable of type VAR_FUNC
          * use its contents. */
-        s = deref_func_name(s, &len, FALSE);
+        s = deref_func_name(s, &len, !evaluate);
 
         /* Invoke the function. */
         ret = get_func_tv(s, len, rettv, arg,
@@ -5757,7 +5759,7 @@ static char_u *list2string(typval_T *tv, int copyID)
 
   if (tv->vval.v_list == NULL)
     return NULL;
-  ga_init2(&ga, (int)sizeof(char), 80);
+  ga_init(&ga, (int)sizeof(char), 80);
   ga_append(&ga, '[');
   if (list_join(&ga, tv->vval.v_list, (char_u *)", ", FALSE, copyID) == FAIL) {
     vim_free(ga.ga_data);
@@ -5852,7 +5854,7 @@ static int list_join(garray_T *gap, list_T *l, char_u *sep, int echo_style, int 
   join_T      *p;
   int i;
 
-  ga_init2(&join_ga, (int)sizeof(join_T), l->lv_len);
+  ga_init(&join_ga, (int)sizeof(join_T), l->lv_len);
   retval = list_join_inner(gap, l, sep, echo_style, copyID, &join_ga);
 
   /* Dispose each item in join_ga. */
@@ -6448,7 +6450,7 @@ static char_u *dict2string(typval_T *tv, int copyID)
 
   if ((d = tv->vval.v_dict) == NULL)
     return NULL;
-  ga_init2(&ga, (int)sizeof(char), 80);
+  ga_init(&ga, (int)sizeof(char), 80);
   ga_append(&ga, '{');
 
   todo = (int)d->dv_hashtab.ht_used;
@@ -7034,9 +7036,7 @@ static struct fst {
   {"str2nr",          1, 2, f_str2nr},
   {"strchars",        1, 1, f_strchars},
   {"strdisplaywidth", 1, 2, f_strdisplaywidth},
-#ifdef HAVE_STRFTIME
   {"strftime",        1, 2, f_strftime},
-#endif
   {"stridx",          2, 3, f_stridx},
   {"string",          1, 1, f_string},
   {"strlen",          1, 1, f_strlen},
@@ -8878,7 +8878,8 @@ static void f_filereadable(typval_T *argvars, typval_T *rettv)
  */
 static void f_filewritable(typval_T *argvars, typval_T *rettv)
 {
-  rettv->vval.v_number = filewritable(get_tv_string(&argvars[0]));
+  char *filename = (char *)get_tv_string(&argvars[0]);
+  rettv->vval.v_number = os_file_is_writable(filename);
 }
 
 static void findfilendir(typval_T *argvars, typval_T *rettv,
@@ -10304,6 +10305,7 @@ static void f_has(typval_T *argvars, typval_T *rettv)
     "scrollbind",
     "showcmd",
     "cmdline_info",
+    "signs",
     "smartindent",
 #ifdef STARTUPTIME
     "startuptime",
@@ -11041,7 +11043,7 @@ static void f_join(typval_T *argvars, typval_T *rettv)
   rettv->v_type = VAR_STRING;
 
   if (sep != NULL) {
-    ga_init2(&ga, (int)sizeof(char), 80);
+    ga_init(&ga, (int)sizeof(char), 80);
     list_join(&ga, argvars[0].vval.v_list, sep, TRUE, 0);
     ga_append(&ga, NUL);
     rettv->vval.v_string = (char_u *)ga.ga_data;
@@ -11657,7 +11659,7 @@ static int mkdir_recurse(char_u *dir, int prot)
 
   /* Get end of directory name in "dir".
    * We're done when it's "/" or "c:/". */
-  p = gettail_sep(dir);
+  p = path_tail_with_sep(dir);
   if (p <= get_past_head(dir))
     return OK;
 
@@ -11691,9 +11693,9 @@ static void f_mkdir(typval_T *argvars, typval_T *rettv)
   if (*dir == NUL)
     rettv->vval.v_number = FAIL;
   else {
-    if (*gettail(dir) == NUL)
+    if (*path_tail(dir) == NUL)
       /* remove trailing slashes */
-      *gettail_sep(dir) = NUL;
+      *path_tail_with_sep(dir) = NUL;
 
     if (argvars[1].v_type != VAR_UNKNOWN) {
       if (argvars[2].v_type != VAR_UNKNOWN)
@@ -11862,13 +11864,11 @@ static void f_prevnonblank(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_number = lnum;
 }
 
-#ifdef HAVE_STDARG_H
 /* This dummy va_list is here because:
  * - passing a NULL pointer doesn't work when va_list isn't a pointer
  * - locally in the function results in a "used before set" warning
  * - using va_start() to initialize it gives "function with fixed args" error */
 static va_list ap;
-#endif
 
 /*
  * "printf()" function
@@ -11877,7 +11877,6 @@ static void f_printf(typval_T *argvars, typval_T *rettv)
 {
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = NULL;
-#ifdef HAVE_STDARG_H        /* only very old compilers can't do this */
   {
     char_u buf[NUMBUFLEN];
     int len;
@@ -11898,7 +11897,6 @@ static void f_printf(typval_T *argvars, typval_T *rettv)
     }
     did_emsg |= saved_did_emsg;
   }
-#endif
 }
 
 /*
@@ -12017,7 +12015,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
           /* Change "prev" buffer to be the right size.  This way
            * the bytes are only copied once, and very long lines are
            * allocated only once.  */
-          if ((s = realloc(prev, prevlen + len + 1)) != NULL) {
+          if ((s = xrealloc(prev, prevlen + len + 1)) != NULL) {
             memmove(s + prevlen, start, len);
             s[prevlen + len] = NUL;
             prev = NULL;             /* the list will own the string */
@@ -12102,7 +12100,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
           prevsize = grow50pc > growmin ? grow50pc : growmin;
         }
         newprev = prev == NULL ? alloc(prevsize)
-                  : realloc(prev, prevsize);
+                  : xrealloc(prev, prevsize);
         if (newprev == NULL) {
           do_outofmem_msg((long_u)prevsize);
           failed = TRUE;
@@ -12426,7 +12424,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
       p[len - 1] = NUL;       /* the trailing slash breaks readlink() */
     }
 
-    q = getnextcomp(p);
+    q = path_next_component(p);
     if (*q != NUL) {
       /* Separate the first path component in "p", and keep the
        * remainder (beginning with the path separator). */
@@ -12460,7 +12458,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
 
         /* Separate the first path component in the link value and
          * concatenate the remainders. */
-        q = getnextcomp(vim_ispathsep(*buf) ? buf + 1 : buf);
+        q = path_next_component(vim_ispathsep(*buf) ? buf + 1 : buf);
         if (*q != NUL) {
           if (remain == NULL)
             remain = vim_strsave(q - 1);
@@ -12474,18 +12472,18 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
           q[-1] = NUL;
         }
 
-        q = gettail(p);
+        q = path_tail(p);
         if (q > p && *q == NUL) {
           /* Ignore trailing path separator. */
           q[-1] = NUL;
-          q = gettail(p);
+          q = path_tail(p);
         }
         if (q > p && !os_is_absolute_path(buf)) {
           /* symlink is relative to directory of argument */
           cpy = alloc((unsigned)(STRLEN(p) + STRLEN(buf) + 1));
           if (cpy != NULL) {
             STRCPY(cpy, p);
-            STRCPY(gettail(cpy), buf);
+            STRCPY(path_tail(cpy), buf);
             vim_free(p);
             p = cpy;
           }
@@ -12499,7 +12497,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
         break;
 
       /* Append the first path component of "remain" to "p". */
-      q = getnextcomp(remain + 1);
+      q = path_next_component(remain + 1);
       len = q - remain - (*q != NUL);
       cpy = vim_strnsave(p, STRLEN(p) + len);
       if (cpy != NULL) {
@@ -12548,7 +12546,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
     if (!has_trailing_pathsep) {
       q = p + STRLEN(p);
       if (after_pathsep(p, q))
-        *gettail_sep(p) = NUL;
+        *path_tail_with_sep(p) = NUL;
     }
 
     rettv->vval.v_string = p;
@@ -14025,7 +14023,6 @@ static void f_str2nr(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_number = n;
 }
 
-#ifdef HAVE_STRFTIME
 /*
  * "strftime({format}[, {time}])" function
  */
@@ -14075,7 +14072,6 @@ static void f_strftime(typval_T *argvars, typval_T *rettv)
     vim_free(enc);
   }
 }
-#endif
 
 /*
  * "stridx()" function
@@ -14542,7 +14538,7 @@ static void f_system(typval_T *argvars, typval_T *rettv)
   }
 
   res = get_cmd_output(get_tv_string(&argvars[0]), infile,
-      SHELL_SILENT | SHELL_COOKED);
+      kShellOptSilent | kShellOptCooked);
 
 #ifdef USE_CR
   /* translate <CR> into <NL> */
@@ -14857,7 +14853,7 @@ static void f_tr(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_string = NULL;
   if (fromstr == NULL || tostr == NULL)
     return;                     /* type error; errmsg already given */
-  ga_init2(&ga, (int)sizeof(char), 80);
+  ga_init(&ga, (int)sizeof(char), 80);
 
   if (!has_mbyte)
     /* not multi-byte: fromstr and tostr must be the same length */
@@ -15130,7 +15126,7 @@ static void f_winrestcmd(typval_T *argvars, typval_T *rettv)
   garray_T ga;
   char_u buf[50];
 
-  ga_init2(&ga, (int)sizeof(char), 70);
+  ga_init(&ga, (int)sizeof(char), 70);
   for (wp = firstwin; wp != NULL; wp = wp->w_next) {
     sprintf((char *)buf, "%dresize %d|", winnr, wp->w_height);
     ga_concat(&ga, buf);
@@ -16992,7 +16988,7 @@ void ex_execute(exarg_T *eap)
   int len;
   int save_did_emsg;
 
-  ga_init2(&ga, 1, 80);
+  ga_init(&ga, 1, 80);
 
   if (eap->skip)
     ++emsg_skip;
@@ -17259,8 +17255,8 @@ void ex_function(exarg_T *eap)
   }
   p = skipwhite(p + 1);
 
-  ga_init2(&newargs, (int)sizeof(char_u *), 3);
-  ga_init2(&newlines, (int)sizeof(char_u *), 3);
+  ga_init(&newargs, (int)sizeof(char_u *), 3);
+  ga_init(&newlines, (int)sizeof(char_u *), 3);
 
   if (!eap->skip) {
     /* Check the name of the function.  Unless it's a dictionary function
@@ -19406,7 +19402,7 @@ repeat:
     }
   }
 
-  tail = gettail(*fnamep);
+  tail = path_tail(*fnamep);
   *fnamelen = (int)STRLEN(*fnamep);
 
   /* ":h" - head, remove "/file_name", can be repeated  */
@@ -19552,7 +19548,7 @@ char_u *do_string_sub(char_u *str, char_u *pat, char_u *sub, char_u *flags)
   save_cpo = p_cpo;
   p_cpo = empty_option;
 
-  ga_init2(&ga, 1, 200);
+  ga_init(&ga, 1, 200);
 
   do_all = (flags[0] == 'g');
 
