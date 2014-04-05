@@ -1021,7 +1021,17 @@ static int parse_rest_line(char_u **pp,
                            LineGetter fgetline,
                            void *cookie)
 {
-  size_t len = STRLEN(*pp);
+  size_t len;
+  if (**pp == NUL) {
+    if (node->type == kCmdUSER || node->type == kCmdAugroup)
+      return OK;
+    error->message = (char *) e_argreq;
+    error->position = *pp;
+    return NOTDONE;
+  }
+
+  len = STRLEN(*pp);
+
   if ((node->args[0].arg.str = vim_strnsave(*pp, len)) == NULL)
     return FAIL;
   *pp += len;
