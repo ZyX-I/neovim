@@ -5,7 +5,7 @@
 #include "misc2.h"
 #include "types.h"
 #include "charset.h"
-#include "translator/parser/expressions.h"
+#include "translator/printer/expressions.h"
 #include <stdio.h>
 static void print_node(int indent, ExpressionNode *node)
 {
