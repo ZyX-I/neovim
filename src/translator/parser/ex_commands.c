@@ -1110,6 +1110,8 @@ static int parse_expr(char_u **pp,
                       LineGetter fgetline,
                       void *cookie)
 {
+  if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp))
+    return OK;
   return do_parse_expr(pp, node, error, o, FALSE);
 }
 
@@ -1121,7 +1123,7 @@ static int parse_exprs(char_u **pp,
                        LineGetter fgetline,
                        void *cookie)
 {
-  if (!**pp)
+  if (ENDS_EXCMD_NOCOMMENT(**pp))
     return OK;
   return do_parse_expr(pp, node, error, o, TRUE);
 }

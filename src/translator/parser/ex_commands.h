@@ -243,7 +243,7 @@ const CommandNode nocmd;
 
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
-#define ENDS_EXCMD(ch) ((ch) == NUL || (ch) == '|' || (ch) == '"' \
-                        || (ch) == '\n')
+#define ENDS_EXCMD_NOCOMMENT(ch) ((ch) == NUL || (ch) == '|' || (ch) == '\n')
+#define ENDS_EXCMD(ch) ((ch) == '"' || ENDS_EXCMD_NOCOMMENT(ch))
 
 #endif  // NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H

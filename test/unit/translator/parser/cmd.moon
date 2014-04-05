@@ -387,6 +387,7 @@ describe 'parse_one_cmd', ->
     itn 'if 1', 'if1'
     itn 'elseif 1', 'elsei1'
     itn 'return 1', 'retu1'
+    itn 'return', 'retu'
     itn 'throw 1', 'th1'
     itn 'while 1', 'wh1'
     itn 'call tr(1, 2, 3)', 'cal tr(1, 2, 3)'
