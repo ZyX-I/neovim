@@ -153,6 +153,27 @@ describe 'parse_cmd_sequence', ->
 
     t 'function', 'fu'
 
+    t '
+    function s:F()
+    endfunction'
+
+    t '
+    function foo#bar()
+    endfunction'
+
+    t '
+    function g:bar()
+    endfunction'
+
+    t '
+    function foo:bar()
+    endfunction'
+
+    t '
+    function Abc
+    echo 1
+    '
+
   describe 'comments, empty lines', ->
     t '
     unlet a b
