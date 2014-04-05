@@ -36,7 +36,6 @@ static char *(features[]) = {
 #endif  // ifdef HAVE_ACL
   "+arabic",
   "+autocmd",
-  "-balloon_eval",
   "-browse",
 #ifdef NO_BUILTIN_TCAPS
   "-builtin_terms",
@@ -49,7 +48,6 @@ static char *(features[]) = {
 #endif  // ifdef ALL_BUILTIN_TCAPS
   "+byte_offset",
   "+cindent",
-  "-clientserver",
   "-clipboard",
   "+cmdline_compl",
   "+cmdline_hist",
@@ -109,7 +107,6 @@ static char *(features[]) = {
   "+lispindent",
   "+listcmds",
   "+localmap",
-  "-lua",
   "+menu",
   "+mksession",
   "+modify_fname",
@@ -137,31 +134,23 @@ static char *(features[]) = {
 
   "+multi_byte",
   "+multi_lang",
-  "-mzscheme",
-  "-netbeans_intg",
   "+path_extra",
-  "-perl",
   "+persistent_undo",
   "+postscript",
   "+printer",
   "+profile",
-  "-python",
-  "-python3",
   "+quickfix",
   "+reltime",
   "+rightleft",
-  "-ruby",
   "+scrollbind",
   "+signs",
   "+smartindent",
-  "-sniff",
 #ifdef STARTUPTIME
   "+startuptime",
 #else  // ifdef STARTUPTIME
   "-startuptime",
 #endif  // ifdef STARTUPTIME
   "+statusline",
-  "-sun_workshop",
   "+syntax",
   "+tag_binary",
   "+tag_old_static",
@@ -170,7 +159,6 @@ static char *(features[]) = {
 #else  // ifdef FEAT_TAG_ANYWHITE
   "-tag_any_white",
 #endif  // ifdef FEAT_TAG_ANYWHITE
-  "-tcl",
 #if defined(UNIX) || defined(__EMX__)
 
   // only Unix (or OS/2 with EMX!) can have terminfo instead of termcap
@@ -205,22 +193,17 @@ static char *(features[]) = {
   "-X11",
 #endif  // if defined(UNIX) || defined(VMS)
   "-xfontset",
-  "-xim",
 #if defined(UNIX) || defined(VMS)
   "-xsmp",
   "-xterm_clipboard",
 #endif  // if defined(UNIX) || defined(VMS)
-#ifdef FEAT_XTERM_SAVE
-  "+xterm_save",
-#else  // ifdef FEAT_XTERM_SAVE
-  "-xterm_save",
-#endif  // ifdef FEAT_XTERM_SAVE
-  "-xpm",
   NULL
 };
 
 static int included_patches[] = {
   // Add new patch number below this line
+  172,
+  //171,
   170,
   169,
   //168,

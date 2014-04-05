@@ -325,12 +325,6 @@ static char *(main_errors[]) =
   /* Set the break level after the terminal is initialized. */
   debug_break_level = params.use_debug_break_level;
 
-#endif /* NO_VIM_MAIN */
-
-  /* vim_main2() needs to be produced when FEAT_MZSCHEME is defined even when
-   * NO_VIM_MAIN is defined. */
-
-#ifndef NO_VIM_MAIN
   /* Execute --cmd arguments. */
   exe_pre_commands(&params);
 
@@ -2229,10 +2223,6 @@ static void usage(void)
   main_msg(_("--\t\t\tOnly file names after this"));
 #if (!defined(UNIX) && !defined(__EMX__)) || defined(ARCHIE)
   main_msg(_("--literal\t\tDon't expand wildcards"));
-#endif
-#ifdef FEAT_OLE
-  main_msg(_("-register\t\tRegister this gvim for OLE"));
-  main_msg(_("-unregister\t\tUnregister gvim for OLE"));
 #endif
   main_msg(_("-v\t\t\tVi mode (like \"vi\")"));
   main_msg(_("-e\t\t\tEx mode (like \"ex\")"));

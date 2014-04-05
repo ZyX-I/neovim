@@ -5268,8 +5268,7 @@ list_equal (
   return item1 == NULL && item2 == NULL;
 }
 
-#if defined(FEAT_RUBY) || defined(FEAT_PYTHON) || defined(FEAT_PYTHON3) \
-  || defined(FEAT_MZSCHEME) || defined(FEAT_LUA) || defined(PROTO)
+#if defined(PROTO)
 /*
  * Return the dictitem that an entry in a hashtable points to.
  */
@@ -10291,9 +10290,6 @@ static void f_has(typval_T *argvars, typval_T *rettv)
 #endif
     "multi_byte",
     "multi_lang",
-#ifdef FEAT_OLE
-    "ole",
-#endif
     "path_extra",
     "persistent_undo",
     "postscript",
@@ -10343,14 +10339,6 @@ static void f_has(typval_T *argvars, typval_T *rettv)
     "windows",
     "winaltkeys",
     "writebackup",
-#ifdef FEAT_XPM_W32
-    "xpm",
-    "xpm_w32",          /* for backward compatibility */
-#else
-#endif
-#ifdef FEAT_XTERM_SAVE
-    "xterm_save",
-#endif
     "neovim",
     NULL
   };
@@ -10369,17 +10357,9 @@ static void f_has(typval_T *argvars, typval_T *rettv)
       n = (starting != 0);
     else if (STRICMP(name, "multi_byte_encoding") == 0)
       n = has_mbyte;
-#ifdef DYNAMIC_TCL
-    else if (STRICMP(name, "tcl") == 0)
-      n = tcl_enabled(FALSE);
-#endif
 #if defined(USE_ICONV) && defined(DYNAMIC_ICONV)
     else if (STRICMP(name, "iconv") == 0)
       n = iconv_enabled(FALSE);
-#endif
-#ifdef DYNAMIC_MZSCHEME
-    else if (STRICMP(name, "mzscheme") == 0)
-      n = mzscheme_enabled(FALSE);
 #endif
     else if (STRICMP(name, "syntax_items") == 0)
       n = syntax_present(curwin);

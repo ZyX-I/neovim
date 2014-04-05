@@ -75,10 +75,6 @@
 # include <time.h>
 #endif
 
-#if defined(SASC) || defined(__amigaos4__)
-# include <proto/dos.h>     /* for Open() and Close() */
-#endif
-
 typedef struct block0 ZERO_BL;              /* contents of the first block */
 typedef struct pointer_block PTR_BL;        /* contents of a pointer block */
 typedef struct data_block DATA_BL;          /* contents of a data block */
@@ -2974,8 +2970,7 @@ static void ml_flush_line(buf_T *buf)
     return;             /* nothing to do */
 
   if (buf->b_ml.ml_flags & ML_LINE_DIRTY) {
-    /* This code doesn't work recursively, but Netbeans may call back here
-     * when obtaining the cursor position. */
+    /* This code doesn't work recursively. */
     if (entered)
       return;
     entered = TRUE;
@@ -4284,7 +4279,7 @@ static void ml_crypt_prepare(memfile_T *mfp, off_t offset, int reading)
      * block for the salt. */
     vim_snprintf((char *)salt, sizeof(salt), "%ld", (long)offset);
     bf_key_init(key, salt, (int)STRLEN(salt));
-    bf_ofb_init(seed, MF_SEED_LEN);
+    bf_cfb_init(seed, MF_SEED_LEN);
   }
 }
 

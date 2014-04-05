@@ -117,15 +117,8 @@ static int getargopt(exarg_T *eap);
 static int check_more(int, int);
 static linenr_T get_address(char_u **, int skip, int to_other_file);
 static void get_flags(exarg_T *eap);
-#if !defined(FEAT_PERL) \
-  || !defined(FEAT_PYTHON) || !defined(FEAT_PYTHON3) \
-  || !defined(FEAT_TCL) \
-  || !defined(FEAT_RUBY) \
-  || !defined(FEAT_LUA) \
-  || !defined(FEAT_MZSCHEME)
 # define HAVE_EX_SCRIPT_NI
 static void ex_script_ni(exarg_T *eap);
-#endif
 static char_u   *invalid_range(exarg_T *eap);
 static void correct_range(exarg_T *eap);
 static char_u   *replace_makeprg(exarg_T *eap, char_u *p,
@@ -172,26 +165,6 @@ static void ex_nogui(exarg_T *eap);
 # define gui_mch_find_dialog    ex_ni
 # define gui_mch_replace_dialog ex_ni
 # define ex_helpfind            ex_ni
-# define ex_lua                 ex_script_ni
-# define ex_luado               ex_ni
-# define ex_luafile             ex_ni
-# define ex_mzscheme            ex_script_ni
-# define ex_mzfile              ex_ni
-# define ex_perl                ex_script_ni
-# define ex_perldo              ex_ni
-# define ex_python              ex_script_ni
-# define ex_pydo                ex_ni
-# define ex_pyfile              ex_ni
-# define ex_py3                 ex_script_ni
-# define ex_py3do               ex_ni
-# define ex_py3file             ex_ni
-# define ex_tcl                 ex_script_ni
-# define ex_tcldo               ex_ni
-# define ex_tclfile             ex_ni
-# define ex_ruby                ex_script_ni
-# define ex_rubydo              ex_ni
-# define ex_rubyfile            ex_ni
-# define ex_sniff               ex_ni
 static void ex_swapname(exarg_T *eap);
 static void ex_syncbind(exarg_T *eap);
 static void ex_read(exarg_T *eap);
@@ -2020,24 +1993,16 @@ void                *cookie;                    /*argument for fgetline() */
     case CMD_leftabove:
     case CMD_let:
     case CMD_lockmarks:
-    case CMD_lua:
     case CMD_match:
-    case CMD_mzscheme:
-    case CMD_perl:
     case CMD_psearch:
-    case CMD_python:
-    case CMD_py3:
-    case CMD_python3:
     case CMD_return:
     case CMD_rightbelow:
-    case CMD_ruby:
     case CMD_silent:
     case CMD_smagic:
     case CMD_snomagic:
     case CMD_substitute:
     case CMD_syntax:
     case CMD_tab:
-    case CMD_tcl:
     case CMD_throw:
     case CMD_tilde:
     case CMD_topleft:
@@ -8939,7 +8904,7 @@ static char_u *get_view_file(int c)
         *s++ = '=';
       } else if (vim_ispathsep(*p)) {
         *s++ = '=';
-#if defined(BACKSLASH_IN_FILENAME) || defined(AMIGA) || defined(VMS)
+#if defined(BACKSLASH_IN_FILENAME) || defined(VMS)
         if (*p == ':')
           *s++ = '-';
         else

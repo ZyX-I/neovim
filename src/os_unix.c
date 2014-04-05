@@ -97,7 +97,6 @@ static int have_dollars(int, char_u **);
 static int save_patterns(int num_pat, char_u **pat, int *num_file,
                          char_u ***file);
 
-
 /*
  * Write s[len] to the screen.
  */
@@ -1566,7 +1565,6 @@ error:
  * "msec" == 0 will check for characters once.
  * "msec" == -1 will block until a character is available.
  * When a GUI is being used, this will not be used for input -- webb
- * Returns also, when a request from Sniff is waiting -- toni.
  * Or when a Linux GPM mouse event is waiting.
  */
 static int RealWaitForChar(fd, msec, check_for_gpm)

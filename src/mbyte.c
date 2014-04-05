@@ -142,36 +142,6 @@ static char utf8len_tab_zero[256] =
 };
 
 /*
- * XIM often causes trouble.  Define XIM_DEBUG to get a log of XIM callbacks
- * in the "xim.log" file.
- */
-/* #define XIM_DEBUG */
-#ifdef XIM_DEBUG
-static void xim_log(char *s, ...)
-{
-  va_list arglist;
-  static FILE *fd = NULL;
-
-  if (fd == (FILE *)-1)
-    return;
-  if (fd == NULL) {
-    fd = mch_fopen("xim.log", "w");
-    if (fd == NULL) {
-      EMSG("Cannot open xim.log");
-      fd = (FILE *)-1;
-      return;
-    }
-  }
-
-  va_start(arglist, s);
-  vfprintf(fd, s, arglist);
-  va_end(arglist);
-}
-
-#endif
-
-
-/*
  * Canonical encoding names and their properties.
  * "iso-8859-n" is handled by enc_canonize() directly.
  */
@@ -556,14 +526,6 @@ char_u * mb_init()
     else if (enc_dbcs == 0)
       n = 1;
     else {
-# if defined(MACOS) || defined(__amigaos4__)
-      /*
-       * if mblen() is not available, character which MSB is turned on
-       * are treated as leading byte character. (note : This assumption
-       * is not always true.)
-       */
-      n = (i & 0x80) ? 2 : 1;
-# else
       char buf[MB_MAXBYTES + 1];
       if (i == NUL)             /* just in case mblen() can't handle "" */
         n = 1;
@@ -598,9 +560,7 @@ char_u * mb_init()
             n = 1;
         }
       }
-# endif
     }
-
     mb_bytelen_tab[i] = n;
   }
 
@@ -3857,7 +3817,7 @@ int convert_setup_ext(vcp, from, from_unicode_is_utf8, to, to_unicode_is_utf8)
   return OK;
 }
 
-#if defined(FEAT_GUI) || defined(AMIGA) || defined(WIN3264) \
+#if defined(FEAT_GUI) || defined(WIN3264) \
   || defined(MSDOS) || defined(PROTO)
 /*
  * Do conversion on typed input characters in-place.
