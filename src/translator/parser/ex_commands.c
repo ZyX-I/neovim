@@ -123,6 +123,13 @@ static int parse_rest_line(char_u **pp,
                            CommandPosition *position,
                            LineGetter fgetline,
                            void *cookie);
+static int parse_rest_allow_empty(char_u **pp,
+                                  CommandNode *node,
+                                  CommandParserError *error,
+                                  CommandParserOptions o,
+                                  CommandPosition *position,
+                                  LineGetter fgetline,
+                                  void *cookie);
 static int parse_do(char_u **pp,
                     CommandNode *node,
                     CommandParserError *error,
@@ -1186,8 +1193,6 @@ static int parse_rest_line(char_u **pp,
 {
   size_t len;
   if (**pp == NUL) {
-    if (node->type == kCmdUSER || node->type == kCmdAugroup)
-      return OK;
     error->message = (char *) e_argreq;
     error->position = *pp;
     return NOTDONE;
@@ -1199,6 +1204,20 @@ static int parse_rest_line(char_u **pp,
     return FAIL;
   *pp += len;
   return OK;
+}
+
+static int parse_rest_allow_empty(char_u **pp,
+                                  CommandNode *node,
+                                  CommandParserError *error,
+                                  CommandParserOptions o,
+                                  CommandPosition *position,
+                                  LineGetter fgetline,
+                                  void *cookie)
+{
+  if (**pp == NUL)
+    return OK;
+
+  return parse_rest_line(pp, node, error, o, position, fgetline, cookie);
 }
 
 static char_u *do_fgetline(int c, char_u **arg, int indent)
