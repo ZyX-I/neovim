@@ -12,6 +12,8 @@
 # include "translator/printer/ex_commands.c.generated.h"
 #endif
 
+#define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
+
 static char_u *fgetline_test(int c, char_u **arg, int indent)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
@@ -37,14 +39,14 @@ static char_u *fgetline_test(int c, char_u **arg, int indent)
 static size_t regex_repr_len(Regex *regex)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
-  size_t len = 0;
-  // FIXME
-  return len;
+  assert(regex->string != NULL);
+  return STRLEN(regex->string);
 }
 
 static void regex_repr(Regex *regex, char **pp)
 {
-  // FIXME
+  size_t len = regex_repr_len(regex);
+  ADD_STRING(*pp, regex->string, len);
   return;
 }
 
@@ -687,8 +689,6 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
 
   return len;
 }
-
-#define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
 
 static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
   FUNC_ATTR_NONNULL_ALL

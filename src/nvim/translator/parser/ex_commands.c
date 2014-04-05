@@ -18,6 +18,7 @@
 #include "nvim/farsi.h"
 #include "nvim/menu.h"
 #include "nvim/option.h"
+#include "nvim/regexp.h"
 #include "nvim/memory.h"
 
 #include "nvim/translator/parser/expressions.h"
@@ -76,6 +77,29 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
   return node;
 }
 
+/// Allocate new regex definition and assign all its properties
+///
+/// @param[in]  string  Regular expression string.
+/// @param[in]  len     String length. It is not required for string[len] to be 
+///                     a NUL byte.
+///
+/// @return Pointer to allocated block of memory or NULL in case of error.
+static Regex *regex_alloc(const char_u *string, size_t len)
+{
+  Regex *regex;
+
+  if ((regex = (Regex *) alloc(offsetof(Regex, string) + len + 1)) != NULL) {
+    memcpy(regex->string, string, len);
+    regex->string[len] = NUL;
+    regex->prog = NULL;
+    // FIXME: use vim_regcomp, but make it save errors in place of throwing them 
+    //        right away.
+    // regex->prog = vim_regcomp(reg->string, 0);
+  }
+
+  return regex;
+}
+
 /// Allocate new address followup structure and set its type
 ///
 /// @param[in]  type  Followup type.
@@ -103,7 +127,7 @@ static void free_menu_item(MenuItem *menu_item)
 
 static void free_regex(Regex *regex)
 {
-  // FIXME
+  vim_regfree(regex->prog);
   vim_free(regex);
   return;
 }
@@ -345,28 +369,42 @@ static int get_vcol(char_u **pp)
   return vcol;
 }
 
-static int get_regex(char_u **pp, CommandParserError *error, Regex **target,
+/// Get regular expression
+///
+/// @param[in,out]  pp     String searched for a regular expression
+/// @param[out]     error  Structure where errors are saved.
+/// @param[out]     regex  Location where regex is saved.
+/// @param[in]      endch  Last character of the regex: character at which 
+///                        regular expression should end (unless it was 
+///                        escaped). Is expected to be either '?', '/' or NUL 
+///                        (note: regex will in any case end on NUL, but using 
+///                        NUL here will result in a faster code: NULs cannot be 
+///                        escaped, so it just uses STRLEN to find regex end).
+///
+/// @return FAIL when out of memory, OK otherwise.
+static int get_regex(char_u **pp, CommandParserError *error, Regex **regex,
                      char_u endch)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // FIXME compile regex
   char_u *p = *pp;
   char_u *s = p;
-  char_u c = p[-1];
 
-  while (*p != c && *p != NUL && *p != endch)
-  {
-    if (*p == '\\' && p[1] != NUL)
-      p += 2;
-    else
-      p++;
+  if (endch == NUL) {
+    p += STRLEN(p);
+  } else {
+    while (*p != NUL && *p != endch) {
+      if (*p == '\\' && p[1] != NUL)
+        p += 2;
+      else
+        p++;
+    }
   }
+
+  if ((*regex = regex_alloc(s, p - s)) == NULL)
+    return FAIL;
 
   if (*p != NUL)
     p++;
-
-  if ((*target = vim_strnsave(s, p - s)) == NULL)
-    return FAIL;
 
   if (*p == endch)
     p++;
