@@ -1,14 +1,4 @@
-{:eqn, :itn} = require 'test.unit.translator.parser.helpers'
-
-t = (expected_result, cmd, flags=0) ->
-  it 'parses ' .. cmd, ->
-    expected = expected_result
-    expected = expected\gsub('^%s*\n', '')
-    first_indent = expected\match('^%s*')
-    expected = expected\gsub('^' .. first_indent, '')
-    expected = expected\gsub('\n' .. first_indent, '\n')
-    expected = expected\gsub('\n%s*$', '')
-    eqn expected, cmd, false, flags
+{:t, :itn} = require 'test.unit.translator.parser.helpers'
 
 describe 'parse_one_cmd', ->
   opts = {

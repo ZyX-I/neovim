@@ -229,6 +229,7 @@ describe 'parse_one_cmd', ->
     itn '5,1foldclose!', ':5,1foldc!'
     itn '5,1fold', ':5,1fold'
     itn 'fixdel', 'fixdel'
+    itn 'fixdel', 'fix'
     itn 'finish', 'fini'
     itn 'finally', 'fina'
     itn 'files!', 'files!'
