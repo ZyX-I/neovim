@@ -117,9 +117,6 @@ ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error);
 void free_expr(ExpressionNode *node);
 void free_test_expr_result(TestExprResult *result);
 TestExprResult *parse0_test(char_u *arg);
-char *parse0_repr(char_u *arg, bool dump_as_expr);
-size_t expr_node_dump_len(ExpressionNode *node);
-void expr_node_dump(ExpressionNode *node, char **pp);
 ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error);
 ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
                            ExpressionParser parse, bool listends,
