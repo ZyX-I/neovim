@@ -1632,6 +1632,23 @@ static int parse_let(char_u **pp,
   return OK;
 }
 
+static int parse_scriptencoding(char_u **pp,
+                                CommandNode *node,
+                                CommandParserError *error,
+                                CommandParserOptions o,
+                                CommandPosition *position,
+                                LineGetter fgetline,
+                                void *cookie)
+{
+  if (**pp == NUL)
+    return OK;
+  // TODO Setup conversion from parsed encoding
+  if ((node->args[0].arg.str = enc_canonize(*pp)) == NULL)
+    return FAIL;
+  *pp += STRLEN(*pp);
+  return OK;
+}
+
 /// Check for an Ex command with optional tail.
 ///
 /// @param[in,out]  pp   Start of the command. Is advanced to the command 
