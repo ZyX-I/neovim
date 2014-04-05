@@ -1,4 +1,4 @@
-{:eqn, :itn, :p1ct} = require 'test.unit.translator.parser.helpers'
+{:eqn, :itn} = require 'test.unit.translator.parser.helpers'
 
 t = (expected_result, cmd, flags=0) ->
   it 'parses ' .. cmd, ->
