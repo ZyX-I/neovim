@@ -8,15 +8,17 @@ p1ct = (str, one, flags=0) ->
   return ffi.string(result)
 
 eqn = (expected_result, cmd, one, flags=0) ->
+  if cmd == nil
+    cmd = expected_result
   result = p1ct cmd, one, flags
   eq expected_result, result
 
-itn = (expected_result, cmd, flags=0) ->
-  it 'parses ' .. cmd, ->
+itn = (expected_result, cmd=nil, flags=0) ->
+  it 'parses ' .. (cmd or expected_result), ->
     eqn expected_result, cmd, true, flags
 
-t = (expected_result, cmd, flags=0) ->
-  it 'parses ' .. cmd, ->
+t = (expected_result, cmd=nil, flags=0) ->
+  it 'parses ' .. (cmd or expected_result), ->
     expected = expected_result
     expected = expected\gsub('^%s*\n', '')
     first_indent = expected\match('^%s*')

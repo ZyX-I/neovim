@@ -1198,7 +1198,17 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 {
   switch (expr->type) {
     case kTypeSimpleVariableName: {
-      if (!allow_lower && ASCII_ISLOWER(*expr->position)) {
+      if (!allow_lower
+          && ASCII_ISLOWER(*expr->position)
+          && expr->position[1] != ':'  // Fast check: most functions containing 
+                                       // colon contain it in the second 
+                                       // character
+          && memchr((void *) expr->position, '#',
+                    expr->end_position - expr->position + 1) == NULL
+          // FIXME? Though foo:bar works in Vim Bram said it was never intended 
+          //        to work.
+          && memchr((void *) expr->position, ':',
+                    expr->end_position - expr->position + 1) == NULL) {
         error->message =
             N_("E128: Function name must start with a capital "
                "or contain a colon or a hash");
