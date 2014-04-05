@@ -3033,20 +3033,36 @@ const CommandNode nocmd = {
   }
 };
 
-#define NEW_ERROR_NODE(prev_node, error_message, error_position, line_start) \
+#define _NEW_ERROR_NODE(next_node, prev_node, error_message, error_position, \
+                       line_start) \
         { \
           CommandParserError error; \
           error.message = error_message; \
           error.position = error_position; \
-          assert(prev_node->next == NULL); \
-          if (create_error_node(&(prev_node->next), &error, &position, \
+          assert(prev_node == NULL || prev_node->next == NULL || \
+                 next_node != NULL); \
+          if (create_error_node(prev_node == NULL \
+                                ? next_node \
+                                : &(prev_node->next), &error, &position, \
                                 line_start) \
               == FAIL) { \
             free_cmd(result); \
             vim_free(line_start); \
             return FAIL; \
           } \
-          prev_node->next->prev = prev_node; \
+          if (prev_node != NULL) \
+            prev_node->next->prev = prev_node; \
+        }
+#define NEW_ERROR_NODE(prev_node, error_message, error_position, line_start) \
+        _NEW_ERROR_NODE(NULL, prev_node, error_message, error_position, \
+                        line_start)
+#define APPEND_ERROR_NODE(next_node, prev_node, error_message, error_position, \
+                          line_start) \
+        { \
+          _NEW_ERROR_NODE(next_node, prev_node, error_message, error_position, \
+                          line_start) \
+          prev_node = prev_node == NULL ? *next_node : prev_node->next; \
+          next_node = &(prev_node->next); \
         }
 
 /// Parses sequence of commands
@@ -3121,9 +3137,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         if (blockstack_len == 0) {
           free_cmd(*next_node);
           *next_node = NULL;
-          NEW_ERROR_NODE(prev_node, bo.no_start_message, line, line_start)
-          prev_node = prev_node->next;
-          next_node = &(prev_node->next);
+          APPEND_ERROR_NODE(next_node, prev_node, bo.no_start_message, line,
+                            line_start)
         }
         while (blockstack_len) {
           CommandType last_block_type = blockstack[blockstack_len - 1].type;
@@ -3183,9 +3198,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
             prev_node = blockstack[0].node;
             while (prev_node->next != NULL)
               prev_node = prev_node->next;
-            NEW_ERROR_NODE(prev_node, bo.no_start_message, line, line_start)
-            prev_node = prev_node->next;
-            next_node = &(prev_node->next);
+            APPEND_ERROR_NODE(next_node, prev_node, bo.no_start_message, line,
+                              line_start)
             break;
           }
         }

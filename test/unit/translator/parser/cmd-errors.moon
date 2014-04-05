@@ -173,3 +173,11 @@ describe 'parse_cmd_sequence errors', ->
     if 1
     endif
     endif | if 1 | endif'
+
+    t '
+    \\ error: E606: :finally without :try:     finally!!!
+    \\ error: E602: :endtry without :try:     endtry!!!
+    ', '
+    finally
+    endtry
+    '
