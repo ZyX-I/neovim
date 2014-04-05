@@ -14,7 +14,18 @@ eqn = (expected_result, cmd, one, flags=0) ->
 itn = (expected_result, cmd, flags=0) ->
   it 'parses ' .. cmd, ->
     eqn expected_result, cmd, true, flags
+
+t = (expected_result, cmd, flags=0) ->
+  it 'parses ' .. cmd, ->
+    expected = expected_result
+    expected = expected\gsub('^%s*\n', '')
+    first_indent = expected\match('^%s*')
+    expected = expected\gsub('^' .. first_indent, '')
+    expected = expected\gsub('\n' .. first_indent, '\n')
+    expected = expected\gsub('\n%s*$', '')
+    eqn expected, cmd, false, flags
+
 return {
-  eqn: eqn
+  t: t
   itn: itn
 }

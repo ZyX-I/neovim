@@ -3106,6 +3106,13 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       if (bo.find_in_stack != kCmdUnknown) {
         size_t initial_blockstack_len = blockstack_len;
 
+        if (blockstack_len == 0) {
+          free_cmd(*next_node);
+          *next_node = NULL;
+          NEW_ERROR_NODE(prev_node, bo.no_start_message, line, line_start)
+          prev_node = prev_node->next;
+          next_node = &(prev_node->next);
+        }
         while (blockstack_len) {
           CommandType last_block_type = blockstack[blockstack_len - 1].type;
           if (bo.not_after != kCmdUnknown && last_block_type == bo.not_after) {
