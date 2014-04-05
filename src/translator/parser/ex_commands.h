@@ -217,6 +217,16 @@ typedef int (*CommandArgsParser)(char_u **,
 #define MENU_DEFAULT_PRI_VALUE 500
 #define MENU_DEFAULT_PRI        -1
 
+typedef struct {
+  char_u      *name;          // name of the command
+  uint_least32_t flags;       // flags declared above
+  size_t num_args;            // number of arguments
+  CommandArgType *arg_types;  // argument types
+  CommandArgsParser parse;    // argument parsing function
+} CommandDefinition;
+extern CommandDefinition cmddefs[kCmdREAL_SIZE];
+#define CMDDEF(type) cmddefs[type - 1]
+
 void free_cmd(CommandNode *);
 int parse_one_cmd(char_u **pp,
                   CommandNode **node,
@@ -224,7 +234,6 @@ int parse_one_cmd(char_u **pp,
                   CommandPosition *position,
                   line_getter fgetline,
                   void *cookie);
-char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one);
 CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 CommandPosition position,
                                 line_getter fgetline,
@@ -233,5 +242,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
 const CommandNode nocmd;
 
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
+
+#define ENDS_EXCMD(ch) ((ch) == NUL || (ch) == '|' || (ch) == '"' \
+                        || (ch) == '\n')
 
 #endif  // NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H
