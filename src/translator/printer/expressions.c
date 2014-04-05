@@ -334,10 +334,10 @@ static void node_dump(ExpressionNode *node, char **pp)
           *p++ = ' ';
           memcpy(p, operator, operator_len);
           p += operator_len;
-          *p++ = ' ';
           if (add_ccs)
             if (node->ignore_case)
               *p++ = *(case_compare_strategy_string[node->ignore_case]);
+          *p++ = ' ';
         }
       } while (child != NULL);
 
