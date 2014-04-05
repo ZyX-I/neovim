@@ -1,6 +1,6 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 
-cmd = cimport('./src/nvim/translator/parser/ex_commands.h')
+cmd = cimport('./src/nvim/translator/printer/ex_commands.h')
 
 p1ct = (str, one, flags=0) ->
   s = to_cstr(str)

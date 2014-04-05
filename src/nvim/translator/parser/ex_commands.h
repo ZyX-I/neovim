@@ -219,6 +219,20 @@ typedef int (*CommandArgsParser)(char_u **,
 
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
+typedef struct {
+  char_u      *name;          // name of the command
+  uint_least32_t flags;       // flags declared above
+  size_t num_args;            // number of arguments
+  CommandArgType *arg_types;  // argument types
+  CommandArgsParser parse;    // argument parsing function
+} CommandDefinition;
+extern CommandDefinition cmddefs[kCmdREAL_SIZE];
+
+#define CMDDEF(type) cmddefs[type - 1]
+
+#define ENDS_EXCMD(ch) ((ch) == NUL || (ch) == '|' || (ch) == '"' \
+                        || (ch) == '\n')
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "nvim/translator/parser/ex_commands.h.generated.h"
 #endif

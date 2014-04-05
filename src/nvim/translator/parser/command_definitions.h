@@ -77,10 +77,6 @@
 #define WORD1  (EXTRA | NOSPC)  // one extra word allowed
 #define FILE1  (FILES | NOSPC)  // 1 file allowed, defaults to current file
 
-#ifndef DO_DECLARE_EXCMD
-typedef struct command_definition CommandDefinition;
-#endif
-
 /*
  * This array maps ex command names to command codes.
  * The order in which command names are listed below is significant --
@@ -93,7 +89,6 @@ typedef struct command_definition CommandDefinition;
 # undef EX          /* just in case */
 #endif
 #ifdef DO_DECLARE_EXCMD
-# define CMDDEF(type) cmddefs[type - 1]
 # define EX(idx, name, func, last_arg, args, flags) \
     {(char_u *)name, \
      (uint_least32_t) (flags), \
@@ -101,15 +96,8 @@ typedef struct command_definition CommandDefinition;
      (CommandArgType[]) args, \
      func}
 
-static struct command_definition {
-  char_u      *name;          // name of the command
-  uint_least32_t flags;       // flags declared above
-  size_t num_args;            // number of arguments
-  CommandArgType *arg_types;  // argument types
-  CommandArgsParser parse;    // argument parsing function
-}
-#define NOFUNC NULL
-cmddefs[] =
+# define NOFUNC NULL
+CommandDefinition cmddefs[] =
 #else
 # define EX(idx, name, func, last_arg, args, flags) idx
 typedef enum
@@ -1705,6 +1693,11 @@ typedef enum
   EX(kCmdMissing,         NULL,           NULL,
      ARG_NO_ARGS, ARGS_NO,
      0),
+  // XXX If you add any command just above this line (i.e. after kCmdMissing) 
+  // you should update kCmdREAL_SIZE
+#ifndef DO_DECLARE_EXCMD
+# define kCmdREAL_SIZE (((size_t)kCmdMissing))
+#endif
 }
 #ifndef DO_DECLARE_EXCMD
 CommandType
