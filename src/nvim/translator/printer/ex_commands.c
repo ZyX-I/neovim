@@ -1203,12 +1203,12 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
     char_u *line;
     line = fgetline_test(0, pp, 0);
     p = line;
-    if (parse_one_cmd(&p, &node, o, &position, (line_getter) fgetline_test,
+    if (parse_one_cmd(&p, &node, o, &position, (LineGetter) fgetline_test,
                       pp) == FAIL)
       return NULL;
     vim_free(line);
   } else {
-    if ((node = parse_cmd_sequence(o, position, (line_getter) fgetline_test,
+    if ((node = parse_cmd_sequence(o, position, (LineGetter) fgetline_test,
                                    pp)) == FAIL)
       return NULL;
   }

@@ -192,14 +192,14 @@ typedef struct {
   char *message;
 } CommandParserError;
 
-typedef char_u *(*line_getter)(int, void *, int);
+typedef char_u *(*LineGetter)(int, void *, int);
 
 typedef int (*CommandArgsParser)(char_u **,
                                  CommandNode *,
                                  CommandParserError *,
                                  CommandParserOptions,
                                  CommandPosition *,
-                                 line_getter,
+                                 LineGetter,
                                  void *);
 
 // flags for parse_one_cmd
@@ -227,7 +227,6 @@ typedef struct {
   CommandArgsParser parse;    // argument parsing function
 } CommandDefinition;
 extern CommandDefinition cmddefs[kCmdREAL_SIZE];
-
 #define CMDDEF(type) cmddefs[type - 1]
 
 #define ENDS_EXCMD(ch) ((ch) == NUL || (ch) == '|' || (ch) == '"' \
