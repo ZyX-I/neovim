@@ -157,6 +157,7 @@ describe 'parse_one_cmd errors', ->
 
     for cmd in *{
       'setf'
+      'nbk'
     }
       itn '\\ error: E471: Argument required: !!!', cmd
 
