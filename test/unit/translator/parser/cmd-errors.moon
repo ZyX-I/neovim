@@ -144,6 +144,22 @@ describe 'parse_one_cmd errors', ->
       itn '\\ error: E488: Trailing characters: ' .. cmd .. ' !!a!!bc',
         cmd .. ' abc'
 
+  describe 'commands with required argument', ->
+    for cmd in *{
+      'norm'
+      'luado'
+      'perldo'
+      'pydo'
+      'py3do'
+      'tcldo'
+    }
+      itn '\\ error: E471: Argument required: ' .. cmd .. '!!!', cmd
+
+    for cmd in *{
+      'setf'
+    }
+      itn '\\ error: E471: Argument required: !!!', cmd
+
 describe 'parse_cmd_sequence errors', ->
   describe 'missing block ends', ->
     t '
