@@ -5,6 +5,12 @@ describe 'parse_one_cmd', ->
     itn '1,2print', '1,2|'
     itn '1', '1'
     itn '1,2', '1,2'
+    itn '/abc/', '/abc'
+    itn '?abc?', '?abc'
+    itn '/abc//def/'
+    itn '?abc?/def/'
+    itn '/abc//def/', '/abc//def'
+    itn '?abc?/def/', '?abc?/def'
 
   describe 'modifier commands', ->
     itn 'belowright 9join', 'bel 9join'
