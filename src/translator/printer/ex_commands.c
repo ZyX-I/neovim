@@ -24,7 +24,8 @@ static void address_repr(Address *address, char **pp);
 static size_t range_repr_len(Range *range);
 static void range_repr(Range *range, char **pp);
 static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext);
-static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp);
+static void node_repr(CommandNode *node, size_t indent, bool barnext,
+                      char **pp);
 // }}}
 
 #define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
@@ -692,7 +693,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   return len;
 }
 
-static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
+static void node_repr(CommandNode *node, size_t indent, bool barnext,
+                      char **pp)
 {
   char *p = *pp;
   size_t len = 0;
