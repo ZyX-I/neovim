@@ -918,19 +918,24 @@ static int parse7(char_u **arg,
       p = s + 1;
 
       if (*s == '"') {
-        while (*p != '"' && *p != NUL)
-        {
+        while (*p != '"' && *p != NUL) {
           if (*p == '\\' && p[1] != NUL)
             p += 2;
           else
             p++;
         }
       } else {
-        while (*p != '\'' && *p != NUL)
-        {
-          p++;
-          if (*p == '\'' && p[1] == '\'')
-            p += 2;
+        for(;;) {
+          if (*p == '\'') {
+            if (p[1] == '\'')
+              p += 2;
+            else
+              break;
+          } else if (*p) {
+            p++;
+          } else {
+            break;
+          }
         }
       }
       if (*p == NUL) {

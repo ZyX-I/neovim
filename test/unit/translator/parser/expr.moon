@@ -54,8 +54,12 @@ describe 'parse0', ->
     eqn '"[+"a\\"bc"+]', '"a\\"bc"'
   it 'parses \'abc\'', ->
     eqn '\'[+\'abc\'+]', '\'abc\''
-  it 'parses \'a\'\'bc\'', ->
+  it 'parses \'ab\'\'c\'', ->
     eqn '\'[+\'ab\'\'c\'+]', '\'ab\'\'c\''
+  it 'parses \'ab\'\'\'', ->
+    eqn '\'[+\'ab\'\'\'+]', '\'ab\'\'\''
+  it 'parses \'\'\'c\'', ->
+    eqn '\'[+\'\'\'c\'+]', '\'\'\'c\''
   it 'parses option', ->
     eqn '&[+abc+]', '&abc'
   it 'parses local option', ->
