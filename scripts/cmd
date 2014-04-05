@@ -14,11 +14,12 @@ cimport = (function(path)
   pipe = io.popen('cc -Isrc -P -E ' .. path)
   header = pipe:read('*a')
   pipe:close()
+  header = header:gsub('%c[^%c]*1UL[^%c]*', '')
   ffi.cdef(header)
 end)
 
 cimport 'src/nvim/vim.h'
-cimport 'src/nvim/translator/parser/ex_commands.h'
+cimport 'src/nvim/translator/printer/ex_commands.h'
 cimport 'src/nvim/os_unix.h'
 cimport 'src/nvim/eval.h'
 -- cimport 'src/main.h'
