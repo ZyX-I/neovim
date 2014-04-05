@@ -459,6 +459,9 @@ describe 'parse_one_cmd', ->
     itn 'lockvar abc', 'lockv abc'
     itn 'lockvar! abc', 'lockvar!abc'
     itn 'lockvar 5 abc', 'lockv5abc'
+    itn 'unlockvar abc', 'unlockv abc'
+    itn 'unlockvar! abc', 'unlockvar!abc'
+    itn 'unlockvar 5 abc', 'unlockv5abc'
     itn 'delfunction Abc', 'delf Abc'
     itn 'delfunction {"abc"}', 'delf{"abc"}'
 
