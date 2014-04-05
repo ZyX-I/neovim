@@ -66,9 +66,8 @@ describe 'parse0', ->
     eqn '@[+@r+]', '@r'
   it 'parses register NUL', ->
     eqn '@[+@+]', '@'
-  -- TODO Requires chartab to be initialized
-  -- it('parses environment variable', function()
-    -- eq '$[+abc+]', '$abc'
+  it 'parses environment variable', ->
+    eqn '$[+abc+]', '$abc'
   it 'parses varname', ->
     eqn 'var[+varname+]', 'varname'
   it 'parses g:varname', ->
