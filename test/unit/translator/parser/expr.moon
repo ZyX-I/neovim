@@ -1,58 +1,6 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 
-expr = cimport('./src/nvim/translator/parser/ex_commands.h')
-
-expression_type = {
-  [0]: 'Unknown',
-  '?:',
-  '||',
-  '&&',
-  '>',
-  '>=',
-  '<',
-  '<=',
-  '==',
-  '!=',
-  'is',
-  'isnot',
-  '=~',
-  '!~',
-  '+',
-  '-',
-  '..',
-  '*',
-  '/',
-  '%',
-  '!',
-  '-!',
-  '+!',
-  'N',
-  'O',
-  'X',
-  'F',
-  '"',
-  '\'',
-  '&',
-  '@',
-  '$',
-  'cvar',
-  'var',
-  'id',
-  'curly',
-  'expr',
-  '[]',
-  '{}',
-  'index',
-  '.',
-  'call',
-  'empty',
-}
-
-case_compare_strategy = {
-  [0]: '',
-  '#',
-  '?',
-}
+expr = cimport('./src/nvim/translator/printer/expressions.h')
 
 p0 = (str) ->
   s = to_cstr(str)

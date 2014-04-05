@@ -3,8 +3,10 @@
 //
 // Copyright 2014 Nikolay Pavlov
 
-// cmd.c: Ex commands parsing
+// ex_commands.c: Ex commands parsing
 
+#include <stddef.h>
+#include <stdbool.h>
 #include <stddef.h>
 
 #include "nvim/vim.h"
@@ -20,6 +22,7 @@
 #include "nvim/memory.h"
 
 #include "nvim/translator/parser/expressions.h"
+#include "nvim/translator/printer/expressions.h"
 #include "nvim/translator/parser/ex_commands.h"
 
 typedef struct {
