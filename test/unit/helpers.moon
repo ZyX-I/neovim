@@ -133,16 +133,21 @@ if not garray_defined
   ]]
   garray_defined = true
 
-libnvim.mch_early_init()
-libnvim.mb_init()
-libnvim.eval_init()
-libnvim.init_normal_cmds()
-libnvim.allocate_generic_buffers()
-libnvim.win_alloc_first()
-libnvim.init_yank()
-libnvim.init_homedir()
-libnvim.set_init_1()
-libnvim.set_lang_var()
+export vim_initialized
+
+if not vim_initialized
+  libnvim.mch_early_init()
+  libnvim.mb_init()
+  libnvim.eval_init()
+  libnvim.init_normal_cmds()
+  libnvim.allocate_generic_buffers()
+  libnvim.win_alloc_first()
+  libnvim.init_yank()
+  libnvim.init_homedir()
+  libnvim.set_init_1()
+  libnvim.set_lang_var()
+
+  vim_initialized = true
 
 return {
   cimport: cimport
