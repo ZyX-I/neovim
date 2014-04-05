@@ -14,6 +14,7 @@
 #endif
 #include "translator/parser/command_definitions.h"
 #include "translator/parser/expressions.h"
+#include "regexp_defs.h"
 
 // :argadd/:argd
 #define ARG_NAME_FILES     0
@@ -21,9 +22,14 @@
 // FIXME
 typedef char_u Pattern;
 typedef char_u Glob;
-typedef char_u Regex;
 typedef int AuEvent;
 typedef int CmdCompleteType;
+
+/// Regular expression
+typedef struct {
+  regprog_T *prog;   ///< Compiled pattern
+  char_u string[1];  ///< Original string
+} Regex;
 
 /// Address followup type
 typedef enum {

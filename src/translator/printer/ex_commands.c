@@ -27,6 +27,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext);
 static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp);
 // }}}
 
+#define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
+
 static char_u *fgetline_test(int c, char_u **arg, int indent)
 {
   size_t len = 0;
@@ -50,14 +52,14 @@ static char_u *fgetline_test(int c, char_u **arg, int indent)
 
 static size_t regex_repr_len(Regex *regex)
 {
-  size_t len = 0;
-  // FIXME
-  return len;
+  assert(regex->string != NULL);
+  return STRLEN(regex->string);
 }
 
 static void regex_repr(Regex *regex, char **pp)
 {
-  // FIXME
+  size_t len = regex_repr_len(regex);
+  ADD_STRING(*pp, regex->string, len);
   return;
 }
 
@@ -689,8 +691,6 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
 
   return len;
 }
-
-#define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
 
 static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
 {
