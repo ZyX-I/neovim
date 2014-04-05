@@ -87,8 +87,8 @@ void free_expr(ExpressionNode *node)
 ///
 /// @param[in]  c  Tested character.
 ///
-/// @return TRUE if character can be used in a variable of function name, FALSE 
-///         otherwise. Does not include '{' or '}' for magic braces.
+/// @return TRUE if character can be used in a variable of function name, 
+///         FALSE otherwise. Does not include '{' or '}' for magic braces.
 static bool isnamechar(int c)
   FUNC_ATTR_CONST
 {
@@ -306,7 +306,8 @@ static int parse_list(char_u **arg,
 /// @param[out]     node         Location where parsing results are saved.
 /// @param[out]     error        Structure where errors are saved.
 /// @param[out]     parse1_node  Location where parsing results are saved if 
-///                              expression proved to be curly braces name part.
+///                              expression proved to be curly braces name 
+///                              part.
 /// @param[out]     parse1_arg   Location where end of curly braces name 
 ///                              expression is saved.
 ///
@@ -394,9 +395,9 @@ static int parse_dictionary(char_u **arg,
 
 /// Skip over the name of an option ("&option", "&g:option", "&l:option")
 ///
-/// @param[in,out]  arg  Start of the option name. It must point to option sigil 
-///                      (i.e. '&' or '+'). Advanced to the first character 
-///                      after the option name.
+/// @param[in,out]  arg  Start of the option name. It must point to option 
+///                      sigil (i.e. '&' or '+'). Advanced to the first 
+///                      character after the option name.
 ///
 /// @return NULL if no option name found, pointer to the last character of the 
 ///         option name otherwise (i.e. *arg - 1).
@@ -457,8 +458,8 @@ static int parse_option(char_u **arg,
 /// @param[in,out]  arg  Start of the variable name. Advanced to the first 
 ///                      character after the variable name.
 ///
-/// @return NULL if no variable name found, pointer to the last character of the 
-///         variable name otherwise (i.e. *arg - 1).
+/// @return NULL if no variable name found, pointer to the last character of 
+///         the variable name otherwise (i.e. *arg - 1).
 ///
 /// @note Uses vim_isIDc() function: depends on &isident option.
 static char_u *find_env_end(char_u **arg)
@@ -546,7 +547,8 @@ static int parse_dot_subscript(char_u **arg,
 /// Parse function call arguments
 ///
 /// @param[in,out]  arg    Parsed string. Is advanced to the first character 
-///                        after the closing parenthesis of given function call. 
+///                        after the closing parenthesis of given function 
+///                        call. 
 ///                        Should point to the opening parenthesis.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -774,16 +776,17 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
 ///                                 non-white after the recognized expression.
 /// @param[out]     node            Location where parsing results are saved.
 /// @param[out]     error           Structure where errors are saved.
-/// @param[in]      want_string     True if the result should be string. Is used 
-///                                 to preserve compatibility with vim: "a".1.2 
-///                                 is a string "a12" (uses string concat), not 
-///                                 floating-point value. This flag is set in 
-///                                 parse5 that handles concats.
-/// @param[in]      parse_funccall  Determines whether function calls should be 
-///                                 parsed. I.e. if this is TRUE then "abc(def)" 
-///                                 will be parsed as "call(abc, def)", if this 
-///                                 is FALSE it will parse this as "abc" and 
-///                                 stop at opening parenthesis.
+/// @param[in]      want_string     True if the result should be string. Is 
+///                                 used to preserve compatibility with vim: 
+///                                 "a".1.2 is a string "a12" (uses string 
+///                                 concat), not floating-point value. This 
+///                                 flag is set in parse5 that handles 
+///                                 concats.
+/// @param[in]      parse_funccall  Determines whether function calls should 
+///                                 be parsed. I.e. if this is TRUE then 
+///                                 "abc(def)" will be parsed as "call(abc, 
+///                                 def)", if this is FALSE it will parse this 
+///                                 as "abc" and stop at opening parenthesis.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
 static int parse7(char_u **arg,
@@ -873,7 +876,7 @@ static int parse7(char_u **arg,
             p++;
         }
       } else {
-        for(;;) {
+        for (;;) {
           if (*p == '\'') {
             if (p[1] == '\'')
               p += 2;
@@ -1401,9 +1404,9 @@ static int parse1(char_u **arg,
 
 /// Parse expression
 ///
-/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
-///                        advanced to the next non-white after the recognized 
-///                        expression.
+/// @param[in,out]  arg    Parsed string. May point to whitespace character. 
+///                        Is advanced to the next non-white after the 
+///                        recognized expression.
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
@@ -1427,9 +1430,9 @@ ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
 
 /// Parse value (actually used for lvals)
 ///
-/// @param[in,out]  arg    Parsed string. May point to whitespace character. Is 
-///                        advanced to the next non-white after the recognized 
-///                        expression.
+/// @param[in,out]  arg    Parsed string. May point to whitespace character. 
+///                        Is advanced to the next non-white after the 
+///                        recognized expression.
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
@@ -1452,13 +1455,13 @@ ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
 
 /// Parse a whitespace-separated sequence of expressions
 ///
-/// @param[in,out]  arg       Parsed string. May point to whitespace character. 
-///                           Is advanced to the next non-white after the 
-///                           recognized expression.
+/// @param[in,out]  arg       Parsed string. May point to whitespace 
+///                           character. Is advanced to the next non-white 
+///                           after the recognized expression.
 /// @param[out]     error     Structure where errors are saved.
 /// @param[in]      parse     Parser used to parse one expression in sequence.
-/// @param[in]      listends  Determines whether list literal should end parsing 
-///                           process.
+/// @param[in]      listends  Determines whether list literal should end 
+///                           parsing process.
 /// @param[in]      endwith   Determines what characters are allowed to stop 
 ///                           parsing. NUL byte always stops parsing.
 ///

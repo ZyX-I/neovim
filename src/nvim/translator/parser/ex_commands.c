@@ -92,8 +92,8 @@ static Regex *regex_alloc(const char_u *string, size_t len)
     memcpy(regex->string, string, len);
     regex->string[len] = NUL;
     regex->prog = NULL;
-    // FIXME: use vim_regcomp, but make it save errors in place of throwing them 
-    //        right away.
+    // FIXME: use vim_regcomp, but make it save errors in place of throwing 
+    //        them right away.
     // regex->prog = vim_regcomp(reg->string, 0);
   }
 
@@ -383,8 +383,9 @@ static int get_vcol(char_u **pp)
 ///                        regular expression should end (unless it was 
 ///                        escaped). Is expected to be either '?', '/' or NUL 
 ///                        (note: regex will in any case end on NUL, but using 
-///                        NUL here will result in a faster code: NULs cannot be 
-///                        escaped, so it just uses STRLEN to find regex end).
+///                        NUL here will result in a faster code: NULs cannot 
+///                        be escaped, so it just uses STRLEN to find regex 
+///                        end).
 ///
 /// @return FAIL when out of memory, OK otherwise.
 static int get_regex(char_u **pp, CommandParserError *error, Regex **regex,
@@ -655,8 +656,8 @@ static int do_parse_map(char_u **pp,
     // Note: type of the abbreviation is not checked because it depends on the 
     //       &iskeyword option. Unlike $ENV parsing (which depends on the 
     //       options too) it is not unlikely that both 1. file will be parsed 
-    //       before result is actually used and 2. option value at the execution 
-    //       stage will make results invalid.
+    //       before result is actually used and 2. option value at the 
+    //       execution stage will make results invalid.
     *lhs_end = NUL;
     lhs = replace_termcodes(lhs, &lhs_buf, TRUE, TRUE,
                             map_flags&FLAG_MAP_SPECIAL,
@@ -1109,13 +1110,13 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
     case kTypeSimpleVariableName: {
       if (!allow_lower
           && ASCII_ISLOWER(*expr->position)
-          && expr->position[1] != ':'  // Fast check: most functions containing 
-                                       // colon contain it in the second 
-                                       // character
+          && expr->position[1] != ':'  // Fast check: most functions 
+                                       // containing colon contain it in the 
+                                       // second character
           && memchr((void *) expr->position, '#',
                     expr->end_position - expr->position + 1) == NULL
-          // FIXME? Though foo:bar works in Vim Bram said it was never intended 
-          //        to work.
+          // FIXME? Though foo:bar works in Vim Bram said it was never 
+          //        intended to work.
           && memchr((void *) expr->position, ':',
                     expr->end_position - expr->position + 1) == NULL) {
         error->message =
@@ -1211,8 +1212,8 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 
 /// Parse left value of assignment
 ///
-/// @param[in,out]  pp          Parsed string. Is advanced to the next character 
-///                             after parsed expression.
+/// @param[in,out]  pp          Parsed string. Is advanced to the next 
+///                             character after parsed expression.
 /// @param[out]     error       Structure where errors are saved.
 /// @param[in]      o           Options that control parsing behavior.
 /// @param[out]     expr        Location where result will be saved.
@@ -1225,13 +1226,13 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 ///   FLAG_PLVAL_NOLOWER   | Do not allow name to start with a lowercase letter
 ///   FLAG_PLVAL_ALLOW_ENV | Allow options, env variables and registers
 ///
-///   @note If both FLAG_PLVAL_LISTMULT and FLAG_PLVAL_SPACEMULT were specified 
-///         then only either space-separated values or list will be allowed, but 
-///         not both.
+///   @note If both FLAG_PLVAL_LISTMULT and FLAG_PLVAL_SPACEMULT were 
+///         specified then only either space-separated values or list will be 
+///         allowed, but not both.
 /// @endparblock
 ///
-/// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when out 
-///         of memory.
+/// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when 
+///         out of memory.
 static int parse_lval(char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
@@ -2088,8 +2089,8 @@ static char_u *do_fgetline_allocated(int c, char_u **arg, int indent)
 /// @param[out]     next_node  Location where parsing results are saved.
 /// @param[in]      o          Options that control parsing behavior.
 /// @param[in]      position   Position of input.
-/// @param[in]      s          Address of position->col. Used to adjust position 
-///                            in case of error.
+/// @param[in]      s          Address of position->col. Used to adjust 
+///                            position in case of error.
 ///
 /// @return OK if everything was parsed correctly, FAIL if out of memory.
 ///
@@ -2995,8 +2996,8 @@ const CommandNode nocmd = {
 
 /// Parses sequence of commands
 ///
-/// @param[in]      o         Options that control parsing behavior. In addition 
-///                           to flags documented in parse_one_command 
+/// @param[in]      o         Options that control parsing behavior. In 
+///                           addition to flags documented in parse_one_command 
 ///                           documentation it accepts o.early_return option 
 ///                           that makes in not call fgetline once there is 
 ///                           something to execute.

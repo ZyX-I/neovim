@@ -90,8 +90,8 @@ typedef struct range {
   Address address;     ///< Ex address
   bool setpos;         ///< TRUE if next address in range was separated from 
                        ///< this address by ';'
-  struct range *next;  ///< Next address in range. There is no limit in a number 
-                       ///< of consequent addresses
+  struct range *next;  ///< Next address in range. There is no limit in 
+                       ///< a number of consequent addresses
 } Range;
 
 /// A structure to represent GUI menu item
@@ -172,9 +172,9 @@ typedef struct command_node {
       MenuItem *menu_item;        ///< Menu item
       Address *address;           ///< Ex mode address
       CmdComplete *complete;
-      ExpressionNode *expr;       ///< Expression (:if) or a list of expressions 
-                                  ///< (:echo) (uses expr->next to build 
-                                  ///< a linked list)
+      ExpressionNode *expr;       ///< Expression (:if) or a list of 
+                                  ///< expressions (:echo) (uses expr->next to 
+                                  ///< build a linked list)
       struct command_subargs {
         unsigned type;
         size_t num_args;

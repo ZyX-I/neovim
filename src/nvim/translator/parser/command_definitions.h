@@ -26,7 +26,11 @@
  *    long name of the command.
  */
 
-#if (defined(DO_DECLARE_EXCMD) && !defined(NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DECLARED)) || (!defined(DO_DECLARE_EXCMD) && !defined(NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DEFINED_ENUM))
+#if (defined(DO_DECLARE_EXCMD) \
+     && !defined(NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DECLARED)) \
+    || \
+    (!defined(DO_DECLARE_EXCMD) \
+     && !defined(NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DEFINED_ENUM))
 #ifdef DO_DECLARE_EXCMD
 # define NEOVIM_TRANSLATOR_PARSER_COMMAND_DEFINITIONS_H_DECLARED
 #else
@@ -1676,8 +1680,8 @@ typedef enum
   EX(kCmdTilde,           "~",            NULL,
      ARG_S_FLAGS, ARGS_S,
      RANGE|WHOLEFOLD|EXTRA|CMDWIN|MODIFY),
-  // XXX If you add real command just above this line (i.e. after kCmdTilde) you 
-  // should update kCmdSIZE
+  // XXX If you add real command just above this line (i.e. after kCmdTilde) 
+  //     you should update kCmdSIZE
 #ifndef DO_DECLARE_EXCMD
 # define kCmdSIZE (((size_t)kCmdTilde))
 #endif
@@ -1697,7 +1701,7 @@ typedef enum
      ARG_NO_ARGS, ARGS_NO,
      0),
   // XXX If you add any command just above this line (i.e. after kCmdMissing) 
-  // you should update kCmdREAL_SIZE
+  //     you should update kCmdREAL_SIZE
 #ifndef DO_DECLARE_EXCMD
 # define kCmdREAL_SIZE (((size_t)kCmdMissing))
 #endif

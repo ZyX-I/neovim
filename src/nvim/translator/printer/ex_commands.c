@@ -3,6 +3,7 @@
 
 #include "nvim/vim.h"
 #include "nvim/misc2.h"
+#include "nvim/memory.h"
 
 #include "nvim/translator/printer/expressions.h"
 #include "nvim/translator/parser/expressions.h"
@@ -690,7 +691,8 @@ static size_t node_repr_len(CommandNode *node, size_t indent, bool barnext)
   return len;
 }
 
-static void node_repr(CommandNode *node, size_t indent, bool barnext, char **pp)
+static void node_repr(CommandNode *node, size_t indent, bool barnext,
+                      char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
   char *p = *pp;
