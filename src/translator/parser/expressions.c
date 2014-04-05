@@ -564,8 +564,8 @@ static int parse_environment_variable(char_u **arg,
 
 /// Parse .key subscript
 ///
-/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
-///                        after the subscript.
+/// @param[in,out]  arg    Parsed string. Is advanced to the first non-white 
+///                        character after the subscript.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
 ///
@@ -595,7 +595,7 @@ static int parse_dot_subscript(char_u **arg,
   top_node->position = s + 1;
   top_node->end_position = e - 1;
   *node = top_node;
-  *arg = e;
+  *arg = skipwhite(e);
   return NOTDONE;
 }
 
