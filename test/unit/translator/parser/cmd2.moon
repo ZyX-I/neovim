@@ -201,3 +201,11 @@ describe 'parse_cmd_sequence', ->
     \t
     \t
     unlet a b'
+
+  describe 'expression commands', ->
+    t 'echo 1\necho 2', 'echo1|echo2'
+    t '
+    if 1
+      return 1
+    endif
+    ', 'if 1 | return 1 | endif'

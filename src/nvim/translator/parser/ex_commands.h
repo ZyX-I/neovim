@@ -217,8 +217,6 @@ typedef int (*CommandArgsParser)(char_u **,
 #define MENU_DEFAULT_PRI_VALUE 500
 #define MENU_DEFAULT_PRI        -1
 
-#define MAX_NEST_BLOCKS   CSTACK_LEN * 3
-
 typedef struct {
   char_u      *name;          // name of the command
   uint_least32_t flags;       // flags declared above
@@ -229,8 +227,12 @@ typedef struct {
 extern CommandDefinition cmddefs[kCmdREAL_SIZE];
 #define CMDDEF(type) cmddefs[type - 1]
 
-#define ENDS_EXCMD(ch) ((ch) == NUL || (ch) == '|' || (ch) == '"' \
-                        || (ch) == '\n')
+const CommandNode nocmd;
+
+#define MAX_NEST_BLOCKS   CSTACK_LEN * 3
+
+#define ENDS_EXCMD_NOCOMMENT(ch) ((ch) == NUL || (ch) == '|' || (ch) == '\n')
+#define ENDS_EXCMD(ch) ((ch) == '"' || ENDS_EXCMD_NOCOMMENT(ch))
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "nvim/translator/parser/ex_commands.h.generated.h"
