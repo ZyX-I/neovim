@@ -2176,7 +2176,7 @@ static int parse_argopt(char_u **pp,
       return FAIL;
     for (e = *enc; *e != NUL; e++)
       *e = TOLOWER_ASC(*e);
-  } else {
+  } else if (do_bad) {
     size_t len = *pp - arg_start;
     if (STRNICMP(arg_start, "keep", len) == 0) {
       *optflags |= VAL_OPT_BAD_KEEP;
@@ -2190,6 +2190,8 @@ static int parse_argopt(char_u **pp,
       error->position = arg_start;
       return NOTDONE;
     }
+  } else {
+    assert(FALSE);
   }
   *pp = skipwhite(*pp);
   return OK;
