@@ -286,9 +286,11 @@ static void free_menu_item(MenuItem *menu_item)
 
 static void free_regex(Regex *regex)
 {
+  if (regex == NULL)
+    return;
+
   vim_regfree(regex->prog);
   vim_free(regex);
-  return;
 }
 
 static void free_address_data(Address *address)
@@ -529,7 +531,10 @@ static int get_vcol(char_u **pp)
 
 /// Get regular expression
 ///
-/// @param[in,out]  pp     String searched for a regular expression
+/// @param[in,out]  pp     String searched for a regular expression. Should 
+///                        point to the first character of the regular 
+///                        expression, *not* to the first character before it. 
+///                        Is advanced to the character just after endch.
 /// @param[out]     error  Structure where errors are saved.
 /// @param[out]     regex  Location where regex is saved.
 /// @param[in]      endch  Last character of the regex: character at which 
@@ -561,9 +566,6 @@ static int get_regex(char_u **pp, CommandParserError *error, Regex **regex,
     return FAIL;
 
   if (*p != NUL)
-    p++;
-
-  if (*p == endch)
     p++;
 
   *pp = p;
@@ -1940,9 +1942,7 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
       }
       case kAddressFollowupForwardPattern:
       case kAddressFollowupBackwardPattern: {
-        if (get_regex(pp, error, &(fw->data.regex),
-                      type == kAddressFollowupForwardPattern ? '/' : '?')
-            == FAIL) {
+        if (get_regex(&p, error, &(fw->data.regex), p[-1]) == FAIL) {
           free_address_followup(fw);
           return FAIL;
         }
