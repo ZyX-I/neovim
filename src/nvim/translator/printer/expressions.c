@@ -338,7 +338,7 @@ static void node_dump(ExpressionNode *node, char **pp)
           *p++ = ' ';
           if (add_ccs)
             if (node->ignore_case)
-              *p++ = *(case_compare_strategy_string[node->type]);
+              *p++ = *(case_compare_strategy_string[node->ignore_case]);
         }
       } while (child != NULL);
 
