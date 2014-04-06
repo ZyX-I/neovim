@@ -100,6 +100,21 @@ static Regex *regex_alloc(const char_u *string, size_t len)
   return regex;
 }
 
+/// Allocate new glob pattern part
+///
+/// @param[in]  type  Part type.
+///
+/// @return Pointer to allocated block of memory or NULL in case of error.
+static Glob *glob_alloc(GlobType type)
+{
+  Glob *glob;
+
+  if ((glob = ALLOC_CLEAR_NEW(Glob, 1)) != NULL)
+    glob->type = type;
+
+  return glob;
+}
+
 /// Allocate new address followup structure and set its type
 ///
 /// @param[in]  type  Followup type.
@@ -132,6 +147,49 @@ static void free_regex(Regex *regex)
 
   vim_regfree(regex->prog);
   vim_free(regex);
+}
+
+static void free_glob(Glob *glob)
+{
+  if (glob == NULL)
+    return;
+
+  switch (glob->type) {
+    case kPatMissing:
+    case kPatHome:
+    case kPatCurrent:
+    case kPatAlternate:
+    case kPatBufname:
+    case kPatOldFile:
+    case kPatArguments:
+    case kPatCharacter:
+    case kPatAnything:
+    case kPatAnyRecurse: {
+      break;
+    }
+    case kPatLiteral:
+    case kPatEnviron:
+    case kPatCollection:
+    case kGlobShell: {
+      vim_free(glob->data.str);
+      break;
+    }
+    case kGlobExpression: {
+      free_expr(glob->data.expr);
+      break;
+    }
+    case kPatBranch: {
+      free_glob(glob->data.glob);
+      break;
+    }
+  }
+  free_glob(glob->next);
+  vim_free(glob);
+}
+
+static void free_pattern(Pattern *pat)
+{
+  free_glob((Glob *) pat);
 }
 
 static void free_address_data(Address *address)
@@ -232,11 +290,11 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       break;
     }
     case kArgPattern: {
-      // FIXME
+      free_pattern(arg->arg.pat);
       break;
     }
     case kArgGlob: {
-      // FIXME
+      free_glob(arg->arg.glob);
       break;
     }
     case kArgRegex: {
@@ -296,9 +354,255 @@ void free_cmd(CommandNode *node)
 
   free_cmd(node->next);
   free_cmd(node->children);
+  free_glob(node->glob);
   free_range_data(&(node->range));
+  vim_free(node->expr);
   vim_free(node->name);
   vim_free(node);
+}
+
+static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
+                    char_u **expr, bool is_branch, bool is_glob)
+{
+  char_u *p = *pp;
+  Glob **next = glob;
+  char_u *real_expr_start;
+  char_u *e;
+  size_t literal_length = 0;
+  char_u *literal_start = NULL;
+  int ret = FAIL;
+
+  *glob = NULL;
+  if (!is_branch)
+    *expr = NULL;
+
+  while (*p) {
+    GlobType type = kPatMissing;
+    switch (*p) {
+      case '`': {
+        if (!is_glob)
+          type = kPatLiteral;
+        // FIXME Not compatible
+        else if (is_branch)
+          type = kPatLiteral;
+        else if (p[1] == '=')
+          type = kGlobExpression;
+        else
+          type = kGlobShell;
+        break;
+      }
+      case '*': {
+        if (p[1] == '*')
+          type = kPatAnyRecurse;
+        else
+          type = kPatAnything;
+        break;
+      }
+      case '?': {
+        type = kPatCharacter;
+        break;
+      }
+      case '%': {
+        type = kPatCurrent;
+        break;
+      }
+      case '#': {
+        switch (p[1]) {
+          case '1':
+          case '2':
+          case '3':
+          case '4':
+          case '5':
+          case '6':
+          case '7':
+          case '8':
+          case '9': {
+            type = kPatBufname;
+            break;
+          }
+          case '<': {
+            if (VIM_ISDIGIT(p[2]))
+              type = kPatOldFile;
+            else
+              type = kPatLiteral;
+            break;
+          }
+          case '#': {
+            type = kPatArguments;
+            break;
+          }
+          default: {
+            type = kPatAlternate;
+            break;
+          }
+        }
+        break;
+      }
+      case '[': {
+        type = kPatCollection;
+        break;
+      }
+      case '{': {
+        type = kPatBranch;
+      }
+      case '$': {
+        type = kPatHome;
+        break;
+      }
+      case NUL: {
+        type = kPatMissing;
+        break;
+      }
+      case ',': {
+        if (is_branch)
+          type = kPatMissing;
+        else
+          type = kPatLiteral;
+        break;
+      }
+      case ' ':
+      case '\t': {
+        type = kPatMissing;
+        break;
+      }
+      default: {
+        type = kPatLiteral;
+        break;
+      }
+    }
+    if (type == kPatLiteral) {
+      if (literal_start == NULL)
+        literal_start = p;
+      literal_length++;
+#define GLOB_SPECIAL_CHARS ((char_u *) "`#*?%\\[{}]$")
+#define IS_GLOB_SPECIAL(c) (vim_strchr(GLOB_SPECIAL_CHARS, c) != NULL)
+      // TODO Compare with vim
+      if (*p == '\\' && IS_GLOB_SPECIAL(p[1]))
+        p += 2;
+      else
+        p++;
+    } else {
+      if (literal_start != NULL) {
+        char_u *s;
+        char_u *t;
+        if ((*next = glob_alloc(kPatLiteral)) == NULL)
+          goto get_glob_error_return;
+        if (((*next)->data.str = ALLOC_CLEAR_NEW(char_u, literal_length + 1))
+            == NULL)
+          goto get_glob_error_return;
+        s = (*next)->data.str;
+
+        for (t = literal_start; t < p; t++) {
+          if (*t == '\\' && IS_GLOB_SPECIAL(t[1])) {
+            *s++ = t[1];
+            t++;
+          } else {
+            *s++ = *t;
+          }
+        }
+        literal_start = NULL;
+        literal_length = 0;
+      }
+      if (type == kPatMissing)
+        break;
+      if ((*next = glob_alloc(kGlobExpression)) == NULL)
+        goto get_glob_error_return;
+      switch (type) {
+        case kGlobExpression: {
+          ExpressionParserError expr_error;
+          p += 2;
+          if (*expr == NULL) {
+            if ((*expr = vim_strsave(p)) == NULL)
+              goto get_glob_error_return;
+            real_expr_start = p;
+            e = *expr;
+          } else {
+            e = *expr + (p - real_expr_start);
+          }
+          if (((*next)->data.expr = parse0_err(&e, &expr_error)) == NULL) {
+            if (expr_error.message == NULL)
+              goto get_glob_error_return;
+            error->message = expr_error.message;
+            error->position = real_expr_start + (expr_error.position - *expr);
+            ret = NOTDONE;
+            goto get_glob_error_return;
+          }
+          p = real_expr_start + (e - *expr);
+          break;
+        }
+        case kGlobShell: {
+          p++;
+          if ((*next = glob_alloc(kGlobShell)) == NULL)
+            goto get_glob_error_return;
+          if (((*next)->data.str = vim_strsave(p)) == NULL)
+            goto get_glob_error_return;
+          p += STRLEN(p);
+          break;
+        }
+        case kPatHome:
+        case kPatCurrent:
+        case kPatAlternate:
+        case kPatCharacter:
+        case kPatAnything: {
+          p++;
+          break;
+        }
+        case kPatArguments:
+        case kPatAnyRecurse: {
+          p += 2;
+          break;
+        }
+        case kPatOldFile: {
+          p++;
+          // fallthrough
+        }
+        case kPatBufname: {
+          p++;
+          (*next)->data.number = getdigits(&p);
+          break;
+        }
+        case kPatCollection: {
+          p++;
+          // FIXME
+          break;
+        }
+        case kPatEnviron: {
+          p++;
+          // FIXME
+          break;
+        }
+        case kPatBranch: {
+          Glob **cnext = &((*next)->data.glob);
+          do {
+            int cret;
+            p++;
+            if ((cret = get_glob(&p, error, cnext, expr, TRUE, is_glob))
+                == FAIL)
+              return FAIL;
+            if (cret == NOTDONE) {
+              ret = NOTDONE;
+              goto get_glob_error_return;
+            }
+            cnext = &((*cnext)->next);
+          } while(*p == ',');
+          break;
+        }
+        case kPatMissing:
+        case kPatLiteral: {
+          assert(FALSE);
+        }
+      }
+      next = &((*next)->next);
+    }
+  }
+
+  *pp = p;
+  return OK;
+
+get_glob_error_return:
+  free_glob(*glob);
+  vim_free(*expr);
+  return ret;
 }
 
 /// Create new syntax error node
@@ -2339,6 +2643,8 @@ int parse_one_cmd(char_u **pp,
   CommandArgsParser parse = NULL;
   CountType cnt_type = kCntMissing;
   int count = 0;
+  Glob *glob = NULL;
+  char_u *expr = NULL;
 
   memset(&range, 0, sizeof(Range));
   memset(&current_range, 0, sizeof(Range));
@@ -2710,11 +3016,26 @@ int parse_one_cmd(char_u **pp,
     }
   }
 
+  if (CMDDEF(type).flags & XFILE) {
+    int ret;
+    if ((ret = get_glob(&p, &error, &glob, &expr, FALSE, TRUE)) == FAIL) {
+      free_range_data(&range);
+      return FAIL;
+    }
+    if (ret == NOTDONE) {
+      free_range_data(&range);
+      if (create_error_node(next_node, &error, position, s) == FAIL)
+        return FAIL;
+      return NOTDONE;
+    }
+  }
+
   if (!(CMDDEF(type).flags & EXTRA)
       && *p != NUL
       && *p != '"'
       && (*p != '|' || !(CMDDEF(type).flags & TRLBAR))) {
     free_range_data(&range);
+    free_glob(glob);
     error.message = (char *) e_trailing;
     error.position = p;
     if (create_error_node(next_node, &error, position, s) == FAIL)
@@ -2737,6 +3058,8 @@ int parse_one_cmd(char_u **pp,
   (*next_node)->children = children;
   (*next_node)->optflags = optflags;
   (*next_node)->enc = enc;
+  (*next_node)->glob = glob;
+  (*next_node)->expr = expr;
 
   parse = CMDDEF(type).parse;
 
@@ -2955,6 +3278,8 @@ const CommandNode nocmd = {
   {0},
   0,
   0,
+  NULL,
+  NULL,
   NULL,
   FALSE,
   {

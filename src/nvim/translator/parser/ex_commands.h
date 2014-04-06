@@ -20,8 +20,6 @@
 #define ARG_NAME_FILES     0
 
 // FIXME
-typedef char_u Pattern;
-typedef char_u Glob;
 typedef int AuEvent;
 typedef int CmdCompleteType;
 
@@ -30,6 +28,40 @@ typedef struct {
   regprog_T *prog;   ///< Compiled pattern
   char_u string[1];  ///< Original string
 } Regex;
+
+typedef enum {
+  kPatMissing = 0,
+  kPatLiteral,      ///< Literal string (char_u *str)
+  kPatHome,         ///< Tilde expansion (no data)
+  kPatEnviron,      ///< Environment variable (char_u *str)
+  kPatCurrent,      ///< Current file name (no data)
+  kPatAlternate,    ///< Alternate file name (no data)
+  kPatBufname,      ///< Buffer name ("#N") expansion (int number)
+  kPatOldFile,      ///< Old file expansion ("#<N") (int number)
+  kPatArguments,    ///< Arguments list expansion ("##") (no data)
+  kPatCharacter,    ///< "?" expansion (no data)
+  kPatAnything,     ///< "*" expansion (no data)
+  kPatAnyRecurse,   ///< "**" expansion (no data)
+  kPatCollection,   ///< [abc] expansion (char_u *str)
+  kPatBranch,       ///< {a,b} expansion (Glob *glob)
+  // The following arguments are only valid for Glob and not for Pattern
+  kGlobShell,       ///< Shell backtick expansion (char_u *str)
+  kGlobExpression,  ///< "`=expr`" expansion (Expression *expr)
+} GlobType;
+
+/// Structure representing glob pattern
+typedef struct glob {
+  GlobType type;           ///< Type of the glob
+  union {
+    char_u *str;           ///< String argument (for most types)
+    ExpressionNode *expr;  ///< Expression (for "`=expr`")
+    int number;            ///< Buffer name or old file number
+    struct glob *glob;     ///< Glob(s)
+  } data;                  ///< Glob data
+  struct glob *next;       ///< Next part of the pattern
+} Glob;
+
+typedef Glob Pattern;
 
 /// Address followup type
 typedef enum {
@@ -151,6 +183,8 @@ typedef struct command_node {
   uint_least8_t exflags;          ///< Ex flags (for :print command and like)
   uint_least32_t optflags;        ///< ++opt flags
   char_u *enc;                    ///< Encoding from ++enc
+  Glob *glob;                     ///< File name(s)
+  char_u *expr;                   ///< Saved expression used in "`=expr`"
   bool bang;                      ///< TRUE if command was used with a bang
   struct command_argument {
     union {

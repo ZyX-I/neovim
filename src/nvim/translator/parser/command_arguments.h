@@ -39,8 +39,8 @@ typedef enum {
 #define ARGS_MENU     {kArgFlags, kArgString, kArgNumbers, kArgMenuName, \
                        kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
-#define ARGS_E        {kArgGlob}
-#define ARGS_SO       {kArgGlob}
+#define ARGS_E        {kArgString, kArgGlob}
+#define ARGS_SO       {kArgPattern}
 #define ARGS_AU       {kArgString, kArgAuEvents, kArgPattern, kArgFlags}
 #define ARGS_NAME     {kArgString}
 #define ARGS_UNMAP    {kArgFlags, kArgString}
@@ -58,8 +58,8 @@ typedef enum {
 #define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
 #define ARGS_EXPRS    {kArgString, kArgExpressions}
 #define ARGS_LOCKVAR  {kArgString, kArgExpressions, kArgUNumber}
-#define ARGS_EXIT     {kArgGlob}
-#define ARGS_WN       {kArgGlob}
+#define ARGS_EXIT     {kArgString, kArgGlob}
+#define ARGS_WN       {kArgString, kArgGlob}
 #define ARGS_FOR      {kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_LET      {kArgFlags, kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_FUNC     {kArgString, kArgRegex, kArgAssignLhs, kArgStrings, \
@@ -73,15 +73,15 @@ typedef enum {
                        kArgUNumber}
 #define ARGS_HIST     {kArgFlags, kArgNumber, kArgNumber}
 #define ARGS_LANG     {kArgFlags, kArgString}
-#define ARGS_VIMG     {kArgFlags, kArgRegex, kArgGlob}
+#define ARGS_VIMG     {kArgFlags, kArgRegex, kArgString, kArgGlob}
 #define ARGS_MARK     {kArgChar}
 #define ARGS_SIMALT   {kArgChar}
 #define ARGS_MATCH    {kArgString, kArgRegex}
 #define ARGS_MT       {kArgString, kArgString}
 #define ARGS_NORMAL   {kArgString}
-#define ARGS_PROFILE  {kArgFlags, kArgGlob, kArgPattern}
-#define ARGS_W        {kArgGlob, kArgString}
-#define ARGS_REDIR    {kArgFlags, kArgGlob, kArgAssignLhs}
+#define ARGS_PROFILE  {kArgFlags, kArgString, kArgGlob, kArgPattern}
+#define ARGS_W        {kArgString, kArgGlob, kArgString}
+#define ARGS_REDIR    {kArgFlags, kArgString, kArgGlob, kArgAssignLhs}
 #define ARGS_S        {kArgRegex, kArgReplacement, kArgFlags}
 #define ARGS_SET      {kArgStrings, kArgNumbers, kArgStrings}
 #define ARGS_FT       {kArgFlags}
@@ -170,7 +170,8 @@ enum {
 
 // :args/:e
 enum {
-  ARG_E_FILES       = 0,
+  ARG_E_EXPR        = 0,
+  ARG_E_FILES,
 };
 
 // :argadd/:argdelete/:source
@@ -325,12 +326,14 @@ enum {
 
 // :exit
 enum {
-  ARG_EXIT_FILES    = 0,
+  ARG_EXIT_EXPR     = 0,
+  ARG_EXIT_FILES,
 };
 
 // :wnext/:wNext/:wprevious
 enum {
-  ARG_WN_FILES      = 0,
+  ARG_WN_EXPR       = 0,
+  ARG_WN_FILES,
 };
 
 // :for
@@ -485,6 +488,7 @@ enum {
 // :profile/:profdel
 enum {
   ARG_PROFILE_FLAGS = 0,
+  ARG_PROFILE_EXPR,
   ARG_PROFILE_FILE,
   ARG_PROFILE_PAT,
 };
@@ -498,13 +502,15 @@ enum {
 
 // :write/:read/:update
 enum {
-  ARG_W_FILE        = 0,
+  ARG_W_EXPR        = 0,
+  ARG_W_FILE,
   ARG_W_SHELL,
 };
 
 // :redir
 enum {
-  ARG_REDIR_FLAGS   = 0,
+  ARG_REDIR_EXPR    = 0,
+  ARG_REDIR_FLAGS,
   ARG_REDIR_FILE,
   ARG_REDIR_VAR,
 };
