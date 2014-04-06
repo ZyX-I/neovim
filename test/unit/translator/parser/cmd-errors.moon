@@ -198,3 +198,38 @@ describe 'parse_cmd_sequence errors', ->
     finally
     endtry
     '
+
+    t '
+    if 1
+      if 1
+        echo 1
+      else
+        echo 2
+      \\ error: E583: multiple :else:       else!!!
+        echo 3
+      \\ error: E583: multiple :else:       else!!!
+        echo 4
+      endif
+    endif
+    echo 6
+    for x in x
+      echo 7
+    \\ error: E733: Using :endwhile with :for:     endwhile!!!
+    echo 8
+    ', '
+    if 1
+      if 1
+        echo 1
+      else
+        echo 2
+      else
+        echo 3
+      else
+        echo 4
+      endif
+    endif
+    echo 6
+    for x in x
+      echo 7
+    endwhile
+    echo 8'

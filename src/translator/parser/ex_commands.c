@@ -3475,13 +3475,34 @@ const CommandNode nocmd = {
             prev_node->next->prev = prev_node; \
         }
 #define NEW_ERROR_NODE(prev_node, error_message, error_position, line_start) \
-        _NEW_ERROR_NODE(NULL, prev_node, error_message, error_position, \
-                        line_start)
-#define APPEND_ERROR_NODE(next_node, prev_node, error_message, error_position, \
-                          line_start) \
         { \
-          _NEW_ERROR_NODE(next_node, prev_node, error_message, error_position, \
+          _NEW_ERROR_NODE(NULL, prev_node, error_message, error_position, \
                           line_start) \
+          assert(prev_node != NULL); \
+          prev_node = prev_node->next; \
+        }
+#define NEW_BLOCK_SEP_ERROR_NODE(next_node, blockstack, blockstack_len, \
+                                 prev_node, error_message, push_stack, \
+                                 error_position, line_start) \
+        { \
+          free_cmd(*next_node); \
+          *next_node = NULL; \
+          NEW_ERROR_NODE(blockstack[blockstack_len - 1].node, \
+                         error_message, error_position, line_start) \
+          if (push_stack) { \
+            prev_node = NULL; \
+            next_node = &(blockstack[blockstack_len - 1].node->children); \
+          } else { \
+            prev_node = blockstack[blockstack_len - 1].node; \
+            next_node = &(prev_node->next); \
+            blockstack_len--; \
+          } \
+        }
+#define APPEND_ERROR_NODE(next_node, prev_node, error_message, \
+                          error_position, line_start) \
+        { \
+          _NEW_ERROR_NODE(next_node, prev_node, error_message, \
+                          error_position, line_start) \
           prev_node = prev_node == NULL ? *next_node : prev_node->next; \
           next_node = &(prev_node->next); \
         }
@@ -3564,17 +3585,15 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         while (blockstack_len) {
           CommandType last_block_type = blockstack[blockstack_len - 1].type;
           if (bo.not_after != kCmdUnknown && last_block_type == bo.not_after) {
-            free_cmd(*next_node);
-            *next_node = NULL;
-            NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
-                           bo.not_after_message, line, line_start)
+            NEW_BLOCK_SEP_ERROR_NODE(next_node, blockstack, blockstack_len,
+                                     prev_node, bo.not_after_message,
+                                     bo.push_stack, line, line_start)
             break;
           } else if (bo.duplicate_message != NULL
                      && last_block_type == (*next_node)->type) {
-            free_cmd(*next_node);
-            *next_node = NULL;
-            NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
-                           bo.duplicate_message, line, line_start)
+            NEW_BLOCK_SEP_ERROR_NODE(next_node, blockstack, blockstack_len,
+                                     prev_node, bo.duplicate_message,
+                                     bo.push_stack, line, line_start)
             break;
           } else if (last_block_type == bo.find_in_stack
                      || (bo.find_in_stack_2 != kCmdUnknown
