@@ -8,6 +8,8 @@ ffi.cdef [[
 const char *os_getenv(const char *name);
 int os_setenv(const char *name, const char *value, int override);
 char *os_getenvname_at_index(size_t index);
+long os_get_pid(void);
+void os_get_hostname(char *hostname, size_t len);
 ]]
 
 NULL = ffi.cast 'void*', 0
@@ -89,4 +91,27 @@ describe 'env function', ->
         -- maxuint64 = ffi.new 'size_t', 18446744073709551615
         maxuint64 = ffi.new 'size_t', 18446744073709000000
         eq NULL, env.os_getenvname_at_index maxuint64
+
+  describe 'os_get_pid', ->
+
+    it 'returns the process ID', ->
+      stat_file = io.open '/proc/self/stat'
+      if stat_file
+        stat_str = stat_file\read '*l'
+        stat_file\close!
+        pid = tonumber (stat_str\match '%d+')
+        eq pid, tonumber env.os_get_pid!
+      else
+        -- /proc is not avaliable on all systems, test if pid is nonzero.
+        eq true, (env.os_get_pid! > 0)
+
+  describe 'os_get_hostname', ->
+
+    it 'returns the hostname', ->
+      handle = io.popen 'hostname'
+      hostname = handle\read '*l'
+      handle\close!
+      hostname_buf = cstr 255, ''
+      env.os_get_hostname hostname_buf, 255
+      eq hostname,  (ffi.string hostname_buf)
 
