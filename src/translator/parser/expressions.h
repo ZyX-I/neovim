@@ -8,77 +8,77 @@
 #include "types.h"
 
 typedef enum {
-  kTypeUnknown = 0,
+  kExprUnknown = 0,
 
   // Ternary operators
-  kTypeTernaryConditional,    // ? :
+  kExprTernaryConditional,    // ? :
 
   // Binary operators
-#define LOGICAL_START kTypeLogicalOr
-  kTypeLogicalOr,             // ||
-  kTypeLogicalAnd,            // &&
-#define LOGICAL_END kTypeLogicalAnd
-#define COMPARISON_START kTypeGreater
-  kTypeGreater,               // >
-  kTypeGreaterThanOrEqualTo,  // >=
-  kTypeLess,                  // <
-  kTypeLessThanOrEqualTo,     // <=
-  kTypeEquals,                // ==
-  kTypeNotEquals,             // !=
-  kTypeIdentical,             // is
-  kTypeNotIdentical,          // isnot
-  kTypeMatches,               // =~
-  kTypeNotMatches,            // !~
-#define COMPARISON_END kTypeNotMatches
-#define ARITHMETIC_START kTypeAdd
-  kTypeAdd,                   // +
-  kTypeSubtract,              // -
-  kTypeMultiply,              // *
-  kTypeDivide,                // /
-  kTypeModulo,                // %
-#define ARITHMETIC_END kTypeModulo
-  kTypeStringConcat,          // .
+#define LOGICAL_START kExprLogicalOr
+  kExprLogicalOr,             // ||
+  kExprLogicalAnd,            // &&
+#define LOGICAL_END kExprLogicalAnd
+#define COMPARISON_START kExprGreater
+  kExprGreater,               // >
+  kExprGreaterThanOrEqualTo,  // >=
+  kExprLess,                  // <
+  kExprLessThanOrEqualTo,     // <=
+  kExprEquals,                // ==
+  kExprNotEquals,             // !=
+  kExprIdentical,             // is
+  kExprNotIdentical,          // isnot
+  kExprMatches,               // =~
+  kExprNotMatches,            // !~
+#define COMPARISON_END kExprNotMatches
+#define ARITHMETIC_START kExprAdd
+  kExprAdd,                   // +
+  kExprSubtract,              // -
+  kExprMultiply,              // *
+  kExprDivide,                // /
+  kExprModulo,                // %
+#define ARITHMETIC_END kExprModulo
+  kExprStringConcat,          // .
   // 19
 
   // Unary operators
-#define UNARY_START kTypeNot
-  kTypeNot,                   // !
-  kTypeMinus,                 // -
-  kTypePlus,                  // +
-#define UNARY_END kTypePlus
+#define UNARY_START kExprNot
+  kExprNot,                   // !
+  kExprMinus,                 // -
+  kExprPlus,                  // +
+#define UNARY_END kExprPlus
   // 22
 
   // Simple value nodes
-  kTypeDecimalNumber,         // 0
-  kTypeOctalNumber,           // 0123
-  kTypeHexNumber,             // 0x1C
-  kTypeFloat,                 // 0.0, 0.0e0
-  kTypeDoubleQuotedString,    // "abc"
-  kTypeSingleQuotedString,    // 'abc'
-  kTypeOption,                // &option
-  kTypeRegister,              // @r
-  kTypeEnvironmentVariable,   // $VAR
+  kExprDecimalNumber,         // 0
+  kExprOctalNumber,           // 0123
+  kExprHexNumber,             // 0x1C
+  kExprFloat,                 // 0.0, 0.0e0
+  kExprDoubleQuotedString,    // "abc"
+  kExprSingleQuotedString,    // 'abc'
+  kExprOption,                // &option
+  kExprRegister,              // @r
+  kExprEnvironmentVariable,   // $VAR
   // 31
 
   // Curly braces names parts
-  kTypeVariableName,          // Top-level part
-  kTypeSimpleVariableName,    // Variable name without curly braces
-  kTypeIdentifier,            // plain string part
-  kTypeCurlyName,             // curly brace name
+  kExprVariableName,          // Top-level part
+  kExprSimpleVariableName,    // Variable name without curly braces
+  kExprIdentifier,            // plain string part
+  kExprCurlyName,             // curly brace name
   // 35
 
   // Complex value nodes
-  kTypeExpression,            // (expr)
-  kTypeList,                  // [expr, ]
-  kTypeDictionary,            // {expr : expr, }
+  kExprExpression,            // (expr)
+  kExprList,                  // [expr, ]
+  kExprDictionary,            // {expr : expr, }
   // 38
 
   // Subscripts
-  kTypeSubscript,             // expr[expr:expr]
-  kTypeConcatOrSubscript,     // expr.name
-  kTypeCall,                  // expr(expr, )
+  kExprSubscript,             // expr[expr:expr]
+  kExprConcatOrSubscript,     // expr.name
+  kExprCall,                  // expr(expr, )
 
-  kTypeEmptySubscript,        // empty lhs or rhs in [lhs:rhs]
+  kExprEmptySubscript,        // empty lhs or rhs in [lhs:rhs]
 } ExpressionType;
 
 #define LOGICAL_LENGTH (LOGICAL_END - LOGICAL_START + 1)
@@ -100,12 +100,12 @@ typedef struct expression_node {
   ExpressionType type;
   // Position of start inside a line.
   char_u *position;
-  // Only valid for value nodes and kTypeConcatOrSubscript.
+  // Only valid for value nodes and kExprConcatOrSubscript.
   char_u *end_position;
-  // Only valid for kType(Greater|Less)*, kType[Not]Matches, kType[Not]Equals: 
+  // Only valid for kExpr(Greater|Less)*, kExpr[Not]Matches, kExpr[Not]Equals: 
   // determines whether case should be ignored
   CaseCompareStrategy ignore_case;
-  // Only valid for operators, subscripts (except for kTypeConcatOrSubscript) 
+  // Only valid for operators, subscripts (except for kExprConcatOrSubscript) 
   // and complex value nodes: represents operator arguments, nodes inside 
   // a list, …
   struct expression_node *children;

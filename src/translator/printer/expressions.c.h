@@ -24,36 +24,36 @@ static FDEC(node_dump, ExpressionNode *node)
   bool add_ccs = FALSE;
 
   switch (node->type) {
-    case kTypeGreater:
-    case kTypeGreaterThanOrEqualTo:
-    case kTypeLess:
-    case kTypeLessThanOrEqualTo:
-    case kTypeEquals:
-    case kTypeNotEquals:
-    case kTypeIdentical:
-    case kTypeNotIdentical:
-    case kTypeMatches:
-    case kTypeNotMatches: {
+    case kExprGreater:
+    case kExprGreaterThanOrEqualTo:
+    case kExprLess:
+    case kExprLessThanOrEqualTo:
+    case kExprEquals:
+    case kExprNotEquals:
+    case kExprIdentical:
+    case kExprNotIdentical:
+    case kExprMatches:
+    case kExprNotMatches: {
       assert(node->children->next->next == NULL);
 
       add_ccs = TRUE;
       // fallthrough
     }
-    case kTypeLogicalOr:
-    case kTypeLogicalAnd:
-    case kTypeAdd:
-    case kTypeSubtract:
-    case kTypeMultiply:
-    case kTypeDivide:
-    case kTypeModulo:
-    case kTypeStringConcat: {
+    case kExprLogicalOr:
+    case kExprLogicalAnd:
+    case kExprAdd:
+    case kExprSubtract:
+    case kExprMultiply:
+    case kExprDivide:
+    case kExprModulo:
+    case kExprStringConcat: {
       ExpressionNode *child = node->children;
       char *operator;
 
       assert(node->children != NULL);
       assert(node->children->next != NULL);
 
-      if (node->type == kTypeStringConcat)
+      if (node->type == kExprStringConcat)
         operator = ".";
       else
         operator = expression_type_string[node->type];
@@ -74,7 +74,7 @@ static FDEC(node_dump, ExpressionNode *node)
 
       break;
     }
-    case kTypeTernaryConditional: {
+    case kExprTernaryConditional: {
       assert(node->children != NULL);
       assert(node->children->next != NULL);
       assert(node->children->next->next != NULL);
@@ -91,9 +91,9 @@ static FDEC(node_dump, ExpressionNode *node)
       F(node_dump, node->children->next->next);
       break;
     }
-    case kTypeNot:
-    case kTypeMinus:
-    case kTypePlus: {
+    case kExprNot:
+    case kExprMinus:
+    case kExprPlus: {
       assert(node->children != NULL);
       assert(node->children->next == NULL);
       SPACES(OPERATOR_SPACES(node->type).before)
@@ -102,20 +102,20 @@ static FDEC(node_dump, ExpressionNode *node)
       F(node_dump, node->children);
       break;
     }
-    case kTypeEnvironmentVariable:
-    case kTypeOption: {
-      ADD_CHAR((node->type == kTypeEnvironmentVariable ? '$' : '&'));
+    case kExprEnvironmentVariable:
+    case kExprOption: {
+      ADD_CHAR((node->type == kExprEnvironmentVariable ? '$' : '&'));
       // fallthrough
     }
-    case kTypeDecimalNumber:
-    case kTypeOctalNumber:
-    case kTypeHexNumber:
-    case kTypeFloat:
-    case kTypeDoubleQuotedString:
-    case kTypeSingleQuotedString:
-    case kTypeRegister:
-    case kTypeSimpleVariableName:
-    case kTypeIdentifier: {
+    case kExprDecimalNumber:
+    case kExprOctalNumber:
+    case kExprHexNumber:
+    case kExprFloat:
+    case kExprDoubleQuotedString:
+    case kExprSingleQuotedString:
+    case kExprRegister:
+    case kExprSimpleVariableName:
+    case kExprIdentifier: {
       size_t node_len = node->end_position - node->position + 1;
 
       assert(node->position != NULL);
@@ -125,7 +125,7 @@ static FDEC(node_dump, ExpressionNode *node)
       ADD_STRING_LEN(node->position, node_len);
       break;
     }
-    case kTypeVariableName: {
+    case kExprVariableName: {
       ExpressionNode *child = node->children;
 
       assert(child != NULL);
@@ -136,25 +136,25 @@ static FDEC(node_dump, ExpressionNode *node)
       } while (child != NULL);
       break;
     }
-    case kTypeCurlyName:
-    case kTypeExpression: {
+    case kExprCurlyName:
+    case kExprExpression: {
       assert(node->children != NULL);
       assert(node->children->next == NULL);
 
-      ADD_CHAR((node->type == kTypeExpression ? '(' : '{'));
-      if (node->type == kTypeCurlyName)
-      SPACES((node->type == kTypeCurlyName
+      ADD_CHAR((node->type == kExprExpression ? '(' : '{'));
+      if (node->type == kExprCurlyName)
+      SPACES((node->type == kExprCurlyName
               ? po->expression.curly_name
               : po->expression.function_call.call).after_start)
       F(node_dump, node->children);
-      if (node->type == kTypeCurlyName)
-      SPACES((node->type == kTypeCurlyName
+      if (node->type == kExprCurlyName)
+      SPACES((node->type == kExprCurlyName
               ? po->expression.curly_name
               : po->expression.function_call.call).before_end)
-      ADD_CHAR((node->type == kTypeExpression ? ')' : '}'));
+      ADD_CHAR((node->type == kExprExpression ? ')' : '}'));
       break;
     }
-    case kTypeList: {
+    case kExprList: {
       ExpressionNode *child = node->children;
 
       ADD_CHAR('[');
@@ -172,7 +172,7 @@ static FDEC(node_dump, ExpressionNode *node)
       ADD_CHAR(']');
       break;
     }
-    case kTypeDictionary: {
+    case kExprDictionary: {
       ExpressionNode *child = node->children;
       ADD_CHAR('{');
       SPACES(po->expression.dictionary.curly_braces.after_start)
@@ -195,7 +195,7 @@ static FDEC(node_dump, ExpressionNode *node)
       ADD_CHAR('}');
       break;
     }
-    case kTypeSubscript: {
+    case kExprSubscript: {
       assert(node->children != NULL);
       assert(node->children->next != NULL);
 
@@ -214,7 +214,7 @@ static FDEC(node_dump, ExpressionNode *node)
       ADD_CHAR(']');
       break;
     }
-    case kTypeConcatOrSubscript: {
+    case kExprConcatOrSubscript: {
       size_t node_len = node->end_position - node->position + 1;
 
       assert(node->children != NULL);
@@ -225,7 +225,7 @@ static FDEC(node_dump, ExpressionNode *node)
       ADD_STRING_LEN(node->position, node_len);
       break;
     }
-    case kTypeCall: {
+    case kExprCall: {
       ExpressionNode *child;
 
       assert(node->children != NULL);
@@ -244,7 +244,7 @@ static FDEC(node_dump, ExpressionNode *node)
       ADD_CHAR(')');
       break;
     }
-    case kTypeEmptySubscript: {
+    case kExprEmptySubscript: {
       break;
     }
     default: {
@@ -269,7 +269,7 @@ static FDEC(node_repr, ExpressionNode *node)
 
       ADD_CHAR('+');
 
-      if (node->type == kTypeRegister && *(node->end_position) == NUL)
+      if (node->type == kExprRegister && *(node->end_position) == NUL)
         node_len--;
 
       ADD_STRING_LEN(node->position, node_len);

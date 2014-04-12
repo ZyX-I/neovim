@@ -11,136 +11,136 @@ static void print_node(int indent, ExpressionNode *node)
 {
   char *name = NULL;
   switch (node->type) {
-    case kTypeUnknown: {
+    case kExprUnknown: {
       printf("%*sUnknown\n", indent, "");
       break;
     }
 
-    case kTypeConcatOrSubscript: {
-      if (name == NULL) name = "kTypeConcatOrSubscript";
+    case kExprConcatOrSubscript: {
+      if (name == NULL) name = "kExprConcatOrSubscript";
     }
-    case kTypeDecimalNumber: {
-      if (name == NULL) name = "kTypeDecimalNumber";
+    case kExprDecimalNumber: {
+      if (name == NULL) name = "kExprDecimalNumber";
     }
-    case kTypeOctalNumber: {
-      if (name == NULL) name = "kTypeOctalNumber";
+    case kExprOctalNumber: {
+      if (name == NULL) name = "kExprOctalNumber";
     }
-    case kTypeHexNumber: {
-      if (name == NULL) name = "kTypeHexNumber";
+    case kExprHexNumber: {
+      if (name == NULL) name = "kExprHexNumber";
     }
-    case kTypeFloat: {
-      if (name == NULL) name = "kTypeFloat";
+    case kExprFloat: {
+      if (name == NULL) name = "kExprFloat";
     }
-    case kTypeDoubleQuotedString: {
-      if (name == NULL) name = "kTypeDoubleQuotedString";
+    case kExprDoubleQuotedString: {
+      if (name == NULL) name = "kExprDoubleQuotedString";
     }
-    case kTypeSingleQuotedString: {
-      if (name == NULL) name = "kTypeSingleQuotedString";
+    case kExprSingleQuotedString: {
+      if (name == NULL) name = "kExprSingleQuotedString";
     }
-    case kTypeOption: {
-      if (name == NULL) name = "kTypeOption";
+    case kExprOption: {
+      if (name == NULL) name = "kExprOption";
     }
-    case kTypeRegister: {
-      if (name == NULL) name = "kTypeRegister";
+    case kExprRegister: {
+      if (name == NULL) name = "kExprRegister";
     }
-    case kTypeEnvironmentVariable: {
-      if (name == NULL) name = "kTypeEnvironmentVariable";
+    case kExprEnvironmentVariable: {
+      if (name == NULL) name = "kExprEnvironmentVariable";
     }
-    case kTypeExpression: {
-      if (name == NULL) name = "kTypeExpression";
+    case kExprExpression: {
+      if (name == NULL) name = "kExprExpression";
     }
-    case kTypeList: {
-      if (name == NULL) name = "kTypeList";
+    case kExprList: {
+      if (name == NULL) name = "kExprList";
     }
-    case kTypeDictionary: {
-      if (name == NULL) name = "kTypeDictionary";
+    case kExprDictionary: {
+      if (name == NULL) name = "kExprDictionary";
     }
-    case kTypeSubscript: {
-      if (name == NULL) name = "kTypeSubscript";
+    case kExprSubscript: {
+      if (name == NULL) name = "kExprSubscript";
     }
-    case kTypeCall: {
-      if (name == NULL) name = "kTypeCall";
+    case kExprCall: {
+      if (name == NULL) name = "kExprCall";
     }
-    case kTypeTernaryConditional: {
-      if (name == NULL) name = "kTypeTernaryConditional";
+    case kExprTernaryConditional: {
+      if (name == NULL) name = "kExprTernaryConditional";
     }
-    case kTypeNot: {
-      if (name == NULL) name = "kTypeNot";
+    case kExprNot: {
+      if (name == NULL) name = "kExprNot";
     }
-    case kTypeMinus: {
-      if (name == NULL) name = "kTypeMinus";
+    case kExprMinus: {
+      if (name == NULL) name = "kExprMinus";
     }
-    case kTypePlus: {
-      if (name == NULL) name = "kTypePlus";
+    case kExprPlus: {
+      if (name == NULL) name = "kExprPlus";
     }
-    case kTypeVariableName: {
-      if (name == NULL) name = "kTypeVariableName";
+    case kExprVariableName: {
+      if (name == NULL) name = "kExprVariableName";
     }
-    case kTypeCurlyName: {
-      if (name == NULL) name = "kTypeCurlyName";
+    case kExprCurlyName: {
+      if (name == NULL) name = "kExprCurlyName";
     }
-    case kTypeLogicalOr: {
-      if (name == NULL) name = "kTypeLogicalOr";
+    case kExprLogicalOr: {
+      if (name == NULL) name = "kExprLogicalOr";
     }
-    case kTypeLogicalAnd: {
-      if (name == NULL) name = "kTypeLogicalAnd";
+    case kExprLogicalAnd: {
+      if (name == NULL) name = "kExprLogicalAnd";
     }
-    case kTypeGreater: {
-      if (name == NULL) name = "kTypeGreater";
+    case kExprGreater: {
+      if (name == NULL) name = "kExprGreater";
     }
-    case kTypeGreaterThanOrEqualTo: {
-      if (name == NULL) name = "kTypeGreaterThanOrEqualTo";
+    case kExprGreaterThanOrEqualTo: {
+      if (name == NULL) name = "kExprGreaterThanOrEqualTo";
     }
-    case kTypeLess: {
-      if (name == NULL) name = "kTypeLess";
+    case kExprLess: {
+      if (name == NULL) name = "kExprLess";
     }
-    case kTypeLessThanOrEqualTo: {
-      if (name == NULL) name = "kTypeLessThanOrEqualTo";
+    case kExprLessThanOrEqualTo: {
+      if (name == NULL) name = "kExprLessThanOrEqualTo";
     }
-    case kTypeEquals: {
-      if (name == NULL) name = "kTypeEquals";
+    case kExprEquals: {
+      if (name == NULL) name = "kExprEquals";
     }
-    case kTypeNotEquals: {
-      if (name == NULL) name = "kTypeNotEquals";
+    case kExprNotEquals: {
+      if (name == NULL) name = "kExprNotEquals";
     }
-    case kTypeIdentical: {
-      if (name == NULL) name = "kTypeIdentical";
+    case kExprIdentical: {
+      if (name == NULL) name = "kExprIdentical";
     }
-    case kTypeNotIdentical: {
-      if (name == NULL) name = "kTypeNotIdentical";
+    case kExprNotIdentical: {
+      if (name == NULL) name = "kExprNotIdentical";
     }
-    case kTypeMatches: {
-      if (name == NULL) name = "kTypeMatches";
+    case kExprMatches: {
+      if (name == NULL) name = "kExprMatches";
     }
-    case kTypeNotMatches: {
-      if (name == NULL) name = "kTypeNotMatches";
+    case kExprNotMatches: {
+      if (name == NULL) name = "kExprNotMatches";
     }
-    case kTypeAdd: {
-      if (name == NULL) name = "kTypeAdd";
+    case kExprAdd: {
+      if (name == NULL) name = "kExprAdd";
     }
-    case kTypeSubtract: {
-      if (name == NULL) name = "kTypeSubtract";
+    case kExprSubtract: {
+      if (name == NULL) name = "kExprSubtract";
     }
-    case kTypeStringConcat: {
-      if (name == NULL) name = "kTypeStringConcat";
+    case kExprStringConcat: {
+      if (name == NULL) name = "kExprStringConcat";
     }
-    case kTypeMultiply: {
-      if (name == NULL) name = "kTypeMultiply";
+    case kExprMultiply: {
+      if (name == NULL) name = "kExprMultiply";
     }
-    case kTypeDivide: {
-      if (name == NULL) name = "kTypeDivide";
+    case kExprDivide: {
+      if (name == NULL) name = "kExprDivide";
     }
-    case kTypeSimpleVariableName: {
-      if (name == NULL) name = "kTypeSimpleVariableName";
+    case kExprSimpleVariableName: {
+      if (name == NULL) name = "kExprSimpleVariableName";
     }
-    case kTypeIdentifier: {
-      if (name == NULL) name = "kTypeIdentifier";
+    case kExprIdentifier: {
+      if (name == NULL) name = "kExprIdentifier";
     }
-    case kTypeEmptySubscript: {
-      if (name == NULL) name = "kTypeEmptySubscript";
+    case kExprEmptySubscript: {
+      if (name == NULL) name = "kExprEmptySubscript";
     }
-    case kTypeModulo: {
-      if (name == NULL) name = "kTypeModulo";
+    case kExprModulo: {
+      if (name == NULL) name = "kExprModulo";
       printf("%*s%s\n", indent, "", name);
       if (node->position == NULL)
         printf("%*sNo position\n", indent + 1, "");
