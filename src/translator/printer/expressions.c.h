@@ -162,7 +162,7 @@ static FDEC(node_dump, ExpressionNode *node)
       while (child != NULL) {
         F(node_dump, child);
         child = child->next;
-        if (child != NULL) {
+        if (child != NULL || po->expression.list.trailing_comma) {
           SPACES(po->expression.list.item.before)
           ADD_CHAR(',');
           SPACES(po->expression.list.item.after)
@@ -185,7 +185,7 @@ static FDEC(node_dump, ExpressionNode *node)
         SPACES(po->expression.dictionary.key.after)
         F(node_dump, child);
         child = child->next;
-        if (child != NULL) {
+        if (child != NULL || po->expression.dictionary.trailing_comma) {
           SPACES(po->expression.dictionary.item.before)
           ADD_CHAR(',');
           SPACES(po->expression.dictionary.item.after)
