@@ -47,11 +47,13 @@ typedef struct {
     struct {
       _StartEndSpaces braces;
       _BeforeAfterSpaces item;
+      bool trailing_comma;
     } list;
     struct {
       _StartEndSpaces curly_braces;
       _BeforeAfterSpaces key;
       _BeforeAfterSpaces item;
+      bool trailing_comma;
     } dictionary;
     _StartEndSpaces curly_name;
     struct {
@@ -59,7 +61,8 @@ typedef struct {
       _StartEndSpaces brackets;
     } subscript;
     struct {
-      size_t simple_call_separator;
+      size_t before_sub;
+      _StartEndSpaces call;
       _BeforeAfterSpaces argument;
     } function_call;
   } expression;
@@ -71,6 +74,12 @@ typedef struct {
       _BeforeAfterSpaces subtract;
       _BeforeAfterSpaces concat;
     } let;
+    struct {
+      size_t before_sub;
+      _StartEndSpaces call;
+      _BeforeAfterSpaces argument;
+      size_t attribute;
+    } function;
   } command;
 } PrinterOptions;
 
