@@ -41,6 +41,8 @@
 #define ATTRIBUTE_SPACES 1
 #define FUNCTION_SUB_SPACES 0
 #define FUNCTION_CMD_SUB_SPACES FUNCTION_SUB_SPACES
+#define COMMENT_INLINE_SPACES 2
+#define COMMENT_SPACES 0
 
 const PrinterOptions default_po = {
   {
@@ -116,6 +118,10 @@ const PrinterOptions default_po = {
       FUNCTION_CMD_CALL_SPACES,
       CMD_ARGUMENT_SPACES,
       ATTRIBUTE_SPACES
+    },
+    {
+      COMMENT_INLINE_SPACES,
+      COMMENT_SPACES
     }
   }
 };
