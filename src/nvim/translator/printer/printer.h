@@ -43,13 +43,11 @@ typedef struct {
       } ternary;
     } operators;
     struct {
-      _BeforeAfterSpaces opening_curly_brace;
-      _BeforeAfterSpaces closing_curly_brace;
+      _StartEndSpaces braces;
       _BeforeAfterSpaces item_separator;
     } list;
     struct {
-      _BeforeAfterSpaces opening_curly_brace;
-      _BeforeAfterSpaces closing_curly_brace;
+      _StartEndSpaces curly_braces;
       _BeforeAfterSpaces key_value_separator;
       _BeforeAfterSpaces item_separator;
     } dictionary;
@@ -71,7 +69,9 @@ typedef struct {
       _BeforeAfterSpaces subtract;
       _BeforeAfterSpaces concat;
     } let;
-  } ex_commands;
+  } command;
 } PrinterOptions;
+
+const PrinterOptions default_po;
 
 #endif  // NEOVIM_TRANSLATOR_PRINTER_PRINTER_H

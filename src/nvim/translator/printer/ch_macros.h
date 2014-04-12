@@ -33,6 +33,12 @@
 #ifdef MEMSET
 # undef MEMSET
 #endif
+#ifdef SPACES
+# undef SPACES
+#endif
+#ifdef INDENT
+# undef INDENT
+#endif
 
 #ifdef DEFINE_LENGTH
 # define F(f, ...) \
@@ -40,7 +46,7 @@
 # define F2(f, ...) \
     len += 2 * f##_len(po, __VA_ARGS__)
 # define FDEC(f, ...) \
-    size_t f##_len(PrinterOptions *po, __VA_ARGS__)
+    size_t f##_len(const PrinterOptions *const po, __VA_ARGS__)
 # define FUNCTION_START \
     size_t len = 0
 # define RETURN \
@@ -57,13 +63,15 @@
     len += length;
 # define MEMSET(c, length) \
     len += length
+# define INDENT(length) \
+    len += length * STRLEN(po->command->indent);
 #else
 # define F(f, ...) \
     f(po, __VA_ARGS__, &p)
 # define F2(f, ...) \
     f(po, __VA_ARGS__, &p)
 # define FDEC(f, ...) \
-    void f(PrinterOptions *po, __VA_ARGS__, char **pp)
+    void f(const PrinterOptions *const po, __VA_ARGS__, char **pp)
 # define FUNCTION_START \
     char *p = *pp
 # define RETURN \
@@ -93,4 +101,14 @@
 # define MEMSET(c, length) \
     memset(p, c, length); \
     p += length
+# define INDENT(length) \
+    { \
+      size_t i = 0; \
+      size_t len = STRLEN(po->command->indent); \
+      while (i < length) \
+        ADD_STRING_LEN(po->command->indent, len) \
+    }
 #endif
+
+#define SPACES(length) \
+    MEMSET(' ', length)

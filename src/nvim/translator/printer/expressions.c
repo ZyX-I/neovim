@@ -11,6 +11,98 @@
 # include "translator/printer/expressios.c.generated.h"
 #endif
 
+#define OP_SPACES {1, 1}
+#define LOGICAL_OP_SPACES OP_SPACES
+#define COMPARISON_OP_SPACES OP_SPACES
+#define ARITHMETIC_OP_SPACES OP_SPACES
+#define STRING_OP_SPACES ARITHMETIC_OP_SPACES
+#define UNARY_OP_SPACES {0, 0}
+#define TERNARY_OP_SPACES OP_SPACES
+#define COMPLEX_LITERAL_SPACES {0, 0}
+#define VALUE_SEPARATOR_SPACES {0, 1}
+#define LIST_LITERAL_SPACES COMPLEX_LITERAL_SPACES
+#define LIST_VALUE_SPACES VALUE_SEPARATOR_SPACES
+#define DICT_LITERAL_SPACES COMPLEX_LITERAL_SPACES
+#define DICT_VALUE_SPACES VALUE_SEPARATOR_SPACES
+#define DICT_KEY_SPACES VALUE_SEPARATOR_SPACES
+#define VARIABLE_SPACES {0, 0}
+#define CURLY_NAME_SPACES VARIABLE_SPACES
+#define FUNCTION_CALL_SPACES 0
+#define ARGUMENT_SPACES VALUE_SEPARATOR_SPACES
+#define INDENT "  "
+#define LET_SPACES {1, 1}
+#define SLICE_SPACES {1, 1}
+#define INDEX_SPACES VARIABLE_SPACES
+
+const PrinterOptions default_po = {
+  {
+    {
+      {
+        LOGICAL_OP_SPACES,
+        LOGICAL_OP_SPACES
+      },
+      {
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES,
+        COMPARISON_OP_SPACES
+      },
+      {
+        ARITHMETIC_OP_SPACES,
+        ARITHMETIC_OP_SPACES,
+        ARITHMETIC_OP_SPACES,
+        ARITHMETIC_OP_SPACES,
+        ARITHMETIC_OP_SPACES
+      },
+      {
+        STRING_OP_SPACES
+      },
+      {
+        UNARY_OP_SPACES,
+        UNARY_OP_SPACES,
+        UNARY_OP_SPACES
+      },
+      {
+        TERNARY_OP_SPACES,
+        TERNARY_OP_SPACES
+      }
+    },
+    {
+      LIST_LITERAL_SPACES,
+      LIST_VALUE_SPACES
+    },
+    {
+      DICT_LITERAL_SPACES,
+      DICT_KEY_SPACES,
+      DICT_VALUE_SPACES
+    },
+    CURLY_NAME_SPACES,
+    {
+      SLICE_SPACES,
+      INDEX_SPACES
+    },
+    {
+      FUNCTION_CALL_SPACES,
+      ARGUMENT_SPACES
+    }
+  },
+  {
+    INDENT,
+    {
+      LET_SPACES,
+      LET_SPACES,
+      LET_SPACES,
+      LET_SPACES
+    }
+  }
+};
+
 static char *expression_type_string[] = {
   "Unknown",
   "?:",
@@ -65,7 +157,7 @@ static char *case_compare_strategy_string[] = {
 
 #include "nvim/translator/printer/expressions.c.h"
 
-size_t expr_node_dump_len(PrinterOptions *po, ExpressionNode *node)
+size_t expr_node_dump_len(const PrinterOptions *const po, ExpressionNode *node)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
   size_t len = node_dump_len(po, node);
@@ -80,7 +172,8 @@ size_t expr_node_dump_len(PrinterOptions *po, ExpressionNode *node)
   return len;
 }
 
-void expr_node_dump(PrinterOptions *po, ExpressionNode *node, char **pp)
+void expr_node_dump(const PrinterOptions *const po, ExpressionNode *node,
+                    char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
   ExpressionNode *next = node->next;
