@@ -932,10 +932,13 @@ static int parse_append(char_u **pp,
       vim_free(next_line);
       break;
     }
+    ga_grow(strs, 1);
+#if 0
     if (ga_grow(strs, 1) == FAIL) {
       ga_clear_strings(strs);
       return FAIL;
     }
+#endif
     ((char_u **)(strs->ga_data))[strs->ga_len++] = next_line;
   }
 
@@ -1979,11 +1982,14 @@ static int parse_function(char_u **pp,
           return FAIL;
         }
 
+      ga_grow(args, 1);
+#if 0
       if (ga_grow(args, 1) == FAIL) {
         ga_clear_strings(args);
         vim_free(arg);
         return FAIL;
       }
+#endif
 
       ((char_u **)(args->ga_data))[args->ga_len++] = arg;
     }
