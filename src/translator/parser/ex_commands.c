@@ -50,6 +50,8 @@ static void free_address_followup(AddressFollowup *followup);
 static void free_range_data(Range *range);
 static void free_range(Range *range);
 static void free_cmd_arg(CommandArg *arg, CommandArgType type);
+static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
+                    char_u **expr, bool is_branch, bool is_glob);
 static int get_vcol(char_u **pp);
 static int get_regex(char_u **pp, CommandParserError *error, Regex **target,
                      char_u endch);
@@ -552,7 +554,7 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
   if (!is_branch)
     *expr = NULL;
 
-  while (*p) {
+  for (;;) {
     GlobType type = kPatMissing;
     switch (*p) {
       case '`': {
@@ -641,6 +643,13 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
         type = kPatMissing;
         break;
       }
+      case '~': {
+        if (p == *pp)
+          type = kPatHome;
+        else
+          type = kPatLiteral;
+        break;
+      }
       default: {
         type = kPatLiteral;
         break;
@@ -678,10 +687,11 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
         }
         literal_start = NULL;
         literal_length = 0;
+        next = &((*next)->next);
       }
       if (type == kPatMissing)
         break;
-      if ((*next = glob_alloc(kGlobExpression)) == NULL)
+      if ((*next = glob_alloc(type)) == NULL)
         goto get_glob_error_return;
       switch (type) {
         case kGlobExpression: {
@@ -707,7 +717,6 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
           break;
         }
         case kGlobShell: {
-          p++;
           if ((*next = glob_alloc(kGlobShell)) == NULL)
             goto get_glob_error_return;
           if (((*next)->data.str = vim_strsave(p)) == NULL)
