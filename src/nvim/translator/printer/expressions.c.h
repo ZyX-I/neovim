@@ -4,6 +4,7 @@
 
 // {{{ Function declarations
 static FDEC(node_dump, ExpressionNode *node);
+static FDEC(node_repr, ExpressionNode *node);
 // }}}
 
 #ifndef DEFINE_LENGTH
@@ -229,6 +230,48 @@ static FDEC(node_dump, ExpressionNode *node)
     default: {
       assert(FALSE);
     }
+  }
+
+  FUNCTION_END;
+}
+
+static FDEC(node_repr, ExpressionNode *node)
+{
+  FUNCTION_START;
+
+  ADD_STRING(expression_type_string[node->type]);
+  ADD_STRING(case_compare_strategy_string[node->ignore_case]);
+
+  if (node->position != NULL) {
+    ADD_CHAR('[');
+    if (node->end_position != NULL) {
+      size_t node_len = node->end_position - node->position + 1;
+
+      ADD_CHAR('+');
+
+      if (node->type == kTypeRegister && *(node->end_position) == NUL)
+        node_len--;
+
+      ADD_STRING_LEN(node->position, node_len);
+
+      ADD_CHAR('+');
+    } else {
+      ADD_CHAR('!');
+      ADD_CHAR(*(node->position));
+      ADD_CHAR('!');
+    }
+    ADD_CHAR(']');
+  }
+
+  if (node->children != NULL) {
+    ADD_CHAR('(');
+    F(node_repr, node->children);
+    ADD_CHAR(')');
+  }
+
+  if (node->next != NULL) {
+    ADD_STATIC_STRING(", ");
+    F(node_repr, node->next);
   }
 
   FUNCTION_END;

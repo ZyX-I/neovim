@@ -14,8 +14,11 @@ typedef enum {
   kTypeTernaryConditional,    // ? :
 
   // Binary operators
+#define LOGICAL_START kTypeLogicalOr
   kTypeLogicalOr,             // ||
   kTypeLogicalAnd,            // &&
+#define LOGICAL_END kTypeLogicalAnd
+#define COMPARISON_START kTypeGreater
   kTypeGreater,               // >
   kTypeGreaterThanOrEqualTo,  // >=
   kTypeLess,                  // <
@@ -26,13 +29,19 @@ typedef enum {
   kTypeNotIdentical,          // isnot
   kTypeMatches,               // =~
   kTypeNotMatches,            // !~
+#define COMPARISON_END kTypeNotMatches
+#define ARITHMETIC_START kTypeAdd
   kTypeAdd,                   // +
   kTypeSubtract,              // -
-  kTypeStringConcat,          // .
   kTypeMultiply,              // *
   kTypeDivide,                // /
   kTypeModulo,                // %
+#define ARITHMETIC_END kTypeModulo
+  kTypeStringConcat,          // .
   // 19
+#define LOGICAL_LENGTH (LOGICAL_END - LOGICAL_START + 1)
+#define COMPARISON_LENGTH (COMPARISON_END - COMPARISON_START + 1)
+#define ARITHMETIC_LENGTH (ARITHMETIC_END - ARITHMETIC_START + 1)
 
   // Unary operators
   kTypeNot,                   // !

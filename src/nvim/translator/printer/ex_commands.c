@@ -49,6 +49,9 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
   char *r;
   size_t len;
   char_u **pp;
+  PrinterOptions po;
+
+  memset(&po, 0, sizeof(PrinterOptions));
 
   pp = &arg;
 
@@ -67,7 +70,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
       return NULL;
   }
 
-  len = node_repr_len(node, 0, FALSE);
+  len = node_repr_len(po, node, 0, FALSE);
 
   if ((repr = ALLOC_CLEAR_NEW(char, len + 1)) == NULL) {
     free_cmd(node);
@@ -76,7 +79,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 
   r = repr;
 
-  node_repr(node, 0, FALSE, &r);
+  node_repr(po, node, 0, FALSE, &r);
 
   free_cmd(node);
   return repr;

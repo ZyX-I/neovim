@@ -6,6 +6,7 @@
 #define NEOVIM_TRANSLATOR_PRINTER_EXPRESSIONS_H
 
 #include "nvim/translator/parser/expressions.h"
+#include "nvim/translator/printer/printer.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/printer/expressios.h.generated.h"

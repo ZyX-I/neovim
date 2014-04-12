@@ -1,3 +1,5 @@
+#include "translator/printer/printer.h"
+
 #ifdef F
 # undef F
 #endif
@@ -34,11 +36,11 @@
 
 #ifdef DEFINE_LENGTH
 # define F(f, ...) \
-    len += f##_len(__VA_ARGS__)
+    len += f##_len(po, __VA_ARGS__)
 # define F2(f, ...) \
-    len += 2 * f##_len(__VA_ARGS__)
+    len += 2 * f##_len(po, __VA_ARGS__)
 # define FDEC(f, ...) \
-    size_t f##_len(__VA_ARGS__)
+    size_t f##_len(PrinterOptions po, __VA_ARGS__)
 # define FUNCTION_START \
     size_t len = 0
 # define RETURN \
@@ -57,11 +59,11 @@
     len += length
 #else
 # define F(f, ...) \
-    f(__VA_ARGS__, &p)
+    f(po, __VA_ARGS__, &p)
 # define F2(f, ...) \
-    f(__VA_ARGS__, &p)
+    f(po, __VA_ARGS__, &p)
 # define FDEC(f, ...) \
-    void f(__VA_ARGS__, char **pp)
+    void f(PrinterOptions po, __VA_ARGS__, char **pp)
 # define FUNCTION_START \
     char *p = *pp
 # define RETURN \
