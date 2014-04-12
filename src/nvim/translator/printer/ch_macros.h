@@ -39,6 +39,9 @@
 #ifdef INDENT
 # undef INDENT
 #endif
+#ifdef OPERATOR_SPACES
+# undef OPERATOR_SPACES
+#endif
 
 #ifdef DEFINE_LENGTH
 # define F(f, ...) \
@@ -111,4 +114,9 @@
 #endif
 
 #define SPACES(length) \
-    MEMSET(' ', length)
+    if (length) { \
+      MEMSET(' ', length); \
+    }
+
+#define OPERATOR_SPACES(op) \
+    _OPERATOR_SPACES(po, op)

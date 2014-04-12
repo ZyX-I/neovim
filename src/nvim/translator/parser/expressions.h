@@ -39,14 +39,13 @@ typedef enum {
 #define ARITHMETIC_END kTypeModulo
   kTypeStringConcat,          // .
   // 19
-#define LOGICAL_LENGTH (LOGICAL_END - LOGICAL_START + 1)
-#define COMPARISON_LENGTH (COMPARISON_END - COMPARISON_START + 1)
-#define ARITHMETIC_LENGTH (ARITHMETIC_END - ARITHMETIC_START + 1)
 
   // Unary operators
+#define UNARY_START kTypeNot
   kTypeNot,                   // !
   kTypeMinus,                 // -
   kTypePlus,                  // +
+#define UNARY_END kTypePlus
   // 22
 
   // Simple value nodes
@@ -81,6 +80,11 @@ typedef enum {
 
   kTypeEmptySubscript,        // empty lhs or rhs in [lhs:rhs]
 } ExpressionType;
+
+#define LOGICAL_LENGTH (LOGICAL_END - LOGICAL_START + 1)
+#define COMPARISON_LENGTH (COMPARISON_END - COMPARISON_START + 1)
+#define ARITHMETIC_LENGTH (ARITHMETIC_END - ARITHMETIC_START + 1)
+#define UNARY_LENGTH (UNARY_END - UNARY_START + 1)
 
 // Defines whether to ignore case:
 //    ==   kCCStrategyUseOption

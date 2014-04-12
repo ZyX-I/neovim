@@ -13,7 +13,11 @@ typedef struct {
   size_t before_end;
 } _StartEndSpaces;
 
-#define OPERATOR_SPACES(po, op) \
+// XXX Never defined: not needed: it should crash in case branch with 
+//     _error_spaces is reached.
+const _BeforeAfterSpaces _error_spaces;
+
+#define _OPERATOR_SPACES(po, op) \
     (LOGICAL_START <= op && op <= LOGICAL_END \
      ? po->expression.operators.logical[op - LOGICAL_START] \
      : (COMPARISON_START <= op && op <= COMPARISON_END \
@@ -22,7 +26,9 @@ typedef struct {
            ? po->expression.operators.arithmetic[op - ARITHMETIC_START] \
            : (op == kTypeStringConcat \
               ? po->expression.operators.string.concat \
-              : assert(FALSE)))))
+              : (UNARY_START <= op && op <= UNARY_END \
+                 ? po->expression.operators.unary[op - UNARY_START] \
+                 : (assert(FALSE), _error_spaces))))))
 typedef struct {
   struct {
     struct {
@@ -32,24 +38,20 @@ typedef struct {
       struct {
         _BeforeAfterSpaces concat;
       } string;
-      struct {
-        _BeforeAfterSpaces not;
-        _BeforeAfterSpaces minus;
-        _BeforeAfterSpaces plus;
-      } unary;
+      _BeforeAfterSpaces unary[UNARY_LENGTH];
       struct {
         _BeforeAfterSpaces condition;
-        _BeforeAfterSpaces values_separator;
+        _BeforeAfterSpaces values;
       } ternary;
     } operators;
     struct {
       _StartEndSpaces braces;
-      _BeforeAfterSpaces item_separator;
+      _BeforeAfterSpaces item;
     } list;
     struct {
       _StartEndSpaces curly_braces;
-      _BeforeAfterSpaces key_value_separator;
-      _BeforeAfterSpaces item_separator;
+      _BeforeAfterSpaces key;
+      _BeforeAfterSpaces item;
     } dictionary;
     _StartEndSpaces curly_name;
     struct {

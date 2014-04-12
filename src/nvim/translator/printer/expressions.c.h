@@ -1,5 +1,7 @@
 #ifndef NEOVIM_TRANSLATOR_PRINTER_EXPRESSIONS_C_H
 
+#include "nvim/translator/parser/expressions.h"
+
 #include "nvim/translator/printer/ch_macros.h"
 
 // {{{ Function declarations
@@ -61,12 +63,12 @@ static FDEC(node_dump, ExpressionNode *node)
         F(node_dump, child);
         child = child->next;
         if (child != NULL) {
-          ADD_CHAR(' ');
+          SPACES(OPERATOR_SPACES(node->type).before)
           ADD_STRING(operator);
           if (add_ccs)
             if (node->ignore_case)
               ADD_CHAR(*(case_compare_strategy_string[node->ignore_case]));
-          ADD_CHAR(' ');
+          SPACES(OPERATOR_SPACES(node->type).after)
         }
       } while (child != NULL);
 
@@ -79,13 +81,13 @@ static FDEC(node_dump, ExpressionNode *node)
       assert(node->children->next->next->next == NULL);
 
       F(node_dump, node->children);
-      ADD_CHAR(' ');
+      SPACES(po->expression.operators.ternary.condition.before)
       ADD_CHAR('?');
-      ADD_CHAR(' ');
+      SPACES(po->expression.operators.ternary.condition.after)
       F(node_dump, node->children->next);
-      ADD_CHAR(' ');
+      SPACES(po->expression.operators.ternary.values.before)
       ADD_CHAR(':');
-      ADD_CHAR(' ');
+      SPACES(po->expression.operators.ternary.values.after)
       F(node_dump, node->children->next->next);
       break;
     }
@@ -94,7 +96,9 @@ static FDEC(node_dump, ExpressionNode *node)
     case kTypePlus: {
       assert(node->children != NULL);
       assert(node->children->next == NULL);
+      SPACES(OPERATOR_SPACES(node->type).before)
       ADD_CHAR(*(expression_type_string[node->type]));
+      SPACES(OPERATOR_SPACES(node->type).after)
       F(node_dump, node->children);
       break;
     }
@@ -138,7 +142,11 @@ static FDEC(node_dump, ExpressionNode *node)
       assert(node->children->next == NULL);
 
       ADD_CHAR((node->type == kTypeExpression ? '(' : '{'));
+      if (node->type == kTypeCurlyName)
+        SPACES(po->expression.curly_name.after_start)
       F(node_dump, node->children);
+      if (node->type == kTypeCurlyName)
+        SPACES(po->expression.curly_name.before_end)
       ADD_CHAR((node->type == kTypeExpression ? ')' : '}'));
       break;
     }
