@@ -180,10 +180,10 @@ describe 'parse_cmd_sequence', ->
     " echo 1+1
     ', '
     unlet a b
-    "echo 1+1'
+    " echo 1+1'
 
     t '
-    "  !
+    " !
     unlet a b
     ', '
     " !

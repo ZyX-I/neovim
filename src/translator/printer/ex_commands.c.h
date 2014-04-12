@@ -676,7 +676,11 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
         }
         case kArgString: {
           if (node->args[i].arg.str != NULL) {
-            ADD_CHAR(' ');
+            if (node->type == kCmdComment) {
+              SPACES(po->command.comment.before_text)
+            } else if (node->type != kCmdHashbangComment) {
+              ADD_CHAR(' ');
+            }
             // FIXME Escape arguments if necessary
             ADD_STRING(node->args[i].arg.str);
           }

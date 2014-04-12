@@ -80,6 +80,10 @@ typedef struct {
       _BeforeAfterSpaces argument;
       size_t attribute;
     } function;
+    struct {
+      size_t before_inline;
+      size_t before_text;
+    } comment;
   } command;
 } PrinterOptions;
 
