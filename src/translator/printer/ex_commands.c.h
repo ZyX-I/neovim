@@ -271,7 +271,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     RETURN;
 
   if (!barnext) {
-    MEMSET(' ', indent);
+    INDENT(indent)
   }
 
   F(range_repr, &(node->range));
@@ -583,27 +583,32 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
         if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
           uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
           garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
+          SPACES(po->command.function.before_sub)
           ADD_CHAR('(');
+          SPACES(po->command.function.call.after_start)
           for (int i = 0; i < ga->ga_len; i++) {
             ADD_STRING(((char_u **)ga->ga_data)[i]);
             if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
-              ADD_STATIC_STRING(", ");
+              SPACES(po->command.function.argument.before)
+              ADD_CHAR(',');
+              SPACES(po->command.function.argument.after)
             }
           }
           if (flags&FLAG_FUNC_VARARGS) {
             ADD_STATIC_STRING("...");
           }
+          SPACES(po->command.function.call.before_end)
           ADD_CHAR(')');
           if (flags&FLAG_FUNC_RANGE) {
-            ADD_CHAR(' ');
+            SPACES(po->command.function.attribute)
             ADD_STATIC_STRING("range");
           }
           if (flags&FLAG_FUNC_DICT) {
-            ADD_CHAR(' ');
+            SPACES(po->command.function.attribute)
             ADD_STATIC_STRING("dict");
           }
           if (flags&FLAG_FUNC_ABORT) {
-            ADD_CHAR(' ');
+            SPACES(po->command.function.attribute)
             ADD_STATIC_STRING("abort");
           }
         }
@@ -623,28 +628,31 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
           break;
         }
         case VAL_LET_ASSIGN: {
-          ADD_CHAR(' ');
+          SPACES(po->command.let.assign.before)
           ADD_CHAR('=');
+          SPACES(po->command.let.assign.after)
           break;
         }
         case VAL_LET_ADD: {
-          ADD_CHAR(' ');
+          SPACES(po->command.let.add.before)
           ADD_STATIC_STRING("+=");
+          SPACES(po->command.let.add.after)
           break;
         }
         case VAL_LET_SUBTRACT: {
-          ADD_CHAR(' ');
+          SPACES(po->command.let.subtract.before)
           ADD_STATIC_STRING("-=");
+          SPACES(po->command.let.subtract.after)
           break;
         }
         case VAL_LET_APPEND: {
-          ADD_CHAR(' ');
+          SPACES(po->command.let.concat.before)
           ADD_STATIC_STRING(".=");
+          SPACES(po->command.let.concat.after)
           break;
         }
       }
       if (add_rval) {
-        ADD_CHAR(' ');
         F(expr_node_dump, node->args[ARG_LET_RHS].arg.expr);
       }
     }
@@ -694,7 +702,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
       } else {
         ADD_CHAR('\n');
       }
-      F(node_repr, node->children, indent + 2, barnext);
+      F(node_repr, node->children, indent + 1, barnext);
     }
   }
 

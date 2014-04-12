@@ -67,7 +67,7 @@
 # define MEMSET(c, length) \
     len += length
 # define INDENT(length) \
-    len += length * STRLEN(po->command->indent);
+    len += length * STRLEN(po->command.indent);
 #else
 # define F(f, ...) \
     f(po, __VA_ARGS__, &p)
@@ -106,10 +106,10 @@
     p += length
 # define INDENT(length) \
     { \
-      size_t i = 0; \
-      size_t len = STRLEN(po->command->indent); \
-      while (i < length) \
-        ADD_STRING_LEN(po->command->indent, len) \
+      size_t i; \
+      size_t len = STRLEN(po->command.indent); \
+      for (i = 0; i < length; i++) \
+        ADD_STRING_LEN(po->command.indent, len) \
     }
 #endif
 
