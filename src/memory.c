@@ -1,5 +1,6 @@
  // Various routines dealing with allocation and deallocation of memory.
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "vim.h"
@@ -42,6 +43,17 @@
 #include "os/os.h"
 
 static void try_to_free_memory();
+static void *xmallocz(size_t size);
+
+/// Allocates (len + 1) bytes of memory, duplicates `len` bytes of
+/// `data` to the allocated memory, zero terminates the allocated memory,
+/// and returns a pointer to the allocated memory. If the allocation fails,
+/// the program dies.
+///
+/// @see {xmalloc}
+/// @param data Pointer to the data that will be copied
+/// @param len number of bytes that will be copied
+static void *xmemdupz(const void *data, size_t len);
 
 /*
  * Note: if unsigned is 16 bits we can only allocate up to 64K with alloc().
@@ -57,28 +69,7 @@ char_u *alloc(unsigned size)
  */
 char_u *alloc_clear(unsigned size)
 {
-  char_u *p;
-
-  p = lalloc((long_u)size, TRUE);
-  if (p != NULL)
-    (void)memset(p, 0, (size_t)size);
-  return p;
-}
-
-/*
- * alloc() with check for maximum line length
- */
-char_u *alloc_check(unsigned size)
-{
-#if !defined(UNIX) && !defined(__EMX__)
-  if (sizeof(int) == 2 && size > 0x7fff) {
-    /* Don't hide this message */
-    emsg_silent = 0;
-    EMSG(_("E340: Line is becoming too long"));
-    return NULL;
-  }
-#endif
-  return lalloc((long_u)size, TRUE);
+  return (char_u *)xcalloc(1, (size_t)size);
 }
 
 /*
@@ -86,9 +77,7 @@ char_u *alloc_check(unsigned size)
  */
 char_u *lalloc_clear(long_u size, int message)
 {
-  char_u *p = lalloc(size, message);
-  memset(p, 0, (size_t)size);
-  return p;
+  return (char_u *)xcalloc(1, (size_t)size);
 }
 
 /// Try to free memory. Used when trying to recover from out of memory errors.
@@ -132,6 +121,27 @@ void *xmalloc(size_t size)
   return ret;
 }
 
+void *xcalloc(size_t count, size_t size)
+{
+  void *ret = calloc(count, size);
+
+  if (!ret && (!count || !size))
+    ret = calloc(1, 1);
+
+  if (!ret) {
+    try_to_free_memory();
+    ret = calloc(count, size);
+    if (!ret && (!count || !size))
+      ret = calloc(1, 1);
+    if (!ret) {
+      OUT_STR("Vim: Error: Out of memory.\n");
+      preserve_exit();
+    }
+  }
+
+  return ret;
+}
+
 void *xrealloc(void *ptr, size_t size)
 {
   void *ret = realloc(ptr, size);
@@ -152,6 +162,29 @@ void *xrealloc(void *ptr, size_t size)
 
   return ret;
 }
+
+char * xstrdup(const char *str)
+{
+  char *ret = strdup(str);
+
+  if (!ret) {
+    try_to_free_memory();
+    ret = strdup(str);
+    if (!ret) {
+      OUT_STR("Vim: Error: Out of memory.\n");
+      preserve_exit();
+    }
+  }
+
+  return ret;
+}
+
+char *xstrndup(const char *str, size_t len)
+{
+  char *p = memchr(str, '\0', len);
+  return xmemdupz(str, p ? (size_t)(p - str) : len);
+}
+
 
 char_u *lalloc(long_u size, int message)
 {
@@ -320,8 +353,29 @@ void free_all_mem(void)
 
   clear_hl_tables();
 
-  vim_free(IObuff);
   vim_free(NameBuff);
 }
 
 #endif
+
+static void *xmallocz(size_t size)
+{
+  size_t total_size = size + 1;
+  void *ret;
+
+  if (total_size < size) {
+    OUT_STR("Vim: Data too large to fit into virtual memory space\n");
+    preserve_exit();
+  }
+
+  ret = xmalloc(total_size);
+  ((char*)ret)[size] = 0;
+
+  return ret;
+}
+
+static void *xmemdupz(const void *data, size_t len)
+{
+  return memcpy(xmallocz(len), data, len);
+}
+

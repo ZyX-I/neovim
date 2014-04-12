@@ -1222,8 +1222,6 @@ static regprog_T *bt_regcomp(char_u *expr, int re_flags)
 
   /* Allocate space. */
   r = (bt_regprog_T *)lalloc(sizeof(bt_regprog_T) + regsize, TRUE);
-  if (r == NULL)
-    return NULL;
 
   /*
    * Second pass: emit code.
@@ -3592,8 +3590,7 @@ static reg_extmatch_T *make_extmatch(void)
   reg_extmatch_T      *em;
 
   em = (reg_extmatch_T *)alloc_clear((unsigned)sizeof(reg_extmatch_T));
-  if (em != NULL)
-    em->refcnt = 1;
+  em->refcnt = 1;
   return em;
 }
 
@@ -4288,14 +4285,11 @@ regmatch (
               break;
           if (i == backpos.ga_len) {
             /* First time at this BACK, make room to store the pos. */
-            if (ga_grow(&backpos, 1) == FAIL)
-              status = RA_FAIL;
-            else {
-              /* get "ga_data" again, it may have changed */
-              bp = (backpos_T *)backpos.ga_data;
-              bp[i].bp_scan = scan;
-              ++backpos.ga_len;
-            }
+            ga_grow(&backpos, 1);
+            /* get "ga_data" again, it may have changed */
+            bp = (backpos_T *)backpos.ga_data;
+            bp[i].bp_scan = scan;
+            ++backpos.ga_len;
           } else if (reg_save_equal(&bp[i].bp_pos))
             /* Still at same position as last time, fail. */
             status = RA_NOMATCH;
@@ -4635,9 +4629,8 @@ regmatch (
             if ((long)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
               EMSG(_(e_maxmempat));
               status = RA_FAIL;
-            } else if (ga_grow(&regstack, sizeof(regstar_T)) == FAIL)
-              status = RA_FAIL;
-            else {
+            } else {
+              ga_grow(&regstack, sizeof(regstar_T));
               regstack.ga_len += sizeof(regstar_T);
               rp = regstack_push(rst.minval <= rst.maxval
                   ? RS_STAR_LONG : RS_STAR_SHORT, scan);
@@ -4674,9 +4667,8 @@ regmatch (
           if ((long)((unsigned)regstack.ga_len >> 10) >= p_mmp) {
             EMSG(_(e_maxmempat));
             status = RA_FAIL;
-          } else if (ga_grow(&regstack, sizeof(regbehind_T)) == FAIL)
-            status = RA_FAIL;
-          else {
+          } else {
+            ga_grow(&regstack, sizeof(regbehind_T));
             regstack.ga_len += sizeof(regbehind_T);
             rp = regstack_push(RS_BEHIND1, scan);
             if (rp == NULL)
@@ -5097,8 +5089,7 @@ static regitem_T *regstack_push(regstate_T state, char_u *scan)
     EMSG(_(e_maxmempat));
     return NULL;
   }
-  if (ga_grow(&regstack, sizeof(regitem_T)) == FAIL)
-    return NULL;
+  ga_grow(&regstack, sizeof(regitem_T));
 
   rp = (regitem_T *)((char *)regstack.ga_data + regstack.ga_len);
   rp->rs_state = state;
@@ -5699,8 +5690,6 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
         len += 50;              /* get some extra */
         vim_free(reg_tofree);
         reg_tofree = alloc(len);
-        if (reg_tofree == NULL)
-          return RA_FAIL;           /* out of memory!*/
         reg_tofreelen = len;
       }
       STRCPY(reg_tofree, regline);
@@ -6451,22 +6440,20 @@ char_u *regtilde(char_u *source, int magic)
         /* length = len(newsub) - 1 + len(prev_sub) + 1 */
         prevlen = (int)STRLEN(reg_prev_sub);
         tmpsub = alloc((unsigned)(STRLEN(newsub) + prevlen));
-        if (tmpsub != NULL) {
-          /* copy prefix */
-          len = (int)(p - newsub);              /* not including ~ */
-          memmove(tmpsub, newsub, (size_t)len);
-          /* interpret tilde */
-          memmove(tmpsub + len, reg_prev_sub, (size_t)prevlen);
-          /* copy postfix */
-          if (!magic)
-            ++p;                                /* back off \ */
-          STRCPY(tmpsub + len + prevlen, p + 1);
+        /* copy prefix */
+        len = (int)(p - newsub);              /* not including ~ */
+        memmove(tmpsub, newsub, (size_t)len);
+        /* interpret tilde */
+        memmove(tmpsub + len, reg_prev_sub, (size_t)prevlen);
+        /* copy postfix */
+        if (!magic)
+          ++p;                                /* back off \ */
+        STRCPY(tmpsub + len + prevlen, p + 1);
 
-          if (newsub != source)                 /* already allocated newsub */
-            vim_free(newsub);
-          newsub = tmpsub;
-          p = newsub + len + prevlen;
-        }
+        if (newsub != source)                 /* already allocated newsub */
+          vim_free(newsub);
+        newsub = tmpsub;
+        p = newsub + len + prevlen;
       } else if (magic)
         STRMOVE(p, p + 1);              /* remove '~' */
       else
@@ -6926,8 +6913,6 @@ char_u *reg_submatch(int no)
 
       if (retval == NULL) {
         retval = lalloc((long_u)len, TRUE);
-        if (retval == NULL)
-          return NULL;
       }
     }
   } else {

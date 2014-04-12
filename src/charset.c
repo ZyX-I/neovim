@@ -330,7 +330,7 @@ void trans_characters(char_u *buf, int bufsize)
 ///
 /// @param s
 ///
-/// @return translated string or NULL if out of memory.
+/// @return translated string
 char_u *transstr(char_u *s)
 {
   char_u *res;
@@ -371,26 +371,25 @@ char_u *transstr(char_u *s)
     res = alloc((unsigned)(vim_strsize(s) + 1));
   }
 
-  if (res != NULL) {
-    *res = NUL;
-    p = s;
+  *res = NUL;
+  p = s;
 
-    while (*p != NUL) {
-      if (has_mbyte && ((l = (*mb_ptr2len)(p)) > 1)) {
-        c = (*mb_ptr2char)(p);
+  while (*p != NUL) {
+    if (has_mbyte && ((l = (*mb_ptr2len)(p)) > 1)) {
+      c = (*mb_ptr2char)(p);
 
-        if (vim_isprintc(c)) {
-          // append printable multi-byte char
-          STRNCAT(res, p, l);
-        } else {
-          transchar_hex(res + STRLEN(res), c);
-        }
-        p += l;
+      if (vim_isprintc(c)) {
+        // append printable multi-byte char
+        STRNCAT(res, p, l);
       } else {
-        STRCAT(res, transchar_byte(*p++));
+        transchar_hex(res + STRLEN(res), c);
       }
+      p += l;
+    } else {
+      STRCAT(res, transchar_byte(*p++));
     }
   }
+
   return res;
 }
 
@@ -424,9 +423,7 @@ char_u* str_foldcase(char_u *str, int orglen, char_u *buf, int buflen)
   if (buf == NULL) {
     ga_init(&ga, 1, 10);
 
-    if (ga_grow(&ga, len + 1) == FAIL) {
-      return NULL;
-    }
+    ga_grow(&ga, len + 1);
     memmove(ga.ga_data, str, (size_t)len);
     ga.ga_len = len;
   } else {
@@ -462,12 +459,14 @@ char_u* str_foldcase(char_u *str, int orglen, char_u *buf, int buflen)
           // characters forward or backward.
           if (olen != nlen) {
             if (nlen > olen) {
-              if ((buf == NULL)
-                  ? (ga_grow(&ga, nlen - olen + 1) == FAIL)
-                  : (len + nlen - olen >= buflen)) {
-                // out of memory, keep old char
-                lc = c;
-                nlen = olen;
+              if (buf == NULL) {
+                ga_grow(&ga, nlen - olen + 1);
+              } else {
+                if (len + nlen - olen >= buflen) {
+                  // out of memory, keep old char
+                  lc = c;
+                  nlen = olen;
+                }
               }
             }
 

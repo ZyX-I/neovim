@@ -30,15 +30,6 @@
 # include <sys/param.h>     /* defines BSD, if it's a BSD system */
 #endif
 
-/*
- * Sun defines FILE on SunOS 4.x.x, Solaris has a typedef for FILE
- */
-
-/* always use unlink() to remove files */
-#  define vim_mkdir(x, y) mkdir((char *)(x), y)
-#  define mch_rmdir(x) rmdir((char *)(x))
-#  define mch_remove(x) unlink((char *)(x))
-
 /* The number of arguments to a signal handler is configured here. */
 /* It used to be a long list of almost all systems. Any system that doesn't
  * have an argument??? */

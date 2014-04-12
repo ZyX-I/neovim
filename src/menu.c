@@ -373,8 +373,6 @@ add_menu_path (
 
       /* Not already there, so lets add it */
       menu = (vimmenu_T *)alloc_clear((unsigned)sizeof(vimmenu_T));
-      if (menu == NULL)
-        goto erret;
 
       menu->modes = modes;
       menu->enabled = MENU_ALL_MODES;
@@ -465,22 +463,20 @@ add_menu_path (
 
         if (c != 0) {
           menu->strings[i] = alloc((unsigned)(STRLEN(call_data) + 5 ));
-          if (menu->strings[i] != NULL) {
-            menu->strings[i][0] = c;
-            if (d == 0)
-              STRCPY(menu->strings[i] + 1, call_data);
-            else {
-              menu->strings[i][1] = d;
-              STRCPY(menu->strings[i] + 2, call_data);
-            }
-            if (c == Ctrl_C) {
-              int len = (int)STRLEN(menu->strings[i]);
+          menu->strings[i][0] = c;
+          if (d == 0)
+            STRCPY(menu->strings[i] + 1, call_data);
+          else {
+            menu->strings[i][1] = d;
+            STRCPY(menu->strings[i] + 2, call_data);
+          }
+          if (c == Ctrl_C) {
+            int len = (int)STRLEN(menu->strings[i]);
 
-              /* Append CTRL-\ CTRL-G to obey 'insertmode'. */
-              menu->strings[i][len] = Ctrl_BSL;
-              menu->strings[i][len + 1] = Ctrl_G;
-              menu->strings[i][len + 2] = NUL;
-            }
+            /* Append CTRL-\ CTRL-G to obey 'insertmode'. */
+            menu->strings[i][len] = Ctrl_BSL;
+            menu->strings[i][len + 1] = Ctrl_G;
+            menu->strings[i][len + 2] = NUL;
           }
         } else
           menu->strings[i] = p;
@@ -1514,26 +1510,25 @@ void ex_menutranslate(exarg_T *eap)
     if (arg == to)
       EMSG(_(e_invarg));
     else {
-      if (ga_grow(&menutrans_ga, 1) == OK) {
-        tp = (menutrans_T *)menutrans_ga.ga_data;
-        from = vim_strsave(from);
-        if (from != NULL) {
-          from_noamp = menu_text(from, NULL, NULL);
-          to = vim_strnsave(to, (int)(arg - to));
-          if (from_noamp != NULL && to != NULL) {
-            menu_translate_tab_and_shift(from);
-            menu_translate_tab_and_shift(to);
-            menu_unescape_name(from);
-            menu_unescape_name(to);
-            tp[menutrans_ga.ga_len].from = from;
-            tp[menutrans_ga.ga_len].from_noamp = from_noamp;
-            tp[menutrans_ga.ga_len].to = to;
-            ++menutrans_ga.ga_len;
-          } else {
-            vim_free(from);
-            vim_free(from_noamp);
-            vim_free(to);
-          }
+      ga_grow(&menutrans_ga, 1);
+      tp = (menutrans_T *)menutrans_ga.ga_data;
+      from = vim_strsave(from);
+      if (from != NULL) {
+        from_noamp = menu_text(from, NULL, NULL);
+        to = vim_strnsave(to, (int)(arg - to));
+        if (from_noamp != NULL && to != NULL) {
+          menu_translate_tab_and_shift(from);
+          menu_translate_tab_and_shift(to);
+          menu_unescape_name(from);
+          menu_unescape_name(to);
+          tp[menutrans_ga.ga_len].from = from;
+          tp[menutrans_ga.ga_len].from_noamp = from_noamp;
+          tp[menutrans_ga.ga_len].to = to;
+          ++menutrans_ga.ga_len;
+        } else {
+          vim_free(from);
+          vim_free(from_noamp);
+          vim_free(to);
         }
       }
     }

@@ -164,6 +164,7 @@ static void map_free(mapblock_T **);
 static void validate_maphash(void);
 static void showmap(mapblock_T *mp, int local);
 static char_u   *eval_map_expr(char_u *str, int c);
+static bool is_user_input(int k);
 
 /*
  * Free and clear a buffer.
@@ -197,7 +198,8 @@ static char_u *get_buffcont(buffheader_T *buffer,
   for (bp = buffer->bh_first.b_next; bp != NULL; bp = bp->b_next)
     count += (long_u)STRLEN(bp->b_str);
 
-  if ((count || dozero) && (p = lalloc(count + 1, TRUE)) != NULL) {
+  if (count || dozero) {
+    p = lalloc(count + 1, TRUE);
     p2 = p;
     for (bp = buffer->bh_first.b_next; bp != NULL; bp = bp->b_next)
       for (str = bp->b_str; *str; )
@@ -290,8 +292,6 @@ add_buff (
     else
       len = slen;
     p = (buffblock_T *)lalloc((long_u)(sizeof(buffblock_T) + len), TRUE);
-    if (p == NULL)
-      return;       /* no space, just forget it */
     buf->bh_space = (int)(len - slen);
     vim_strncpy(p->b_str, s, (size_t)slen);
 
@@ -384,7 +384,7 @@ static int read_readbuf(buffheader_T *buf, int advance)
 }
 
 /*
- * Prepare the read buffers for reading (if they contains something).
+ * Prepare the read buffers for reading (if they contain something).
  */
 static void start_stuff(void)
 {
@@ -1939,6 +1939,8 @@ static int vgetorpeek(int advance)
                 msg_row = Rows - 1;
                 msg_clr_eos();                          /* clear ruler */
               }
+              status_redraw_all();
+              redraw_statuslines();
               showmode();
               setcursor();
               continue;
@@ -2551,11 +2553,10 @@ fix_input_buffer (
    * Don't replace K_SPECIAL when reading a script file.
    */
   for (i = len; --i >= 0; ++p) {
-    if (p[0] == NUL || (p[0] == K_SPECIAL && !script
-                        /* timeout may generate K_CURSORHOLD */
-                        && (i < 2 || p[1] != KS_EXTRA || p[2] !=
-                            (int)KE_CURSORHOLD)
-                        )) {
+    if (p[0] == NUL
+        || (p[0] == K_SPECIAL
+          && !script
+          && (i < 2 || p[1] != KS_EXTRA || is_user_input(p[2])))) {
       memmove(p + 3, p + 1, (size_t)i);
       p[2] = K_THIRD(p[0]);
       p[1] = K_SECOND(p[0]);
@@ -3817,6 +3818,11 @@ eval_map_expr (
   return res;
 }
 
+static bool is_user_input(int k)
+{
+  return k != (int)KE_EVENT && k != (int)KE_CURSORHOLD;
+}
+
 /*
  * Copy "p" to allocated memory, escaping K_SPECIAL and CSI so that the result
  * can be put in the typeahead buffer.
@@ -3829,30 +3835,29 @@ char_u *vim_strsave_escape_csi(char_u *p)
 
   /* Need a buffer to hold up to three times as much. */
   res = alloc((unsigned)(STRLEN(p) * 3) + 1);
-  if (res != NULL) {
-    d = res;
-    for (s = p; *s != NUL; ) {
-      if (s[0] == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
-        /* Copy special key unmodified. */
-        *d++ = *s++;
-        *d++ = *s++;
-        *d++ = *s++;
-      } else {
-        int len  = mb_char2len(PTR2CHAR(s));
-        int len2 = mb_ptr2len(s);
-        /* Add character, possibly multi-byte to destination, escaping
-         * CSI and K_SPECIAL. */
-        d = add_char2buf(PTR2CHAR(s), d);
-        while (len < len2) {
-          /* add following combining char */
-          d = add_char2buf(PTR2CHAR(s + len), d);
-          len += mb_char2len(PTR2CHAR(s + len));
-        }
-        mb_ptr_adv(s);
+  d = res;
+  for (s = p; *s != NUL; ) {
+    if (s[0] == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
+      /* Copy special key unmodified. */
+      *d++ = *s++;
+      *d++ = *s++;
+      *d++ = *s++;
+    } else {
+      int len  = mb_char2len(PTR2CHAR(s));
+      int len2 = mb_ptr2len(s);
+      /* Add character, possibly multi-byte to destination, escaping
+       * CSI and K_SPECIAL. */
+      d = add_char2buf(PTR2CHAR(s), d);
+      while (len < len2) {
+        /* add following combining char */
+        d = add_char2buf(PTR2CHAR(s + len), d);
+        len += mb_char2len(PTR2CHAR(s + len));
       }
+      mb_ptr_adv(s);
     }
-    *d = NUL;
   }
+  *d = NUL;
+
   return res;
 }
 

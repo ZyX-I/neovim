@@ -1317,8 +1317,6 @@ static void command_line_scan(mparm_T *parmp)
               } else
                 a = argv[0];
               p = alloc((unsigned)(STRLEN(a) + 4));
-              if (p == NULL)
-                mch_exit(2);
               sprintf((char *)p, "so %s", a);
               parmp->cmds_tofree[parmp->n_commands] = TRUE;
               parmp->commands[parmp->n_commands++] = p;
@@ -1427,8 +1425,8 @@ scripterror:
 
 
       /* Add the file to the global argument list. */
-      if (ga_grow(&global_alist.al_ga, 1) == FAIL
-          || (p = vim_strsave((char_u *)argv[0])) == NULL)
+      ga_grow(&global_alist.al_ga, 1);
+      if ((p = vim_strsave((char_u *)argv[0])) == NULL)
         mch_exit(2);
       if (parmp->diff_mode && os_isdir(p) && GARGCOUNT > 0
           && !os_isdir(alist_name(&GARGLIST[0]))) {
@@ -1472,11 +1470,9 @@ scripterror:
    * one. */
   if (parmp->n_commands > 0) {
     p = alloc((unsigned)STRLEN(parmp->commands[0]) + 3);
-    if (p != NULL) {
-      sprintf((char *)p, ":%s\r", parmp->commands[0]);
-      set_vim_var_string(VV_SWAPCOMMAND, p, -1);
-      vim_free(p);
-    }
+    sprintf((char *)p, ":%s\r", parmp->commands[0]);
+    set_vim_var_string(VV_SWAPCOMMAND, p, -1);
+    vim_free(p);
   }
   TIME_MSG("parsing arguments");
 }
@@ -1519,9 +1515,7 @@ static void init_startuptime(mparm_T *paramp)
  */
 void allocate_generic_buffers(void)
 {
-  if ((IObuff = alloc(IOSIZE)) == NULL
-      || (NameBuff = alloc(MAXPATHL)) == NULL)
-    mch_exit(0);
+  NameBuff = alloc(MAXPATHL);
   TIME_MSG("Allocated generic buffers");
 }
 

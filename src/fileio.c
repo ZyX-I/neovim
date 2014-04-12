@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=2 sts=2 sw=2:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -490,17 +490,13 @@ readfile (
   }
 
   if (fd < 0) {                     /* cannot open at all */
-#ifndef UNIX
-    int isdir_f;
-#endif
     msg_scroll = msg_save;
 #ifndef UNIX
     /*
      * On MSDOS and Amiga we can't open a directory, check here.
      */
-    isdir_f = (os_isdir(fname));
     perm = os_getperm(fname);      /* check if the file exists */
-    if (isdir_f) {
+    if (os_isdir(fname)) {
       filemess(curbuf, sfname, (char_u *)_("is a directory"), 0);
       curbuf->b_p_ro = TRUE;            /* must use "w!" now */
     } else
@@ -874,7 +870,7 @@ retry:
       }
     }
     if (tmpname != NULL) {
-      mch_remove(tmpname);                      /* delete converted file */
+      os_remove((char *)tmpname);  // delete converted file
       vim_free(tmpname);
       tmpname = NULL;
     }
@@ -1010,12 +1006,7 @@ retry:
         for (; size >= 10; size = (long)((long_u)size >> 1)) {
           if ((new_buffer = lalloc((long_u)(size + linerest + 1),
                    FALSE)) != NULL)
-            break;
-        }
-        if (new_buffer == NULL) {
-          do_outofmem_msg((long_u)(size * 2 + linerest + 1));
-          error = TRUE;
-          break;
+              break;
         }
         if (linerest)           /* copy characters from the previous buffer */
           memmove(new_buffer, ptr - linerest, (size_t)linerest);
@@ -1795,7 +1786,7 @@ failed:
 #endif
 
   if (tmpname != NULL) {
-    mch_remove(tmpname);                /* delete converted file */
+    os_remove((char *)tmpname);  // delete converted file
     vim_free(tmpname);
   }
   --no_wait_return;                     /* may wait for return now */
@@ -2212,7 +2203,7 @@ readfile_charconvert (
      * another type of conversion might still work. */
     MSG(errmsg);
     if (tmpname != NULL) {
-      mch_remove(tmpname);              /* delete converted file */
+      os_remove((char *)tmpname);  // delete converted file
       vim_free(tmpname);
       tmpname = NULL;
     }
@@ -2394,22 +2385,21 @@ char_u *prepare_crypt_write(buf_T *buf, int *lenp)
 
   header = alloc_clear(CRYPT_MAGIC_LEN + CRYPT_SALT_LEN_MAX
       + CRYPT_SEED_LEN_MAX + 2);
-  if (header != NULL) {
-    crypt_push_state();
-    use_crypt_method = get_crypt_method(buf);      /* select zip or blowfish */
-    vim_strncpy(header, (char_u *)crypt_magic[use_crypt_method],
-        CRYPT_MAGIC_LEN);
-    if (use_crypt_method == 0)
-      crypt_init_keys(buf->b_p_key);
-    else {
-      /* Using blowfish, add salt and seed. */
-      salt = header + CRYPT_MAGIC_LEN;
-      seed = salt + salt_len;
-      sha2_seed(salt, salt_len, seed, seed_len);
-      bf_key_init(buf->b_p_key, salt, salt_len);
-      bf_cfb_init(seed, seed_len);
-    }
+  crypt_push_state();
+  use_crypt_method = get_crypt_method(buf);      /* select zip or blowfish */
+  vim_strncpy(header, (char_u *)crypt_magic[use_crypt_method],
+      CRYPT_MAGIC_LEN);
+  if (use_crypt_method == 0)
+    crypt_init_keys(buf->b_p_key);
+  else {
+    /* Using blowfish, add salt and seed. */
+    salt = header + CRYPT_MAGIC_LEN;
+    seed = salt + salt_len;
+    sha2_seed(salt, salt_len, seed, seed_len);
+    bf_key_init(buf->b_p_key, salt, salt_len);
+    bf_cfb_init(seed, seed_len);
   }
+
   *lenp = CRYPT_MAGIC_LEN + salt_len + seed_len;
   return header;
 }
@@ -2502,7 +2492,7 @@ buf_write (
   int device = FALSE;                       /* writing to a device */
   struct stat st_old;
   int prev_got_int = got_int;
-  int file_readonly = FALSE;                /* overwritten file is read-only */
+  bool file_readonly = false;               /* overwritten file is read-only */
   static char     *err_readonly =
     "is read-only (cannot override: \"W\" in 'cpoptions')";
 #if defined(UNIX) || defined(__EMX__XX)     /*XXX fix me sometime? */
@@ -2789,9 +2779,12 @@ buf_write (
   msg_scroll = FALSE;               /* always overwrite the file message now */
 
   buffer = alloc(BUFSIZE);
-  if (buffer == NULL) {             /* can't allocate big buffer, use small
-                                     * one (to be able to write when out of
-                                     * memory) */
+  // TODO: decide how to handle this now that alloc never returns NULL. The fact
+  // that the OOM handling code calls this should be considered.
+  //
+  // can't allocate big buffer, use small one (to be able to write when out of
+  // memory)
+  if (buffer == NULL) {
     buffer = smallbuf;
     bufsize = SMBUFSIZE;
   } else
@@ -2979,7 +2972,7 @@ buf_write (
           /* Close the file before removing it, on MS-Windows we
            * can't delete an open file. */
           close(fd);
-          mch_remove(IObuff);
+          os_remove((char *)IObuff);
         }
       }
     }
@@ -3029,10 +3022,6 @@ buf_write (
 #endif
 
       copybuf = alloc(BUFSIZE + 1);
-      if (copybuf == NULL) {
-        some_error = TRUE;                  /* out of memory */
-        goto nobackup;
-      }
 
       /*
        * Try to make the backup in each directory in the 'bdir' option.
@@ -3151,7 +3140,7 @@ buf_write (
          */
         if (backup != NULL) {
           /* remove old backup, if present */
-          mch_remove(backup);
+          os_remove((char *)backup);
           /* Open with O_EXCL to avoid the file being created while
            * we were sleeping (symlink hacker attack?) */
           bfd = mch_open((char *)backup,
@@ -3400,8 +3389,6 @@ nobackup:
         write_info.bw_conv_buflen = bufsize * 4;
       write_info.bw_conv_buf
         = lalloc((long_u)write_info.bw_conv_buflen, TRUE);
-      if (write_info.bw_conv_buf == NULL)
-        end = 0;
     }
   }
 
@@ -3420,8 +3407,6 @@ nobackup:
       write_info.bw_conv_buflen = bufsize * ICONV_MULT;
       write_info.bw_conv_buf
         = lalloc((long_u)write_info.bw_conv_buflen, TRUE);
-      if (write_info.bw_conv_buf == NULL)
-        end = 0;
       write_info.bw_first = TRUE;
     } else
 #  endif
@@ -3472,7 +3457,7 @@ nobackup:
     /*
      * A forced write will try to create a new file if the old one is
      * still readonly. This may also happen when the directory is
-     * read-only. In that case the mch_remove() will fail.
+     * read-only. In that case the os_remove() will fail.
      */
     if (errmsg == NULL) {
 #ifdef UNIX
@@ -3500,7 +3485,7 @@ nobackup:
             perm &= 0777;
 #endif
           if (!append)                      /* don't remove when appending */
-            mch_remove(wfname);
+            os_remove((char *)wfname);
           continue;
         }
       }
@@ -3528,7 +3513,7 @@ restore_backup:
             vim_rename(backup, fname);
           /* if original file does exist throw away the copy */
           if (mch_stat((char *)fname, &st) >= 0)
-            mch_remove(backup);
+            os_remove((char *)backup);
         } else {
           /* try to put the original file back */
           vim_rename(backup, fname);
@@ -3765,7 +3750,7 @@ restore_backup:
         end = 0;
       }
     }
-    mch_remove(wfname);
+    os_remove((char *)wfname);
     vim_free(wfname);
   }
 
@@ -3966,7 +3951,7 @@ restore_backup:
   /*
    * Remove the backup unless 'backup' option is set
    */
-  if (!p_bk && backup != NULL && mch_remove(backup) != 0)
+  if (!p_bk && backup != NULL && os_remove((char *)backup) != 0)
     EMSG(_("E207: Can't delete backup file"));
 
 
@@ -4685,7 +4670,7 @@ void shorten_fnames(int force)
         && !path_with_url(buf->b_fname)
         && (force
             || buf->b_sfname == NULL
-            || os_is_absolute_path(buf->b_sfname))) {
+            || path_is_absolute_path(buf->b_sfname))) {
       vim_free(buf->b_sfname);
       buf->b_sfname = NULL;
       p = shorten_fname(buf->b_ffname, dirname);
@@ -4754,8 +4739,6 @@ buf_modname (
    */
   if (fname == NULL || *fname == NUL) {
     retval = alloc((unsigned)(MAXPATHL + extlen + 3));
-    if (retval == NULL)
-      return NULL;
     if (os_dirname(retval, MAXPATHL) == FAIL ||
         (fnamelen = (int)STRLEN(retval)) == 0) {
       vim_free(retval);
@@ -4771,8 +4754,6 @@ buf_modname (
   } else {
     fnamelen = (int)STRLEN(fname);
     retval = alloc((unsigned)(fnamelen + extlen + 3));
-    if (retval == NULL)
-      return NULL;
     STRCPY(retval, fname);
   }
 
@@ -5032,7 +5013,7 @@ int vim_rename(char_u *from, char_u *to)
     STRCPY(tempname, from);
     for (n = 123; n < 99999; ++n) {
       sprintf((char *)path_tail(tempname), "%d", n);
-      if (os_file_exists(tempname) == FALSE) {
+      if (!os_file_exists(tempname)) {
         if (os_rename(from, tempname) == OK) {
           if (os_rename(tempname, to) == OK)
             return 0;
@@ -5055,7 +5036,7 @@ int vim_rename(char_u *from, char_u *to)
    * two files when the os_rename() fails.
    */
 
-  mch_remove(to);
+  os_remove((char *)to);
 
   /*
    * First try a normal rename, return if it works.
@@ -5128,7 +5109,7 @@ int vim_rename(char_u *from, char_u *to)
     EMSG2(errmsg, to);
     return -1;
   }
-  mch_remove(from);
+  os_remove((char *)from);
   return 0;
 }
 
@@ -5637,11 +5618,11 @@ void vim_deltempdir(void)
     if (gen_expand_wildcards(1, &NameBuff, &file_count, &files,
             EW_DIR|EW_FILE|EW_SILENT) == OK) {
       for (i = 0; i < file_count; ++i)
-        mch_remove(files[i]);
+        os_remove((char *)files[i]);
       FreeWild(file_count, files);
     }
     path_tail(NameBuff)[-1] = NUL;
-    (void)mch_rmdir(NameBuff);
+    os_rmdir((char *)NameBuff);
 
     vim_free(vim_tempdir);
     vim_tempdir = NULL;
@@ -5661,13 +5642,11 @@ static void vim_settempdir(char_u *tempdir)
   char_u      *buf;
 
   buf = alloc((unsigned)MAXPATHL + 2);
-  if (buf != NULL) {
-    if (vim_FullName(tempdir, buf, MAXPATHL, FALSE) == FAIL)
-      STRCPY(buf, tempdir);
-    add_pathsep(buf);
-    vim_tempdir = vim_strsave(buf);
-    vim_free(buf);
-  }
+  if (vim_FullName(tempdir, buf, MAXPATHL, FALSE) == FAIL)
+    STRCPY(buf, tempdir);
+  add_pathsep(buf);
+  vim_tempdir = vim_strsave(buf);
+  vim_free(buf);
 }
 #endif
 
@@ -5754,7 +5733,7 @@ vim_tempname (
            * "repl" has been reported to use "177". */
           umask_save = umask(077);
 #  endif
-          r = vim_mkdir(itmp, 0700);
+          r = os_mkdir((char *)itmp, 0700);
 #  if defined(UNIX) || defined(VMS)
           (void)umask(umask_save);
 #  endif
@@ -5967,6 +5946,7 @@ static struct event_name {
   {"InsertEnter",     EVENT_INSERTENTER},
   {"InsertLeave",     EVENT_INSERTLEAVE},
   {"InsertCharPre",   EVENT_INSERTCHARPRE},
+  {"JobActivity",     EVENT_JOBACTIVITY},
   {"MenuPopup",       EVENT_MENUPOPUP},
   {"QuickFixCmdPost", EVENT_QUICKFIXCMDPOST},
   {"QuickFixCmdPre",  EVENT_QUICKFIXCMDPRE},
@@ -6236,8 +6216,9 @@ static int au_new_group(char_u *name)
     for (i = 0; i < augroups.ga_len; ++i)
       if (AUGROUP_NAME(i) == NULL)
         break;
-    if (i == augroups.ga_len && ga_grow(&augroups, 1) == FAIL)
-      return AUGROUP_ERROR;
+    if (i == augroups.ga_len) {
+      ga_grow(&augroups, 1);
+    }
 
     AUGROUP_NAME(i) = vim_strsave(name);
     if (AUGROUP_NAME(i) == NULL)
@@ -6788,8 +6769,6 @@ static int do_autocmd_event(event_T event, char_u *pat, int nested, char_u *cmd,
         }
 
         ap = (AutoPat *)alloc((unsigned)sizeof(AutoPat));
-        if (ap == NULL)
-          return FAIL;
         ap->pat = vim_strnsave(pat, patlen);
         ap->patlen = patlen;
         if (ap->pat == NULL) {
@@ -6831,8 +6810,6 @@ static int do_autocmd_event(event_T event, char_u *pat, int nested, char_u *cmd,
       while ((ac = *prev_ac) != NULL)
         prev_ac = &ac->next;
       ac = (AutoCmd *)alloc((unsigned)sizeof(AutoCmd));
-      if (ac == NULL)
-        return FAIL;
       ac->cmd = vim_strsave(cmd);
       ac->scriptID = current_SID;
       if (ac->cmd == NULL) {
@@ -7411,7 +7388,7 @@ apply_autocmds_group (
   } else {
     sfname = vim_strsave(fname);
     /* Don't try expanding FileType, Syntax, FuncUndefined, WindowID,
-     * ColorScheme or QuickFixCmd* */
+     * ColorScheme, QuickFixCmd or JobActivity */
     if (event == EVENT_FILETYPE
         || event == EVENT_SYNTAX
         || event == EVENT_FUNCUNDEFINED
@@ -7419,7 +7396,8 @@ apply_autocmds_group (
         || event == EVENT_SPELLFILEMISSING
         || event == EVENT_QUICKFIXCMDPRE
         || event == EVENT_COLORSCHEME
-        || event == EVENT_QUICKFIXCMDPOST)
+        || event == EVENT_QUICKFIXCMDPOST
+        || event == EVENT_JOBACTIVITY)
       fname = vim_strsave(fname);
     else
       fname = FullName_save(fname, FALSE);
@@ -7648,14 +7626,12 @@ auto_next_pat (
         s = _("%s Auto commands for \"%s\"");
         sourcing_name = alloc((unsigned)(STRLEN(s)
                                          + STRLEN(name) + ap->patlen + 1));
-        if (sourcing_name != NULL) {
-          sprintf((char *)sourcing_name, s,
-              (char *)name, (char *)ap->pat);
-          if (p_verbose >= 8) {
-            verbose_enter();
-            smsg((char_u *)_("Executing %s"), sourcing_name);
-            verbose_leave();
-          }
+        sprintf((char *)sourcing_name, s,
+            (char *)name, (char *)ap->pat);
+        if (p_verbose >= 8) {
+          verbose_enter();
+          smsg((char_u *)_("Executing %s"), sourcing_name);
+          verbose_leave();
         }
 
         apc->curpat = ap;
@@ -8130,10 +8106,8 @@ file_pat_to_reg_pat (
       if (p + 1 >= pat_end) {
         /* The 'pattern' is a filetype check ONLY */
         reg_pat = (char_u *)alloc(check_length + 1);
-        if (reg_pat != NULL) {
-          memmove(reg_pat, pat, (size_t)check_length);
-          reg_pat[check_length] = NUL;
-        }
+        memmove(reg_pat, pat, (size_t)check_length);
+        reg_pat[check_length] = NUL;
         return reg_pat;
       }
     }

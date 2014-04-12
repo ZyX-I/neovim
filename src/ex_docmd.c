@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=2 sts=2 sw=2:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -304,7 +304,7 @@ struct loop_cookie {
 };
 
 static char_u   *get_loop_line(int c, void *cookie, int indent);
-static int store_loop_line(garray_T *gap, char_u *line);
+static void store_loop_line(garray_T *gap, char_u *line);
 static void free_cmdlines(garray_T *gap);
 
 /* Struct to save a few things while debugging.  Used in do_cmdline() only. */
@@ -739,10 +739,7 @@ int flags;
      */
     if (current_line == lines_ga.ga_len
         && (cstack.cs_looplevel || has_loop_cmd(next_cmdline))) {
-      if (store_loop_line(&lines_ga, next_cmdline) == FAIL) {
-        retval = FAIL;
-        break;
-      }
+      store_loop_line(&lines_ga, next_cmdline);
     }
     did_endif = FALSE;
 
@@ -1161,8 +1158,10 @@ static char_u *get_loop_line(int c, void *cookie, int indent)
       line = getcmdline(c, 0L, indent);
     else
       line = cp->getline(c, cp->cookie, indent);
-    if (line != NULL && store_loop_line(cp->lines_gap, line) == OK)
+    if (line != NULL) {
+      store_loop_line(cp->lines_gap, line);
       ++cp->current_line;
+    }
 
     return line;
   }
@@ -1177,14 +1176,12 @@ static char_u *get_loop_line(int c, void *cookie, int indent)
 /*
  * Store a line in "gap" so that a ":while" loop can execute it again.
  */
-static int store_loop_line(garray_T *gap, char_u *line)
+static void store_loop_line(garray_T *gap, char_u *line)
 {
-  if (ga_grow(gap, 1) == FAIL)
-    return FAIL;
+  ga_grow(gap, 1);
   ((wcmd_T *)(gap->ga_data))[gap->ga_len].line = vim_strsave(line);
   ((wcmd_T *)(gap->ga_data))[gap->ga_len].lnum = sourcing_lnum;
   ++gap->ga_len;
-  return OK;
 }
 
 /*
@@ -4361,8 +4358,8 @@ static int uc_add_command(char_u *name, size_t name_len, char_u *rep, long argt,
 
   /* Extend the array unless we're replacing an existing command */
   if (cmp != 0) {
-    if (ga_grow(gap, 1) != OK)
-      goto fail;
+    ga_grow(gap, 1);
+
     if ((p = vim_strnsave(name, (int)name_len)) == NULL)
       goto fail;
 
@@ -5868,7 +5865,8 @@ void alist_set(alist_T *al, int count, char_u **files, int use_curbuf, int *fnum
   int i;
 
   alist_clear(al);
-  if (ga_grow(&al->al_ga, count) == OK) {
+  ga_grow(&al->al_ga, count);
+  {
     for (i = 0; i < count; ++i) {
       if (got_int) {
         /* When adding many buffers this can take a long time.  Allow
@@ -5887,8 +5885,8 @@ void alist_set(alist_T *al, int count, char_u **files, int use_curbuf, int *fnum
       ui_breakcheck();
     }
     vim_free(files);
-  } else
-    FreeWild(count, files);
+  }
+
   if (al == &global_alist)
     arg_had_last = FALSE;
 }
@@ -7239,12 +7237,10 @@ static void ex_mkrc(exarg_T *eap)
   else
     fname = (char_u *)EXRC_FILE;
 
-
-#if defined(FEAT_SESSION) && defined(vim_mkdir)
   /* When using 'viewdir' may have to create the directory. */
-  if (using_vdir && !os_isdir(p_vdir))
+  if (using_vdir && !os_isdir(p_vdir)) {
     vim_mkdir_emsg(p_vdir, 0755);
-#endif
+  }
 
   fd = open_exfile(fname, eap->forceit, WRITEBIN);
   if (fd != NULL) {
@@ -7362,17 +7358,14 @@ static void ex_mkrc(exarg_T *eap)
   vim_free(viewFile);
 }
 
-#if ((defined(FEAT_SESSION) || defined(FEAT_EVAL)) && defined(vim_mkdir)) \
-  || defined(PROTO)
 int vim_mkdir_emsg(char_u *name, int prot)
 {
-  if (vim_mkdir(name, prot) != 0) {
+  if (os_mkdir((char *)name, prot) != 0) {
     EMSG2(_("E739: Cannot create directory: %s"), name);
     return FAIL;
   }
   return OK;
 }
-#endif
 
 /*
  * Open a file for writing for an Ex command, with some checks.

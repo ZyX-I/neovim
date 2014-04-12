@@ -1369,10 +1369,6 @@ buflist_new (
   }
   if (buf != curbuf || curbuf == NULL) {
     buf = (buf_T *)alloc_clear((unsigned)sizeof(buf_T));
-    if (buf == NULL) {
-      vim_free(ffname);
-      return NULL;
-    }
     /* init b: variables */
     buf->b_vars = dict_alloc();
     if (buf->b_vars == NULL) {
@@ -1391,8 +1387,7 @@ buflist_new (
   clear_wininfo(buf);
   buf->b_wininfo = (wininfo_T *)alloc_clear((unsigned)sizeof(wininfo_T));
 
-  if ((ffname != NULL && (buf->b_ffname == NULL || buf->b_sfname == NULL))
-      || buf->b_wininfo == NULL) {
+  if (ffname != NULL && (buf->b_ffname == NULL || buf->b_sfname == NULL)) {
     vim_free(buf->b_ffname);
     buf->b_ffname = NULL;
     vim_free(buf->b_sfname);
@@ -1837,8 +1832,6 @@ int ExpandBufnames(char_u *pat, int *num_file, char_u ***file, int options)
   /* Make a copy of "pat" and change "^" to "\(^\|[\/]\)". */
   if (*pat == '^') {
     patc = alloc((unsigned)STRLEN(pat) + 11);
-    if (patc == NULL)
-      return FAIL;
     STRCPY(patc, "\\(^\\|[\\/]\\)");
     STRCPY(patc + 11, pat + 1);
   } else
@@ -1884,12 +1877,6 @@ int ExpandBufnames(char_u *pat, int *num_file, char_u ***file, int options)
         break;
       if (round == 1) {
         *file = (char_u **)alloc((unsigned)(count * sizeof(char_u *)));
-        if (*file == NULL) {
-          vim_regfree(prog);
-          if (patc != pat)
-            vim_free(patc);
-          return FAIL;
-        }
       }
     }
     vim_regfree(prog);
@@ -2001,8 +1988,6 @@ static void buflist_setfpos(buf_T *buf, win_T *win, linenr_T lnum, colnr_T col, 
   if (wip == NULL) {
     /* allocate a new entry */
     wip = (wininfo_T *)alloc_clear((unsigned)sizeof(wininfo_T));
-    if (wip == NULL)
-      return;
     wip->wi_win = win;
     if (lnum == 0)              /* set lnum even when it's 0 */
       lnum = 1;
@@ -2427,7 +2412,7 @@ void buflist_altfpos(win_T *win)
 
 /*
  * Return TRUE if 'ffname' is not the same file as current file.
- * Fname must have a full path (expanded by os_get_absolute_path()).
+ * Fname must have a full path (expanded by path_get_absolute_path()).
  */
 int otherfile(char_u *ffname)
 {
@@ -2523,8 +2508,6 @@ fileinfo (
   size_t len;
 
   buffer = alloc(IOSIZE);
-  if (buffer == NULL)
-    return;
 
   if (fullname > 1) {       /* 2 CTRL-G: include buffer number */
     vim_snprintf((char *)buffer, IOSIZE, "buf %d: ", curbuf->b_fnum);
@@ -3700,8 +3683,6 @@ do_arg_all (
 
   opened_len = ARGCOUNT;
   opened = alloc_clear((unsigned)opened_len);
-  if (opened == NULL)
-    return;
 
   /* Autocommands may do anything to the argument list.  Make sure it's not
    * freed while we are working here by "locking" it.  We still have to
@@ -4292,8 +4273,6 @@ void write_viminfo_bufferlist(FILE *fp)
   /* Allocate room for the file name, lnum and col. */
 #define LINE_BUF_LEN (MAXPATHL + 40)
   line = alloc(LINE_BUF_LEN);
-  if (line == NULL)
-    return;
 
   FOR_ALL_TAB_WINDOWS(tp, win)
   set_last_cursor(win);
@@ -4380,26 +4359,24 @@ static void insert_sign(
     signlist_T	*newsign;
 
     newsign = (signlist_T *)lalloc((long_u)sizeof(signlist_T), FALSE);
-    if (newsign != NULL) {
-        newsign->id = id;
-        newsign->lnum = lnum;
-        newsign->typenr = typenr;
-        newsign->next = next;
+    newsign->id = id;
+    newsign->lnum = lnum;
+    newsign->typenr = typenr;
+    newsign->next = next;
 
-        if (prev == NULL) {
-            /* When adding first sign need to redraw the windows to create the
-             * column for signs. */
-            if (buf->b_signlist == NULL) {
-                redraw_buf_later(buf, NOT_VALID);
-                changed_cline_bef_curs();
-            }
+    if (prev == NULL) {
+        /* When adding first sign need to redraw the windows to create the
+         * column for signs. */
+        if (buf->b_signlist == NULL) {
+            redraw_buf_later(buf, NOT_VALID);
+            changed_cline_bef_curs();
+        }
 
-            /* first sign in signlist */
-            buf->b_signlist = newsign;
-        }
-        else {
-            prev->next = newsign;
-        }
+        /* first sign in signlist */
+        buf->b_signlist = newsign;
+    }
+    else {
+        prev->next = newsign;
     }
 }
 

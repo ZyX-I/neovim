@@ -30,6 +30,8 @@
 #define URL_SLASH       1               /* path_is_url() has found "://" */
 #define URL_BACKSLASH   2               /* path_is_url() has found ":\\" */
 
+static int path_get_absolute_path(char_u *fname, char_u *buf, int len, int force);
+
 FileComparison path_full_compare(char_u *s1, char_u *s2, int checkname)
 {
   assert(s1 && s2);
@@ -397,8 +399,6 @@ unix_expandpath (
 
   /* make room for file name */
   buf = alloc((int)STRLEN(path) + BASENAMELEN + 5);
-  if (buf == NULL)
-    return 0;
 
   /*
    * Find the first part in the path name that contains a wildcard.
@@ -627,8 +627,7 @@ static void expand_path_option(char_u *curdir, garray_T *gap)
   char_u      *p;
   int len;
 
-  if ((buf = alloc((int)MAXPATHL)) == NULL)
-    return;
+  buf = alloc((int)MAXPATHL);
 
   while (*path_option != NUL) {
     copy_option_part(&path_option, buf, MAXPATHL, " ,");
@@ -655,7 +654,7 @@ static void expand_path_option(char_u *curdir, garray_T *gap)
     else if (path_with_url(buf))
       /* URL can't be used here */
       continue;
-    else if (!os_is_absolute_path(buf)) {
+    else if (!path_is_absolute_path(buf)) {
       /* Expand relative path to their full path equivalent */
       len = (int)STRLEN(curdir);
       if (len + (int)STRLEN(buf) + 3 > MAXPATHL)
@@ -666,9 +665,7 @@ static void expand_path_option(char_u *curdir, garray_T *gap)
       simplify_filename(buf);
     }
 
-    if (ga_grow(gap, 1) == FAIL)
-      break;
-
+    ga_grow(gap, 1);
 
     p = vim_strsave(buf);
     if (p == NULL)
@@ -745,8 +742,6 @@ static void uniquefy_paths(garray_T *gap, char_u *pattern)
    */
   len = (int)STRLEN(pattern);
   file_pattern = alloc(len + 2);
-  if (file_pattern == NULL)
-    return;
   file_pattern[0] = '*';
   file_pattern[1] = NUL;
   STRCAT(file_pattern, pattern);
@@ -761,14 +756,11 @@ static void uniquefy_paths(garray_T *gap, char_u *pattern)
   if (regmatch.regprog == NULL)
     return;
 
-  if ((curdir = alloc((int)(MAXPATHL))) == NULL)
-    goto theend;
+  curdir = alloc((int)(MAXPATHL));
   os_dirname(curdir, MAXPATHL);
   expand_path_option(curdir, &path_ga);
 
   in_curdir = (char_u **)alloc_clear(gap->ga_len * sizeof(char_u *));
-  if (in_curdir == NULL)
-    goto theend;
 
   for (i = 0; i < gap->ga_len && !got_int; i++) {
     char_u      *path = fnames[i];
@@ -798,7 +790,7 @@ static void uniquefy_paths(garray_T *gap, char_u *pattern)
         break;
       }
 
-    if (os_is_absolute_path(path)) {
+    if (path_is_absolute_path(path)) {
       /*
        * Last resort: shorten relative to curdir if possible.
        * 'possible' means:
@@ -841,8 +833,6 @@ static void uniquefy_paths(garray_T *gap, char_u *pattern)
     }
 
     rel_path = alloc((int)(STRLEN(short_name) + STRLEN(PATHSEPSTR) + 2));
-    if (rel_path == NULL)
-      goto theend;
     STRCPY(rel_path, ".");
     add_pathsep(rel_path);
     STRCAT(rel_path, short_name);
@@ -853,7 +843,6 @@ static void uniquefy_paths(garray_T *gap, char_u *pattern)
     ui_breakcheck();
   }
 
-theend:
   vim_free(curdir);
   if (in_curdir != NULL) {
     for (i = 0; i < gap->ga_len; i++)
@@ -916,8 +905,7 @@ expand_in_path (
   char_u      *e;       /* end */
   char_u      *paths = NULL;
 
-  if ((curdir = alloc((unsigned)MAXPATHL)) == NULL)
-    return 0;
+  curdir = alloc((unsigned)MAXPATHL);
   os_dirname(curdir, MAXPATHL);
 
   ga_init(&path_ga, (int)sizeof(char_u *), 1);
@@ -1098,7 +1086,7 @@ gen_expand_wildcards (
        */
       if (mch_has_exp_wildcard(p)) {
         if ((flags & EW_PATH)
-            && !os_is_absolute_path(p)
+            && !path_is_absolute_path(p)
             && !(p[0] == '.'
                  && (vim_ispathsep(p[1])
                      || (p[1] == '.' && vim_ispathsep(p[2]))))
@@ -1220,7 +1208,7 @@ addfile (
 )
 {
   char_u      *p;
-  int isdir;
+  bool isdir;
 
   /* if the file/dir doesn't exist, may not add it */
   if (!(flags & EW_NOTFOUND) && !os_file_exists(f))
@@ -1241,12 +1229,9 @@ addfile (
     return;
 
   /* Make room for another item in the file list. */
-  if (ga_grow(gap, 1) == FAIL)
-    return;
+  ga_grow(gap, 1);
 
   p = alloc((unsigned)(STRLEN(f) + 1 + isdir));
-  if (p == NULL)
-    return;
 
   STRCPY(p, f);
 #ifdef BACKSLASH_IN_FILENAME
@@ -1542,7 +1527,7 @@ int path_with_url(char_u *fname)
  */
 int vim_isAbsName(char_u *name)
 {
-  return path_with_url(name) != 0 || os_is_absolute_path(name);
+  return path_with_url(name) != 0 || path_is_absolute_path(name);
 }
 
 /*
@@ -1567,7 +1552,7 @@ vim_FullName (
 
   url = path_with_url(fname);
   if (!url)
-    retval = os_get_absolute_path(fname, buf, len, force);
+    retval = path_get_absolute_path(fname, buf, len, force);
   if (url || retval == FAIL) {
     /* something failed; use the file name (truncate when too long) */
     vim_strncpy(buf, fname, len - 1);
@@ -1745,8 +1730,6 @@ char_u *shorten_fname1(char_u *full_path)
   char_u      *p = full_path;
 
   dirname = alloc(MAXPATHL);
-  if (dirname == NULL)
-    return full_path;
   if (os_dirname(dirname, MAXPATHL) == OK) {
     p = shorten_fname(full_path, dirname);
     if (p == NULL || *p == NUL)
@@ -1953,4 +1936,119 @@ int match_suffix(char_u *fname)
     }
   }
   return setsuflen != 0;
+}
+
+int path_full_dir_name(char *directory, char *buffer, int len)
+{
+  int SUCCESS = 0;
+  int retval = OK;
+
+  if (STRLEN(directory) == 0) {
+    return os_dirname((char_u *) buffer, len);
+  }
+
+  char old_dir[MAXPATHL];
+
+  // Get current directory name.
+  if (os_dirname((char_u *) old_dir, MAXPATHL) == FAIL) {
+    return FAIL;
+  }
+
+  // We have to get back to the current dir at the end, check if that works.
+  if (os_chdir(old_dir) != SUCCESS) {
+    return FAIL;
+  }
+
+  if (os_chdir(directory) != SUCCESS) {
+    // Do not return immediatly since we may be in the wrong directory.
+    retval = FAIL;
+  }
+
+  if (retval == FAIL || os_dirname((char_u *) buffer, len) == FAIL) {
+    // Do not return immediatly since we are in the wrong directory.
+    retval = FAIL;
+  }
+
+  if (os_chdir(old_dir) != SUCCESS) {
+    // That shouldn't happen, since we've tested if it works.
+    retval = FAIL;
+    EMSG(_(e_prev_dir));
+  }
+
+  return retval;
+}
+
+// Append to_append to path with a slash in between.
+int append_path(char *path, const char *to_append, int max_len)
+{
+  int current_length = STRLEN(path);
+  int to_append_length = STRLEN(to_append);
+
+  // Do not append empty strings.
+  if (to_append_length == 0) {
+    return OK;
+  }
+
+  // Do not append a dot.
+  if (STRCMP(to_append, ".") == 0) {
+    return OK;
+  }
+
+  // Glue both paths with a slash.
+  if (current_length > 0 && path[current_length-1] != '/') {
+    current_length += 1;  // Count the trailing slash.
+
+    // +1 for the NUL at the end.
+    if (current_length + 1 > max_len) {
+      return FAIL;
+    }
+
+    STRCAT(path, "/");
+  }
+
+  // +1 for the NUL at the end.
+  if (current_length + to_append_length + 1 > max_len) {
+    return FAIL;
+  }
+
+  STRCAT(path, to_append);
+  return OK;
+}
+
+/// Expand a given file to its absolute path.
+///
+/// @param fname The filename which should be expanded.
+/// @param buf Buffer to store the absolute path of `fname`.
+/// @param len Length of `buf`.
+/// @param force Also expand when `fname` is already absolute.
+/// @return `FAIL` for failure, `OK` for success.
+static int path_get_absolute_path(char_u *fname, char_u *buf, int len, int force)
+{
+  char_u *p;
+  *buf = NUL;
+
+  char relative_directory[len];
+  char *end_of_path = (char *) fname;
+
+  // expand it if forced or not an absolute path
+  if (force || !path_is_absolute_path(fname)) {
+    if ((p = vim_strrchr(fname, '/')) != NULL) {
+      STRNCPY(relative_directory, fname, p-fname);
+      relative_directory[p-fname] = NUL;
+      end_of_path = (char *) (p + 1);
+    } else {
+      relative_directory[0] = NUL;
+      end_of_path = (char *) fname;
+    }
+
+    if (FAIL == path_full_dir_name(relative_directory, (char *) buf, len)) {
+      return FAIL;
+    }
+  }
+  return append_path((char *) buf, (char *) end_of_path, len);
+}
+
+int path_is_absolute_path(const char_u *fname)
+{
+  return *fname == '/' || *fname == '~';
 }

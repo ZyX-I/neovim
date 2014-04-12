@@ -1207,9 +1207,9 @@ filterend:
     EMSG(_("E135: *Filter* Autocommands must not change current buffer"));
   }
   if (itmp != NULL)
-    mch_remove(itmp);
+    os_remove((char *)itmp);
   if (otmp != NULL)
-    mch_remove(otmp);
+    os_remove((char *)otmp);
   vim_free(itmp);
   vim_free(otmp);
 }
@@ -1712,9 +1712,9 @@ void write_viminfo(char_u *file, int forceit)
      * In case of an error keep the original viminfo file.
      * Otherwise rename the newly written file.
      */
-    if (viminfo_errcnt || vim_rename(tempname, fname) == -1)
-      mch_remove(tempname);
-
+    if (viminfo_errcnt || vim_rename(tempname, fname) == -1) {
+      os_remove((char *)tempname);
+    }
   }
 
 end:
@@ -3861,10 +3861,6 @@ void do_sub(exarg_T *eap)
 
         if (sub_firstline == NULL) {
           sub_firstline = vim_strsave(ml_get(sub_firstlnum));
-          if (sub_firstline == NULL) {
-            vim_free(new_start);
-            goto outofmem;
-          }
         }
 
         /* Save the line number of the last change for the final
@@ -4154,8 +4150,7 @@ void do_sub(exarg_T *eap)
            * too many calls to alloc()/free()).
            */
           new_start_len = needed_len + 50;
-          if ((new_start = alloc_check(new_start_len)) == NULL)
-            goto outofmem;
+          new_start = (char_u *)xmalloc((size_t)new_start_len);
           *new_start = NUL;
           new_end = new_start;
         } else {
@@ -4168,10 +4163,7 @@ void do_sub(exarg_T *eap)
           needed_len += len;
           if (needed_len > (int)new_start_len) {
             new_start_len = needed_len + 50;
-            if ((p1 = alloc_check(new_start_len)) == NULL) {
-              vim_free(new_start);
-              goto outofmem;
-            }
+            p1 = (char_u *) xmalloc((size_t)new_start_len);
             memmove(p1, new_start, (size_t)(len + 1));
             vim_free(new_start);
             new_start = p1;
@@ -4388,7 +4380,6 @@ skip:
     changed_lines(first_line, 0, last_line - i, i);
   }
 
-outofmem:
   vim_free(sub_firstline);   /* may have to free allocated copy of the line */
 
   /* ":s/pat//n" doesn't move the cursor */
@@ -5435,8 +5426,7 @@ void ex_helptags(exarg_T *eap)
           break;
       if (j == ga.ga_len) {
         /* New language, add it. */
-        if (ga_grow(&ga, 2) == FAIL)
-          break;
+        ga_grow(&ga, 2);
         ((char_u *)ga.ga_data)[ga.ga_len++] = lang[0];
         ((char_u *)ga.ga_data)[ga.ga_len++] = lang[1];
       }
@@ -5529,18 +5519,11 @@ helptags_one (
   ga_init(&ga, (int)sizeof(char_u *), 100);
   if (add_help_tags || path_full_compare((char_u *)"$VIMRUNTIME/doc",
           dir, FALSE) == kEqualFiles) {
-    if (ga_grow(&ga, 1) == FAIL)
-      got_int = TRUE;
-    else {
-      s = alloc(18 + (unsigned)STRLEN(tagfname));
-      if (s == NULL)
-        got_int = TRUE;
-      else {
-        sprintf((char *)s, "help-tags\t%s\t1\n", tagfname);
-        ((char_u **)ga.ga_data)[ga.ga_len] = s;
-        ++ga.ga_len;
-      }
-    }
+    ga_grow(&ga, 1);
+    s = alloc(18 + (unsigned)STRLEN(tagfname));
+    sprintf((char *)s, "help-tags\t%s\t1\n", tagfname);
+    ((char_u **)ga.ga_data)[ga.ga_len] = s;
+    ++ga.ga_len;
   }
 
   /*
@@ -5607,10 +5590,7 @@ helptags_one (
                   || s[1] == '\0')) {
             *p2 = '\0';
             ++p1;
-            if (ga_grow(&ga, 1) == FAIL) {
-              got_int = TRUE;
-              break;
-            }
+            ga_grow(&ga, 1);
             s = alloc((unsigned)(p2 - p1 + STRLEN(fname) + 2));
             if (s == NULL) {
               got_int = TRUE;

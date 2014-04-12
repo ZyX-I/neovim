@@ -63,6 +63,7 @@
 #include "version.h"
 #include "window.h"
 #include "os/os.h"
+#include "os/job.h"
 #include "os/shell.h"
 
 #if defined(FEAT_FLOAT)
@@ -388,6 +389,7 @@ static struct vimvar {
   {VV_NAME("hlsearch",         VAR_NUMBER), 0},
   {VV_NAME("oldfiles",         VAR_LIST), 0},
   {VV_NAME("windowid",         VAR_NUMBER), VV_RO},
+  {VV_NAME("job_data",         VAR_LIST), 0}
 };
 
 /* shorthand */
@@ -401,6 +403,11 @@ static struct vimvar {
 static dictitem_T vimvars_var;                  /* variable used for v: */
 #define vimvarht  vimvardict.dv_hashtab
 
+static void apply_job_autocmds(int id,
+                               void *data,
+                               char *buffer,
+                               uint32_t len,
+                               bool from_stdout);
 static void prepare_vimvar(int idx, typval_T *save_tv);
 static void restore_vimvar(int idx, typval_T *save_tv);
 static int ex_let_vars(char_u *arg, typval_T *tv, int copy,
@@ -629,6 +636,9 @@ static void f_invert(typval_T *argvars, typval_T *rettv);
 static void f_isdirectory(typval_T *argvars, typval_T *rettv);
 static void f_islocked(typval_T *argvars, typval_T *rettv);
 static void f_items(typval_T *argvars, typval_T *rettv);
+static void f_job_start(typval_T *argvars, typval_T *rettv);
+static void f_job_stop(typval_T *argvars, typval_T *rettv);
+static void f_job_write(typval_T *argvars, typval_T *rettv);
 static void f_join(typval_T *argvars, typval_T *rettv);
 static void f_keys(typval_T *argvars, typval_T *rettv);
 static void f_last_buffer_nr(typval_T *argvars, typval_T *rettv);
@@ -653,9 +663,7 @@ static void f_matchlist(typval_T *argvars, typval_T *rettv);
 static void f_matchstr(typval_T *argvars, typval_T *rettv);
 static void f_max(typval_T *argvars, typval_T *rettv);
 static void f_min(typval_T *argvars, typval_T *rettv);
-#ifdef vim_mkdir
 static void f_mkdir(typval_T *argvars, typval_T *rettv);
-#endif
 static void f_mode(typval_T *argvars, typval_T *rettv);
 static void f_nextnonblank(typval_T *argvars, typval_T *rettv);
 static void f_nr2char(typval_T *argvars, typval_T *rettv);
@@ -1106,11 +1114,9 @@ void var_redir_str(char_u *value, int value_len)
   else
     len = value_len;                    /* Append only "value_len" characters */
 
-  if (ga_grow(&redir_ga, len) == OK) {
-    memmove((char *)redir_ga.ga_data + redir_ga.ga_len, value, len);
-    redir_ga.ga_len += len;
-  } else
-    var_redir_stop();
+  ga_grow(&redir_ga, len);
+  memmove((char *)redir_ga.ga_data + redir_ga.ga_len, value, len);
+  redir_ga.ga_len += len;
 }
 
 /*
@@ -1179,7 +1185,7 @@ int eval_printexpr(char_u *fname, char_u *args)
   set_vim_var_string(VV_CMDARG, NULL, -1);
 
   if (err) {
-    mch_remove(fname);
+    os_remove((char *)fname);
     return FAIL;
   }
   return OK;
@@ -1365,6 +1371,7 @@ int eval_to_number(char_u *expr)
 
   return retval;
 }
+
 
 /*
  * Prepare v: variable "idx" to be used.
@@ -5823,8 +5830,7 @@ list_join_inner (
    * multiple copy operations.  Add 2 for a tailing ']' and NUL. */
   if (join_gap->ga_len >= 2)
     sumlen += (int)STRLEN(sep) * (join_gap->ga_len - 1);
-  if (ga_grow(gap, sumlen + 2) == FAIL)
-    return FAIL;
+  ga_grow(gap, sumlen + 2);
 
   for (i = 0; i < join_gap->ga_len && !got_int; ++i) {
     if (first)
@@ -6946,6 +6952,9 @@ static struct fst {
   {"isdirectory",     1, 1, f_isdirectory},
   {"islocked",        1, 1, f_islocked},
   {"items",           1, 1, f_items},
+  {"jobstart",        2, 3, f_job_start},
+  {"jobstop",         1, 1, f_job_stop},
+  {"jobwrite",        2, 2, f_job_write},
   {"join",            1, 2, f_join},
   {"keys",            1, 1, f_keys},
   {"last_buffer_nr",  0, 0, f_last_buffer_nr},  /* obsolete */
@@ -6970,9 +6979,7 @@ static struct fst {
   {"matchstr",        2, 4, f_matchstr},
   {"max",             1, 1, f_max},
   {"min",             1, 1, f_min},
-#ifdef vim_mkdir
   {"mkdir",           1, 3, f_mkdir},
-#endif
   {"mode",            0, 1, f_mode},
   {"nextnonblank",    1, 1, f_nextnonblank},
   {"nr2char",         1, 2, f_nr2char},
@@ -8402,7 +8409,7 @@ static void f_delete(typval_T *argvars, typval_T *rettv)
   if (check_restricted() || check_secure())
     rettv->vval.v_number = -1;
   else
-    rettv->vval.v_number = mch_remove(get_tv_string(&argvars[0]));
+    rettv->vval.v_number = os_remove((char *)get_tv_string(&argvars[0]));
 }
 
 /*
@@ -10799,13 +10806,10 @@ static void f_inputrestore(typval_T *argvars, typval_T *rettv)
 static void f_inputsave(typval_T *argvars, typval_T *rettv)
 {
   /* Add an entry to the stack of typeahead storage. */
-  if (ga_grow(&ga_userinput, 1) == OK) {
-    save_typeahead((tasave_T *)(ga_userinput.ga_data)
-        + ga_userinput.ga_len);
-    ++ga_userinput.ga_len;
-    /* default return is zero == OK */
-  } else
-    rettv->vval.v_number = 1;     /* Failed */
+  ga_grow(&ga_userinput, 1);
+  save_typeahead((tasave_T *)(ga_userinput.ga_data)
+          + ga_userinput.ga_len);
+  ++ga_userinput.ga_len;
 }
 
 /*
@@ -11001,6 +11005,143 @@ static void f_items(typval_T *argvars, typval_T *rettv)
   dict_list(argvars, rettv, 2);
 }
 
+// "jobstart()" function
+static void f_job_start(typval_T *argvars, typval_T *rettv)
+{
+  list_T *args = NULL;
+  listitem_T *arg;
+  int i, argvl, argsl;
+  char **argv = NULL;
+
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (check_restricted() || check_secure()) {
+    goto cleanup;
+  }
+
+  if (argvars[0].v_type != VAR_STRING
+      || argvars[1].v_type != VAR_STRING
+      || (argvars[2].v_type != VAR_LIST
+      && argvars[2].v_type != VAR_UNKNOWN)) {
+    // Wrong argument types
+    EMSG(_(e_invarg));
+    goto cleanup;
+  }
+
+  argsl = 0;
+  if (argvars[2].v_type == VAR_LIST) {
+    args = argvars[2].vval.v_list;
+    argsl = args->lv_len;
+    // Assert that all list items are strings
+    for (arg = args->lv_first; arg != NULL; arg = arg->li_next) {
+      if (arg->li_tv.v_type != VAR_STRING) {
+        EMSG(_(e_invarg));
+        goto cleanup;
+      }
+    }
+  }
+
+  if (!os_can_exe(get_tv_string(&argvars[1]))) {
+    // String is not executable
+    EMSG2(e_jobexe, get_tv_string(&argvars[1]));
+    goto cleanup;
+  }
+
+  // Allocate extra memory for the argument vector and the NULL pointer
+  argvl = argsl + 2;
+  argv = xmalloc(sizeof(char_u *) * argvl);
+
+  // Copy program name
+  argv[0] = xstrdup((char *)argvars[1].vval.v_string);
+
+  i = 1;
+  // Copy arguments to the vector
+  if (argsl > 0) {
+    for (arg = args->lv_first; arg != NULL; arg = arg->li_next) {
+      argv[i++] = xstrdup((char *)arg->li_tv.vval.v_string);
+    }
+  }
+
+  // The last item of argv must be NULL
+  argv[i] = NULL;
+
+  rettv->vval.v_number = job_start(argv,
+                                   xstrdup((char *)argvars[0].vval.v_string),
+                                   apply_job_autocmds);
+
+  if (rettv->vval.v_number <= 0) {
+    if (rettv->vval.v_number == 0) {
+      EMSG(_(e_jobtblfull));
+    } else {
+      EMSG(_(e_jobexe));
+    }
+  }
+
+cleanup:
+  if (rettv->vval.v_number > 0) {
+    // Success
+    return;
+  }
+  // Cleanup argv memory in case the `job_start` call failed
+  shell_free_argv(argv);
+}
+
+// "jobstop()" function
+static void f_job_stop(typval_T *argvars, typval_T *rettv)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (check_restricted() || check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_NUMBER) {
+    // Only argument is the job id
+    EMSG(_(e_invarg));
+    return;
+  }
+
+  if (!job_stop(argvars[0].vval.v_number)) {
+    // Probably an invalid job id
+    EMSG(_(e_invjob));
+    return;
+  }
+
+  rettv->vval.v_number = 1;
+}
+
+// "jobwrite()" function
+static void f_job_write(typval_T *argvars, typval_T *rettv)
+{
+  bool res;
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = 0;
+
+  if (check_restricted() || check_secure()) {
+    return;
+  }
+
+  if (argvars[0].v_type != VAR_NUMBER || argvars[1].v_type != VAR_STRING) {
+    // First argument is the job id and second is the string to write to 
+    // the job's stdin
+    EMSG(_(e_invarg));
+    return;
+  }
+
+  res = job_write(argvars[0].vval.v_number,
+                  xstrdup((char *)argvars[1].vval.v_string),
+                  strlen((char *)argvars[1].vval.v_string));
+
+  if (!res) {
+    // Invalid job id
+    EMSG(_(e_invjob));
+  }
+
+  rettv->vval.v_number = 1;
+}
+
 /*
  * "join()" function
  */
@@ -11045,7 +11186,7 @@ static void f_keys(typval_T *argvars, typval_T *rettv)
 static void f_last_buffer_nr(typval_T *argvars, typval_T *rettv)
 {
   int n = 0;
-  buf_T       *buf;
+  buf_T *buf;
 
   for (buf = firstbuf; buf != NULL; buf = buf->b_next)
     if (n < buf->b_fnum)
@@ -11315,6 +11456,7 @@ static void find_some_match(typval_T *argvars, typval_T *rettv, int start);
 static void find_some_match(typval_T *argvars, typval_T *rettv, int type)
 {
   char_u      *str = NULL;
+  long        len = 0;
   char_u      *expr = NULL;
   char_u      *pat;
   regmatch_T regmatch;
@@ -11348,8 +11490,10 @@ static void find_some_match(typval_T *argvars, typval_T *rettv, int type)
     if ((l = argvars[0].vval.v_list) == NULL)
       goto theend;
     li = l->lv_first;
-  } else
+  } else {
     expr = str = get_tv_string(&argvars[0]);
+    len = (long)STRLEN(str);
+  }
 
   pat = get_tv_string_buf_chk(&argvars[1], patbuf);
   if (pat == NULL)
@@ -11369,15 +11513,17 @@ static void find_some_match(typval_T *argvars, typval_T *rettv, int type)
     } else {
       if (start < 0)
         start = 0;
-      if (start > (long)STRLEN(str))
+      if (start > len)
         goto theend;
       /* When "count" argument is there ignore matches before "start",
        * otherwise skip part of the string.  Differs when pattern is "^"
        * or "\<". */
       if (argvars[3].v_type != VAR_UNKNOWN)
         startcol = start;
-      else
+      else {
         str += start;
+        len -= start;
+      }
     }
 
     if (argvars[3].v_type != VAR_UNKNOWN)
@@ -11416,6 +11562,10 @@ static void find_some_match(typval_T *argvars, typval_T *rettv, int type)
       } else {
         startcol = (colnr_T)(regmatch.startp[0]
                              + (*mb_ptr2len)(regmatch.startp[0]) - str);
+        if (startcol > (colnr_T)len || str + startcol <= regmatch.startp[0]) {
+            match = FALSE;
+            break;
+        }
       }
     }
 
@@ -11655,7 +11805,6 @@ static int mkdir_recurse(char_u *dir, int prot)
   return r;
 }
 
-#ifdef vim_mkdir
 /*
  * "mkdir()" function
  */
@@ -11686,7 +11835,6 @@ static void f_mkdir(typval_T *argvars, typval_T *rettv)
     rettv->vval.v_number = prot == -1 ? FAIL : vim_mkdir_emsg(dir, prot);
   }
 }
-#endif
 
 /*
  * "mode()" function
@@ -12458,7 +12606,7 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
           q[-1] = NUL;
           q = path_tail(p);
         }
-        if (q > p && !os_is_absolute_path(buf)) {
+        if (q > p && !path_is_absolute_path(buf)) {
           /* symlink is relative to directory of argument */
           cpy = alloc((unsigned)(STRLEN(p) + STRLEN(buf) + 1));
           if (cpy != NULL) {
@@ -14549,7 +14697,7 @@ static void f_system(typval_T *argvars, typval_T *rettv)
 
 done:
   if (infile != NULL) {
-    mch_remove(infile);
+    os_remove((char *)infile);
     vim_free(infile);
   }
   rettv->v_type = VAR_STRING;
@@ -16378,7 +16526,8 @@ void new_script_vars(scid_T id)
   hashtab_T   *ht;
   scriptvar_T *sv;
 
-  if (ga_grow(&ga_scripts, (int)(id - ga_scripts.ga_len)) == OK) {
+  ga_grow(&ga_scripts, (int)(id - ga_scripts.ga_len));
+  {
     /* Re-allocating ga_data means that an ht_array pointing to
      * ht_smallarray becomes invalid.  We can recognize this: ht_mask is
      * at its init value.  Also reset "v_dict", it's always the same. */
@@ -16989,11 +17138,7 @@ void ex_execute(exarg_T *eap)
     if (!eap->skip) {
       p = get_tv_string(&rettv);
       len = (int)STRLEN(p);
-      if (ga_grow(&ga, len + 2) == FAIL) {
-        clear_tv(&rettv);
-        ret = FAIL;
-        break;
-      }
+      ga_grow(&ga, len + 2);
       if (ga.ga_len)
         ((char_u *)(ga.ga_data))[ga.ga_len++] = ' ';
       STRCPY((char_u *)(ga.ga_data) + ga.ga_len, p);
@@ -17281,8 +17426,7 @@ void ex_function(exarg_T *eap)
           EMSG2(_("E125: Illegal argument: %s"), arg);
         break;
       }
-      if (ga_grow(&newargs, 1) == FAIL)
-        goto erret;
+      ga_grow(&newargs, 1);
       c = *p;
       *p = NUL;
       arg = vim_strsave(arg);
@@ -17293,6 +17437,7 @@ void ex_function(exarg_T *eap)
       for (i = 0; i < newargs.ga_len; ++i)
         if (STRCMP(((char_u **)(newargs.ga_data))[i], arg) == 0) {
           EMSG2(_("E853: Duplicate argument name: %s"), arg);
+          vim_free(arg);
           goto erret;
         }
 
@@ -17472,11 +17617,7 @@ void ex_function(exarg_T *eap)
     }
 
     /* Add the line to the function. */
-    if (ga_grow(&newlines, 1 + sourcing_lnum_off) == FAIL) {
-      if (line_arg == NULL)
-        vim_free(theline);
-      goto erret;
-    }
+    ga_grow(&newlines, 1 + sourcing_lnum_off);
 
     /* Copy the line to newly allocated memory.  get_one_sourceline()
      * allocates 250 bytes per line, this saves 80% on average.  The cost
@@ -18161,7 +18302,8 @@ script_autoload (
     ret = FALSE;            /* was loaded already */
   else {
     /* Remember the name if it wasn't loaded already. */
-    if (i == ga_loaded.ga_len && ga_grow(&ga_loaded, 1) == OK) {
+    if (i == ga_loaded.ga_len) {
+      ga_grow(&ga_loaded, 1);
       ((char_u **)ga_loaded.ga_data)[ga_loaded.ga_len++] = scriptname;
       tofree = NULL;
     }
@@ -19556,12 +19698,8 @@ char_u *do_string_sub(char_u *str, char_u *pat, char_u *sub, char_u *flags)
        * - The text after the match.
        */
       sublen = vim_regsub(&regmatch, sub, tail, FALSE, TRUE, FALSE);
-      if (ga_grow(&ga, (int)(STRLEN(tail) + sublen -
-                             (regmatch.endp[0] - regmatch.startp[0]))) ==
-          FAIL) {
-        ga_clear(&ga);
-        break;
-      }
+      ga_grow(&ga, (int)(STRLEN(tail) + sublen -
+                     (regmatch.endp[0] - regmatch.startp[0])));
 
       /* copy the text up to where the match is */
       i = (int)(regmatch.startp[0] - tail);
@@ -19592,5 +19730,22 @@ char_u *do_string_sub(char_u *str, char_u *pat, char_u *sub, char_u *flags)
     free_string_option(save_cpo);
 
   return ret;
+}
+
+static void apply_job_autocmds(int id,
+                               void *data,
+                               char *buffer,
+                               uint32_t len,
+                               bool from_stdout)
+{
+  list_T *list;
+
+  // Call JobActivity autocommands
+  list = list_alloc();
+  list_append_number(list, id);
+  list_append_string(list, (char_u *)buffer, len);
+  list_append_string(list, (char_u *)(from_stdout ? "out" : "err"), 3);
+  set_vim_var_list(VV_JOB_DATA, list);
+  apply_autocmds(EVENT_JOBACTIVITY, (char_u *)data, NULL, TRUE, NULL);
 }
 

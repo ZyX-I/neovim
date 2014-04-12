@@ -87,4 +87,20 @@ int expand_wildcards(int num_pat, char_u **pat, int *num_file, char_u *
                      **file,
                      int flags);
 int match_suffix(char_u *fname);
+
+/// Get the absolute name of the given relative directory.
+///
+/// @param directory Directory name, relative to current directory.
+/// @return `FAIL` for failure, `OK` for success.
+int path_full_dir_name(char *directory, char *buffer, int len);
+
+// Append to_append to path with a slash in between.
+int append_path(char *path, const char *to_append, int max_len);
+
+/// Check if the given file is absolute.
+///
+/// This just checks if the file name starts with '/' or '~'.
+/// @return `TRUE` if "fname" is absolute.
+int path_is_absolute_path(const char_u *fname);
+
 #endif

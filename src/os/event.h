@@ -4,18 +4,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef enum {
-  kEventSignal
-} EventType;
-
-typedef struct {
-  EventType type;
-  void *data;
-} Event;
+#include "os/event_defs.h"
+#include "os/job_defs.h"
 
 void event_init(void);
 bool event_poll(int32_t ms);
-void event_push(Event *event);
+bool event_is_pending(void);
+void event_push(Event event);
+void event_process(void);
 
 #endif  // NEOVIM_OS_EVENT_H
 

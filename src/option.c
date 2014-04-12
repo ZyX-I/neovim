@@ -2001,14 +2001,13 @@ void set_init_1(void)
       if (p != NULL && *p != NUL) {
         /* First time count the NUL, otherwise count the ','. */
         len = (int)STRLEN(p) + 3;
-        if (ga_grow(&ga, len) == OK) {
-          if (ga.ga_len > 0)
-            STRCAT(ga.ga_data, ",");
-          STRCAT(ga.ga_data, p);
-          add_pathsep(ga.ga_data);
-          STRCAT(ga.ga_data, "*");
-          ga.ga_len += len;
-        }
+        ga_grow(&ga, len);
+        if (ga.ga_len > 0)
+          STRCAT(ga.ga_data, ",");
+        STRCAT(ga.ga_data, p);
+        add_pathsep(ga.ga_data);
+        STRCAT(ga.ga_data, "*");
+        ga.ga_len += len;
       }
       if (mustfree)
         vim_free(p);
@@ -3128,8 +3127,6 @@ do_set (
               if (adding || prepending || removing)
                 newlen += (unsigned)STRLEN(origval) + 1;
               newval = alloc(newlen);
-              if (newval == NULL)                /* out of mem, don't change */
-                break;
               s = newval;
 
               /*
@@ -3176,8 +3173,6 @@ do_set (
                   if (adding || prepending || removing)
                     newlen += (unsigned)STRLEN(origval) + 1;
                   newval = alloc(newlen);
-                  if (newval == NULL)
-                    break;
                   STRCPY(newval, s);
                 }
               }
@@ -4890,17 +4885,15 @@ skip:
     wp->w_p_cc_cols = NULL;
   else {
     wp->w_p_cc_cols = (int *)alloc((unsigned)sizeof(int) * (count + 1));
-    if (wp->w_p_cc_cols != NULL) {
-      /* sort the columns for faster usage on screen redraw inside
-       * win_line() */
-      qsort(color_cols, count, sizeof(int), int_cmp);
+    /* sort the columns for faster usage on screen redraw inside
+     * win_line() */
+    qsort(color_cols, count, sizeof(int), int_cmp);
 
-      for (i = 0; i < count; ++i)
-        /* skip duplicates */
-        if (j == 0 || wp->w_p_cc_cols[j - 1] != color_cols[i])
-          wp->w_p_cc_cols[j++] = color_cols[i];
-      wp->w_p_cc_cols[j] = -1;        /* end marker */
-    }
+    for (i = 0; i < count; ++i)
+      /* skip duplicates */
+      if (j == 0 || wp->w_p_cc_cols[j - 1] != color_cols[i])
+        wp->w_p_cc_cols[j++] = color_cols[i];
+    wp->w_p_cc_cols[j] = -1;        /* end marker */
   }
 
   return NULL;    /* no error */
@@ -6172,8 +6165,6 @@ showoptions (
 
   items = (struct vimoption **)alloc((unsigned)(sizeof(struct vimoption *) *
                                                 PARAM_COUNT));
-  if (items == NULL)
-    return;
 
   /* Highlight title */
   if (all == 2)
@@ -6465,8 +6456,6 @@ static int put_setstring(FILE *fd, char *cmd, char *name, char_u **valuep, int e
           return FAIL;
     } else if (expand) {
       buf = alloc(MAXPATHL);
-      if (buf == NULL)
-        return FAIL;
       home_replace(NULL, *valuep, buf, MAXPATHL, FALSE);
       if (put_escstr(fd, buf, 2) == FAIL) {
         vim_free(buf);
@@ -7515,8 +7504,6 @@ int ExpandOldSetting(int *num_file, char_u ***file)
 
   *num_file = 0;
   *file = (char_u **)alloc((unsigned)sizeof(char_u *));
-  if (*file == NULL)
-    return FAIL;
 
   /*
    * For a terminal key code expand_option_idx is < 0.
@@ -7665,8 +7652,7 @@ static void langmap_set_entry(int from, int to)
       b = i;
   }
 
-  if (ga_grow(&langmap_mapga, 1) != OK)
-    return;      /* out of memory */
+  ga_grow(&langmap_mapga, 1);
 
   /* insert new entry at position "a" */
   entries = (langmap_entry_T *)(langmap_mapga.ga_data) + a;

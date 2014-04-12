@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=2 sts=2 sw=2:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -56,6 +56,7 @@
 #include "window.h"
 #include "ui.h"
 #include "os/os.h"
+#include "os/event.h"
 
 /*
  * Variables shared between getcmdline(), redrawcmdline() and others.
@@ -788,6 +789,11 @@ getcmdline (
      * Big switch for a typed command line character.
      */
     switch (c) {
+    case K_EVENT:
+      event_process();
+      // Force a redraw even though the command line didn't change
+      shell_resized();
+      goto cmdline_not_changed;
     case K_BS:
     case Ctrl_H:
     case K_DEL:
@@ -1801,8 +1807,7 @@ getexmodeline (
    */
   got_int = FALSE;
   while (!got_int) {
-    if (ga_grow(&line_ga, 40) == FAIL)
-      break;
+    ga_grow(&line_ga, 40);
 
     /* Get one character at a time.  Don't use inchar(), it can't handle
      * special characters. */
@@ -1904,9 +1909,12 @@ redraw:
         continue;
       }
 
-      /* Ignore special key codes: mouse movement, K_IGNORE, etc. */
-      if (IS_SPECIAL(c1))
+      if (IS_SPECIAL(c1)) {
+        // Process pending events
+        event_process();
+        // Ignore other special key codes
         continue;
+      }
     }
 
     if (IS_SPECIAL(c1))
@@ -3955,7 +3963,7 @@ expand_shellcmd (
   flags |= EW_FILE | EW_EXEC;
 
   /* For an absolute name we don't use $PATH. */
-  if (os_is_absolute_path(pat))
+  if (path_is_absolute_path(pat))
     path = (char_u *)" ";
   else if ((pat[0] == '.' && (vim_ispathsep(pat[1])
                               || (pat[1] == '.' && vim_ispathsep(pat[2])))))
@@ -3990,9 +3998,8 @@ expand_shellcmd (
     /* Expand matches in one directory of $PATH. */
     ret = expand_wildcards(1, &buf, num_file, file, flags);
     if (ret == OK) {
-      if (ga_grow(&ga, *num_file) == FAIL)
-        FreeWild(*num_file, *file);
-      else {
+      ga_grow(&ga, *num_file);
+      {
         for (i = 0; i < *num_file; ++i) {
           s = (*file)[i];
           if (STRLEN(s) > l) {
@@ -4102,8 +4109,7 @@ static int ExpandUserDefined(expand_T *xp, regmatch_T *regmatch, int *num_file, 
       continue;
     }
 
-    if (ga_grow(&ga, 1) == FAIL)
-      break;
+    ga_grow(&ga, 1);
 
     ((char_u **)ga.ga_data)[ga.ga_len] = vim_strnsave(s, (int)(e - s));
     ++ga.ga_len;
@@ -4137,8 +4143,7 @@ static int ExpandUserList(expand_T *xp, int *num_file, char_u ***file)
     if (li->li_tv.v_type != VAR_STRING || li->li_tv.vval.v_string == NULL)
       continue;        /* Skip non-string items and empty strings */
 
-    if (ga_grow(&ga, 1) == FAIL)
-      break;
+    ga_grow(&ga, 1);
 
     ((char_u **)ga.ga_data)[ga.ga_len] =
       vim_strsave(li->li_tv.vval.v_string);
@@ -4186,8 +4191,7 @@ static int ExpandRTDir(char_u *pat, int *num_file, char_u ***file, char *dirname
       e = vim_strchr(s, '\n');
       if (e == NULL)
         e = s + STRLEN(s);
-      if (ga_grow(&ga, 1) == FAIL)
-        break;
+      ga_grow(&ga, 1);
       if (e - 4 > s && STRNICMP(e - 4, ".vim", 4) == 0) {
         for (s = e - 4; s > matches; mb_ptr_back(matches, s))
           if (*s == '\n' || vim_ispathsep(*s))
@@ -4254,15 +4258,15 @@ char_u *globpath(char_u *path, char_u *file, int expand_options)
           len += (int)STRLEN(p[i]) + 1;
 
         /* Concatenate new results to previous ones. */
-        if (ga_grow(&ga, len) == OK) {
-          cur = (char_u *)ga.ga_data + ga.ga_len;
-          for (i = 0; i < num_p; ++i) {
-            STRCPY(cur, p[i]);
-            cur += STRLEN(p[i]);
-            *cur++ = '\n';
-          }
-          ga.ga_len += len;
+        ga_grow(&ga, len);
+        cur = (char_u *)ga.ga_data + ga.ga_len;
+        for (i = 0; i < num_p; ++i) {
+          STRCPY(cur, p[i]);
+          cur += STRLEN(p[i]);
+          *cur++ = '\n';
         }
+        ga.ga_len += len;
+
         FreeWild(num_p, p);
       }
     }

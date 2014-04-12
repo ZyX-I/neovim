@@ -2465,8 +2465,6 @@ void win_new_shellsize(void)
   static int old_Rows = 0;
   static int old_Columns = 0;
 
-  if (old_Rows != Rows || old_Columns != Columns)
-    ui_new_shellsize();
   if (old_Rows != Rows) {
     /* if 'window' uses the whole screen, keep it using that */
     if (p_window == old_Rows - 1 || old_Rows == 0)
@@ -3028,10 +3026,6 @@ void add_termcode(char_u *name, char_u *string, int flags)
     tc_max_len += 20;
     new_tc = (struct termcode *)alloc(
         (unsigned)(tc_max_len * sizeof(struct termcode)));
-    if (new_tc == NULL) {
-      tc_max_len -= 20;
-      return;
-    }
     for (i = 0; i < tc_len; ++i)
       new_tc[i] = termcodes[i];
     vim_free(termcodes);
@@ -4209,10 +4203,6 @@ replace_termcodes (
    * replaced by 6 bytes (shifted special key), plus a NUL at the end.
    */
   result = alloc((unsigned)STRLEN(from) * 6 + 1);
-  if (result == NULL) {         /* out of memory */
-    *bufp = NULL;
-    return from;
-  }
 
   src = from;
 
@@ -4419,8 +4409,6 @@ void show_termcodes(void)
   if (tc_len == 0)          /* no terminal codes (must be GUI) */
     return;
   items = (int *)alloc((unsigned)(sizeof(int) * tc_len));
-  if (items == NULL)
-    return;
 
   /* Highlight title */
   MSG_PUTS_TITLE(_("\n--- Terminal keys ---"));

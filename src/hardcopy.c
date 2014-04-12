@@ -441,8 +441,6 @@ static void prt_header(prt_settings_T *psettings, int pagenum, linenr_T lnum)
     width += PRINT_NUMBER_WIDTH;
 
   tbuf = alloc(width + IOSIZE);
-  if (tbuf == NULL)
-    return;
 
   if (*p_header != NUL) {
     linenr_T tmp_lnum, tmp_topline, tmp_botline;
@@ -1598,8 +1596,6 @@ static int prt_find_resource(char *name, struct prt_ps_resource_S *resource)
   int retval;
 
   buffer = alloc(MAXPATHL + 1);
-  if (buffer == NULL)
-    return FALSE;
 
   vim_strncpy(resource->name, (char_u *)name, 63);
   /* Look for named resource file in runtimepath */
@@ -2526,10 +2522,6 @@ int mch_print_begin(prt_settings_T *psettings)
                 alloc(sizeof(struct prt_ps_resource_S));
   res_cmap = (struct prt_ps_resource_S *)
              alloc(sizeof(struct prt_ps_resource_S));
-  if (res_prolog == NULL || res_encoding == NULL
-      || res_cidfont == NULL || res_cmap == NULL
-      )
-    goto theend;
 
   /*
    * PS DSC Header comments - no PS code!
@@ -2863,7 +2855,6 @@ int mch_print_begin(prt_settings_T *psettings)
   /* Fail if any problems writing out to the PS file */
   retval = !prt_file_error;
 
-theend:
   vim_free(res_prolog);
   vim_free(res_encoding);
   vim_free(res_cidfont);

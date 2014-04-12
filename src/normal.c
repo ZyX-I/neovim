@@ -54,6 +54,7 @@
 #include "ui.h"
 #include "undo.h"
 #include "window.h"
+#include "os/event.h"
 
 /*
  * The Visual area is remembered for reselection.
@@ -61,7 +62,7 @@
 static int resel_VIsual_mode = NUL;             /* 'v', 'V', or Ctrl-V */
 static linenr_T resel_VIsual_line_count;        /* number of lines */
 static colnr_T resel_VIsual_vcol;               /* nr of cols or end col */
-static int VIsual_mode_orig = NUL;              /* type of Visual mode, that user entered */
+static int VIsual_mode_orig = NUL;              /* saved Visual mode */
 
 static int restart_VIsual_select = 0;
 
@@ -177,6 +178,7 @@ static void nv_join(cmdarg_T *cap);
 static void nv_put(cmdarg_T *cap);
 static void nv_open(cmdarg_T *cap);
 static void nv_cursorhold(cmdarg_T *cap);
+static void nv_event(cmdarg_T *cap);
 
 static char *e_noident = N_("E349: No identifier under cursor");
 
@@ -409,6 +411,7 @@ static const struct nv_cmd {
   {K_F8,      farsi_fkey,     0,                      0},
   {K_F9,      farsi_fkey,     0,                      0},
   {K_CURSORHOLD, nv_cursorhold, NV_KEEPREG,           0},
+  {K_EVENT,   nv_event,       NV_KEEPREG,             0},
 };
 
 /* Number of commands in nv_cmds[]. */
@@ -3434,8 +3437,7 @@ find_decl (
   int retval = OK;
   int incll;
 
-  if ((pat = alloc(len + 7)) == NULL)
-    return FAIL;
+  pat = alloc(len + 7);
 
   /* Put "\V" before the pattern to avoid that the special meaning of "."
    * and "~" causes trouble. */
@@ -4410,8 +4412,6 @@ static void nv_ident(cmdarg_T *cap)
   kp_help = (*kp == NUL || STRCMP(kp, ":he") == 0
              || STRCMP(kp, ":help") == 0);
   buf = alloc((unsigned)(n * 2 + 30 + STRLEN(kp)));
-  if (buf == NULL)
-    return;
   buf[0] = NUL;
 
   switch (cmdchar) {
@@ -4500,11 +4500,6 @@ static void nv_ident(cmdarg_T *cap)
       return;
     }
     newbuf = (char_u *)xrealloc(buf, STRLEN(buf) + STRLEN(p) + 1);
-    if (newbuf == NULL) {
-      vim_free(buf);
-      vim_free(p);
-      return;
-    }
     buf = newbuf;
     STRCAT(buf, p);
     vim_free(p);
@@ -4809,8 +4804,15 @@ static void nv_left(cmdarg_T *cap)
         if (       (cap->oap->op_type == OP_DELETE
                     || cap->oap->op_type == OP_CHANGE)
                    && !lineempty(curwin->w_cursor.lnum)) {
-          if (*ml_get_cursor() != NUL)
-            ++curwin->w_cursor.col;
+          char_u *cp = ml_get_cursor();
+
+          if (*cp != NUL) {
+            if (has_mbyte) {
+              curwin->w_cursor.col += (*mb_ptr2len)(cp);
+            } else {
+              curwin->w_cursor.col++;
+            }
+          }
           cap->retval |= CA_NO_ADJ_OP_END;
         }
         continue;
@@ -7492,4 +7494,9 @@ static void nv_cursorhold(cmdarg_T *cap)
   apply_autocmds(EVENT_CURSORHOLD, NULL, NULL, FALSE, curbuf);
   did_cursorhold = TRUE;
   cap->retval |= CA_COMMAND_BUSY;       /* don't call edit() now */
+}
+
+static void nv_event(cmdarg_T *cap)
+{
+  event_process();
 }

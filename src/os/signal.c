@@ -11,6 +11,7 @@
 #include "memory.h"
 #include "misc1.h"
 #include "misc2.h"
+#include "os/event_defs.h"
 #include "os/event.h"
 #include "os/signal.h"
 
@@ -67,22 +68,19 @@ void signal_accept_deadly()
   rejecting_deadly = false;
 }
 
-void signal_handle(Event *event)
+void signal_handle(Event event)
 {
-  int signum = *(int *)event->data;
-
-  free(event->data);
-  free(event);
+  int signum = event.data.signum;
 
   switch (signum) {
     case SIGINT:
-      got_int = TRUE;
+      got_int = true;
       break;
 #ifdef SIGPWR
     case SIGPWR:
       // Signal of a power failure(eg batteries low), flush the swap files to
       // be safe
-      ml_sync_all(FALSE, FALSE);
+      ml_sync_all(false, false);
       break;
 #endif
     case SIGPIPE:
@@ -138,7 +136,7 @@ static void deadly_signal(int signum)
   // Set the v:dying variable.
   set_vim_var_nr(VV_DYING, 1);
 
-  sprintf((char *)IObuff, "Vim: Caught deadly signal '%s'\n",
+  snprintf((char *)IObuff, sizeof(IObuff), "Vim: Caught deadly signal '%s'\n",
       signal_name(signum));
 
   // Preserve files and exit.  This sets the really_exiting flag to prevent
@@ -148,19 +146,19 @@ static void deadly_signal(int signum)
 
 static void signal_cb(uv_signal_t *handle, int signum)
 {
-  Event *event;
-
   if (rejecting_deadly) {
     if (signum == SIGINT) {
       got_int = true;
     }
 
     return;
-  } 
+  }
 
-  event = (Event *)xmalloc(sizeof(Event));
-  event->type = kEventSignal;
-  event->data = xmalloc(sizeof(int));
-  *(int *)event->data = signum;
+  Event event = {
+    .type = kEventSignal,
+    .data = {
+      .signum = signum
+    }
+  };
   event_push(event);
 }

@@ -266,10 +266,6 @@ static void diff_mark_adjust_tp(tabpage_T *tp, int idx, linenr_T line1,
         && !diff_busy) {
       diff_T *dnext = diff_alloc_new(tp, dprev, dp);
 
-      if (dnext == NULL) {
-        return;
-      }
-
       dnext->df_lnum[idx] = line1;
       dnext->df_count[idx] = inserted;
       int i;
@@ -467,14 +463,14 @@ static void diff_mark_adjust_tp(tabpage_T *tp, int idx, linenr_T line1,
 static diff_T* diff_alloc_new(tabpage_T *tp, diff_T *dprev, diff_T *dp)
 {
   diff_T *dnew = (diff_T *)alloc((unsigned)sizeof(diff_T));
-  if (dnew != NULL) {
-    dnew->df_next = dp;
-    if (dprev == NULL) {
-      tp->tp_first_diff = dnew;
-    } else {
-      dprev->df_next = dnew;
-    }
+
+  dnew->df_next = dp;
+  if (dprev == NULL) {
+    tp->tp_first_diff = dnew;
+  } else {
+    dprev->df_next = dnew;
   }
+
   return dnew;
 }
 
@@ -732,10 +728,10 @@ void ex_diffupdate(exarg_T *eap)
           }
           fclose(fd);
         }
-        mch_remove(tmp_diff);
-        mch_remove(tmp_new);
+        os_remove((char *)tmp_diff);
+        os_remove((char *)tmp_new);
       }
-      mch_remove(tmp_orig);
+      os_remove((char *)tmp_orig);
     }
 
     // When using 'diffexpr' break here.
@@ -794,10 +790,10 @@ void ex_diffupdate(exarg_T *eap)
 
     // Read the diff output and add each entry to the diff list.
     diff_read(idx_orig, idx_new, tmp_diff);
-    mch_remove(tmp_diff);
-    mch_remove(tmp_new);
+    os_remove((char *)tmp_diff);
+    os_remove((char *)tmp_new);
   }
-  mch_remove(tmp_orig);
+  os_remove((char *)tmp_orig);
 
   // force updating cursor position on screen
   curwin->w_valid_cursor.lnum = 0;
@@ -825,31 +821,29 @@ static void diff_file(char_u *tmp_orig, char_u *tmp_new, char_u *tmp_diff)
         + STRLEN(p_srr) + 27;
     char_u *cmd = alloc((unsigned)len);
 
-    if (cmd != NULL) {
-      /* We don't want $DIFF_OPTIONS to get in the way. */
-      if (os_getenv("DIFF_OPTIONS")) {
-        vim_setenv((char_u *)"DIFF_OPTIONS", (char_u *)"");
-      }
-
-      /* Build the diff command and execute it.  Always use -a, binary
-       * differences are of no use.  Ignore errors, diff returns
-       * non-zero when differences have been found. */
-      vim_snprintf((char *)cmd, len, "diff %s%s%s%s%s %s",
-                   diff_a_works == FALSE ? "" : "-a ",
-                   "",
-                   (diff_flags & DIFF_IWHITE) ? "-b " : "",
-                   (diff_flags & DIFF_ICASE) ? "-i " : "",
-                   tmp_orig, tmp_new);
-      append_redir(cmd, (int)len, p_srr, tmp_diff);
-      block_autocmds(); /* Avoid ShellCmdPost stuff */
-      (void)call_shell(
-          cmd,
-          kShellOptFilter | kShellOptSilent | kShellOptDoOut,
-          NULL
-          );
-      unblock_autocmds();
-      vim_free(cmd);
+    /* We don't want $DIFF_OPTIONS to get in the way. */
+    if (os_getenv("DIFF_OPTIONS")) {
+      vim_setenv((char_u *)"DIFF_OPTIONS", (char_u *)"");
     }
+
+    /* Build the diff command and execute it.  Always use -a, binary
+     * differences are of no use.  Ignore errors, diff returns
+     * non-zero when differences have been found. */
+    vim_snprintf((char *)cmd, len, "diff %s%s%s%s%s %s",
+                 diff_a_works == FALSE ? "" : "-a ",
+                 "",
+                 (diff_flags & DIFF_IWHITE) ? "-b " : "",
+                 (diff_flags & DIFF_ICASE) ? "-i " : "",
+                 tmp_orig, tmp_new);
+    append_redir(cmd, (int)len, p_srr, tmp_diff);
+    block_autocmds(); /* Avoid ShellCmdPost stuff */
+    (void)call_shell(
+        cmd,
+        kShellOptFilter | kShellOptSilent | kShellOptDoOut,
+        NULL
+        );
+    unblock_autocmds();
+    vim_free(cmd);
   }
 }
 
@@ -902,9 +896,6 @@ void ex_diffpatch(exarg_T *eap)
 #endif  // ifdef UNIX
 
   buf = alloc((unsigned)buflen);
-  if (buf == NULL) {
-    goto theend;
-  }
 
 #ifdef UNIX
 
@@ -968,10 +959,10 @@ void ex_diffpatch(exarg_T *eap)
   // Delete any .orig or .rej file created.
   STRCPY(buf, tmp_new);
   STRCAT(buf, ".orig");
-  mch_remove(buf);
+  os_remove((char *)buf);
   STRCPY(buf, tmp_new);
   STRCAT(buf, ".rej");
-  mch_remove(buf);
+  os_remove((char *)buf);
 
   // Only continue if the output file was created.
   if ((mch_stat((char *)tmp_new, &st) < 0) || (st.st_size == 0)) {
@@ -1017,12 +1008,12 @@ void ex_diffpatch(exarg_T *eap)
 
 theend:
   if (tmp_orig != NULL) {
-    mch_remove(tmp_orig);
+    os_remove((char *)tmp_orig);
   }
   vim_free(tmp_orig);
 
   if (tmp_new != NULL) {
-    mch_remove(tmp_new);
+    os_remove((char *)tmp_new);
   }
   vim_free(tmp_new);
   vim_free(newname);
@@ -1377,9 +1368,6 @@ static void diff_read(int idx_orig, int idx_new, char_u *fname)
     } else {
       // Allocate a new diffblock.
       dp = diff_alloc_new(curtab, dprev, dp);
-      if (dp == NULL) {
-        goto done;
-      }
 
       dp->df_lnum[idx_orig] = lnum_orig;
       dp->df_count[idx_orig] = count_orig;
@@ -1408,7 +1396,6 @@ static void diff_read(int idx_orig, int idx_new, char_u *fname)
     notset = TRUE;
   }
 
-done:
   fclose(fd);
 }
 

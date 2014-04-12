@@ -585,6 +585,12 @@ EXTERN pos_T saved_cursor               /* w_cursor before formatting text. */
  */
 EXTERN pos_T Insstart;                  /* This is where the latest
                                          * insert/append mode started. */
+
+// This is where the latest insert/append mode started. In contrast to
+// Insstart, this won't be reset by certain keys and is needed for
+// op_insert(), to detect correctly where inserting by the user started.
+EXTERN pos_T Insstart_orig;
+
 /*
  * Stuff for VREPLACE mode.
  */
@@ -741,7 +747,7 @@ EXTERN int swap_exists_action INIT(= SEA_NONE);
 EXTERN int swap_exists_did_quit INIT(= FALSE);
 /* Selected "quit" at the dialog. */
 
-EXTERN char_u   *IObuff;                /* sprintf's are done in this buffer,
+EXTERN char_u   IObuff[IOSIZE];         /* sprintf's are done in this buffer,
                                            size is IOSIZE */
 EXTERN char_u   *NameBuff;              /* file names are expanded in this
                                          * buffer, size is MAXPATHL */
@@ -1009,6 +1015,9 @@ EXTERN char_u e_invexpr2[] INIT(= N_("E15: Invalid expression: %s"));
 EXTERN char_u e_invrange[] INIT(= N_("E16: Invalid range"));
 EXTERN char_u e_invcmd[] INIT(= N_("E476: Invalid command"));
 EXTERN char_u e_isadir2[] INIT(= N_("E17: \"%s\" is a directory"));
+EXTERN char_u e_invjob[] INIT(= N_("E900: Invalid job id"));
+EXTERN char_u e_jobtblfull[] INIT(= N_("E901: Job table is full"));
+EXTERN char_u e_jobexe[] INIT(= N_("E902: \"%s\" is not an executable"));
 #ifdef FEAT_LIBCALL
 EXTERN char_u e_libcall[] INIT(= N_("E364: Library call failed for \"%s()\""));
 #endif
@@ -1130,7 +1139,5 @@ EXTERN char *ignoredp;
 /* Temporarily moved these static variables to assist in migrating from
  * os_unix.c */
 EXTERN int curr_tmode INIT(= TMODE_COOK); /* contains current terminal mode */
-/* volatile because it is used in signal handler deathtrap(). */
-EXTERN volatile bool in_os_delay INIT(= false);  /* sleeping in os_delay() */
 
 #endif /* NEOVIM_GLOBALS_H */
