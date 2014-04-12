@@ -13,15 +13,15 @@ typedef struct {
   size_t before_end;
 } _StartEndSpaces;
 
-#define OPERATOR_SPACES(o, op) \
+#define OPERATOR_SPACES(po, op) \
     (LOGICAL_START <= op && op <= LOGICAL_END \
-     ? o.expression.operators.logical[op - LOGICAL_START] \
+     ? po->expression.operators.logical[op - LOGICAL_START] \
      : (COMPARISON_START <= op && op <= COMPARISON_END \
-        ? o.expression.operators.comparison[op - COMPARISON_START] \
+        ? po->expression.operators.comparison[op - COMPARISON_START] \
         : (ARITHMETIC_START <= op && op <= ARITHMETIC_END \
-           ? o.expression.operators.arithmetic[op - ARITHMETIC_START] \
+           ? po->expression.operators.arithmetic[op - ARITHMETIC_START] \
            : (op == kTypeStringConcat \
-              ? o.expression.operators.string.concat \
+              ? po->expression.operators.string.concat \
               : assert(FALSE)))))
 typedef struct {
   struct {

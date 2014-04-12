@@ -60,7 +60,7 @@ static char *case_compare_strategy_string[] = {
 
 #include "translator/printer/expressions.c.h"
 
-size_t expr_node_dump_len(PrinterOptions po, ExpressionNode *node)
+size_t expr_node_dump_len(PrinterOptions *po, ExpressionNode *node)
 {
   size_t len = node_dump_len(po, node);
   ExpressionNode *next = node->next;
@@ -74,7 +74,7 @@ size_t expr_node_dump_len(PrinterOptions po, ExpressionNode *node)
   return len;
 }
 
-void expr_node_dump(PrinterOptions po, ExpressionNode *node, char **pp)
+void expr_node_dump(PrinterOptions *po, ExpressionNode *node, char **pp)
 {
   ExpressionNode *next = node->next;
 
@@ -106,7 +106,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
   if (p0_result->error.message != NULL)
     len = 6 + STRLEN(p0_result->error.message);
   else
-    len = (dump_as_expr ? expr_node_dump_len : node_repr_len)(po,
+    len = (dump_as_expr ? expr_node_dump_len : node_repr_len)(&po,
                                                               p0_result->node);
 
   offset = p0_result->end - arg;
@@ -136,7 +136,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
     p += 6;
     STRCPY(p, p0_result->error.message);
   } else {
-    (dump_as_expr ? expr_node_dump : node_repr)(po, p0_result->node, &p);
+    (dump_as_expr ? expr_node_dump : node_repr)(&po, p0_result->node, &p);
   }
 
 theend:
