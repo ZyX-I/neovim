@@ -32,7 +32,7 @@ static FDEC(unumber_repr, uintmax_t unumber)
     ADD_CHAR(0);
   } while (i);
 #else
-  uintmax_t i = unumber_repr_len(unumber);
+  uintmax_t i = unumber_repr_len(po, unumber);
   do {
     uintmax_t digit;
     uintmax_t d = 1;
