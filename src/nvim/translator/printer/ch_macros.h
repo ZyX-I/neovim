@@ -40,7 +40,7 @@
 # define F2(f, ...) \
     len += 2 * f##_len(po, __VA_ARGS__)
 # define FDEC(f, ...) \
-    size_t f##_len(PrinterOptions po, __VA_ARGS__)
+    size_t f##_len(PrinterOptions *po, __VA_ARGS__)
 # define FUNCTION_START \
     size_t len = 0
 # define RETURN \
@@ -63,7 +63,7 @@
 # define F2(f, ...) \
     f(po, __VA_ARGS__, &p)
 # define FDEC(f, ...) \
-    void f(PrinterOptions po, __VA_ARGS__, char **pp)
+    void f(PrinterOptions *po, __VA_ARGS__, char **pp)
 # define FUNCTION_START \
     char *p = *pp
 # define RETURN \
