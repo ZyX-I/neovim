@@ -24,7 +24,7 @@ const _BeforeAfterSpaces _error_spaces;
         ? po->expression.operators.comparison[op - COMPARISON_START] \
         : (ARITHMETIC_START <= op && op <= ARITHMETIC_END \
            ? po->expression.operators.arithmetic[op - ARITHMETIC_START] \
-           : (op == kTypeStringConcat \
+           : (op == kExprStringConcat \
               ? po->expression.operators.string.concat \
               : (UNARY_START <= op && op <= UNARY_END \
                  ? po->expression.operators.unary[op - UNARY_START] \

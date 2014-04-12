@@ -1410,15 +1410,15 @@ static int parse_do(char_u **pp,
 /// @param[in]   allow_lower  Determines whether simple variable names are 
 ///                           allowed to start with a lowercase letter.
 /// @param[in]   allow_env    Determines whether it is allowed to contain 
-///                           kTypeOption, kTypeRegister and 
-///                           kTypeEnvironmentVariable nodes.
+///                           kExprOption, kExprRegister and 
+///                           kExprEnvironmentVariable nodes.
 ///
 /// @return TRUE if check failed, FALSE otherwise.
 static bool check_lval(ExpressionNode *expr, CommandParserError *error,
                        bool allow_list, bool allow_lower, bool allow_env)
 {
   switch (expr->type) {
-    case kTypeSimpleVariableName: {
+    case kExprSimpleVariableName: {
       if (!allow_lower
           && ASCII_ISLOWER(*expr->position)
           && expr->position[1] != ':'  // Fast check: most functions 
@@ -1438,7 +1438,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
-    case kTypeEnvironmentVariable: {
+    case kExprEnvironmentVariable: {
       if (allow_env) {
         if (expr->position > expr->end_position) {
           error->message = N_("E475: Cannot assign to environment variable "
@@ -1449,8 +1449,8 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       // fallthrough
     }
-    case kTypeOption:
-    case kTypeRegister: {
+    case kExprOption:
+    case kExprRegister: {
       if (!allow_env) {
         error->message = N_("E15: Only variable names are allowed");
         error->position = expr->position;
@@ -1458,17 +1458,17 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
-    case kTypeVariableName: {
+    case kExprVariableName: {
       break;
     }
-    case kTypeConcatOrSubscript:
-    case kTypeSubscript: {
+    case kExprConcatOrSubscript:
+    case kExprSubscript: {
       ExpressionNode *root = expr;
       while (root->children != NULL)
         root = root->children;
 
-      if (root->type != kTypeVariableName
-          && root->type != kTypeSimpleVariableName) {
+      if (root->type != kExprVariableName
+          && root->type != kExprSimpleVariableName) {
         error->message =
             N_("E475: Expected variable name or a list of variable names");
         error->position = root->position;
@@ -1476,7 +1476,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
-    case kTypeList: {
+    case kExprList: {
       if (allow_list) {
         ExpressionNode *item = expr->children;
 
@@ -1892,7 +1892,7 @@ static int parse_let(char_u **pp,
   expr_str = skipwhite(expr_str);
 
   if (ENDS_EXCMD(*expr_str)) {
-    if (expr->type == kTypeList) {
+    if (expr->type == kExprList) {
       error->message =
           N_("E474: To list multiple variables use \":let var|let var2\", "
                    "not \":let [var, var2]\"");

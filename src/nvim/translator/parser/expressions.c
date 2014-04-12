@@ -162,7 +162,7 @@ static int parse_name(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  TOP_NODE(kTypeVariableName, error, node, top_node, next_node)
+  TOP_NODE(kExprVariableName, error, node, top_node, next_node)
 
   if (parse1_node == NULL) {
     s = *arg;
@@ -177,7 +177,7 @@ static int parse_name(char_u **arg,
         error->position = *arg;
         return FAIL;
       }
-      (*node)->type = kTypeSimpleVariableName;
+      (*node)->type = kExprSimpleVariableName;
       (*node)->position = s;
       (*node)->end_position = p;
       return OK;
@@ -201,13 +201,13 @@ static int parse_name(char_u **arg,
         error->position = *arg;
         return FAIL;
       }
-      (*node)->type = kTypeSimpleVariableName;
+      (*node)->type = kExprSimpleVariableName;
       (*node)->position = s;
       (*node)->end_position = p;
       return OK;
     }
   } else {
-    VALUE_NODE(kTypeCurlyName, error, next_node, *arg, NULL);
+    VALUE_NODE(kExprCurlyName, error, next_node, *arg, NULL);
     (*next_node)->children = parse1_node;
     next_node = &((*next_node)->next);
     *arg = parse1_arg + 1;
@@ -217,7 +217,7 @@ static int parse_name(char_u **arg,
 
   while (**arg == '{') {
     if (p != NULL) {
-      VALUE_NODE(kTypeIdentifier, error, next_node, s, p)
+      VALUE_NODE(kExprIdentifier, error, next_node, s, p)
       next_node = &((*next_node)->next);
     }
 
@@ -225,7 +225,7 @@ static int parse_name(char_u **arg,
     (*arg)++;
     *arg = skipwhite(*arg);
 
-    VALUE_NODE(kTypeCurlyName, error, next_node, s, NULL)
+    VALUE_NODE(kExprCurlyName, error, next_node, s, NULL)
 
     if ((parse1(arg, &((*next_node)->children), error)) == FAIL)
       return FAIL;
@@ -243,7 +243,7 @@ static int parse_name(char_u **arg,
   }
 
   if (p != NULL) {
-    VALUE_NODE(kTypeIdentifier, error, next_node, s, p)
+    VALUE_NODE(kExprIdentifier, error, next_node, s, p)
     next_node = &((*next_node)->next);
   }
 
@@ -266,7 +266,7 @@ static int parse_list(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  TOP_NODE(kTypeList, error, node, top_node, next_node)
+  TOP_NODE(kExprList, error, node, top_node, next_node)
 
   top_node->position = *arg;
 
@@ -339,7 +339,7 @@ static int parse_dictionary(char_u **arg,
       return NOTDONE;
   }
 
-  if ((top_node = expr_alloc(kTypeDictionary)) == NULL) {
+  if ((top_node = expr_alloc(kExprDictionary)) == NULL) {
     free_expr(*parse1_node);
     return FAIL;
   }
@@ -449,7 +449,7 @@ static int parse_option(char_u **arg,
     return FAIL;
   }
 
-  VALUE_NODE(kTypeOption, error, node, s + 1, option_end)
+  VALUE_NODE(kExprOption, error, node, s + 1, option_end)
   return OK;
 }
 
@@ -501,7 +501,7 @@ static int parse_environment_variable(char_u **arg,
   if (e == NULL)
     e = s;
 
-  VALUE_NODE(kTypeEnvironmentVariable, error, node, s + 1, e)
+  VALUE_NODE(kExprEnvironmentVariable, error, node, s + 1, e)
 
   return OK;
 }
@@ -534,7 +534,7 @@ static int parse_dot_subscript(char_u **arg,
   // XXX Workaround for concat ambiguity: s:autoload#var
   if (*e == AUTOLOAD_CHAR)
     return OK;
-  if ((top_node = expr_alloc(kTypeConcatOrSubscript)) == NULL)
+  if ((top_node = expr_alloc(kExprConcatOrSubscript)) == NULL)
     return FAIL;
   top_node->children = *node;
   top_node->position = s + 1;
@@ -564,7 +564,7 @@ static int parse_func_call(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  UP_NODE(kTypeCall, error, node, top_node, next_node)
+  UP_NODE(kExprCall, error, node, top_node, next_node)
 
   // Get the arguments.
   argp = *arg;
@@ -610,12 +610,12 @@ static int parse_subscript(char_u **arg,
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
-  UP_NODE(kTypeSubscript, error, node, top_node, next_node)
+  UP_NODE(kExprSubscript, error, node, top_node, next_node)
 
   // Get the (first) variable from inside the [].
   *arg = skipwhite(*arg + 1);  // skip the '['
   if (**arg == ':')
-    VALUE_NODE(kTypeEmptySubscript, error, next_node, *arg, NULL)
+    VALUE_NODE(kExprEmptySubscript, error, next_node, *arg, NULL)
   else if (parse1(arg, next_node, error) == FAIL)
     return FAIL;
   next_node = &((*next_node)->next);
@@ -624,7 +624,7 @@ static int parse_subscript(char_u **arg,
   if (**arg == ':') {
     *arg = skipwhite(*arg + 1);
     if (**arg == ']')
-      VALUE_NODE(kTypeEmptySubscript, error, next_node, *arg, NULL)
+      VALUE_NODE(kExprEmptySubscript, error, next_node, *arg, NULL)
     else if (parse1(arg, next_node, error) == FAIL)
       return FAIL;
   }
@@ -660,11 +660,11 @@ static int handle_subscript(char_u **arg,
     switch (**arg) {
       case '.': {
         int ret;
-        if ((*node)->type == kTypeDecimalNumber
-            || (*node)->type == kTypeOctalNumber
-            || (*node)->type == kTypeHexNumber
-            || (*node)->type == kTypeSingleQuotedString
-            || (*node)->type == kTypeDoubleQuotedString)
+        if ((*node)->type == kExprDecimalNumber
+            || (*node)->type == kExprOctalNumber
+            || (*node)->type == kExprHexNumber
+            || (*node)->type == kExprSingleQuotedString
+            || (*node)->type == kExprDoubleQuotedString)
           return OK;
         ret = parse_dot_subscript(arg, node, error);
         if (ret == FAIL)
@@ -701,7 +701,7 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
   char_u          *ptr = *arg;
   int n;
 
-  *type = kTypeDecimalNumber;
+  *type = kExprDecimalNumber;
 
   if (ptr[0] == '-')
     ptr++;
@@ -709,35 +709,35 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
   // Recognize hex and octal.
   if (ptr[0] == '0' && ptr[1] != '8' && ptr[1] != '9') {
     if (dohex && (ptr[1] == 'x' || ptr[1] == 'X') && vim_isxdigit(ptr[2])) {
-      *type = kTypeHexNumber;
+      *type = kExprHexNumber;
       ptr += 2;  // hexadecimal
     } else {
-      *type = kTypeDecimalNumber;
+      *type = kExprDecimalNumber;
       if (dooct) {
         // Don't interpret "0", "08" or "0129" as octal.
         for (n = 1; VIM_ISDIGIT(ptr[n]); n++) {
           if (ptr[n] > '7') {
-            *type = kTypeDecimalNumber;  // can't be octal
+            *type = kExprDecimalNumber;  // can't be octal
             break;
           }
           if (ptr[n] >= '0')
-            *type = kTypeOctalNumber;  // assume octal
+            *type = kExprOctalNumber;  // assume octal
         }
       }
     }
   }
   switch (*type) {
-    case kTypeDecimalNumber: {
+    case kExprDecimalNumber: {
       while (VIM_ISDIGIT(*ptr))
         ptr++;
       break;
     }
-    case kTypeOctalNumber: {
+    case kExprOctalNumber: {
       while ('0' <= *ptr && *ptr <= '7')
         ptr++;
       break;
     }
-    case kTypeHexNumber: {
+    case kExprHexNumber: {
       while (vim_isxdigit(*ptr))
         ptr++;
       break;
@@ -796,7 +796,7 @@ static int parse7(char_u **arg,
                   bool parse_funccall)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionType type = kTypeUnknown;
+  ExpressionType type = kExprUnknown;
   ExpressionNode *parse1_node = NULL;
   char_u *parse1_arg;
   char_u *s, *e;
@@ -826,7 +826,7 @@ static int parse7(char_u **arg,
       s = *arg;
       p = skipdigits(*arg + 1);
       e = p - 1;
-      type = kTypeDecimalNumber;
+      type = kExprDecimalNumber;
 
       // We accept a float when the format matches
       // "[0-9]\+\.[0-9]\+\([eE][+-]\?[0-9]\+\)\?".  This is very
@@ -834,23 +834,23 @@ static int parse7(char_u **arg,
       // Don't look for a float after the "." operator, so that
       // ":let vers = 1.2.3" doesn't fail.
       if (!want_string && p[0] == '.' && VIM_ISDIGIT(p[1])) {
-        type = kTypeFloat;
+        type = kExprFloat;
         p = skipdigits(p + 2);
         if (*p == 'e' || *p == 'E') {
           p++;
           if (*p == '-' || *p == '+')
             p++;
           if (!VIM_ISDIGIT(*p))
-            type = kTypeDecimalNumber;
+            type = kExprDecimalNumber;
           else
             p = skipdigits(p + 1);
         }
         if (ASCII_ISALPHA(*p) || *p == '.')
-          type = kTypeDecimalNumber;
-        if (type != kTypeDecimalNumber)
+          type = kExprDecimalNumber;
+        if (type != kExprDecimalNumber)
           e = p - 1;
       }
-      if (type == kTypeFloat) {
+      if (type == kExprFloat) {
         *arg = e + 1;
       } else {
         find_nr_end(arg, &type, TRUE, TRUE);
@@ -898,9 +898,9 @@ static int parse7(char_u **arg,
       p++;
 
       if (*s == '"')
-        type = kTypeDoubleQuotedString;
+        type = kExprDoubleQuotedString;
       else
-        type = kTypeSingleQuotedString;
+        type = kExprSingleQuotedString;
 
       VALUE_NODE(type, error, node, s, p - 1)
       *arg = p;
@@ -941,13 +941,13 @@ static int parse7(char_u **arg,
       // But Vim does not bother itself checking whether next character is 
       // a valid register name so you cannot just use `@` in place of `@"` 
       // everywhere: only at the end of string.
-      VALUE_NODE(kTypeRegister, error, node, s, s + 1)
+      VALUE_NODE(kExprRegister, error, node, s, s + 1)
       break;
     }
 
     // nested expression: (expression).
     case '(': {
-      VALUE_NODE(kTypeExpression, error, node, *arg, NULL)
+      VALUE_NODE(kExprExpression, error, node, *arg, NULL)
       *arg = skipwhite(*arg + 1);
       ret = parse1(arg, &((*node)->children), error);
       if (**arg == ')') {
@@ -993,15 +993,15 @@ static int parse7(char_u **arg,
       --end_leader;
       switch (*end_leader) {
         case '!': {
-          type = kTypeNot;
+          type = kExprNot;
           break;
         }
         case '-': {
-          type = kTypeMinus;
+          type = kExprMinus;
           break;
         }
         case '+': {
-          type = kTypePlus;
+          type = kExprPlus;
           break;
         }
       }
@@ -1038,7 +1038,7 @@ static int parse6(char_u **arg,
                   bool want_string)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionType type = kTypeUnknown;
+  ExpressionType type = kExprUnknown;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
@@ -1050,23 +1050,23 @@ static int parse6(char_u **arg,
   for (;;) {
     switch (**arg) {
       case '*': {
-        type = kTypeMultiply;
+        type = kExprMultiply;
         break;
       }
       case '/': {
-        type = kTypeDivide;
+        type = kExprDivide;
         break;
       }
       case '%': {
-        type = kTypeModulo;
+        type = kExprModulo;
         break;
       }
       default: {
-        type = kTypeUnknown;
+        type = kExprUnknown;
         break;
       }
     }
-    if (type == kTypeUnknown)
+    if (type == kExprUnknown)
       break;
 
     if (top_node == NULL || top_node->type != type)
@@ -1104,7 +1104,7 @@ static int parse5(char_u **arg,
                   ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionType type = kTypeUnknown;
+  ExpressionType type = kExprUnknown;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
@@ -1116,23 +1116,23 @@ static int parse5(char_u **arg,
   for (;;) {
     switch (**arg) {
       case '+': {
-        type = kTypeAdd;
+        type = kExprAdd;
         break;
       }
       case '-': {
-        type = kTypeSubtract;
+        type = kExprSubtract;
         break;
       }
       case '.': {
-        type = kTypeStringConcat;
+        type = kExprStringConcat;
         break;
       }
       default: {
-        type = kTypeUnknown;
+        type = kExprUnknown;
         break;
       }
     }
-    if (type == kTypeUnknown)
+    if (type == kExprUnknown)
       break;
 
     if (top_node == NULL || top_node->type != type)
@@ -1142,7 +1142,7 @@ static int parse5(char_u **arg,
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
-    if (parse6(arg, next_node, error, type == kTypeStringConcat) == FAIL)
+    if (parse6(arg, next_node, error, type == kExprStringConcat) == FAIL)
       return FAIL;
   }
   return OK;
@@ -1182,7 +1182,7 @@ static int parse4(char_u **arg,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   char_u *p;
-  ExpressionType type = kTypeUnknown;
+  ExpressionType type = kExprUnknown;
   size_t len = 2;
 
   // Get the first variable.
@@ -1193,33 +1193,33 @@ static int parse4(char_u **arg,
   switch (p[0]) {
     case '=': {
       if (p[1] == '=')
-        type = kTypeEquals;
+        type = kExprEquals;
       else if (p[1] == '~')
-        type = kTypeMatches;
+        type = kExprMatches;
       break;
     }
     case '!': {
       if (p[1] == '=')
-        type = kTypeNotEquals;
+        type = kExprNotEquals;
       else if (p[1] == '~')
-        type = kTypeNotMatches;
+        type = kExprNotMatches;
       break;
     }
     case '>': {
       if (p[1] != '=') {
-        type = kTypeGreater;
+        type = kExprGreater;
         len = 1;
       } else {
-        type = kTypeGreaterThanOrEqualTo;
+        type = kExprGreaterThanOrEqualTo;
       }
       break;
     }
     case '<': {
       if (p[1] != '=') {
-        type = kTypeLess;
+        type = kExprLess;
         len = 1;
       } else {
-        type = kTypeLessThanOrEqualTo;
+        type = kExprLessThanOrEqualTo;
       }
       break;
     }
@@ -1228,14 +1228,14 @@ static int parse4(char_u **arg,
         if (p[2] == 'n' && p[3] == 'o' && p[4] == 't')
           len = 5;
         if (!vim_isIDc(p[len]))
-          type = len == 2 ? kTypeIdentical : kTypeNotIdentical;
+          type = len == 2 ? kExprIdentical : kExprNotIdentical;
       }
       break;
     }
   }
 
   // If there is a comparative operator, use it.
-  if (type != kTypeUnknown) {
+  if (type != kExprUnknown) {
     ExpressionNode *top_node = NULL;
     ExpressionNode **next_node = node;
 
@@ -1292,11 +1292,11 @@ static int parse23(char_u **arg,
   int (*parse_next)(char_u **, ExpressionNode **, ExpressionParserError *);
 
   if (level == 2) {
-    type = kTypeLogicalOr;
+    type = kExprLogicalOr;
     parse_next = &parse3;
     c = '|';
   } else {
-    type = kTypeLogicalAnd;
+    type = kExprLogicalAnd;
     parse_next = &parse4;
     c = '&';
   }
@@ -1377,7 +1377,7 @@ static int parse1(char_u **arg,
     ExpressionNode *top_node;
     ExpressionNode **next_node = node;
 
-    UP_NODE(kTypeTernaryConditional, error, node, top_node, next_node)
+    UP_NODE(kExprTernaryConditional, error, node, top_node, next_node)
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
@@ -1483,7 +1483,7 @@ ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
       free_expr(result);
       return NULL;
     }
-    if (listends && (*next)->type == kTypeList)
+    if (listends && (*next)->type == kExprList)
       break;
     next = &((*next)->next);
   }
