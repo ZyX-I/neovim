@@ -253,6 +253,12 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
 {
   char_u *name;
 
+  if (node->type == kCmdEndwhile
+      || node->type == kCmdEndfor
+      || node->type == kCmdEndif) {
+    return OK;
+  }
+
   WINDENT(indent);
 
   if (node->type == kCmdComment) {
@@ -325,6 +331,38 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
 
     WINDENT(indent)
     WS("end\n")
+    return OK;
+  } else if (node->type == kCmdIf
+             || node->type == kCmdElseif
+             || node->type == kCmdElse) {
+    switch (node->type) {
+      case kCmdElse: {
+        WS("else\n")
+        break;
+      }
+      case kCmdElseif: {
+        WS("else ")
+        // fallthrough
+      }
+      case kCmdIf: {
+        WS("if (")
+        // TODO dump condition
+        WS(") then\n")
+        break;
+      }
+      default: {
+        assert(FALSE);
+      }
+    }
+
+    CALL(translate_nodes, node->children, indent + 1)
+
+    if (node->next == NULL
+        || (node->next->type != kCmdElseif
+            && node->next->type != kCmdElse)) {
+      WINDENT(indent)
+      WS("end\n")
+    }
     return OK;
   }
 
