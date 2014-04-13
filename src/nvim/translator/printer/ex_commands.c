@@ -58,7 +58,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
     vim_free(line);
   } else {
     if ((node = parse_cmd_sequence(o, position, (LineGetter) fgetline_test,
-                                   pp)) == FAIL)
+                                   pp)) == NULL)
       return NULL;
   }
 
