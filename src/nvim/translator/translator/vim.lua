@@ -113,6 +113,12 @@ end
 modulo = function(state, ...)
 end
 
+concat = function(state, ...)
+end
+
+concat_or_subscript = function(state, dict, key)
+end
+
 call = function(state, caller, ...)
 end
 
@@ -129,6 +135,21 @@ slice = function(state, value, start_index, end_index)
 end
 
 list = function(state, ...)
+end
+
+equals = function(state, ic, arg1, arg2)
+end
+
+identical = function(state, ic, arg1, arg2)
+end
+
+matches = function(state, ic, arg1, arg2)
+end
+
+greater = function(state, ic, arg1, arg2)
+end
+
+less = function(state, ic, arg1, arg2)
 end
 
 return {
@@ -153,4 +174,11 @@ return {
   negate=negate,
   negate_logical=negate_logical,
   promote_integer=promote_integer,
+  concat=concat,
+  concat_or_subscript=concat_or_subscript,
+  equals=equals,
+  identical=identical,
+  matches=matches,
+  greater=greater,
+  less=less,
 }

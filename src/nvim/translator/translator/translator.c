@@ -289,6 +289,7 @@ static WFDEC(translate_expr, ExpressionNode *expr)
       } else {
         CALL(dump_string_len, expr->position, 1)
       }
+      WS("]")
       break;
     }
     case kExprEnvironmentVariable: {
@@ -362,8 +363,16 @@ static WFDEC(translate_expr, ExpressionNode *expr)
       WS("nil")
       break;
     }
+    case kExprExpression: {
+      WS("(")
+      CALL(translate_expr, expr->children)
+      WS(")")
+      break;
+    }
     default: {
       ExpressionNode *current_expr;
+      bool reversed = FALSE;
+
       assert(expr->children != NULL);
       switch (expr->type) {
         case kExprDictionary: {
@@ -380,51 +389,58 @@ static WFDEC(translate_expr, ExpressionNode *expr)
           else
             WS("vim.slice(state, ")
         }
-        case kExprAdd: {
-          WS("vim.add(state, ")
-          break;
+
+#define OPERATOR(op_type, op) \
+        case op_type: { \
+          WS("vim." op "(state, ") \
+          break; \
         }
-        case kExprSubtract: {
-          WS("vim.subtract(state, ")
-          break;
+
+        OPERATOR(kExprAdd,          "add")
+        OPERATOR(kExprSubtract,     "subtract")
+        OPERATOR(kExprDivide,       "divide")
+        OPERATOR(kExprMultiply,     "multiply")
+        OPERATOR(kExprModulo,       "modulo")
+        OPERATOR(kExprCall,         "call")
+        OPERATOR(kExprMinus,        "negate")
+        OPERATOR(kExprNot,          "negate_logical")
+        OPERATOR(kExprPlus,         "promote_integer")
+        OPERATOR(kExprStringConcat, "concat")
+#undef OPERATOR
+
+#define COMPARISON(forward_type, rev_type, op) \
+        case forward_type: \
+        case rev_type: { \
+          if (expr->type == rev_type) { \
+            reversed = TRUE; \
+            WS("(") \
+          } \
+          WS("vim." op "(state, ") \
+          CALL(dump_number, (long) expr->ignore_case) \
+          WS(", ") \
+          break; \
         }
-        case kExprDivide: {
-          WS("vim.divide(state, ")
-          break;
-        }
-        case kExprMultiply: {
-          WS("vim.multiply(state, ")
-          break;
-        }
-        case kExprModulo: {
-          WS("vim.modulo(state, ")
-          break;
-        }
-        case kExprCall: {
-          WS("vim.call(state, ")
-          break;
-        }
-        case kExprMinus: {
-          WS("vim.negate(state, ")
-          break;
-        }
-        case kExprNot: {
-          WS("vim.negate_logical(state, ")
-          break;
-        }
-        case kExprPlus: {
-          WS("vim.promote_integer(state, ")
-          break;
-        }
+
+        COMPARISON(kExprEquals,    kExprNotEquals,            "equals")
+        COMPARISON(kExprIdentical, kExprNotIdentical,         "identical")
+        COMPARISON(kExprMatches,   kExprNotMatches,           "matches")
+        COMPARISON(kExprGreater,   kExprLessThanOrEqualTo,    "greater")
+        COMPARISON(kExprLess,      kExprGreaterThanOrEqualTo, "less")
+#undef COMPARISON
+
         default: {
           assert(FALSE);
         }
       }
 
+      if (reversed)
+        WS(" == 1 and 0 or 1)")
+
       current_expr = expr->children;
       while (current_expr != NULL) {
         CALL(translate_expr, current_expr)
         current_expr = current_expr->next;
+        WS(", ")
       }
       WS(")")
       break;
