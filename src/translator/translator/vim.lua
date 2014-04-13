@@ -85,8 +85,26 @@ commands={
 }
 
 range={
+  compose=function(state, ...)
+  end,
+  apply_followup=function(state, followup_type, followup_data, lnr)
+  end,
+
+  mark=function(state, mark)
+  end,
+  forward_search=function(state, regex)
+  end,
+  backward_search=function(state, regex)
+  end,
   last=function(state)
-    return 100
+  end,
+  current=function(state)
+  end,
+  substitute_search=function(state)
+  end,
+  forward_previous_search=function(state)
+  end,
+  backward_previous_search=function(state)
   end,
 }
 
@@ -94,12 +112,24 @@ new_scope = function()
   return {}
 end
 
+get_state = function()
+  return new_state()
+end
+
+run_user_command = function(state, command, range, bang, args)
+end
+
+iter_start = function(state, list)
+end
+
 return {
   eq=eq,
   add=add,
   new_scope=new_scope,
   new_state=new_state,
-  get_state=new_state,  -- FIXME
+  get_state=get_state,
   commands=commands,
   range=range,
+  run_user_command=run_user_command,
+  iter_start=iter_start,
 }

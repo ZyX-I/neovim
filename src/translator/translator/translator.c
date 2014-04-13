@@ -8,25 +8,56 @@
 #include "translator/translator/translator.h"
 #include "translator/parser/expressions.h"
 #include "translator/parser/ex_commands.h"
+#include "translator/parser/command_definitions.h"
 
+#define WFDEC(f, ...) int f(__VA_ARGS__, Writer write, void *cookie)
 #define CALL(f, ...) \
-    if (f(__VA_ARGS__, write, cookie) == FAIL) \
-      return FAIL;
+    { \
+      if (f(__VA_ARGS__, write, cookie) == FAIL) \
+        return FAIL; \
+    }
 #define CALL_ERR(error_label, f, ...) \
-    if (f(__VA_ARGS__, write, cookie) == FAIL) \
-      goto error_label;
+    { \
+      if (f(__VA_ARGS__, write, cookie) == FAIL) \
+        goto error_label; \
+    }
 #define W_LEN(s, len) \
     CALL(write_string_len, s, len)
-#define W_LEN_ERR(s, len) \
-    CALL_ERR(write_string_len, s, len)
-#define W(s) W_LEN(s, STRLEN(s))
-#define W_ERR(s) W_LEN_ERR(s, STRLEN(s))
-#define WFDEC(f, ...) int f(__VA_ARGS__, Writer write, void *cookie)
+#define W_LEN_ERR(error_label, s, len) \
+    CALL_ERR(error_label, write_string_len, s, len)
+#define W(s) \
+    W_LEN((char *) s, STRLEN(s))
+#define W_ERR(error_label, s) \
+    W_LEN_ERR(error_label, s, STRLEN(s))
+#define WS(s) \
+    W_LEN(s, sizeof(s) - 1)
+#define WS_ERR(error_label, s) \
+    W_LEN_ERR(error_label, s, sizeof(s) - 1)
 #define WINDENT(indent) \
     { \
       for (size_t i = 0; i < indent; i++) \
-        W("  ") \
+        WS("  ") \
     }
+#define WINDENT_ERR(error_label, indent) \
+    { \
+      for (size_t i = 0; i < indent; i++) \
+        WS_ERR(error_label, "  ") \
+    }
+
+// {{{ Function declarations
+static WFDEC(write_string_len, char *s, size_t len);
+static WFDEC(dump_number, long number);
+static WFDEC(dump_string, char_u *s);
+static WFDEC(dump_bool, bool b);
+static WFDEC(translate_regex, Regex *regex);
+static WFDEC(translate_address_followup, AddressFollowup *followup);
+static WFDEC(translate_range, Range *range);
+static WFDEC(translate_ex_flags, uint_least8_t exflags);
+static WFDEC(translate_node, CommandNode *node, size_t indent);
+static WFDEC(translate_nodes, CommandNode *node, size_t indent);
+static int translate_script_stdout(CommandNode *node);
+static char_u *fgetline_file(int c, FILE *file, int indent);
+// }}}
 
 static WFDEC(write_string_len, char *s, size_t len)
 {
@@ -43,45 +74,307 @@ static WFDEC(write_string_len, char *s, size_t len)
 
 static Writer write_file = (Writer) &fwrite;
 
-static WFDEC(translate_node, CommandNode *node, size_t indent)
+/// Dump number that is not a vim Number
+///
+/// Use translate_number to dump vim Numbers (kExpr*Number)
+static WFDEC(dump_number, long number)
 {
-  WINDENT(indent);
+  char buf[NUMBUFLEN];
 
-  switch (node->type) {
-    case kCmdAbclear: {
-      W("vim.commands.")
-      W((char *) CMDDEF(node->type).name)
-      W("(state, ")
-      if (node->args[ARG_CLEAR_BUFFER].arg.flags) {
-        W("true")
-      } else {
-        W("false")
-      }
-      W(")\n")
+  if (sprintf(buf, "%ld", number) == 0)
+    return FAIL;
+
+  W(buf)
+
+  return OK;
+}
+
+/// Dump string that is not a vim String
+///
+/// Use translate_string to dump vim String (kExpr*String)
+static WFDEC(dump_string, char_u *s)
+{
+  // FIXME escape characters
+  WS("'")
+  W(s)
+  WS("'")
+  return OK;
+}
+
+static WFDEC(dump_bool, bool b)
+{
+  if (b)
+    WS("true")
+  else
+    WS("false")
+
+  return OK;
+}
+
+static WFDEC(translate_regex, Regex *regex)
+{
+  CALL(dump_string, regex->string)
+  return OK;
+}
+
+static WFDEC(translate_address_followup, AddressFollowup *followup)
+{
+  switch (followup->type) {
+    case kAddressFollowupShift: {
+      WS("0, ")
+      CALL(dump_number, (long) followup->data.shift)
       break;
     }
-    default: {
+    case kAddressFollowupForwardPattern: {
+      WS("1, ")
+      CALL(dump_string, followup->data.regex->string)
+      break;
+    }
+    case kAddressFollowupBackwardPattern: {
+      WS("2, ")
+      CALL(dump_string, followup->data.regex->string)
+      break;
+    }
+    case kAddressFollowupMissing: {
       assert(FALSE);
     }
   }
   return OK;
 }
 
-int translate_script(CommandNode *node, Writer write, void *cookie)
+static WFDEC(translate_range, Range *range)
+{
+  Range *current_range = range;
+
+  if (current_range->address.type == kAddrMissing) {
+    WS("nil")
+    return OK;
+  }
+
+  WS("vim.range.compose(state, ")
+
+  while (current_range != NULL) {
+    AddressFollowup *current_followup = current_range->address.followups;
+    size_t followup_number = 0;
+
+    assert(current_range->address.type != kAddrMissing);
+
+    while (current_followup != NULL) {
+      WS("vim.range.apply_followup(state, ")
+      CALL(translate_address_followup, current_followup)
+      WS(", ")
+      followup_number++;
+      current_followup = current_followup->next;
+    }
+
+    switch (current_range->address.type) {
+      case kAddrFixed: {
+        CALL(dump_number, (long) current_range->address.data.lnr);
+        break;
+      }
+      case kAddrEnd: {
+        WS("vim.range.last(state)")
+        break;
+      }
+      case kAddrCurrent: {
+        WS("vim.range.current(state)")
+        break;
+      }
+      case kAddrMark: {
+        char_u mark[2] = {current_range->address.data.mark, NUL};
+
+        WS("vim.range.mark(state, '")
+        CALL(dump_string, mark)
+        WS("')")
+        break;
+      }
+      case kAddrForwardSearch: {
+        WS("vim.range.forward_search(state, ")
+        CALL(translate_regex, current_range->address.data.regex)
+        WS(")")
+        break;
+      }
+      case kAddrBackwardSearch: {
+        WS("vim.range.backward_search(state, ")
+        CALL(translate_regex, current_range->address.data.regex)
+        WS(")")
+        break;
+      }
+      case kAddrSubstituteSearch: {
+        WS("vim.range.substitute_search(state)")
+        break;
+      }
+      case kAddrForwardPreviousSearch: {
+        WS("vim.range.forward_previous_search(state)")
+        break;
+      }
+      case kAddrBackwardPreviousSearch: {
+        WS("vim.range.backward_previous_search(state)")
+        break;
+      }
+      case kAddrMissing: {
+        assert(FALSE);
+      }
+    }
+
+    while (followup_number--) {
+      WS(")")
+    }
+    WS(", ")
+
+    CALL(dump_bool, current_range->setpos)
+    WS(", ")
+
+    current_range = current_range->next;
+  }
+
+  WS(")")
+  return OK;
+}
+
+static WFDEC(translate_ex_flags, uint_least8_t exflags)
+{
+  WS("{")
+  if (exflags & FLAG_EX_LIST)
+    WS("list=true, ")
+  if (exflags & FLAG_EX_LNR)
+    WS("lnr=true, ")
+  if (exflags & FLAG_EX_PRINT)
+    WS("print=true, ")
+  WS("}")
+  return OK;
+}
+
+static WFDEC(translate_node, CommandNode *node, size_t indent)
+{
+  char_u *name;
+
+  WINDENT(indent);
+
+  if (node->type == kCmdComment) {
+    WS("--")
+    W(node->args[ARG_NAME_NAME].arg.str)
+    WS("\n")
+    return OK;
+  } else if (node->type == kCmdHashbangComment) {
+    WS("-- #!")
+    W(node->args[ARG_NAME_NAME].arg.str)
+    WS("\n")
+    return OK;
+  } else if (node->type == kCmdSyntaxError) {
+    WS("vim.error(state, ")
+    // FIXME Dump error information
+    WS(")\n")
+    return OK;
+  } else if (node->type == kCmdMissing) {
+    WS("\n")
+    return OK;
+  } else if (node->type == kCmdUSER) {
+    WS("vim.run_user_command(state, '")
+    W(node->name)
+    WS("', ")
+    CALL(translate_range, &(node->range))
+    WS(", ")
+    CALL(dump_bool, node->bang)
+    WS(", ")
+    CALL(dump_string, node->args[ARG_USER_ARG].arg.str)
+    WS(")\n")
+    return OK;
+  } else if (node->type == kCmdFunction
+             && node->args[ARG_FUNC_ARGS].arg.strs.ga_growsize != 0) {
+    // TODO
+    return OK;
+  } else if (node->type == kCmdFor) {
+    char iter_var[NUMBUFLEN + 1];
+    size_t iter_var_len;
+    if ((iter_var_len = sprintf(iter_var, "i%ld", (long) indent)) <= 1)
+      return FAIL;
+    W_LEN(iter_var, iter_var_len)
+    WS(" = vim.iter_start(state, ")
+    // FIXME dump list
+    WS(")\n")
+
+    WINDENT(indent)
+    WS("while (")
+    W_LEN(iter_var, iter_var_len)
+    WS(" ~= nil) do\n")
+
+    WINDENT(indent + 1)
+    W_LEN(iter_var, iter_var_len)
+    WS(", ")
+    // TODO assign variables
+    WS(" = ")
+    W_LEN(iter_var, iter_var_len)
+    WS(":next()\n")
+
+    CALL(translate_nodes, node->children, indent + 1)
+
+    WINDENT(indent)
+    WS("end\n")
+    return OK;
+  }
+
+  name = CMDDEF(node->type).name;
+  assert(name != NULL);
+
+  WS("vim.commands")
+  if (ASCII_ISALPHA(*name)) {
+    WS(".")
+    W(name)
+  } else {
+    WS("['")
+    W(name)
+    WS("']")
+  }
+  WS("(state, ")
+
+  if (CMDDEF(node->type).flags & RANGE) {
+    CALL(translate_range, &(node->range))
+    WS(", ")
+  }
+
+  if (CMDDEF(node->type).flags & BANG) {
+    CALL(dump_bool, node->bang)
+    WS(", ")
+  }
+
+  if (CMDDEF(node->type).flags & EXFLAGS) {
+    CALL(translate_ex_flags, node->exflags)
+    WS(", ")
+  }
+
+  if (CMDDEF(node->type).parse == CMDDEF(kCmdAbclear).parse) {
+    CALL(dump_bool, (bool) node->args[ARG_CLEAR_BUFFER].arg.flags)
+  }
+
+  WS(")\n")
+
+  return OK;
+}
+
+static WFDEC(translate_nodes, CommandNode *node, size_t indent)
 {
   CommandNode *current_node = node;
-  W("vim = require 'vim'\n"
-    "s = vim.new_scope()\n"
-    "return {\n"
-    "  run=function(state)\n"
-    "    state = state:set_script_locals(s)\n")
 
   while (current_node != NULL) {
-    CALL(translate_node, current_node, 2)
+    CALL(translate_node, current_node, indent)
     current_node = current_node->next;
   }
 
-  W("  end\n"
+  return OK;
+}
+
+int translate_script(CommandNode *node, Writer write, void *cookie)
+{
+  WS("vim = require 'vim'\n"
+     "s = vim.new_scope()\n"
+     "return {\n"
+     "  run=function(state)\n"
+     "    state = state:set_script_locals(s)\n")
+
+  CALL(translate_nodes, node, 2)
+
+  WS("  end\n"
     "}\n")
   return OK;
 }
@@ -104,8 +397,8 @@ static char_u *fgetline_file(int c, FILE *file, int indent)
 
   len = STRLEN(res);
 
-  if (res[len] == '\n')
-    res[len] = NUL;
+  if (res[len - 1] == '\n')
+    res[len - 1] = NUL;
 
   return (char_u *) res;
 }
