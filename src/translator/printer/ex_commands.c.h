@@ -1,5 +1,8 @@
 #ifndef NEOVIM_TRANSLATOR_PRINTER_EX_COMMANDS_C_H
 
+#include <stdbool.h>
+#include <stddef.h>
+
 #include "vim.h"
 #include "memory.h"
 #include "misc2.h"

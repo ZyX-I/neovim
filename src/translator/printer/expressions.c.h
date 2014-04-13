@@ -1,7 +1,12 @@
 #ifndef NEOVIM_TRANSLATOR_PRINTER_EXPRESSIONS_C_H
 
-#include "translator/parser/expressions.h"
+#include <stdbool.h>
+#include <stddef.h>
 
+#include "vim.h"
+#include "memory.h"
+
+#include "translator/parser/expressions.h"
 #include "translator/printer/ch_macros.h"
 
 // {{{ Function declarations
