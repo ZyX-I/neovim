@@ -312,6 +312,16 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     WINDENT(indent)
     WS("end\n")
     return OK;
+  } else if (node->type == kCmdWhile) {
+    WS("while (")
+    // TODO dump condition
+    WS(") do\n")
+
+    CALL(translate_nodes, node->children, indent + 1)
+
+    WINDENT(indent)
+    WS("end\n")
+    return OK;
   }
 
   name = CMDDEF(node->type).name;
