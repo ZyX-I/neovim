@@ -26,13 +26,27 @@
         goto error_label; \
     }
 #define W_LEN(s, len) \
-    CALL(write_string_len, s, len)
+    CALL(write_string_len, (char *) s, len)
 #define W_LEN_ERR(error_label, s, len) \
-    CALL_ERR(error_label, write_string_len, s, len)
+    CALL_ERR(error_label, write_string_len, (char *) s, len)
 #define W(s) \
-    W_LEN((char *) s, STRLEN(s))
+    W_LEN(s, STRLEN(s))
 #define W_ERR(error_label, s) \
     W_LEN_ERR(error_label, s, STRLEN(s))
+#define W_END(s, e) \
+    W_LEN(s, e - s + 1)
+#define W_END_ERR(error_label, s, e) \
+    W_LEN_ERR(error_label, s, e - s + 1)
+#define W_EXPR_POS(expr) \
+    W_END(expr->position, expr->end_position)
+#define W_EXPR_POS_ERR(error_label, expr) \
+    W_END_ERR(error_label, expr->position, expr->end_position)
+#define W_EXPR_POS_ESCAPED(expr) \
+    CALL(dump_string_len, expr->position, \
+         expr->end_position - expr->position + 1)
+#define W_EXPR_POS_ESCAPED_ERR(error_label, expr) \
+    CALL_ERR(error_label, dump_string_len, expr->position, \
+             expr->end_position - expr->position + 1)
 #define WS(s) \
     W_LEN(s, sizeof(s) - 1)
 #define WS_ERR(error_label, s) \
@@ -101,6 +115,18 @@ static WFDEC(dump_string, char_u *s)
   // FIXME escape characters
   WS("'")
   W(s)
+  WS("'")
+  return OK;
+}
+
+/// Dump string that is not a vim String
+///
+/// Use translate_string to dump vim String (kExpr*String)
+static WFDEC(dump_string_len, char_u *s, size_t len)
+{
+  // FIXME escape characters
+  WS("'")
+  W_LEN(s, len)
   WS("'")
   return OK;
 }
@@ -249,6 +275,164 @@ static WFDEC(translate_ex_flags, uint_least8_t exflags)
   return OK;
 }
 
+static WFDEC(translate_expr, ExpressionNode *expr)
+{
+  switch (expr->type) {
+    case kExprOption: {
+      // TODO
+      break;
+    }
+    case kExprRegister: {
+      WS("state.registers[")
+      if (expr->end_position < expr->position) {
+        WS("nil")
+      } else {
+        CALL(dump_string_len, expr->position, 1)
+      }
+      break;
+    }
+    case kExprEnvironmentVariable: {
+      WS("state.environment[")
+      W_EXPR_POS_ESCAPED(expr)
+      WS("]")
+      break;
+    }
+    case kExprSimpleVariableName: {
+      char_u *start = expr->position;
+      WS("vim.subscript(state, ")
+      if (expr->position[1] == ':') {
+        start += 2;
+        switch (*expr->position) {
+          case 's':
+          case 'v':
+          case 'a':
+          case 'l':
+          case 'g': {
+            WS("state.")
+            W_LEN(expr->position, 1)
+            break;
+          }
+          case 't': {
+            WS("state.tabpage.t")
+            break;
+          }
+          case 'w': {
+            WS("state.window.w")
+            break;
+          }
+          case 'b': {
+            WS("state.buffer.b")
+            break;
+          }
+          default: {
+            start -= 2;
+            WS("state.current_scope")
+            break;
+          }
+        }
+      } else {
+        WS("state.current_scope")
+      }
+      WS(", '")
+      W_END(start, expr->end_position)
+      WS("')")
+      break;
+    }
+    case kExprVariableName: {
+      // TODO
+      break;
+    }
+    case kExprCurlyName: {
+      // TODO
+      break;
+    }
+    case kExprIdentifier: {
+      // TODO
+      break;
+    }
+    case kExprConcatOrSubscript: {
+      WS("vim.concat_or_subscript(state, ")
+      W_EXPR_POS_ESCAPED(expr)
+      WS(", ")
+      CALL(translate_expr, expr->children)
+      WS(")")
+      break;
+    }
+    case kExprEmptySubscript: {
+      WS("nil")
+      break;
+    }
+    default: {
+      ExpressionNode *current_expr;
+      assert(expr->children != NULL);
+      switch (expr->type) {
+        case kExprDictionary: {
+          WS("vim.dict(state, ")
+          break;
+        }
+        case kExprList: {
+          WS("vim.list(state, ")
+          break;
+        }
+        case kExprSubscript: {
+          if (expr->children->next->next == NULL)
+            WS("vim.subscript(state, ")
+          else
+            WS("vim.slice(state, ")
+        }
+        case kExprAdd: {
+          WS("vim.add(state, ")
+          break;
+        }
+        case kExprSubtract: {
+          WS("vim.subtract(state, ")
+          break;
+        }
+        case kExprDivide: {
+          WS("vim.divide(state, ")
+          break;
+        }
+        case kExprMultiply: {
+          WS("vim.multiply(state, ")
+          break;
+        }
+        case kExprModulo: {
+          WS("vim.modulo(state, ")
+          break;
+        }
+        case kExprCall: {
+          WS("vim.call(state, ")
+          break;
+        }
+        case kExprMinus: {
+          WS("vim.negate(state, ")
+          break;
+        }
+        case kExprNot: {
+          WS("vim.negate_logical(state, ")
+          break;
+        }
+        case kExprPlus: {
+          WS("vim.promote_integer(state, ")
+          break;
+        }
+        default: {
+          assert(FALSE);
+        }
+      }
+
+      current_expr = expr->children;
+      while (current_expr != NULL) {
+        CALL(translate_expr, current_expr)
+        current_expr = current_expr->next;
+      }
+      WS(")")
+      break;
+    }
+  }
+  return OK;
+}
+
 static WFDEC(translate_node, CommandNode *node, size_t indent)
 {
   char_u *name;
@@ -324,7 +508,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     return OK;
   } else if (node->type == kCmdWhile) {
     WS("while (")
-    // TODO dump condition
+    CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr)
     WS(") do\n")
 
     CALL(translate_nodes, node->children, indent + 1)
@@ -346,7 +530,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
       }
       case kCmdIf: {
         WS("if (")
-        // TODO dump condition
+        CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr)
         WS(") then\n")
         break;
       }
