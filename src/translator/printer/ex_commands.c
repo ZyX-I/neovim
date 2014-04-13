@@ -5,8 +5,6 @@
 #include "memory.h"
 #include "misc2.h"
 
-#include "translator/printer/expressions.h"
-#include "translator/parser/expressions.h"
 #include "translator/parser/ex_commands.h"
 
 // {{{ Function declarations
@@ -35,9 +33,6 @@ static char_u *fgetline_test(int c, char_u **arg, int indent)
 }
 
 #include "translator/printer/ex_commands.c.h"
-
-#undef ADD_STRING
-#define ADD_STRING(p, s, l) memcpy(p, s, l); p += l
 
 char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 {

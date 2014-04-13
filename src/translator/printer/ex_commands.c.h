@@ -1,6 +1,13 @@
 #ifndef NEOVIM_TRANSLATOR_PRINTER_EX_COMMANDS_C_H
 
+#include "vim.h"
+#include "memory.h"
+#include "misc2.h"
+
 #include "translator/printer/ch_macros.h"
+#include "translator/printer/expressions.h"
+#include "translator/parser/expressions.h"
+#include "translator/parser/ex_commands.h"
 
 // {{{ Function declarations
 static FDEC(unumber_repr, uintmax_t unumber);
