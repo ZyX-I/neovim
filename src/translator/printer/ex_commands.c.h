@@ -10,6 +10,11 @@ static FDEC(regex_repr, Regex *regex);
 static FDEC(address_followup_repr, AddressFollowup *followup);
 static FDEC(address_repr, Address *address);
 static FDEC(range_repr, Range *range);
+static FDEC(node_name_repr, CommandType node_type, char_u *node_name,
+            bool node_bang);
+static FDEC(optflags_repr, uint_least32_t optflags, char_u *enc);
+static FDEC(count_repr, CommandNode *node);
+static FDEC(exflags_repr, uint_least8_t exflags);
 static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext);
 // }}}
 
@@ -259,46 +264,42 @@ static FDEC(range_repr, Range *range)
   FUNCTION_END;
 }
 
-static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
+static FDEC(node_name_repr, CommandType node_type, char_u *node_name,
+            bool node_bang)
 {
   FUNCTION_START;
-  size_t start_from_arg;
-  bool do_arg_dump = FALSE;
-  bool did_children = FALSE;
   char_u *name;
 
-  if (node == NULL)
-    RETURN;
-
-  if (!barnext) {
-    INDENT(indent)
-  }
-
-  F(range_repr, &(node->range));
-
-  if (node->name != NULL)
-    name = node->name;
-  else if (CMDDEF(node->type).name == NULL)
+  if (node_name != NULL)
+    name = node_name;
+  else if (CMDDEF(node_type).name == NULL)
     name = (char_u *) "";
   else
-    name = CMDDEF(node->type).name;
+    name = CMDDEF(node_type).name;
 
   ADD_STRING(name)
 
-  if (node->bang)
+  if (node_bang)
     ADD_CHAR('!');
 
-  if (node->optflags & FLAG_OPT_BIN_USE_FLAG) {
-    if (node->optflags & FLAG_OPT_BIN) {
+  FUNCTION_END;
+}
+
+static FDEC(optflags_repr, uint_least32_t optflags, char_u *enc)
+{
+  FUNCTION_START;
+
+  if (optflags & FLAG_OPT_BIN_USE_FLAG) {
+    if (optflags & FLAG_OPT_BIN) {
       ADD_STATIC_STRING(" ++bin");
     } else {
       ADD_STRING(" ++nobin");
     }
   }
-  if (node->optflags & FLAG_OPT_EDIT) {
+  if (optflags & FLAG_OPT_EDIT) {
     ADD_STATIC_STRING(" ++edit");
   }
-  switch (node->optflags & FLAG_OPT_FF_MASK) {
+  switch (optflags & FLAG_OPT_FF_MASK) {
     case 0: {
       break;
     }
@@ -318,7 +319,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
       assert(FALSE);
     }
   }
-  switch (node->optflags & FLAG_OPT_BAD_MASK) {
+  switch (optflags & FLAG_OPT_BAD_MASK) {
     case 0: {
       break;
     }
@@ -332,13 +333,79 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     }
     default: {
       ADD_STATIC_STRING(" ++bad=");
-      ADD_CHAR(VAL_OPT_BAD_TO_CHAR(node->optflags));
+      ADD_CHAR(VAL_OPT_BAD_TO_CHAR(optflags));
     }
   }
-  if (node->enc != NULL) {
+  if (enc != NULL) {
     ADD_STATIC_STRING(" ++enc=");
-    ADD_STRING(node->enc);
+    ADD_STRING(enc);
   }
+
+  FUNCTION_END;
+}
+
+static FDEC(count_repr, CommandNode *node)
+{
+  FUNCTION_START;
+
+  switch (node->cnt_type) {
+    case kCntMissing: {
+      break;
+    }
+    case kCntCount:
+    case kCntBuffer: {
+      ADD_CHAR(' ');
+      F(unumber_repr, (uintmax_t) node->cnt.count);
+      break;
+    }
+    case kCntReg: {
+      ADD_CHAR(' ');
+      ADD_CHAR(node->cnt.reg);
+      break;
+    }
+    case kCntExprReg: {
+      // FIXME
+      break;
+    }
+  }
+
+  FUNCTION_END;
+}
+
+static FDEC(exflags_repr, uint_least8_t exflags)
+{
+  FUNCTION_START;
+
+  if (exflags) {
+    ADD_CHAR(' ');
+    if (exflags & FLAG_EX_LIST)
+      ADD_CHAR('l');
+    if (exflags & FLAG_EX_LNR)
+      ADD_CHAR('#');
+    if (exflags & FLAG_EX_PRINT)
+      ADD_CHAR('p');
+  }
+
+  FUNCTION_END;
+}
+
+static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
+{
+  FUNCTION_START;
+  size_t start_from_arg;
+  bool do_arg_dump = FALSE;
+  bool did_children = FALSE;
+
+  if (node == NULL)
+    RETURN;
+
+  if (!barnext) {
+    INDENT(indent)
+  }
+
+  F(range_repr, &(node->range));
+  F(node_name_repr, node->type, node->name, node->bang);
+  F(optflags_repr, node->optflags, node->enc);
 
   if (CMDDEF(node->type).flags & EDITCMD && node->children) {
     did_children = TRUE;
@@ -364,35 +431,8 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
 #endif
   }
 
-  switch (node->cnt_type) {
-    case kCntMissing: {
-      break;
-    }
-    case kCntCount:
-    case kCntBuffer: {
-      ADD_CHAR(' ');
-      F(unumber_repr, (uintmax_t) node->cnt.count);
-      break;
-    }
-    case kCntReg: {
-      ADD_CHAR(' ');
-      ADD_CHAR(node->cnt.reg);
-      break;
-    }
-    case kCntExprReg: {
-      // FIXME
-      break;
-    }
-  }
-
-  if (node->exflags)
-    ADD_CHAR(' ');
-  if (node->exflags & FLAG_EX_LIST)
-    ADD_CHAR('l');
-  if (node->exflags & FLAG_EX_LNR)
-    ADD_CHAR('#');
-  if (node->exflags & FLAG_EX_PRINT)
-    ADD_CHAR('p');
+  F(count_repr, node);
+  F(exflags_repr, node->exflags);
 
   if (node->glob != NULL) {
     ADD_CHAR(' ');
