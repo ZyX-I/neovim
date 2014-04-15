@@ -275,9 +275,53 @@ static WFDEC(translate_ex_flags, uint_least8_t exflags)
   return OK;
 }
 
+static WFDEC(translate_number, ExpressionType type, char_u *s, char_u *e)
+{
+  WS("vim.number(")
+  switch (type) {
+    case kExprHexNumber:
+    case kExprDecimalNumber: {
+      W_END(s, e)
+      break;
+    }
+    case kExprOctalNumber: {
+      unsigned long number;
+      char_u saved_char = e[1];
+      int n;
+
+      e[1] = NUL;
+      if ((n = sscanf((char *) s, "%lo", &number)) != (int) (e - s + 1)) {
+        // TODO: check errno
+        // TODO: give error message
+        return FAIL;
+      }
+      e[1] = saved_char;
+      CALL(dump_number, (long) number)
+      break;
+    }
+    default: {
+      assert(FALSE);
+    }
+  }
+  WS(")")
+  return OK;
+}
+
 static WFDEC(translate_expr, ExpressionNode *expr)
 {
   switch (expr->type) {
+    case kExprFloat: {
+      WS("vim.float(")
+      W_END(expr->position, expr->end_position)
+      WS(")")
+      break;
+    }
+    case kExprDecimalNumber:
+    case kExprOctalNumber:
+    case kExprHexNumber: {
+      CALL(translate_number, expr->type, expr->position, expr->end_position)
+      break;
+    }
     case kExprOption: {
       // TODO
       break;
