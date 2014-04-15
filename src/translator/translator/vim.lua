@@ -152,6 +152,12 @@ end
 less = function(state, ic, arg1, arg2)
 end
 
+number = function(n)
+end
+
+float = function(f)
+end
+
 return {
   eq=eq,
   add=add,
@@ -181,4 +187,6 @@ return {
   matches=matches,
   greater=greater,
   less=less,
+  number=number,
+  float=float,
 }
