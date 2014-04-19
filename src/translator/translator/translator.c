@@ -416,11 +416,11 @@ static WFDEC(translate_expr, ExpressionNode *expr)
       assert(expr->children != NULL);
       switch (expr->type) {
         case kExprDictionary: {
-          WS("vim.dict(state, ")
+          WS("vim.dict.new(state, ")
           break;
         }
         case kExprList: {
-          WS("vim.list(state, ")
+          WS("vim.list.new(state, ")
           break;
         }
         case kExprSubscript: {
