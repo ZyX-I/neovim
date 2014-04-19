@@ -489,13 +489,31 @@ static WFDEC(translate_expr, ExpressionNode *expr)
   return OK;
 }
 
+static WFDEC(translate_exprs, ExpressionNode *expr)
+{
+  ExpressionNode *current_expr;
+
+  for (current_expr = expr; current_expr != NULL;
+       current_expr = current_expr->next) {
+    CALL(translate_expr, current_expr)
+    WS(", ")
+  }
+
+  return OK;
+}
+
 static WFDEC(translate_node, CommandNode *node, size_t indent)
 {
   char_u *name;
+  size_t start_from_arg = 0;
+  bool do_arg_dump = TRUE;
 
   if (node->type == kCmdEndwhile
       || node->type == kCmdEndfor
-      || node->type == kCmdEndif) {
+      || node->type == kCmdEndif
+      || node->type == kCmdEndtry
+      || node->type == kCmdCatch
+      || node->type == kCmdFinally) {
     return OK;
   }
 
@@ -535,26 +553,32 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     // TODO
     return OK;
   } else if (node->type == kCmdFor) {
-    char iter_var[NUMBUFLEN + 1];
-    size_t iter_var_len;
-    if ((iter_var_len = sprintf(iter_var, "i%ld", (long) indent)) <= 1)
+#define INDENTVAR(var, prefix) \
+    char var[NUMBUFLEN + sizeof(prefix) - 1]; \
+    size_t var##_len; \
+    if ((var##_len = sprintf(var, prefix "%ld", (long) indent)) <= 1) \
       return FAIL;
-    W_LEN(iter_var, iter_var_len)
+#define ADDINDENTVAR(var) \
+    W_LEN(var, var##_len)
+
+    INDENTVAR(iter_var, "i")
+    WS("local ")
+    ADDINDENTVAR(iter_var)
     WS(" = vim.iter_start(state, ")
     // FIXME dump list
     WS(")\n")
 
     WINDENT(indent)
     WS("while (")
-    W_LEN(iter_var, iter_var_len)
+    ADDINDENTVAR(iter_var)
     WS(" ~= nil) do\n")
 
     WINDENT(indent + 1)
-    W_LEN(iter_var, iter_var_len)
+    ADDINDENTVAR(iter_var)
     WS(", ")
     // TODO assign variables
     WS(" = ")
-    W_LEN(iter_var, iter_var_len)
+    ADDINDENTVAR(iter_var)
     WS(":next()\n")
 
     CALL(translate_nodes, node->children, indent + 1)
@@ -604,6 +628,180 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
       WS("end\n")
     }
     return OK;
+  } else if (node->type  == kCmdTry) {
+    CommandNode *first_catch = NULL;
+    CommandNode *finally = NULL;
+    CommandNode *next = node->next;
+
+    for (next = node->next;
+         next->type == kCmdCatch || next->type == kCmdFinally;
+         next = next->next) {
+      switch (next->type) {
+        case kCmdCatch: {
+          if (first_catch == NULL)
+            first_catch = next;
+          continue;
+        }
+        case kCmdFinally: {
+          finally = next;
+          break;
+        }
+        default: {
+          assert(FALSE);
+        }
+      }
+      break;
+    }
+
+    INDENTVAR(ok_var,      "ok")
+    INDENTVAR(err_var,     "err")
+    INDENTVAR(ret_var,     "ret")
+    INDENTVAR(new_ret_var, "new_ret")
+    INDENTVAR(fin_var,     "fin")
+    INDENTVAR(catch_var,   "catch")
+
+    WS("local ")
+    ADDINDENTVAR(ok_var)
+    WS(", ")
+    ADDINDENTVAR(err_var)
+    WS(", ")
+    ADDINDENTVAR(ret_var)
+    WS(" = pcall(function(state)\n")
+    CALL(translate_nodes, node->children, indent + 1)
+    WINDENT(indent)
+    WS("end, state:trying())\n")
+
+    if (finally != NULL) {
+      WINDENT(indent)
+      WS("local ")
+      ADDINDENTVAR(fin_var)
+      WS(" = function(state)\n")
+      CALL(translate_nodes, finally->children, indent + 1)
+      WINDENT(indent)
+      WS("end\n")
+    }
+
+    if (first_catch != NULL) {
+      WINDENT(indent)
+      WS("local ")
+      ADDINDENTVAR(catch_var)
+      WINDENT(indent)
+      WS("\n")
+    }
+
+    if (first_catch != NULL) {
+      bool did_first_if = FALSE;
+
+      WINDENT(indent)
+      WS("if (not ")
+      ADDINDENTVAR(ok_var)
+      WS(")\n")
+
+      for (next = first_catch; next->type == kCmdCatch; next = next->next) {
+        size_t current_indent;
+
+        if (did_first_if) {
+          WINDENT(indent + 1)
+          WS("else ")
+        }
+
+        if (next->args[ARG_REG_REG].arg.reg == NULL) {
+          if (did_first_if)
+            WS("\n")
+        } else {
+          WINDENT(indent + 1)
+          WS("if (vim.error.matches(state, ")
+          ADDINDENTVAR(err_var)
+          WS(", ")
+          CALL(translate_regex, next->args[ARG_REG_REG].arg.reg)
+          WS(")\n")
+          did_first_if = TRUE;
+        }
+        current_indent = indent + 1 + (did_first_if ? 1 : 0);
+        WINDENT(current_indent)
+        ADDINDENTVAR(catch_var)
+        WS(" = function(state)\n")
+        CALL(translate_nodes, next->children, current_indent + 1)
+        WINDENT(current_indent)
+        WS("end\n")
+        WINDENT(current_indent)
+        ADDINDENTVAR(ok_var)
+        WS(" = 'caught'\n")  // String "'caught'" is true
+
+        if (next->args[ARG_REG_REG].arg.reg == NULL)
+          break;
+      }
+
+      if (did_first_if) {
+        WINDENT(indent + 1)
+        WS("end\n")
+      }
+
+      WINDENT(indent)
+      WS("end\n")
+    }
+
+#define ADD_VAR_CALL(var, indent) \
+    { \
+      WINDENT(indent) \
+      WS("local ") \
+      ADDINDENTVAR(new_ret_var) \
+      WS(" = ") \
+      ADDINDENTVAR(var) \
+      WS("(state)\n") \
+      WINDENT(indent) \
+      WS("if (") \
+      ADDINDENTVAR(new_ret_var) \
+      WS(" ~= nil)\n") \
+      WINDENT(indent + 1) \
+      ADDINDENTVAR(ret_var) \
+      WS(" = ") \
+      ADDINDENTVAR(new_ret_var) \
+      WS("\n") \
+      WINDENT(indent) \
+      WS("end\n") \
+    }
+
+    if (first_catch != NULL) {
+      WINDENT(indent)
+      WS("if (")
+      ADDINDENTVAR(catch_var)
+      WS(")\n")
+      ADD_VAR_CALL(catch_var, indent + 1)
+      WINDENT(indent)
+      WS("end\n")
+    }
+
+    if (finally != NULL)
+      ADD_VAR_CALL(fin_var, indent)
+
+    WINDENT(indent)
+    WS("if (not ")
+    ADDINDENTVAR(ok_var)
+    WS(")\n")
+    WINDENT(indent + 1)
+    WS("vim.err.propagate(state, ")
+    ADDINDENTVAR(err_var)
+    WS(")\n")
+    WINDENT(indent)
+    WS("end\n")
+
+    WINDENT(indent)
+    WS("if (")
+    ADDINDENTVAR(ret_var)
+    WS(" ~= nil)\n")
+    WINDENT(indent + 1)
+    WS("return ")
+    ADDINDENTVAR(ret_var)
+    WS("\n")
+    WINDENT(indent)
+    WS("end\n")
+
+#undef ADD_VAR_CALL
+#undef INDENTVAR
+#undef ADDINDENTVAR
+
+    return OK;
   }
 
   name = CMDDEF(node->type).name;
@@ -637,6 +835,36 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
 
   if (CMDDEF(node->type).parse == CMDDEF(kCmdAbclear).parse) {
     CALL(dump_bool, (bool) node->args[ARG_CLEAR_BUFFER].arg.flags)
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdEcho).parse) {
+    start_from_arg = 1;
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdCaddexpr).parse) {
+    start_from_arg = 1;
+  }
+
+  if (do_arg_dump) {
+    size_t i;
+
+    for (i = start_from_arg; i < CMDDEF(node->type).num_args; i++) {
+      switch (CMDDEF(node->type).arg_types[i]) {
+        case kArgExpression: {
+          CALL(translate_expr, node->args[i].arg.expr)
+          WS(", ")
+          break;
+        }
+        case kArgExpressions: {
+          CALL(translate_exprs, node->args[i].arg.expr)
+          break;
+        }
+        case kArgString: {
+          CALL(dump_string, node->args[i].arg.str)
+          WS(", ")
+          break;
+        }
+        default: {
+          break;
+        }
+      }
+    }
   }
 
   WS(")\n")

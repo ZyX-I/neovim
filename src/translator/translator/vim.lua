@@ -6,10 +6,6 @@ copy_table = function(state)
   return new_state
 end
 
-vim_error = function(e)
-  error('\0' .. e)
-end
-
 v_meta = copy_table(dictionary_table)
 
 new_state=function()
@@ -158,6 +154,15 @@ end
 float = function(f)
 end
 
+err = {
+  matches=function(state, err, regex)
+  end,
+  propagate=function(state, err)
+  end,
+  throw=function(state, message)
+  end,
+}
+
 return {
   eq=eq,
   add=add,
@@ -189,4 +194,5 @@ return {
   less=less,
   number=number,
   float=float,
+  err=err,
 }
