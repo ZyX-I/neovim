@@ -13,9 +13,9 @@ new_state=function()
     is_silent=false,
     functions={},
     options={},
-    buffer={'b': {}, 'options': {}},
-    window={'w': {}, 'options': {}},
-    tabpage={'t': {}},
+    buffer={b={}, options={}},
+    window={w={}, options={}},
+    tabpage={t={}},
     registers={},
     trying=function(self)
       local state = copy_table(self)
@@ -86,7 +86,7 @@ list = {
   end,
   next=function(it_state, lst)
     i = it_state.i
-    it_state.i += 1
+    it_state.i = it_state.i + 1
     return i, list.raw_subscript(lst, i)
   end,
   iterator=function(state, lst)
@@ -128,6 +128,7 @@ number = {
 float = {
   new=function(state, f)
     -- TODO
+    return f
   end,
 }
 
@@ -164,11 +165,11 @@ commands={
   end,
   echo=function(state, ...)
     mes = ''
-    for i, s in ipairs(...) do
+    for i, s in ipairs({...}) do
       if (i > 1) then
-        mes ..= ' '
+        mes = mes .. ' '
       end
-      mes ..= s
+      mes = mes .. s
     end
     print (mes)
   end,
