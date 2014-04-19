@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -296,6 +295,10 @@ int ml_open(buf_T *buf)
   buf->b_ml.ml_line_lnum = 0;   /* no cached line */
   buf->b_ml.ml_chunksize = NULL;
 
+  if (cmdmod.noswapfile) {
+    buf->b_p_swf = FALSE;
+  }
+
   /*
    * When 'updatecount' is non-zero swap file may be opened later.
    */
@@ -563,8 +566,9 @@ void ml_setname(buf_T *buf)
      * When 'updatecount' is 0 and 'noswapfile' there is no swap file.
      * For help files we will make a swap file now.
      */
-    if (p_uc != 0)
-      ml_open_file(buf);            /* create a swap file */
+    if (p_uc != 0 && !cmdmod.noswapfile) {
+      ml_open_file(buf); /* create a swap file */
+    }
     return;
   }
 
@@ -652,8 +656,9 @@ void ml_open_file(buf_T *buf)
   char_u      *dirp;
 
   mfp = buf->b_ml.ml_mfp;
-  if (mfp == NULL || mfp->mf_fd >= 0 || !buf->b_p_swf)
-    return;             /* nothing to do */
+  if (mfp == NULL || mfp->mf_fd >= 0 || !buf->b_p_swf || cmdmod.noswapfile) {
+    return; /* nothing to do */
+  }
 
   /* For a spell buffer use a temp file name. */
   if (buf->b_spell) {

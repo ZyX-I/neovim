@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -4493,12 +4492,8 @@ static void nv_ident(cmdarg_T *cap)
   if (cmdchar == 'K' && !kp_help) {
     /* Escape the argument properly for a shell command */
     ptr = vim_strnsave(ptr, n);
-    p = vim_strsave_shellescape(ptr, TRUE);
+    p = vim_strsave_shellescape(ptr, true, true);
     vim_free(ptr);
-    if (p == NULL) {
-      vim_free(buf);
-      return;
-    }
     newbuf = (char_u *)xrealloc(buf, STRLEN(buf) + STRLEN(p) + 1);
     buf = newbuf;
     STRCAT(buf, p);

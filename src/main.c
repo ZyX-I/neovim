@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -929,6 +928,7 @@ static void parse_command_name(mparm_T *parmp)
 
 
   set_vim_var_string(VV_PROGNAME, initstr, -1);
+  set_vim_var_string(VV_PROGPATH, (char_u *)parmp->argv[0], -1);
 
   if (parse_string(&initstr, "editor", 6))
     return;

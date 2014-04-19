@@ -44,14 +44,14 @@ endif()
 
 include(ExternalProject)
 
-set(LIBUV_URL https://github.com/joyent/libuv/archive/v0.11.22.tar.gz)
-set(LIBUV_MD5 d0cb0fea847afa35333ccbda56ed16d4)
+set(LIBUV_URL https://github.com/joyent/libuv/archive/v0.11.23.tar.gz)
+set(LIBUV_MD5 e02a3da9fba9ebe72a84e4abd312ee4d)
 
 set(MSGPACK_URL https://github.com/msgpack/msgpack-c/releases/download/cpp-0.5.8/msgpack-0.5.8.tar.gz)
 set(MSGPACK_MD5 ea0bee0939d2980c0df91f0e4843ccc4)
 
-set(LUAJIT_URL http://luajit.org/download/LuaJIT-2.0.2.tar.gz)
-set(LUAJIT_MD5 112dfb82548b03377fbefbba2e0e3a5b)
+set(LUAJIT_URL http://luajit.org/download/LuaJIT-2.0.3.tar.gz)
+set(LUAJIT_MD5 f14e9104be513913810cd59c8c658dc0)
 
 set(LUAROCKS_URL http://github.com/keplerproject/luarocks/archive/v2.1.2.tar.gz)
 set(LUAROCKS_MD5 df591c00a85d51fb754ec08c77896aad)
@@ -158,7 +158,7 @@ if(USE_BUNDLED_LUAROCKS)
   # instances running in parallel.  So we depend on moonscript to force it
   # to be serialized.
   add_custom_command(OUTPUT ${DEPS_BIN_DIR}/busted
-    COMMAND ${DEPS_BIN_DIR}/luarocks ARGS install busted
+    COMMAND ${DEPS_BIN_DIR}/luarocks ARGS install busted 1.10.0
             --server=http://rocks.moonscript.org
     DEPENDS moonscript)
   add_custom_target(busted

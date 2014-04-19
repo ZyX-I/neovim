@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -930,8 +929,14 @@ void do_bang(int addr_count, exarg_T *eap, int forceit, int do_in, int do_out)
   vim_free(prevcmd);
   prevcmd = newcmd;
 
-  if (bangredo) {           /* put cmd in redo buffer for ! command */
-    AppendToRedobuffLit(prevcmd, -1);
+  if (bangredo) { /* put cmd in redo buffer for ! command */
+    /* If % or # appears in the command, it must have been escaped.
+     * Reescape them, so that redoing them does not substitute them by the
+     * buffername. */
+    char_u *cmd = vim_strsave_escaped(prevcmd, (char_u *)"%#");
+
+    AppendToRedobuffLit(cmd, -1);
+    vim_free(cmd);
     AppendToRedobuff((char_u *)"\n");
     bangredo = FALSE;
   }
@@ -2768,6 +2773,11 @@ do_ecmd (
       }
       buf = buflist_new(ffname, sfname, 0L,
           BLN_CURBUF | ((flags & ECMD_SET_HELP) ? 0 : BLN_LISTED));
+      // Autocmds may change curwin and curbuf.
+      if (oldwin != NULL) {
+        oldwin = curwin;
+      }
+      old_curbuf = curbuf;
     }
     if (buf == NULL)
       goto theend;
@@ -3645,6 +3655,35 @@ void do_sub(exarg_T *eap)
     /* Vi compatibility quirk: repeating with ":s" keeps the cursor in the
      * last column after using "$". */
     endcolumn = (curwin->w_curswant == MAXCOL);
+  }
+
+  // Recognize ":%s/\n//" and turn it into a join command, which is much
+  // more efficient.
+  // TODO: find a generic solution to make line-joining operations more
+  // efficient, avoid allocating a string that grows in size.
+  if (pat != NULL
+      && strcmp((const char *)pat, "\\n") == 0
+      && *sub == NUL
+      && (*cmd == NUL || (cmd[1] == NUL
+                          && (*cmd == 'g'
+                              || *cmd == 'l'
+                              || *cmd == 'p'
+                              || *cmd == '#')))) {
+    curwin->w_cursor.lnum = eap->line1;
+    if (*cmd == 'l') {
+      eap->flags = EXFLAG_LIST;
+    } else if (*cmd == '#') {
+      eap->flags = EXFLAG_NR;
+    } else if (*cmd == 'p') {
+      eap->flags = EXFLAG_PRINT;
+    }
+
+    do_join(eap->line2 - eap->line1 + 1, FALSE, TRUE, FALSE);
+    sub_nlines = sub_nsubs = eap->line2 - eap->line1 + 1;
+    do_sub_msg(FALSE);
+    ex_may_print(eap);
+
+    return;
   }
 
   /*

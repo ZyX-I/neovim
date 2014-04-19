@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -691,11 +690,12 @@ int csh_like_shell(void)
  * This uses single quotes, except when we know we need to use double quotes
  * (MS-DOS and MS-Windows without 'shellslash' set).
  * Escape a newline, depending on the 'shell' option.
- * When "do_special" is TRUE also replace "!", "%", "#" and things starting
+ * When "do_special" is true also replace "!", "%", "#" and things starting
  * with "<" like "<cfile>".
- * Returns the result in allocated memory, NULL if we have run out.
+ * When "do_newline" is false do not escape newline unless it is csh shell.
+ * Returns the result in allocated memory.
  */
-char_u *vim_strsave_shellescape(char_u *string, int do_special)
+char_u *vim_strsave_shellescape(char_u *string, bool do_special, bool do_newline)
 {
   unsigned length;
   char_u      *p;
@@ -715,7 +715,8 @@ char_u *vim_strsave_shellescape(char_u *string, int do_special)
   for (p = string; *p != NUL; mb_ptr_adv(p)) {
     if (*p == '\'')
       length += 3;                      /* ' => '\'' */
-    if (*p == '\n' || (*p == '!' && (csh_like || do_special))) {
+    if ((*p == '\n' && (csh_like || do_newline))
+        || (*p == '!' && (csh_like || do_special))) {
       ++length;                         /* insert backslash */
       if (csh_like && do_special)
         ++length;                       /* insert backslash */
@@ -742,7 +743,8 @@ char_u *vim_strsave_shellescape(char_u *string, int do_special)
       ++p;
       continue;
     }
-    if (*p == '\n' || (*p == '!' && (csh_like || do_special))) {
+    if ((*p == '\n' && (csh_like || do_newline))
+        || (*p == '!' && (csh_like || do_special))) {
       *d++ = '\\';
       if (csh_like && do_special)
         *d++ = '\\';
@@ -1145,41 +1147,41 @@ get_fileformat_force (
   return EOL_DOS;
 }
 
-/*
- * Set the current end-of-line type to EOL_DOS, EOL_UNIX or EOL_MAC.
- * Sets both 'textmode' and 'fileformat'.
- * Note: Does _not_ set global value of 'textmode'!
- */
-void 
-set_fileformat (
-    int t,
-    int opt_flags                  /* OPT_LOCAL and/or OPT_GLOBAL */
-)
+/// Set the current end-of-line type to EOL_UNIX, EOL_MAC, or EOL_DOS.
+///
+/// Sets 'fileformat'.
+///
+/// @param eol_style End-of-line style.
+/// @param opt_flags OPT_LOCAL and/or OPT_GLOBAL
+void set_fileformat(int eol_style, int opt_flags)
 {
-  char        *p = NULL;
+  char *p = NULL;
 
-  switch (t) {
-  case EOL_DOS:
-    p = FF_DOS;
-    curbuf->b_p_tx = TRUE;
-    break;
-  case EOL_UNIX:
-    p = FF_UNIX;
-    curbuf->b_p_tx = FALSE;
-    break;
-  case EOL_MAC:
-    p = FF_MAC;
-    curbuf->b_p_tx = FALSE;
-    break;
+  switch (eol_style) {
+      case EOL_UNIX:
+          p = FF_UNIX;
+          break;
+      case EOL_MAC:
+          p = FF_MAC;
+          break;
+      case EOL_DOS:
+          p = FF_DOS;
+          break;
   }
-  if (p != NULL)
-    set_string_option_direct((char_u *)"ff", -1, (char_u *)p,
-        OPT_FREE | opt_flags, 0);
 
-  /* This may cause the buffer to become (un)modified. */
+  // p is NULL if "eol_style" is EOL_UNKNOWN.
+  if (p != NULL) {
+    set_string_option_direct((char_u *)"ff",
+                             -1,
+                             (char_u *)p,
+                             OPT_FREE | opt_flags,
+                             0);
+  }
+
+  // This may cause the buffer to become (un)modified.
   check_status(curbuf);
   redraw_tabline = TRUE;
-  need_maketitle = TRUE;            /* set window title later */
+  need_maketitle = TRUE;  // Set window title later.
 }
 
 /*

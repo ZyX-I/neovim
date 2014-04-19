@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -639,6 +638,8 @@ enum CMD_index
       EXTRA|TRLBAR|NOTRLCOM|USECTRLV|CMDWIN),
   EX(CMD_noremenu,        "noremenu",     ex_menu,
       RANGE|NOTADR|ZEROR|BANG|EXTRA|TRLBAR|NOTRLCOM|USECTRLV|CMDWIN),
+  EX(CMD_noswapfile,      "noswapfile",   ex_wrongmodifier,
+      NEEDARG|EXTRA|NOTRLCOM),
   EX(CMD_normal,          "normal",       ex_normal,
       RANGE|BANG|EXTRA|NEEDARG|NOTRLCOM|USECTRLV|SBOXOK|CMDWIN),
   EX(CMD_number,          "number",       ex_print,
@@ -1183,6 +1184,7 @@ typedef struct {
   int keepjumps;                        /* TRUE when ":keepjumps" was used */
   int lockmarks;                        /* TRUE when ":lockmarks" was used */
   int keeppatterns;                     /* TRUE when ":keeppatterns" was used */
+  bool noswapfile;                      /* true when ":noswapfile" was used */
   char_u      *save_ei;                 /* saved value of 'eventignore' */
 } cmdmod_T;
 

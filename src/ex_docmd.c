@@ -1,5 +1,4 @@
-/* vi:set ts=2 sts=2 sw=2:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -182,7 +181,6 @@ static void ex_winpos(exarg_T *eap);
 static void ex_operators(exarg_T *eap);
 static void ex_put(exarg_T *eap);
 static void ex_copymove(exarg_T *eap);
-static void ex_may_print(exarg_T *eap);
 static void ex_submagic(exarg_T *eap);
 static void ex_join(exarg_T *eap);
 static void ex_at(exarg_T *eap);
@@ -1400,15 +1398,21 @@ void                *cookie;                    /*argument for fgetline() */
       cmdmod.split |= WSP_ABOVE;
       continue;
 
-    case 'n':   if (!checkforcmd(&ea.cmd, "noautocmd", 3))
-        break;
-      if (cmdmod.save_ei == NULL) {
-        /* Set 'eventignore' to "all". Restore the
-         * existing option value later. */
-        cmdmod.save_ei = vim_strsave(p_ei);
-        set_string_option_direct((char_u *)"ei", -1,
-            (char_u *)"all", OPT_FREE, SID_NONE);
+    case 'n':
+      if (checkforcmd(&ea.cmd, "noautocmd", 3)) {
+        if (cmdmod.save_ei == NULL) {
+          /* Set 'eventignore' to "all". Restore the
+           * existing option value later. */
+          cmdmod.save_ei = vim_strsave(p_ei);
+          set_string_option_direct(
+            (char_u *)"ei", -1, (char_u *)"all", OPT_FREE, SID_NONE);
+        }
+        continue;
       }
+      if (!checkforcmd(&ea.cmd, "noswapfile", 6)) {
+        break;
+      }
+      cmdmod.noswapfile = true;
       continue;
 
     case 'r':   if (!checkforcmd(&ea.cmd, "rightbelow", 6))
@@ -1991,6 +1995,8 @@ void                *cookie;                    /*argument for fgetline() */
     case CMD_let:
     case CMD_lockmarks:
     case CMD_match:
+    case CMD_noautocmd:
+    case CMD_noswapfile:
     case CMD_psearch:
     case CMD_return:
     case CMD_rightbelow:
@@ -2414,6 +2420,7 @@ static struct cmdmod {
   {"leftabove", 5, FALSE},
   {"lockmarks", 3, FALSE},
   {"noautocmd", 3, FALSE},
+  {"noswapfile", 3, FALSE},
   {"rightbelow", 6, FALSE},
   {"sandbox", 3, FALSE},
   {"silent", 3, FALSE},
@@ -2851,6 +2858,8 @@ set_one_cmd_context (
   case CMD_keeppatterns:
   case CMD_leftabove:
   case CMD_lockmarks:
+  case CMD_noautocmd:
+  case CMD_noswapfile:
   case CMD_rightbelow:
   case CMD_sandbox:
   case CMD_silent:
@@ -3694,21 +3703,13 @@ int expand_filename(exarg_T *eap, char_u **cmdlinep, char_u **errormsgp)
 
     /* For a shell command a '!' must be escaped. */
     if ((eap->usefilter || eap->cmdidx == CMD_bang)
-        && vim_strpbrk(repl, (char_u *)"!&;()<>") != NULL) {
+        && vim_strpbrk(repl, (char_u *)"!") != NULL) {
       char_u      *l;
 
-      l = vim_strsave_escaped(repl, (char_u *)"!&;()<>");
+      l = vim_strsave_escaped(repl, (char_u *)"!");
       if (l != NULL) {
         vim_free(repl);
         repl = l;
-        /* For a sh-like shell escape "!" another time. */
-        if (strstr((char *)p_sh, "sh") != NULL) {
-          l = vim_strsave_escaped(repl, (char_u *)"!");
-          if (l != NULL) {
-            vim_free(repl);
-            repl = l;
-          }
-        }
       }
     }
 
@@ -3922,7 +3923,7 @@ static char_u *getargcmd(char_u **argp)
 
   if (*arg == '+') {        /* +[command] */
     ++arg;
-    if (vim_isspace(*arg))
+    if (vim_isspace(*arg) || *arg == '\0')
       command = dollar_command;
     else {
       command = arg;
@@ -6353,6 +6354,8 @@ do_exedit (
             ? ECMD_ONE : eap->do_ecmd_lnum,
             (P_HID(curbuf) ? ECMD_HIDE : 0)
             + (eap->forceit ? ECMD_FORCEIT : 0)
+            // After a split we can use an existing buffer.
+            + (old_curwin != NULL ? ECMD_OLDBUF : 0)
             + (eap->cmdidx == CMD_badd ? ECMD_ADDBUF : 0 )
             , old_curwin == NULL ? curwin : NULL) == FAIL) {
       /* Editing the file failed.  If the window was split, close it. */
@@ -6893,7 +6896,7 @@ static void ex_copymove(exarg_T *eap)
 /*
  * Print the current line if flags were given to the Ex command.
  */
-static void ex_may_print(exarg_T *eap)
+void ex_may_print(exarg_T *eap)
 {
   if (eap->flags != 0) {
     print_line(curwin->w_cursor.lnum, (eap->flags & EXFLAG_NR),
@@ -8254,9 +8257,10 @@ makeopens (
   }
 
   /* the global argument list */
-  if (ses_arglist(fd, "args", &global_alist.al_ga,
-          !(ssop_flags & SSOP_CURDIR), &ssop_flags) == FAIL)
+  if (ses_arglist(fd, "argglobal", &global_alist.al_ga,
+                  !(ssop_flags & SSOP_CURDIR), &ssop_flags) == FAIL) {
     return FAIL;
+  }
 
   if (ssop_flags & SSOP_RESIZE) {
     /* Note: after the restore we still check it worked!*/
@@ -8755,10 +8759,12 @@ ses_arglist (
   char_u      *buf = NULL;
   char_u      *s;
 
-  if (gap->ga_len == 0)
-    return put_line(fd, "silent! argdel *");
-  if (fputs(cmd, fd) < 0)
+  if (fputs(cmd, fd) < 0 || put_eol(fd) == FAIL) {
     return FAIL;
+  }
+  if (put_line(fd, "silent! argdel *") == FAIL) {
+    return FAIL;
+  }
   for (i = 0; i < gap->ga_len; ++i) {
     /* NULL file names are skipped (only happens when out of memory). */
     s = alist_name(&((aentry_T *)gap->ga_data)[i]);
@@ -8770,14 +8776,15 @@ ses_arglist (
           s = buf;
         }
       }
-      if (fputs(" ", fd) < 0 || ses_put_fname(fd, s, flagp) == FAIL) {
+      if (fputs("argadd ", fd) < 0 || ses_put_fname(fd, s, flagp) == FAIL
+          || put_eol(fd) == FAIL) {
         vim_free(buf);
         return FAIL;
       }
       vim_free(buf);
     }
   }
-  return put_eol(fd);
+  return OK;
 }
 
 /*

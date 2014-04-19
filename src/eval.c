@@ -1,5 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
- *
+/*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
  * Do ":help uganda"  in Vim to read copying and usage conditions.
@@ -64,7 +63,8 @@
 #include "window.h"
 #include "os/os.h"
 #include "os/job.h"
-#include "os/shell.h"
+#include "os/rstream.h"
+#include "os/rstream_defs.h"
 
 #if defined(FEAT_FLOAT)
 # include <math.h>
@@ -389,6 +389,7 @@ static struct vimvar {
   {VV_NAME("hlsearch",         VAR_NUMBER), 0},
   {VV_NAME("oldfiles",         VAR_LIST), 0},
   {VV_NAME("windowid",         VAR_NUMBER), VV_RO},
+  {VV_NAME("progpath",         VAR_STRING), VV_RO},
   {VV_NAME("job_data",         VAR_LIST), 0}
 };
 
@@ -403,11 +404,11 @@ static struct vimvar {
 static dictitem_T vimvars_var;                  /* variable used for v: */
 #define vimvarht  vimvardict.dv_hashtab
 
-static void apply_job_autocmds(int id,
-                               void *data,
-                               char *buffer,
-                               uint32_t len,
-                               bool from_stdout);
+static void on_job_stdout(RStream *rstream, void *data, bool eof);
+static void on_job_stderr(RStream *rstream, void *data, bool eof);
+static void on_job_exit(Job *job, void *data);
+static void on_job_data(RStream *rstream, void *data, bool eof, char *type);
+static void apply_job_autocmds(Job *job, char *name, char *type, char *str);
 static void prepare_vimvar(int idx, typval_T *save_tv);
 static void restore_vimvar(int idx, typval_T *save_tv);
 static int ex_let_vars(char_u *arg, typval_T *tv, int copy,
@@ -758,6 +759,7 @@ static void f_trunc(typval_T *argvars, typval_T *rettv);
 static void f_type(typval_T *argvars, typval_T *rettv);
 static void f_undofile(typval_T *argvars, typval_T *rettv);
 static void f_undotree(typval_T *argvars, typval_T *rettv);
+static void f_uniq(typval_T *argvars, typval_T *rettv);
 static void f_values(typval_T *argvars, typval_T *rettv);
 static void f_virtcol(typval_T *argvars, typval_T *rettv);
 static void f_visualmode(typval_T *argvars, typval_T *rettv);
@@ -1750,11 +1752,10 @@ void ex_let(exarg_T *eap)
     return;
   if (argend > arg && argend[-1] == '.')    /* for var.='str' */
     --argend;
-  expr = vim_strchr(argend, '=');
-  if (expr == NULL) {
-    /*
-     * ":let" without "=": list variables
-     */
+  expr = skipwhite(argend);
+  if (*expr != '=' && !(vim_strchr((char_u *)"+-.", *expr) != NULL
+                        && expr[1] == '=')) {
+    // ":let" without "=": list variables
     if (*arg == '[')
       EMSG(_(e_invarg));
     else if (!ends_excmd(*arg))
@@ -1774,11 +1775,14 @@ void ex_let(exarg_T *eap)
   } else {
     op[0] = '=';
     op[1] = NUL;
-    if (expr > argend) {
-      if (vim_strchr((char_u *)"+-.", expr[-1]) != NULL)
-        op[0] = expr[-1];           /* +=, -= or .= */
+    if (*expr != '=') {
+      if (vim_strchr((char_u *)"+-.", *expr) != NULL) {
+        op[0] = *expr;  // +=, -=, .=
+      }
+      expr = skipwhite(expr + 2);
+    } else {
+      expr = skipwhite(expr + 1);
     }
-    expr = skipwhite(expr + 1);
 
     if (eap->skip)
       ++emsg_skip;
@@ -7074,6 +7078,7 @@ static struct fst {
   {"type",            1, 1, f_type},
   {"undofile",        1, 1, f_undofile},
   {"undotree",        0, 0, f_undotree},
+  {"uniq",            1, 3, f_uniq},
   {"values",          1, 1, f_values},
   {"virtcol",         1, 1, f_virtcol},
   {"visualmode",      0, 1, f_visualmode},
@@ -11017,7 +11022,7 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
   rettv->vval.v_number = 0;
 
   if (check_restricted() || check_secure()) {
-    goto cleanup;
+    return;
   }
 
   if (argvars[0].v_type != VAR_STRING
@@ -11026,7 +11031,7 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
       && argvars[2].v_type != VAR_UNKNOWN)) {
     // Wrong argument types
     EMSG(_(e_invarg));
-    goto cleanup;
+    return;
   }
 
   argsl = 0;
@@ -11037,7 +11042,7 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
     for (arg = args->lv_first; arg != NULL; arg = arg->li_next) {
       if (arg->li_tv.v_type != VAR_STRING) {
         EMSG(_(e_invarg));
-        goto cleanup;
+        return;
       }
     }
   }
@@ -11045,7 +11050,7 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
   if (!os_can_exe(get_tv_string(&argvars[1]))) {
     // String is not executable
     EMSG2(e_jobexe, get_tv_string(&argvars[1]));
-    goto cleanup;
+    return;
   }
 
   // Allocate extra memory for the argument vector and the NULL pointer
@@ -11068,7 +11073,9 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
 
   rettv->vval.v_number = job_start(argv,
                                    xstrdup((char *)argvars[0].vval.v_string),
-                                   apply_job_autocmds);
+                                   on_job_stdout,
+                                   on_job_stderr,
+                                   on_job_exit);
 
   if (rettv->vval.v_number <= 0) {
     if (rettv->vval.v_number == 0) {
@@ -11077,14 +11084,6 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
       EMSG(_(e_jobexe));
     }
   }
-
-cleanup:
-  if (rettv->vval.v_number > 0) {
-    // Success
-    return;
-  }
-  // Cleanup argv memory in case the `job_start` call failed
-  shell_free_argv(argv);
 }
 
 // "jobstop()" function
@@ -13716,7 +13715,7 @@ static void f_sha256(typval_T *argvars, typval_T *rettv)
 static void f_shellescape(typval_T *argvars, typval_T *rettv)
 {
   rettv->vval.v_string = vim_strsave_shellescape(
-      get_tv_string(&argvars[0]), non_zero_arg(&argvars[1]));
+    get_tv_string(&argvars[0]), non_zero_arg(&argvars[1]), true);
   rettv->v_type = VAR_STRING;
 }
 
@@ -13778,10 +13777,11 @@ static int item_compare_ic;
 static char_u   *item_compare_func;
 static dict_T   *item_compare_selfdict;
 static int item_compare_func_err;
+static void do_sort_uniq(typval_T *argvars, typval_T *rettv, bool sort);
 #define ITEM_COMPARE_FAIL 999
 
 /*
- * Compare functions for f_sort() below.
+ * Compare functions for f_sort() and f_uniq() below.
  */
 static int item_compare(const void *s1, const void *s2)
 {
@@ -13842,7 +13842,7 @@ static int item_compare2(const void *s1, const void *s2)
 /*
  * "sort({list})" function
  */
-static void f_sort(typval_T *argvars, typval_T *rettv)
+static void do_sort_uniq(typval_T *argvars, typval_T *rettv, bool sort)
 {
   list_T      *l;
   listitem_T  *li;
@@ -13850,13 +13850,14 @@ static void f_sort(typval_T *argvars, typval_T *rettv)
   long len;
   long i;
 
-  if (argvars[0].v_type != VAR_LIST)
-    EMSG2(_(e_listarg), "sort()");
-  else {
+  if (argvars[0].v_type != VAR_LIST) {
+    EMSG2(_(e_listarg), sort ? "sort()" : "uniq()");
+  } else {
     l = argvars[0].vval.v_list;
     if (l == NULL || tv_check_lock(l->lv_lock,
-            (char_u *)_("sort() argument")))
+        (char_u *)(sort ? _("sort() argument") : _("uniq() argument")))) {
       return;
+    }
     rettv->vval.v_list = l;
     rettv->v_type = VAR_LIST;
     ++l->lv_refcount;
@@ -13868,11 +13869,12 @@ static void f_sort(typval_T *argvars, typval_T *rettv)
     item_compare_ic = FALSE;
     item_compare_func = NULL;
     item_compare_selfdict = NULL;
+
     if (argvars[1].v_type != VAR_UNKNOWN) {
       /* optional second argument: {func} */
-      if (argvars[1].v_type == VAR_FUNC)
+      if (argvars[1].v_type == VAR_FUNC) {
         item_compare_func = argvars[1].vval.v_string;
-      else {
+      } else {
         int error = FALSE;
 
         i = get_tv_number_chk(&argvars[1], &error);
@@ -13895,35 +13897,84 @@ static void f_sort(typval_T *argvars, typval_T *rettv)
     }
 
     /* Make an array with each entry pointing to an item in the List. */
-    ptrs = (listitem_T **)alloc((int)(len * sizeof(listitem_T *)));
-    if (ptrs == NULL)
-      return;
-    i = 0;
-    for (li = l->lv_first; li != NULL; li = li->li_next)
-      ptrs[i++] = li;
+    ptrs = xmalloc((size_t)(len * sizeof (listitem_T *)));
 
-    item_compare_func_err = FALSE;
-    /* test the compare function */
-    if (item_compare_func != NULL
-        && item_compare2((void *)&ptrs[0], (void *)&ptrs[1])
-        == ITEM_COMPARE_FAIL)
-      EMSG(_("E702: Sort compare function failed"));
-    else {
-      /* Sort the array with item pointers. */
-      qsort((void *)ptrs, (size_t)len, sizeof(listitem_T *),
-          item_compare_func == NULL ? item_compare : item_compare2);
+    i = 0;
+    if (sort) {
+      // sort(): ptrs will be the list to sort.
+      for (li = l->lv_first; li != NULL; li = li->li_next) {
+        ptrs[i++] = li;
+      }
+
+      item_compare_func_err = FALSE;
+      // Test the compare function.
+      if (item_compare_func != NULL
+          && item_compare2(&ptrs[0], &ptrs[1]) == ITEM_COMPARE_FAIL) {
+        EMSG(_("E702: Sort compare function failed"));
+      } else {
+        // Sort the array with item pointers.
+        qsort(ptrs, (size_t)len, sizeof (listitem_T *),
+              item_compare_func == NULL ? item_compare : item_compare2);
+
+        if (!item_compare_func_err) {
+          // Clear the list and append the items in the sorted order.
+          l->lv_first    = NULL;
+          l->lv_last     = NULL;
+          l->lv_idx_item = NULL;
+          l->lv_len      = 0;
+
+          for (i = 0; i < len; i++) {
+            list_append(l, ptrs[i]);
+          }
+        }
+      }
+    } else {
+      int (*item_compare_func_ptr)(const void *, const void *);
+
+      // f_uniq(): ptrs will be a stack of items to remove.
+      item_compare_func_err = FALSE;
+      item_compare_func_ptr = item_compare_func ? item_compare2 : item_compare;
+
+      for (li = l->lv_first; li != NULL && li->li_next != NULL; li = li->li_next) {
+        if (item_compare_func_ptr(&li, &li->li_next) == 0) {
+          ptrs[i++] = li;
+        }
+        if (item_compare_func_err) {
+          EMSG(_("E882: Uniq compare function failed"));
+          break;
+        }
+      }
 
       if (!item_compare_func_err) {
-        /* Clear the List and append the items in the sorted order. */
-        l->lv_first = l->lv_last = l->lv_idx_item = NULL;
-        l->lv_len = 0;
-        for (i = 0; i < len; ++i)
-          list_append(l, ptrs[i]);
+        while (--i >= 0) {
+          li = ptrs[i]->li_next;
+          ptrs[i]->li_next = li->li_next;
+          if (li->li_next != NULL) {
+            li->li_next->li_prev = ptrs[i];
+          } else {
+            l->lv_last = ptrs[i];
+          }
+          list_fix_watch(l, li);
+          listitem_free(li);
+          l->lv_len--;
+        }
       }
     }
 
     vim_free(ptrs);
   }
+}
+
+/// "sort"({list})" function
+static void f_sort(typval_T *argvars, typval_T *rettv)
+{
+  do_sort_uniq(argvars, rettv, true);
+}
+
+/// "uniq({list})" function
+static void f_uniq(typval_T *argvars, typval_T *rettv)
+{
+  do_sort_uniq(argvars, rettv, false);
 }
 
 /*
@@ -19646,6 +19697,14 @@ repeat:
     }
   }
 
+  if (src[*usedlen] == ':' && src[*usedlen + 1] == 'S') {
+    p = vim_strsave_shellescape(*fnamep, false, false);
+    vim_free(*bufp);
+    *bufp = *fnamep = p;
+    *fnamelen = (int)STRLEN(p);
+    *usedlen += 2;
+  }
+
   return valid;
 }
 
@@ -19732,20 +19791,56 @@ char_u *do_string_sub(char_u *str, char_u *pat, char_u *sub, char_u *flags)
   return ret;
 }
 
-static void apply_job_autocmds(int id,
-                               void *data,
-                               char *buffer,
-                               uint32_t len,
-                               bool from_stdout)
+static void on_job_stdout(RStream *rstream, void *data, bool eof)
+{
+  if (!eof) {
+    on_job_data(rstream, data, eof, "stdout");
+  }
+}
+
+static void on_job_stderr(RStream *rstream, void *data, bool eof)
+{
+  if (!eof) {
+    on_job_data(rstream, data, eof, "stderr");
+  }
+}
+
+static void on_job_exit(Job *job, void *data)
+{
+  apply_job_autocmds(job, data, "exit", NULL);
+}
+
+static void on_job_data(RStream *rstream, void *data, bool eof, char *type)
+{
+  Job *job = data;
+  uint32_t read_count = rstream_available(rstream);
+  char *str = xmalloc(read_count + 1);
+
+  rstream_read(rstream, str, read_count);
+  str[read_count] = NUL;
+  apply_job_autocmds(job, job_data(job), type, str);
+}
+
+static void apply_job_autocmds(Job *job, char *name, char *type, char *str)
 {
   list_T *list;
 
-  // Call JobActivity autocommands
+  // Create the list which will be set to v:job_data
   list = list_alloc();
-  list_append_number(list, id);
-  list_append_string(list, (char_u *)buffer, len);
-  list_append_string(list, (char_u *)(from_stdout ? "out" : "err"), 3);
+  list_append_number(list, job_id(job));
+  list_append_string(list, (uint8_t *)type, -1);
+
+  if (str) {
+    listitem_T *str_slot = listitem_alloc();
+    str_slot->li_tv.v_type = VAR_STRING;
+    str_slot->li_tv.v_lock = 0;
+    str_slot->li_tv.vval.v_string = (uint8_t *)str;
+    list_append(list, str_slot);
+  }
+
+  // Update v:job_data for the autocommands
   set_vim_var_list(VV_JOB_DATA, list);
-  apply_autocmds(EVENT_JOBACTIVITY, (char_u *)data, NULL, TRUE, NULL);
+  // Call JobActivity autocommands
+  apply_autocmds(EVENT_JOBACTIVITY, (uint8_t *)name, NULL, TRUE, NULL);
 }
 

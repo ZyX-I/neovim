@@ -5,6 +5,12 @@
 
 #include "os/job.h"
 #include "os/job_defs.h"
+#include "os/rstream.h"
+#include "os/rstream_defs.h"
+#include "os/wstream.h"
+#include "os/wstream_defs.h"
+#include "os/event.h"
+#include "os/event_defs.h"
 #include "os/time.h"
 #include "os/shell.h"
 #include "vim.h"
@@ -14,31 +20,31 @@
 #define EXIT_TIMEOUT 25
 #define MAX_RUNNING_JOBS 100
 #define JOB_BUFFER_SIZE 1024
-
-/// Possible lock states of the job buffer
-typedef enum {
-  kBufferLockNone = 0,  ///< No data was read
-  kBufferLockStdout,    ///< Data read from stdout
-  kBufferLockStderr     ///< Data read from stderr
-} BufferLock;
+#define JOB_WRITE_MAXMEM 1024 * 1024
 
 struct job {
   // Job id the index in the job table plus one.
   int id;
   // Number of polls after a SIGTERM that will trigger a SIGKILL
   int exit_timeout;
+  // exit_cb may be called while there's still pending data from stdout/stderr.
+  // We use this reference count to ensure the JobExit event is only emitted
+  // when stdout/stderr are drained
+  int pending_refs;
+  // Same as above, but for freeing the job memory which contains
+  // libuv handles. Only after all are closed the job can be safely freed.
+  int pending_closes;
   // If the job was already stopped
   bool stopped;
   // Data associated with the job
   void *data;
-  // Buffer for reading from stdout or stderr
-  char buffer[JOB_BUFFER_SIZE];
-  // Size of the data from the last read
-  uint32_t length;
-  // Buffer lock state
-  BufferLock lock;
-  // Callback for consuming data from the buffer
-  job_read_cb read_cb;
+  // Callbacks
+  job_exit_cb exit_cb;
+  rstream_cb stdout_cb, stderr_cb;
+  // Readable streams(std{out,err})
+  RStream *out, *err;
+  // Writable stream(stdin)
+  WStream *in;
   // Structures for process spawning/management used by libuv
   uv_process_t proc;
   uv_process_options_t proc_opts;
@@ -47,6 +53,7 @@ struct job {
 };
 
 static Job *table[MAX_RUNNING_JOBS] = {NULL};
+static uint32_t job_count = 0;
 static uv_prepare_t job_prepare;
 
 // Some helpers shared in this module
@@ -55,17 +62,16 @@ static Job * find_job(int id);
 static void free_job(Job *job);
 
 // Callbacks for libuv
-static void job_prepare_cb(uv_prepare_t *handle, int status);
-static void alloc_cb(uv_handle_t *handle, size_t suggested, uv_buf_t *buf);
-static void read_cb(uv_stream_t *stream, ssize_t cnt, const uv_buf_t *buf);
-static void write_cb(uv_write_t *req, int status);
+static void job_prepare_cb(uv_prepare_t *handle);
+static void read_cb(RStream *rstream, void *data, bool eof);
 static void exit_cb(uv_process_t *proc, int64_t status, int term_signal);
+static void close_cb(uv_handle_t *handle);
+static void emit_exit_event(Job *job);
 
 void job_init()
 {
   uv_disable_stdio_inheritance();
   uv_prepare_init(uv_default_loop(), &job_prepare);
-  uv_prepare_start(&job_prepare, job_prepare_cb);
 }
 
 void job_teardown()
@@ -114,7 +120,11 @@ void job_teardown()
   }
 }
 
-int job_start(char **argv, void *data, job_read_cb cb)
+int job_start(char **argv,
+              void *data,
+              rstream_cb stdout_cb,
+              rstream_cb stderr_cb,
+              job_exit_cb job_exit_cb)
 {
   int i;
   Job *job;
@@ -134,8 +144,12 @@ int job_start(char **argv, void *data, job_read_cb cb)
   job = xmalloc(sizeof(Job));
   // Initialize
   job->id = i + 1;
+  job->pending_refs = 3;
+  job->pending_closes = 4;
   job->data = data;
-  job->read_cb = cb;
+  job->stdout_cb = stdout_cb;
+  job->stderr_cb = stderr_cb;
+  job->exit_cb = job_exit_cb;
   job->stopped = false;
   job->exit_timeout = EXIT_TIMEOUT;
   job->proc_opts.file = argv[0];
@@ -154,12 +168,10 @@ int job_start(char **argv, void *data, job_read_cb cb)
   job->stdio[0].data.stream = (uv_stream_t *)&job->proc_stdin;
 
   uv_pipe_init(uv_default_loop(), &job->proc_stdout, 0);
-  job->proc_stdout.data = job;
   job->stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
   job->stdio[1].data.stream = (uv_stream_t *)&job->proc_stdout;
 
   uv_pipe_init(uv_default_loop(), &job->proc_stderr, 0);
-  job->proc_stderr.data = job;
   job->stdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
   job->stdio[2].data.stream = (uv_stream_t *)&job->proc_stderr;
 
@@ -169,13 +181,25 @@ int job_start(char **argv, void *data, job_read_cb cb)
     return -1;
   }
 
+  job->in = wstream_new(JOB_WRITE_MAXMEM);
+  wstream_set_stream(job->in, (uv_stream_t *)&job->proc_stdin);
   // Start the readable streams
-  uv_read_start((uv_stream_t *)&job->proc_stdout, alloc_cb, read_cb);
-  uv_read_start((uv_stream_t *)&job->proc_stderr, alloc_cb, read_cb);
+  job->out = rstream_new(read_cb, JOB_BUFFER_SIZE, job, true);
+  job->err = rstream_new(read_cb, JOB_BUFFER_SIZE, job, true);
+  rstream_set_stream(job->out, (uv_stream_t *)&job->proc_stdout);
+  rstream_set_stream(job->err, (uv_stream_t *)&job->proc_stderr);
+  rstream_start(job->out);
+  rstream_start(job->err);
   // Give the callback a reference to the job
   job->proc.data = job;
   // Save the job to the table
   table[i] = job;
+
+  // Start polling job status if this is the first
+  if (job_count == 0) {
+    uv_prepare_start(&job_prepare, job_prepare_cb);
+  }
+  job_count++;
 
   return job->id;
 }
@@ -188,8 +212,6 @@ bool job_stop(int id)
     return false;
   }
 
-  uv_read_stop((uv_stream_t *)&job->proc_stdout);
-  uv_read_stop((uv_stream_t *)&job->proc_stderr);
   job->stopped = true;
 
   return true;
@@ -197,8 +219,6 @@ bool job_stop(int id)
 
 bool job_write(int id, char *data, uint32_t len)
 {
-  uv_buf_t uvbuf;
-  uv_write_t *req;
   Job *job = find_job(id);
 
   if (job == NULL || job->stopped) {
@@ -206,30 +226,43 @@ bool job_write(int id, char *data, uint32_t len)
     return false;
   }
 
-  req = xmalloc(sizeof(uv_write_t));
-  req->data = data;
-  uvbuf.base = data;
-  uvbuf.len = len;
-  uv_write(req, (uv_stream_t *)&job->proc_stdin, &uvbuf, 1, write_cb);
+  if (!wstream_write(job->in, data, len, true)) {
+    job_stop(job->id);
+    return false;
+  }
 
   return true;
 }
 
-void job_handle(Event event)
+void job_exit_event(Event event)
 {
   Job *job = event.data.job;
 
-  // Invoke the job callback
-  job->read_cb(job->id,
-               job->data,
-               job->buffer,
-               job->length,
-               job->lock == kBufferLockStdout);
+  // Free the slot now, 'exit_cb' may want to start another job to replace
+  // this one
+  table[job->id - 1] = NULL;
 
-  // restart reading
-  job->lock = kBufferLockNone;
-  uv_read_start((uv_stream_t *)&job->proc_stdout, alloc_cb, read_cb);
-  uv_read_start((uv_stream_t *)&job->proc_stderr, alloc_cb, read_cb);
+  // Invoke the exit callback
+  job->exit_cb(job, job->data);
+
+  // Free the job resources
+  free_job(job);
+
+  // Stop polling job status if this was the last
+  job_count--;
+  if (job_count == 0) {
+    uv_prepare_stop(&job_prepare);
+  }
+}
+
+int job_id(Job *job)
+{
+  return job->id;
+}
+
+void *job_data(Job *job)
+{
+  return job->data;
 }
 
 static bool is_alive(Job *job)
@@ -248,16 +281,15 @@ static Job * find_job(int id)
 
 static void free_job(Job *job)
 {
-  uv_close((uv_handle_t *)&job->proc_stdout, NULL);
-  uv_close((uv_handle_t *)&job->proc_stdin, NULL);
-  uv_close((uv_handle_t *)&job->proc_stderr, NULL);
-  uv_close((uv_handle_t *)&job->proc, NULL);
-  free(job);
+  uv_close((uv_handle_t *)&job->proc_stdout, close_cb);
+  uv_close((uv_handle_t *)&job->proc_stdin, close_cb);
+  uv_close((uv_handle_t *)&job->proc_stderr, close_cb);
+  uv_close((uv_handle_t *)&job->proc, close_cb);
 }
 
 /// Iterates the table, sending SIGTERM to stopped jobs and SIGKILL to those
 /// that didn't die from SIGTERM after a while(exit_timeout is 0).
-static void job_prepare_cb(uv_prepare_t *handle, int status)
+static void job_prepare_cb(uv_prepare_t *handle)
 {
   Job *job;
   int i;
@@ -277,66 +309,52 @@ static void job_prepare_cb(uv_prepare_t *handle, int status)
   }
 }
 
-/// Puts the job into a 'reading state' which 'locks' the job buffer
-/// until the data is consumed
-static void alloc_cb(uv_handle_t *handle, size_t suggested, uv_buf_t *buf)
+// Wraps the call to std{out,err}_cb and emits a JobExit event if necessary.
+static void read_cb(RStream *rstream, void *data, bool eof)
 {
-  Job *job = (Job *)handle->data;
+  Job *job = data;
 
-  if (job->lock != kBufferLockNone) {
-    // Already reserved the buffer for reading from stdout or stderr.
-    buf->len = 0;
-    return;
+  if (rstream == job->out) {
+    job->stdout_cb(rstream, data, eof);
+  } else {
+    job->stderr_cb(rstream, data, eof);
   }
 
-  buf->base = job->buffer;
-  buf->len = JOB_BUFFER_SIZE;
-  // Avoid `alloc_cb`, `alloc_cb` sequences on windows and also mark which
-  // stream we are reading from
-  job->lock =
-    (handle == (uv_handle_t *)&job->proc_stdout) ?
-    kBufferLockStdout :
-    kBufferLockStderr;
-}
-
-/// Pushes a event object to the event queue, which will be handled later by
-/// `job_handle`
-static void read_cb(uv_stream_t *stream, ssize_t cnt, const uv_buf_t *buf)
-{
-  Event event;
-  Job *job = (Job *)stream->data;
-  // pause reading on both streams
-  uv_read_stop((uv_stream_t *)&job->proc_stdout);
-  uv_read_stop((uv_stream_t *)&job->proc_stderr);
-
-  if (cnt <= 0) {
-    if (cnt != UV_ENOBUFS) {
-      // Assume it's EOF and exit the job. Doesn't harm sending a SIGTERM
-      // at this point
-      uv_process_kill(&job->proc, SIGTERM);
-    }
-    return;
+  if (eof && --job->pending_refs == 0) {
+    emit_exit_event(job);
   }
-
-  job->length = cnt;
-  event.type = kEventJobActivity;
-  event.data.job = job;
-  event_push(event);
 }
 
-static void write_cb(uv_write_t *req, int status)
-{
-  free(req->data);
-  free(req);
-}
-
-/// Cleanup all the resources associated with the job
+// Emits a JobExit event if both rstreams are closed
 static void exit_cb(uv_process_t *proc, int64_t status, int term_signal)
 {
   Job *job = proc->data;
 
-  table[job->id - 1] = NULL;
-  shell_free_argv(job->proc_opts.args);
-  free_job(job);
+  if (--job->pending_refs == 0) {
+    emit_exit_event(job);
+  }
 }
 
+static void emit_exit_event(Job *job)
+{
+  Event event;
+  event.type = kEventJobExit;
+  event.data.job = job;
+  event_push(event);
+}
+
+static void close_cb(uv_handle_t *handle)
+{
+  Job *job = handle->data;
+
+  if (--job->pending_closes == 0) {
+    // Only free the job memory after all the associated handles are properly
+    // closed by libuv
+    rstream_free(job->out);
+    rstream_free(job->err);
+    wstream_free(job->in);
+    shell_free_argv(job->proc_opts.args);
+    free(job->data);
+    free(job);
+  }
+}
