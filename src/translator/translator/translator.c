@@ -273,7 +273,7 @@ static WFDEC(translate_ex_flags, uint_least8_t exflags)
 
 static WFDEC(translate_number, ExpressionType type, char_u *s, char_u *e)
 {
-  WS("vim.number(")
+  WS("vim.number.new(state, ")
   switch (type) {
     case kExprHexNumber:
     case kExprDecimalNumber: {
@@ -307,7 +307,7 @@ static WFDEC(translate_expr, ExpressionNode *expr)
 {
   switch (expr->type) {
     case kExprFloat: {
-      WS("vim.float(")
+      WS("vim.float.new(state, ")
       W_END(expr->position, expr->end_position)
       WS(")")
       break;
@@ -413,7 +413,9 @@ static WFDEC(translate_expr, ExpressionNode *expr)
       ExpressionNode *current_expr;
       bool reversed = FALSE;
 
-      assert(expr->children != NULL);
+      assert(expr->children != NULL
+             || expr->type == kExprDictionary
+             || expr->type == kExprList);
       switch (expr->type) {
         case kExprDictionary: {
           WS("vim.dict.new(state, ")
@@ -564,14 +566,14 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     INDENTVAR(iter_var, "i")
     WS("local ")
     ADDINDENTVAR(iter_var)
-    WS(" = vim.iter_start(state, ")
-    // FIXME dump list
-    WS(")\n")
+    WS("\n")
 
     WINDENT(indent)
-    WS("while (")
+    WS("for _, ")
     ADDINDENTVAR(iter_var)
-    WS(" ~= nil) do\n")
+    WS(" in vim.list.iterator(state, ")
+    CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr)
+    WS(") do\n")
 
     WINDENT(indent + 1)
     ADDINDENTVAR(iter_var)
@@ -605,7 +607,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
         break;
       }
       case kCmdElseif: {
-        WS("else ")
+        WS("else")
         // fallthrough
       }
       case kCmdIf: {
@@ -702,7 +704,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
 
         if (did_first_if) {
           WINDENT(indent + 1)
-          WS("else ")
+          WS("else")
         }
 
         if (next->args[ARG_REG_REG].arg.reg == NULL) {
