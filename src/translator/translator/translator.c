@@ -179,18 +179,21 @@ static WFDEC(translate_range, Range *range)
 
   WS("vim.range.compose(state, ")
 
-  while (current_range != NULL) {
+  for (;;) {
     AddressFollowup *current_followup = current_range->address.followups;
     size_t followup_number = 0;
 
     assert(current_range->address.type != kAddrMissing);
 
-    while (current_followup != NULL) {
+    for (;;) {
       WS("vim.range.apply_followup(state, ")
       CALL(translate_address_followup, current_followup)
-      WS(", ")
       followup_number++;
       current_followup = current_followup->next;
+      if (current_followup == NULL)
+        break;
+      else
+        WS(", ")
     }
 
     switch (current_range->address.type) {
@@ -249,9 +252,12 @@ static WFDEC(translate_range, Range *range)
     WS(", ")
 
     CALL(dump_bool, current_range->setpos)
-    WS(", ")
 
     current_range = current_range->next;
+    if (current_range == NULL)
+      break;
+    else
+      WS(", ")
   }
 
   WS(")")
@@ -458,7 +464,7 @@ static WFDEC(translate_expr, ExpressionNode *expr)
             WS("(") \
           } \
           WS("vim." op "(state, ") \
-          CALL(dump_number, (long) expr->ignore_case) \
+          CALL(dump_bool, (bool) expr->ignore_case) \
           WS(", ") \
           break; \
         }
@@ -479,10 +485,13 @@ static WFDEC(translate_expr, ExpressionNode *expr)
         WS(" == 1 and 0 or 1)")
 
       current_expr = expr->children;
-      while (current_expr != NULL) {
+      for (;;) {
         CALL(translate_expr, current_expr)
         current_expr = current_expr->next;
-        WS(", ")
+        if (current_expr == NULL)
+          break;
+        else
+          WS(", ")
       }
       WS(")")
       break;
@@ -493,12 +502,15 @@ static WFDEC(translate_expr, ExpressionNode *expr)
 
 static WFDEC(translate_exprs, ExpressionNode *expr)
 {
-  ExpressionNode *current_expr;
+  ExpressionNode *current_expr = expr;
 
-  for (current_expr = expr; current_expr != NULL;
-       current_expr = current_expr->next) {
+  for (;;) {
     CALL(translate_expr, current_expr)
-    WS(", ")
+    current_expr = current_expr->next;
+    if (current_expr == NULL)
+      break;
+    else
+      WS(", ")
   }
 
   return OK;
@@ -509,6 +521,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
   char_u *name;
   size_t start_from_arg = 0;
   bool do_arg_dump = TRUE;
+  bool add_comma = FALSE;
 
   if (node->type == kCmdEndwhile
       || node->type == kCmdEndfor
@@ -815,21 +828,29 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
   WS("(state, ")
 
   if (CMDDEF(node->type).flags & RANGE) {
+    if (add_comma)
+      WS(", ")
     CALL(translate_range, &(node->range))
-    WS(", ")
+    add_comma = TRUE;
   }
 
   if (CMDDEF(node->type).flags & BANG) {
+    if (add_comma)
+      WS(", ")
     CALL(dump_bool, node->bang)
-    WS(", ")
+    add_comma = TRUE;
   }
 
   if (CMDDEF(node->type).flags & EXFLAGS) {
+    if (add_comma)
+      WS(", ")
     CALL(translate_ex_flags, node->exflags)
-    WS(", ")
+    add_comma = TRUE;
   }
 
   if (CMDDEF(node->type).parse == CMDDEF(kCmdAbclear).parse) {
+    if (add_comma)
+      WS(", ")
     CALL(dump_bool, (bool) node->args[ARG_CLEAR_BUFFER].arg.flags)
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdEcho).parse) {
     start_from_arg = 1;
@@ -839,21 +860,26 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
 
   if (do_arg_dump) {
     size_t i;
+    size_t num_args = CMDDEF(node->type).num_args;
 
-    for (i = start_from_arg; i < CMDDEF(node->type).num_args; i++) {
+    for (i = start_from_arg; i < num_args; i++) {
+      if (add_comma)
+        WS(", ")
+      add_comma = FALSE;
       switch (CMDDEF(node->type).arg_types[i]) {
         case kArgExpression: {
           CALL(translate_expr, node->args[i].arg.expr)
-          WS(", ")
+          add_comma = TRUE;
           break;
         }
         case kArgExpressions: {
           CALL(translate_exprs, node->args[i].arg.expr)
+          add_comma = TRUE;
           break;
         }
         case kArgString: {
           CALL(dump_string, node->args[i].arg.str)
-          WS(", ")
+          add_comma = TRUE;
           break;
         }
         default: {
