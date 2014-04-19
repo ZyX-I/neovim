@@ -576,12 +576,10 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     WS(") do\n")
 
     WINDENT(indent + 1)
-    ADDINDENTVAR(iter_var)
-    WS(", ")
     // TODO assign variables
     WS(" = ")
     ADDINDENTVAR(iter_var)
-    WS(":next()\n")
+    WS("\n")
 
     CALL(translate_nodes, node->children, indent + 1)
 
