@@ -575,11 +575,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr)
     WS(") do\n")
 
-    WINDENT(indent + 1)
     // TODO assign variables
-    WS(" = ")
-    ADDINDENTVAR(iter_var)
-    WS("\n")
 
     CALL(translate_nodes, node->children, indent + 1)
 
