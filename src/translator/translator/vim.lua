@@ -162,6 +162,16 @@ commands={
   end,
   abclear=function(state, buffer)
   end,
+  echo=function(state, ...)
+    mes = ''
+    for i, s in ipairs(...) do
+      if (i > 1) then
+        mes ..= ' '
+      end
+      mes ..= s
+    end
+    print (mes)
+  end,
 }
 
 run_user_command = function(state, command, range, bang, args)
@@ -236,7 +246,9 @@ get_number = function(state, value, position)
   elseif (t == VIM_NUMBER) then
     return value
   elseif (t == VIM_STRING) then
-    return tonumber(value)
+    -- TODO properly convert "0733" style (octal) strings
+    -- TODO properly convert "{number}garbage" strings
+    return tonumber(value) or 0
   elseif (t == VIM_DICTIONARY) then
     err.err(state, position, true, 'E728: Using Dictionary as a Number')
     return nil
@@ -353,23 +365,63 @@ promote_integer = function(state, value)
   return get_number(state, value, position)
 end
 
+same_complex_types = function(state, t1, t2, arg2_position)
+  if (t1 == VIM_LIST) then
+    if (t2 == VIM_LIST) then
+      return 1
+    end
+    err.err(state, arg2_position, true,
+            'E691: Can only compare List with List')
+    return nil
+  elseif (t1 == VIM_DICTIONARY) then
+    if (t2 == VIM_DICTIONARY) then
+      return 1
+    end
+    err.err(state, arg2_position, true,
+            'E735: Can only compare Dictionary with Dictionary')
+    return nil
+  elseif (t1 == VIM_FUNCREF) then
+    if (t2 == VIM_FUNCREF) then
+      return 1
+    end
+    err.err(state, arg2_position, true,
+            'E693: Can only compare Funcref with Funcref')
+    return nil
+  end
+  return 2
+end
+
 equals = function(state, ic, arg1, arg2)
   t1 = vim_type(state, arg1, arg1_position)
   t2 = vim_type(state, arg2, arg2_position)
-  if (t1 == VIM_NUMBER || t2 == VIM_NUMBER) then
-    arg1 = get_number(state, arg1, arg1_position)
-    arg2 = get_number(state, arg2, arg2_position)
-    if (arg1 == arg2) then
-      return vim_true
-    else
-      return vim_false
-    end
-  elseif (t1 == VIM_LIST) then
-    if (t2 ~= VIM_LIST) then
-      err.err(state, arg2_position, true,
-              'E691: Can only compare List with List')
+  if (same_complex_types(state, t1, t2, arg2_position) == nil) then
+    return nil
+  end
+  if (t1 == VIM_FLOAT or t2 == VIM_FLOAT) then
+    arg1 = get_float(state, arg1, arg1_position)
+    arg2 = get_float(state, arg2, arg2_position)
+    if (arg1 == nil or arg2 == nil) then
       return nil
     end
+    return (arg1 == arg2) and vim_true or vim_false
+  elseif (t1 == VIM_NUMBER or t2 == VIM_NUMBER) then
+    arg1 = get_number(state, arg1, arg1_position)
+    arg2 = get_number(state, arg2, arg2_position)
+    if (arg1 == nil or arg2 == nil) then
+      return nil
+    end
+    return (arg1 == arg2) and vim_true or vim_false
+  elseif (t1 == VIM_STRING) then
+    arg2 = get_string(state, arg2, arg2_position)
+    if (arg2 == nil) then
+      return nil
+    end
+    if (not ic) then
+      return (arg1 == arg2) and vim_true or vim_false
+    else
+      -- TODO
+    end
+  elseif (t1 == VIM_LIST) then
     for i, v1 in list.iterator(state, arg1) do
       v2 = list.raw_subscript(arg2, i)
       if (v2 == nil) then
@@ -380,29 +432,8 @@ equals = function(state, ic, arg1, arg2)
     end
     return vim_true
   elseif (t2 == VIM_DICTIONARY) then
-    if (t2 ~= VIM_DICTIONARY) then
-      err.err(state, arg2_position, true,
-              'E735: Can only compare Dictionary with Dictionary')
-      return nil
-    end
     -- TODO
-  elseif (t1 == VIM_STRING) then
-    -- String vs Number comparison must have been caught above
-    arg2 = get_string(state, arg2, arg2_position)
-    if (arg2 == nil) then
-      return nil
-    end
-    if (not ic) then
-      return (arg1 == arg2) and vim_true or vim_false
-    else
-      -- TODO
-    end
   elseif (t1 == VIM_FUNCREF) then
-    if (t2 ~= VIM_FUNCREF) then
-      err.err(state, arg2_position, true,
-              'E693: Can only compare Funcref with Funcref')
-      return nil
-    end
     -- TODO
   end
 end
@@ -420,24 +451,76 @@ identical = function(state, ic, arg1, arg2)
 end
 
 matches = function(state, ic, arg1, arg2)
+  -- TODO
 end
 
-greater = function(state, ic, arg1, arg2)
+less_greater_cmp = function(state, ic, cmp, string_icmp, arg1, arg1_position,
+                                                         arg2, arg2_position)
   t1 = vim_type(state, arg1, arg1_position)
   t2 = vim_type(state, arg2, arg2_position)
-  if (t1 == VIM_NUMBER || t2 == VIM_NUMBER) then
+  if (same_complex_types(state, t1, t2, arg2_position) == nil) then
+    return nil
+  end
+  if (t1 == VIM_FLOAT or t2 == VIM_FLOAT) then
+    arg1 = get_float(state, arg1, arg1_position)
+    arg2 = get_float(state, arg2, arg2_position)
+    if (arg1 == nil or arg2 == nil) then
+      return nil
+    end
+    return cmp(arg1, arg2) and vim_true or vim_false
+  elseif (t1 == VIM_NUMBER or t2 == VIM_NUMBER) then
     arg1 = get_number(state, arg1, arg1_position)
     arg2 = get_number(state, arg2, arg2_position)
+    if (arg1 == nil or arg2 == nil) then
+      return nil
+    end
+    return cmp(arg1, arg2) and vim_true or vim_false
+  elseif (t1 == VIM_STRING) then
+    -- Second argument is now string for sure: if it was number or float it 
+    -- would fall under previous two conditions, if it was string vs something 
+    -- else it would be caught by same_complex_types check
+    if (ic) then
+      return string_icmp(arg1, arg2) and vim_true or vim_false
+    else
+      return cmp(arg1, arg2) and vim_true or vim_false
+    end
+  elseif (t1 == VIM_LIST) then
+    err.err(state, t1 == VIM_LIST and arg1_position or arg2_position,
+            true, 'E692: Invalid operation for Lists')
+    return nil
+  elseif (t1 == VIM_DICTIONARY) then
+    err.err(state, t1 == VIM_DICTIONARY and arg1_position or arg2_position,
+            true, 'E736: Invalid operation for Dictionaries')
+    return nil
+  elseif (t1 == VIM_FUNCREF) then
+    err.err(state, t1 == VIM_FUNCREF and arg1_position or arg2_position,
+            true, 'E694: Invalid operation for Funcrefs')
+    return nil
   end
 end
 
 less = function(state, ic, arg1, arg2)
-  t1 = vim_type(state, arg1, arg1_position)
-  t2 = vim_type(state, arg2, arg2_position)
-  if (t1 == VIM_NUMBER || t2 == VIM_NUMBER) then
-    arg1 = get_number(state, arg1, arg1_position)
-    arg2 = get_number(state, arg2, arg2_position)
-  end
+  return less_greater_cmp(state, ic,
+                          function(arg1, arg2)
+                            return arg1 < arg2
+                          end,
+                          function(arg1, arg2)
+                            -- TODO case-ignorant string comparison
+                          end,
+                          arg1, arg1_position,
+                          arg2, arg2_position)
+end
+
+greater = function(state, ic, arg1, arg2)
+  return less_greater_cmp(state, ic,
+                          function(arg1, arg2)
+                            return arg1 > arg2
+                          end,
+                          function(arg1, arg2)
+                            -- TODO case-ignorant string comparison
+                          end,
+                          arg1, arg1_position,
+                          arg2, arg2_position)
 end
 
 -- {{{1 Subscripting
@@ -494,9 +577,11 @@ concat_or_subscript = function(state, dct, key)
 end
 
 slice = function(state, value, start_index, end_index)
+  -- TODO
 end
 
 call = function(state, caller, ...)
+  -- TODO
 end
 
 -- {{{1 return
