@@ -95,6 +95,12 @@ list = {
     end
     return list.raw_subscript(lst, index)
   end,
+  assign_subscript=function(state, lst, lst_position, index, index_position,
+                                   val, val_position)
+    -- TODO check for locks, check for out of range
+    lst[index + 1] = val
+    return true
+  end,
   next=function(it_state, lst)
     i = it_state.i
     it_state.i = it_state.i + 1
@@ -119,6 +125,7 @@ list = {
 dict = {
   new=function(state, ...)
     -- TODO
+    return {}
   end,
   subscript=function(state, dct, dct_position, key, key_position)
     ret = dct[key]
@@ -127,6 +134,12 @@ dict = {
               'E716: Key not present in Dictionary: ' .. index)
     end
     return ret
+  end,
+  assign_subscript=function(state, dct, dct_position, key, key_position,
+                                   val, val_position)
+    -- TODO check for locks
+    dct[key] = val
+    return true
   end,
 }
 
@@ -201,19 +214,80 @@ run_user_command = function(state, command, range, bang, args)
 end
 
 -- {{{1 Assign support
-assign_scope = function(state, val, scope, key)
-end
-
-assign_scope_function = function(state, val, dct, key)
-end
-
 assign_dict = function(state, val, dct, key)
+  if (key == '') then
+    err.err(state, key_position, true,
+            'E713: Cannot use empty key for dictionary')
+    return nil
+  end
+  return dict.assign_subscript(state, dct, dct_position, key, key_position,
+                                      val, val_position)
+end
+
+assign_dict_function = function(state, unique, val, dct, key)
+  if (unique and dct[key] ~= nil) then
+    err.err(state, key_position, true, 'E717: Dictionary entry already exists')
+    return nil
+  end
+  return assign_dict(state, val, dct, key)
+end
+
+assign_scope = assign_dict
+
+assign_scope_function = function(state, unique, val, scope, key)
+  if (unique and scope[key] ~= nil) then
+    err.err(state, key_position, true,
+            'E122: Function %s already exists, add ! to replace it', key)
+    return nil
+  end
+  return assign_scope(state, val, scope, key)
 end
 
 assign_subscript = function(state, val, dct, key)
+  t = vim_type(dct)
+  if (t == VIM_DICTIONARY) then
+    return assign_dict(state, val, dct, key)
+  elseif (t == VIM_LIST) then
+    return list.assign_subscript(state, dct, dct_position, key, key_position,
+                                             val, val_position)
+  else
+    err.err(state, dct_position, true,
+            'E689: Can only index a List or Dictionary')
+    return nil
+  end
+end
+
+assign_subscript_function = function(state, unique, val, dct, key)
+  t = vim_type(dct)
+  if (t == VIM_DICTIONARY) then
+    return assign_dict_function(state, unique, val, dct, key)
+  end
+  return assign_subscript(state, val, dct, key)
 end
 
 assign_slice = function(state, val, lst, index1, index2)
+  t = vim_type(lst)
+  if (t == VIM_LIST) then
+    -- TODO
+  elseif (t == VIM_DICTIONARY) then
+    err.err(state, lst_position, true, 'E719: Cannot use [:] with a Dictionary')
+    return nil
+  else
+    err.err(state, lst_position, true,
+            'E689: Can only index a List or Dictionary')
+    return nil
+  end
+end
+
+assign_slice_function = function(state, unique, val, lst, index1, index2)
+  t = vim_type(lst)
+  if (t == VIM_LIST) then
+    err.err(state, lst_position, true,
+            'E475: Cannot assign function to a slice')
+    return nil
+  else
+    return assign_slice(state, val, lst, index1, index2)
+  end
 end
 
 -- {{{1 Range handling
@@ -648,5 +722,7 @@ return {
   assign_scope=assign_scope,
   assign_scope_function=assign_scope_function,
   assign_subscript=assign_subscript,
+  assign_subscript_function=assign_subscript_function,
   assign_slice=assign_slice,
+  assign_slice_function=assign_slice_function,
 }
