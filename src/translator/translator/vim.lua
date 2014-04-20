@@ -7,7 +7,12 @@ copy_table = function(state)
   return new_state
 end
 
-new_state=function()
+new_scope = function(is_default_scope)
+  -- TODO: use dict.new
+  return {[':is_default_scope']=is_default_scope}
+end
+
+new_state = function()
   local state = {
     is_trying=false,
     is_silent=false,
@@ -27,30 +32,36 @@ new_state=function()
       state.is_silent=true
       return state
     end,
-    g={},
-    s={},
+    redir_callbacks={},
     v={},
     a={},
     l={},
     user_functions={},
     user_commands={},
+    call_stack={},
     set_script_locals=function(self, s)
       local state = copy_table(self)
       state.s = s
       return state
     end,
+    enter_function=function(self, fcall)
+      local state = copy_table(self)
+      state.a = new_scope(false)
+      state.l = new_scope(true)
+      state.current_scope = state.l
+      state.call_stack = copy_table(call_stack)
+      table.insert(state.call_stack, fcall)
+      return state
+    end,
     stack={},
   }
+  state.g = new_scope(true)
   state.current_scope = state.g
   return state
 end
 
 get_state = function()
   return new_state()
-end
-
-new_scope = function()
-  return {}
 end
 
 -- {{{1 Types
@@ -187,6 +198,22 @@ run_user_command = function(state, command, range, bang, args)
   if (after) then
     after(state)
   end
+end
+
+-- {{{1 Assign support
+assign_scope = function(state, val, scope, key)
+end
+
+assign_scope_function = function(state, val, dct, key)
+end
+
+assign_dict = function(state, val, dct, key)
+end
+
+assign_subscript = function(state, val, dct, key)
+end
+
+assign_slice = function(state, val, lst, index1, index2)
 end
 
 -- {{{1 Range handling
@@ -581,7 +608,7 @@ slice = function(state, value, start_index, end_index)
   -- TODO
 end
 
-call = function(state, caller, ...)
+call = function(state, caller_dict, caller_key, ...)
   -- TODO
 end
 
@@ -618,4 +645,8 @@ return {
   number=number,
   float=float,
   err=err,
+  assign_scope=assign_scope,
+  assign_scope_function=assign_scope_function,
+  assign_subscript=assign_subscript,
+  assign_slice=assign_slice,
 }

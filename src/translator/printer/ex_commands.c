@@ -7,11 +7,7 @@
 
 #include "translator/parser/ex_commands.h"
 
-// {{{ Function declarations
-static char_u *fgetline_test(int c, char_u **arg, int indent);
-// }}}
-
-static char_u *fgetline_test(int c, char_u **arg, int indent)
+char_u *fgetline_string(int c, char_u **arg, int indent)
 {
   size_t len = 0;
   char_u *result;
@@ -49,14 +45,14 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
   if (one) {
     char_u *p;
     char_u *line;
-    line = fgetline_test(0, pp, 0);
+    line = fgetline_string(0, pp, 0);
     p = line;
-    if (parse_one_cmd(&p, &node, o, &position, (LineGetter) fgetline_test,
+    if (parse_one_cmd(&p, &node, o, &position, (LineGetter) fgetline_string,
                       pp) == FAIL)
       return NULL;
     vim_free(line);
   } else {
-    if ((node = parse_cmd_sequence(o, position, (LineGetter) fgetline_test,
+    if ((node = parse_cmd_sequence(o, position, (LineGetter) fgetline_string,
                                    pp)) == NULL)
       return NULL;
   }
