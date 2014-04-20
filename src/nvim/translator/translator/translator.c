@@ -15,16 +15,43 @@
 # include "translator/translator/translator.c.generated.h"
 #endif
 
-#define WFDEC(f, ...) int f(__VA_ARGS__, Writer write, void *cookie)
+typedef enum {
+  kTransUser = 0,
+  kTransScript,
+  kTransFunc,
+} TranslationOptions;
+
+#define WFDEC(f, ...) int f(__VA_ARGS__, Writer write, void *cookie, \
+                            TranslationOptions to)
 #define CALL(f, ...) \
     { \
-      if (f(__VA_ARGS__, write, cookie) == FAIL) \
+      if (f(__VA_ARGS__, write, cookie, to) == FAIL) \
         return FAIL; \
     }
 #define CALL_ERR(error_label, f, ...) \
     { \
       if (f(__VA_ARGS__, write, cookie) == FAIL) \
         goto error_label; \
+    }
+#define CALL_FUNC(f, ...) \
+    { \
+      TranslationOptions to = kTransFunc; \
+      CALL(f, __VA_ARGS__) \
+    }
+#define CALL_FUNC_ERR(error_label, f, ...) \
+    { \
+      TranslationOptions to = kTransFunc; \
+      CALL_ERR(error_label, f, __VA_ARGS__) \
+    }
+#define CALL_SCRIPT(f, ...) \
+    { \
+      TranslationOptions to = kTransScript; \
+      CALL(f, __VA_ARGS__) \
+    }
+#define CALL_SCRIPT_ERR(error_label, f, ...) \
+    { \
+      TranslationOptions to = kTransScript; \
+      CALL_ERR(error_label, f, __VA_ARGS__) \
     }
 #define W_LEN(s, len) \
     CALL(write_string_len, (char *) s, len)
@@ -624,14 +651,12 @@ static WFDEC(translate_function, TranslateFuncArgs *args)
     WINDENT(args->indent + 1)
     // TODO; dump information about function call
     WS("state = state:enter_function({})\n")
-    // FIXME: there may appear nodes after return, instruct translate_nodes to 
-    //        drop it or lua will fail
-    CALL(translate_nodes, args->node->children, args->indent + 1)
+    CALL_FUNC(translate_nodes, args->node->children, args->indent + 1)
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
     // zero
     WINDENT(args->indent + 1)
-    WS("return vim.number.new(0)\n")
+    WS("return vim.number.new(state, 0)\n")
   }
   WINDENT(args->indent)
   WS("end")
@@ -802,7 +827,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     WS("\n")
     return OK;
   } else if (node->type == kCmdSyntaxError) {
-    WS("vim.error(state, ")
+    WS("vim.err.err(state, ")
     // FIXME Dump error information
     WS(")\n")
     return OK;
@@ -1157,11 +1182,62 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
 
 static WFDEC(translate_nodes, CommandNode *node, size_t indent)
 {
-  CommandNode *current_node = node;
+  CommandNode *current_node;
 
-  while (current_node != NULL) {
-    CALL(translate_node, current_node, indent)
-    current_node = current_node->next;
+  for (current_node = node; current_node != NULL;
+       current_node = current_node->next) {
+    switch (current_node->type) {
+      case kCmdFinish: {
+        switch (to) {
+          case kTransFunc:
+          case kTransUser: {
+            WINDENT(indent)
+            // TODO dump error position
+            WS("vim.err.err(state, nil, true, "
+               "\"E168: :finish used outside of a sourced file\""
+               ")\n")
+            continue;
+          }
+          case kTransScript: {
+            WINDENT(indent)
+            WS("return nil\n")
+            break;
+          }
+        }
+        break;
+      }
+      case kCmdReturn: {
+        switch (to) {
+          case kTransScript:
+          case kTransUser: {
+            WINDENT(indent)
+            // TODO dump error position
+            WS("vim.err.err(state, nil, true, "
+               "\"E133: :return not inside a function\""
+               ")\n")
+            continue;
+          }
+          case kTransFunc: {
+            WINDENT(indent)
+            WS("return ")
+            CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr)
+            WS("\n")
+            break;
+          }
+        }
+        break;
+      }
+      default: {
+        CALL(translate_node, current_node, indent)
+        continue;
+      }
+    }
+    break;
+  }
+
+  if (current_node == NULL && to == kTransFunc) {
+    WINDENT(indent)
+    WS("return vim.number.new(state, 0)\n")
   }
 
   return OK;
@@ -1169,13 +1245,15 @@ static WFDEC(translate_nodes, CommandNode *node, size_t indent)
 
 int translate_script(CommandNode *node, Writer write, void *cookie)
 {
+  TranslationOptions to = kTransScript;
+
   WS("vim = require 'vim'\n"
      "s = vim.new_scope(false)\n"
      "return {\n"
      "  run=function(state)\n"
      "    state = state:set_script_locals(s)\n")
 
-  CALL(translate_nodes, node, 2)
+  CALL_SCRIPT(translate_nodes, node, 2)
 
   WS("  end\n"
     "}\n")
