@@ -624,9 +624,9 @@ static WFDEC(translate_function, TranslateFuncArgs *args)
     WINDENT(args->indent + 1)
     // TODO; dump information about function call
     WS("state = state:enter_function({})\n")
-    // FIXME: there may appear nodes after return, instruct translate_node to 
+    // FIXME: there may appear nodes after return, instruct translate_nodes to 
     //        drop it or lua will fail
-    CALL(translate_node, args->node->children, args->indent + 1)
+    CALL(translate_nodes, args->node->children, args->indent + 1)
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
     // zero
