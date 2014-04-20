@@ -9,6 +9,7 @@
 #include "nvim/translator/parser/expressions.h"
 #include "nvim/translator/parser/ex_commands.h"
 #include "nvim/translator/parser/command_definitions.h"
+#include "nvim/translator/printer/ex_commands.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/translator/translator.c.generated.h"
@@ -61,6 +62,12 @@
       for (size_t i = 0; i < indent; i++) \
         WS_ERR(error_label, "  ") \
     }
+
+typedef WFDEC((*AssignmentValueDump), void *dump_cookie);
+typedef struct {
+  CommandNode *node;
+  size_t indent;
+} TranslateFuncArgs;
 
 // {{{ Function declarations
 static WFDEC(write_string_len, char *s, size_t len);
@@ -313,6 +320,117 @@ static WFDEC(translate_number, ExpressionType type, char_u *s, char_u *e)
   return OK;
 }
 
+#define TS_LAST_SEGMENT 0x01
+#define TS_ONLY_SEGMENT 0x02
+#define TS_FUNCCALL     0x04
+#define TS_FUNCASSIGN   0x08
+
+/// Dumps scope variable
+///
+/// @param[out]  start  Is set to the start of variable name, just after the 
+///                     scope. If function failed to detect scope it is set to 
+///                     NULL.
+/// @param[in]   expr   Translated variable name.
+/// @param[in]   flags  Flags.
+/// @parblock
+///   Supported flags:
+///
+///   TS_LAST_SEGMENT
+///   :   Determines whether currently dumped segment is the last one: if it is 
+///       then single character name like "a" may only refer to the variable in 
+///       the current scope, if it is not it may be a construct like "a{':abc'}" 
+///       which refers to "a:abc" variable.
+///
+///   TS_ONLY_SEGMENT
+///   :   Determines whether this segment is the only one. Affects cases when 
+///       "state.user_functions" is preferred over "state.current_scope".
+///
+///   TS_FUNCCALL
+///   :   Use "state.functions" in place of "state.current_scope" in some cases. 
+///       Note that vim.call implementation should still be able to use 
+///       "state.user_functions" if appropriate.
+///
+///   TS_FUNCASSIGN
+///   :   Use "state.user_functions" in place of "state.current_scope" in some 
+///       cases.
+/// @endparblock
+///
+/// @return FAIL in case of unrecoverable error, OK otherwise.
+static WFDEC(translate_scope, char_u **start, ExpressionNode *expr,
+             uint_least8_t flags)
+{
+  assert(expr->type == kExprSimpleVariableName);
+  if (expr->end_position == expr->position) {
+    if (!(flags & (TS_LAST_SEGMENT|TS_ONLY_SEGMENT))) {
+      *start = NULL;
+    } else {
+      *start = expr->position;
+      if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position))
+        WS("state.functions")
+      else if (flags & (TS_FUNCASSIGN|TS_ONLY_SEGMENT))
+        WS("state.user_functions")
+      else
+        WS("state.current_scope")
+    }
+  } else if (expr->position[1] == ':') {
+    switch (*expr->position) {
+      case 's':
+      case 'v':
+      case 'a':
+      case 'l':
+      case 'g': {
+        *start = expr->position + 2;
+        WS("state.")
+        W_LEN(expr->position, 1)
+        break;
+      }
+      case 't': {
+        *start = expr->position + 2;
+        WS("state.tabpage.t")
+        break;
+      }
+      case 'w': {
+        *start = expr->position + 2;
+        WS("state.window.w")
+        break;
+      }
+      case 'b': {
+        *start = expr->position + 2;
+        WS("state.buffer.b")
+        break;
+      }
+      default: {
+        *start = expr->position;
+        if (flags & (TS_FUNCASSIGN|TS_ONLY_SEGMENT))
+          WS("state.user_functions")
+        else
+          WS("state.current_scope")
+        break;
+      }
+    }
+  } else {
+    bool isfunc = FALSE;
+
+    *start = expr->position;
+    if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position)) {
+      char_u *s;
+      for (s = expr->position + 1; s != expr->end_position; s++) {
+        if (!(ASCII_ISLOWER(*s) || VIM_ISDIGIT(*s))) {
+          isfunc = TRUE;
+          break;
+        }
+      }
+    }
+    if (isfunc && !(flags & TS_FUNCASSIGN))
+      WS("state.functions")
+    else if (flags & (TS_FUNCASSIGN|TS_ONLY_SEGMENT))
+      WS("state.user_functions")
+    else
+      WS("state.current_scope")
+  }
+  return OK;
+}
+
 static WFDEC(translate_expr, ExpressionNode *expr)
 {
   switch (expr->type) {
@@ -349,41 +467,10 @@ static WFDEC(translate_expr, ExpressionNode *expr)
       break;
     }
     case kExprSimpleVariableName: {
-      char_u *start = expr->position;
+      char_u *start;
       WS("vim.subscript(state, ")
-      if (expr->position[1] == ':') {
-        start += 2;
-        switch (*expr->position) {
-          case 's':
-          case 'v':
-          case 'a':
-          case 'l':
-          case 'g': {
-            WS("state.")
-            W_LEN(expr->position, 1)
-            break;
-          }
-          case 't': {
-            WS("state.tabpage.t")
-            break;
-          }
-          case 'w': {
-            WS("state.window.w")
-            break;
-          }
-          case 'b': {
-            WS("state.buffer.b")
-            break;
-          }
-          default: {
-            start -= 2;
-            WS("state.current_scope")
-            break;
-          }
-        }
-      } else {
-        WS("state.current_scope")
-      }
+      CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT)
+      assert(start != NULL);
       WS(", '")
       W_END(start, expr->end_position)
       WS("')")
@@ -520,6 +607,157 @@ static WFDEC(translate_exprs, ExpressionNode *expr)
   return OK;
 }
 
+static WFDEC(translate_function, TranslateFuncArgs *args)
+{
+  size_t i;
+  char_u **data = (char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
+  size_t len = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
+  WS("function(state")
+  for (i = 0; i < len; i++) {
+    WS(", ")
+    W(data[i])
+  }
+  if (args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS)
+    WS(", ...")
+  WS(")\n")
+  if (args->node->children != NULL) {
+    // FIXME: there may appear nodes after return, instruct translate_node to 
+    //        drop it
+    CALL(translate_node, args->node->children, args->indent + 1)
+  } else {
+    // Empty function: do not bother creating scope dictionaries, just return 
+    // zero
+    WINDENT(args->indent + 1)
+    WS("return vim.number.new(0)\n")
+  }
+  WINDENT(args->indent)
+  WS("end")
+  return OK;
+}
+
+/// Translate lvalue into one of vim.assign_* calls
+///
+/// @param[in]  expr         Translated expression.
+/// @param[in]  is_funccall  True if it translates :function definition.
+/// @param[in]  dump         Function used to dump value that will be assigned.
+/// @param[in]  dump_cookie  First argument to the above function.
+///
+/// @return FAIL in case of unrecoverable error, OK otherwise.
+static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
+                             AssignmentValueDump dump, void *dump_cookie)
+{
+  switch (expr->type) {
+    case kExprSimpleVariableName: {
+      char_u *start;
+      WS("vim.assign_scope(state, ")
+      CALL(dump, dump_cookie)
+      WS(", ")
+      CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT|TS_LAST_SEGMENT
+                                          |(is_funccall
+                                            ? TS_FUNCASSIGN
+                                            : 0))
+      assert(start != NULL);
+      WS(", '")
+      W_END(start, expr->end_position)
+      WS("')")
+      break;
+    }
+    case kExprVariableName: {
+      ExpressionNode *current_expr = expr->children;
+      bool add_concat;
+
+      assert(current_expr != NULL);
+
+      if (is_funccall)
+        WS("vim.assign_scope_function(state, ")
+      else
+        WS("vim.assign_scope(state, ")
+      CALL(dump, dump_cookie)
+      WS(", ")
+
+      if (current_expr->type == kExprIdentifier) {
+        char_u *start;
+        CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT
+                                            |(is_funccall
+                                              ? TS_FUNCASSIGN
+                                              : 0))
+        if (start == NULL) {
+          WS("vim.get_scope_and_key(state, '")
+          W_EXPR_POS(expr)
+          WS("'")
+        } else {
+          WS(", '")
+          W_END(start, expr->end_position)
+          WS("'")
+        }
+        add_concat = TRUE;
+      } else {
+        WS("vim.get_scope_and_key(state, ")
+        add_concat = FALSE;
+      }
+
+      for (current_expr = current_expr->next; current_expr != NULL;
+           current_expr = current_expr->next) {
+        if (add_concat)
+          WS(" .. ")
+        else
+          add_concat = TRUE;
+        switch (current_expr->type) {
+          case kExprIdentifier: {
+            WS("'")
+            W_EXPR_POS(current_expr)
+            WS("'")
+            break;
+          }
+          case kExprCurlyName: {
+            WS("(")
+            CALL(translate_expr, current_expr->children)
+            WS(")")
+            break;
+          }
+          default: {
+            assert(FALSE);
+          }
+        }
+      }
+      WS(")")
+      break;
+    }
+    case kExprConcatOrSubscript: {
+      WS("vim.assign_dict(state, ")
+      CALL(dump, dump_cookie)
+      WS(", ")
+      CALL(translate_expr, expr->children)
+      WS(", '")
+      W_EXPR_POS(expr)
+      WS("')")
+      break;
+    }
+    case kExprSubscript: {
+      if (expr->children->next->next == NULL)
+        WS("vim.assign_subscript(state, ")
+      else
+        WS("vim.assign_slice(state, ")
+      CALL(dump, dump_cookie)
+      WS(", ")
+      CALL(translate_expr, expr->children)
+      WS(", ")
+      CALL(translate_expr, expr->children->next)
+      if (expr->children->next->next != NULL) {
+        WS(", ")
+        CALL(translate_expr, expr->children->next->next)
+      }
+      WS(")")
+      break;
+    }
+    default: {
+      assert(FALSE);
+    }
+  }
+  WS("\n")
+  return OK;
+}
+
 static WFDEC(translate_node, CommandNode *node, size_t indent)
 {
   char_u *name;
@@ -530,7 +768,9 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
   if (node->type == kCmdEndwhile
       || node->type == kCmdEndfor
       || node->type == kCmdEndif
+      || node->type == kCmdEndfunction
       || node->type == kCmdEndtry
+      // kCmdCatch and kCmdFinally are handled in kCmdTry handler
       || node->type == kCmdCatch
       || node->type == kCmdFinally) {
     return OK;
@@ -568,8 +808,12 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
     WS(")\n")
     return OK;
   } else if (node->type == kCmdFunction
-             && node->args[ARG_FUNC_ARGS].arg.strs.ga_growsize != 0) {
-    // TODO
+             && node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
+    TranslateFuncArgs args = {node, indent};
+    CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, TRUE,
+                         (AssignmentValueDump) &translate_function,
+                         (void *) &args)
+    return OK;
     return OK;
   } else if (node->type == kCmdFor) {
 #define INDENTVAR(var, prefix) \
@@ -913,7 +1157,7 @@ static WFDEC(translate_nodes, CommandNode *node, size_t indent)
 int translate_script(CommandNode *node, Writer write, void *cookie)
 {
   WS("vim = require 'vim'\n"
-     "s = vim.new_scope()\n"
+     "s = vim.new_scope(false)\n"
      "return {\n"
      "  run=function(state)\n"
      "    state = state:set_script_locals(s)\n")
@@ -956,12 +1200,37 @@ int translate_script_std(void)
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
   int ret;
 
-  if ((node = parse_cmd_sequence(o, position, (LineGetter) fgetline_file,
+  if ((node = parse_cmd_sequence(o, position, (LineGetter) &fgetline_file,
                                  stdin)) == NULL)
     return FAIL;
 
   ret = translate_script_stdout(node);
 
   free_cmd(node);
+  return ret;
+}
+
+int translate_script_str_to_file(char_u *str, char *fname)
+{
+  CommandNode *node;
+  CommandParserOptions o = {0, FALSE};
+  CommandPosition position = {1, 1, (char_u *) "<test input>"};
+  int ret;
+  char_u **pp;
+  FILE *f;
+
+  pp = &str;
+
+  if ((node = parse_cmd_sequence(o, position, (LineGetter) &fgetline_string,
+                                 pp)) == NULL)
+    return FAIL;
+
+  if ((f = fopen(fname, "w")) == NULL)
+    return FAIL;
+
+  ret = translate_script(node, write_file, (void *) f);
+
+  fclose(f);
+
   return ret;
 }
