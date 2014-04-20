@@ -621,8 +621,11 @@ static WFDEC(translate_function, TranslateFuncArgs *args)
     WS(", ...")
   WS(")\n")
   if (args->node->children != NULL) {
+    WINDENT(args->indent + 1)
+    // TODO; dump information about function call
+    WS("state = state:enter_function({})\n")
     // FIXME: there may appear nodes after return, instruct translate_node to 
-    //        drop it
+    //        drop it or lua will fail
     CALL(translate_node, args->node->children, args->indent + 1)
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
@@ -639,17 +642,29 @@ static WFDEC(translate_function, TranslateFuncArgs *args)
 ///
 /// @param[in]  expr         Translated expression.
 /// @param[in]  is_funccall  True if it translates :function definition.
+/// @param[in]  unique       True if assignment must be unique.
 /// @param[in]  dump         Function used to dump value that will be assigned.
 /// @param[in]  dump_cookie  First argument to the above function.
 ///
 /// @return FAIL in case of unrecoverable error, OK otherwise.
 static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
+                             bool unique,
                              AssignmentValueDump dump, void *dump_cookie)
 {
+#define ADD_ASSIGN(what) \
+  { \
+    if (is_funccall) { \
+      WS("vim.assign_" what "_function(state, ") \
+      CALL(dump_bool, unique) \
+      WS(", ") \
+    } else { \
+      WS("vim.assign_" what "(state, ") \
+    } \
+  }
   switch (expr->type) {
     case kExprSimpleVariableName: {
       char_u *start;
-      WS("vim.assign_scope(state, ")
+      ADD_ASSIGN("scope")
       CALL(dump, dump_cookie)
       WS(", ")
       CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT|TS_LAST_SEGMENT
@@ -668,10 +683,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
 
       assert(current_expr != NULL);
 
-      if (is_funccall)
-        WS("vim.assign_scope_function(state, ")
-      else
-        WS("vim.assign_scope(state, ")
+      ADD_ASSIGN("scope")
       CALL(dump, dump_cookie)
       WS(", ")
 
@@ -724,7 +736,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
       break;
     }
     case kExprConcatOrSubscript: {
-      WS("vim.assign_dict(state, ")
+      ADD_ASSIGN("dict")
       CALL(dump, dump_cookie)
       WS(", ")
       CALL(translate_expr, expr->children)
@@ -735,9 +747,9 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
     }
     case kExprSubscript: {
       if (expr->children->next->next == NULL)
-        WS("vim.assign_subscript(state, ")
+        ADD_ASSIGN("subscript")
       else
-        WS("vim.assign_slice(state, ")
+        ADD_ASSIGN("slice")
       CALL(dump, dump_cookie)
       WS(", ")
       CALL(translate_expr, expr->children)
@@ -756,6 +768,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
   }
   WS("\n")
   return OK;
+#undef ADD_ASSIGN
 }
 
 static WFDEC(translate_node, CommandNode *node, size_t indent)
@@ -810,7 +823,7 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
   } else if (node->type == kCmdFunction
              && node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
     TranslateFuncArgs args = {node, indent};
-    CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, TRUE,
+    CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, TRUE, !node->bang,
                          (AssignmentValueDump) &translate_function,
                          (void *) &args)
     return OK;
