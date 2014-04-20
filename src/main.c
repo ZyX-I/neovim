@@ -8,6 +8,7 @@
 
 #define EXTERN
 #include <string.h>
+#include <stdbool.h>
 
 #include "vim.h"
 #include "main.h"
@@ -46,6 +47,7 @@
 #include "ui.h"
 #include "version.h"
 #include "window.h"
+#include "os/input.h"
 #include "os/os.h"
 #include "os/signal.h"
 
@@ -76,7 +78,7 @@ typedef struct {
   char_u      *use_ef;                  /* 'errorfile' from -q argument */
 
   int want_full_screen;
-  int stdout_isatty;                    /* is stdout a terminal? */
+  bool stdout_isatty;                   /* is stdout a terminal? */
   char_u      *term;                    /* specified terminal name */
   int ask_for_key;                      /* -x argument */
   int no_swap_file;                     /* "-n" argument used */
@@ -1336,9 +1338,6 @@ static void command_line_scan(mparm_T *parmp)
             /* "--startuptime <file>" already handled */
             break;
 
-            /*	case 'd':   -d {device} is handled in mch_check_win() for the
-             *		    Amiga */
-
           case 'q':               /* "-q {errorfile}" QuickFix mode */
             parmp->use_ef = (char_u *)argv[0];
             break;
@@ -1527,7 +1526,7 @@ void allocate_generic_buffers(void)
  */
 static void check_and_set_isatty(mparm_T *paramp)
 {
-  paramp->stdout_isatty = (mch_check_win(paramp->argc, paramp->argv) != FAIL);
+  paramp->stdout_isatty = os_isatty(STDOUT_FILENO);
   TIME_MSG("window checked");
 }
 
@@ -1625,9 +1624,8 @@ static void handle_tag(char_u *tagname)
  */
 static void check_tty(mparm_T *parmp)
 {
-  int input_isatty;                     /* is active input a terminal? */
-
-  input_isatty = mch_input_isatty();
+  // is active input a terminal?
+  bool input_isatty = os_isatty(read_cmd_fd);
   if (exmode_active) {
     if (!input_isatty)
       silent_mode = TRUE;
