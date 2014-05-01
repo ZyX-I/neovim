@@ -4,6 +4,7 @@
 
 #include "vim.h"
 #include "memory.h"
+#include "misc2.h"
 
 #include "translator/translator/translator.h"
 #include "translator/parser/expressions.h"
@@ -88,33 +89,33 @@ typedef enum {
 
 typedef WFDEC((*AssignmentValueDump), void *dump_cookie);
 typedef struct {
-  CommandNode *node;
-  size_t indent;
+  const CommandNode *node;
+  const size_t indent;
 } TranslateFuncArgs;
 
 // {{{ Function declarations
-static WFDEC(write_string_len, const char *s, size_t len);
+static WFDEC(write_string_len, const char *const s, size_t len);
 static WFDEC(dump_number, long number);
-static WFDEC(dump_string, const char_u *s);
-static WFDEC(dump_string_len, const char_u *s, size_t len);
+static WFDEC(dump_string, const char_u *const s);
+static WFDEC(dump_string_len, const char_u *const s, size_t len);
 static WFDEC(dump_bool, bool b);
-static WFDEC(translate_regex, const Regex *regex);
-static WFDEC(translate_address_followup, const AddressFollowup *followup);
-static WFDEC(translate_range, const Range *range);
+static WFDEC(translate_regex, const Regex *const regex);
+static WFDEC(translate_address_followup, const AddressFollowup *const followup);
+static WFDEC(translate_range, const Range *const range);
 static WFDEC(translate_ex_flags, uint_least8_t exflags);
-static WFDEC(translate_number, ExpressionType type, const char_u *s,
-             const char_u *e);
-static WFDEC(translate_scope, char_u **start, const ExpressionNode *expr,
+static WFDEC(translate_number, ExpressionType type, const char_u *const s,
+             const char_u *const e);
+static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
              uint_least8_t flags);
-static WFDEC(translate_expr, const ExpressionNode *expr);
-static WFDEC(translate_exprs, const ExpressionNode *expr);
-static WFDEC(translate_function, const TranslateFuncArgs *args);
+static WFDEC(translate_expr, const ExpressionNode *const expr);
+static WFDEC(translate_exprs, ExpressionNode *const expr);
+static WFDEC(translate_function, const TranslateFuncArgs *const args);
 static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
                              bool unique,
                              AssignmentValueDump dump, void *dump_cookie);
-static WFDEC(translate_node, const CommandNode *node, size_t indent);
-static WFDEC(translate_nodes, const CommandNode *node, size_t indent);
-static int translate_script_stdout(const CommandNode *node);
+static WFDEC(translate_node, const CommandNode *const node, size_t indent);
+static WFDEC(translate_nodes, const CommandNode *const node, size_t indent);
+static int translate_script_stdout(const CommandNode *const node);
 static char_u *fgetline_file(int c, FILE *file, int indent);
 // }}}
 
@@ -122,7 +123,7 @@ static char_u *fgetline_file(int c, FILE *file, int indent);
 ///
 /// @param[in]  s    String that will be written.
 /// @param[in]  len  Length of this string.
-static WFDEC(write_string_len, const char *s, size_t len)
+static WFDEC(write_string_len, const char *const s, size_t len)
 {
   size_t written;
   if (len) {
@@ -159,7 +160,7 @@ static WFDEC(dump_number, long number)
 /// Use translate_string to dump vim String (kExpr*String)
 ///
 /// @param[in]  s  NUL-terminated string that will be written.
-static WFDEC(dump_string, const char_u *s)
+static WFDEC(dump_string, const char_u *const s)
 {
   // FIXME escape characters
   WS("'")
@@ -174,7 +175,7 @@ static WFDEC(dump_string, const char_u *s)
 ///
 /// @param[in]  s    String that will be written.
 /// @param[in]  len  Length of this string.
-static WFDEC(dump_string_len, const char_u *s, size_t len)
+static WFDEC(dump_string_len, const char_u *const s, size_t len)
 {
   // FIXME escape characters
   WS("'")
@@ -201,7 +202,7 @@ static WFDEC(dump_bool, bool b)
 /// Dump regular expression
 ///
 /// @param[in]  regex  Regular expression that will be dumped.
-static WFDEC(translate_regex, const Regex *regex)
+static WFDEC(translate_regex, const Regex *const regex)
 {
   CALL(dump_string, regex->string)
   return OK;
@@ -210,7 +211,7 @@ static WFDEC(translate_regex, const Regex *regex)
 /// Dump address followup
 ///
 /// @param[in]  followup  Address followup that will be dumped.
-static WFDEC(translate_address_followup, const AddressFollowup *followup)
+static WFDEC(translate_address_followup, const AddressFollowup *const followup)
 {
   // FIXME Replace magic numbers with constants
   switch (followup->type) {
@@ -239,9 +240,9 @@ static WFDEC(translate_address_followup, const AddressFollowup *followup)
 /// Dump Ex command range
 ///
 /// @param[in]  range  Range that will be dumped.
-static WFDEC(translate_range, const Range *range)
+static WFDEC(translate_range, const Range *const range)
 {
-  Range *current_range = range;
+  const Range *current_range = range;
 
   if (current_range->address.type == kAddrMissing) {
     WS("nil")
@@ -356,8 +357,8 @@ static WFDEC(translate_ex_flags, uint_least8_t exflags)
 /// @param[in]  type  Type of the number node being dumped.
 /// @param[in]  s     Pointer to first character in dumped number.
 /// @param[in]  e     Pointer to last character in dumped number.
-static WFDEC(translate_number, ExpressionType type, const char_u *s,
-             const char_u *e)
+static WFDEC(translate_number, ExpressionType type, const char_u *const s,
+             const char_u *const e)
 {
   WS("vim.number.new(state, ")
   switch (type) {
@@ -368,16 +369,18 @@ static WFDEC(translate_number, ExpressionType type, const char_u *s,
     }
     case kExprOctalNumber: {
       unsigned long number;
-      char_u saved_char = e[1];
+      char *num_s;
       int n;
 
-      e[1] = NUL;
-      if ((n = sscanf((char *) s, "%lo", &number)) != (int) (e - s + 1)) {
+      // FIXME Remove unneeded allocation
+      if ((num_s = (char *) vim_strnsave((char_u *) s, (e - s) + 1)) == NULL)
+        return FAIL;
+
+      if ((n = sscanf(num_s, "%lo", &number)) != (int) (e - s + 1)) {
         // TODO: check errno
         // TODO: give error message
         return FAIL;
       }
-      e[1] = saved_char;
       CALL(dump_number, (long) number)
       break;
     }
@@ -425,7 +428,7 @@ static WFDEC(translate_number, ExpressionType type, const char_u *s,
 /// @endparblock
 ///
 /// @return FAIL in case of unrecoverable error, OK otherwise.
-static WFDEC(translate_scope, char_u **start, const ExpressionNode *expr,
+static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
              uint_least8_t flags)
 {
   assert(expr->type == kExprSimpleVariableName);
@@ -503,7 +506,7 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *expr,
 /// Dump parsed VimL expression
 ///
 /// @param[in]  expr  Expression being dumped.
-static WFDEC(translate_expr, const ExpressionNode *expr)
+static WFDEC(translate_expr, const ExpressionNode *const expr)
 {
   switch (expr->type) {
     case kExprFloat: {
@@ -666,7 +669,7 @@ static WFDEC(translate_expr, const ExpressionNode *expr)
 /// Dump a sequence of VimL expressions (e.g. for :echo 1 2 3)
 ///
 /// @param[in]  expr  Pointer to the first expression that will be dumped.
-static WFDEC(translate_exprs, const ExpressionNode *expr)
+static WFDEC(translate_exprs, ExpressionNode *const expr)
 {
   ExpressionNode *current_expr = expr;
 
@@ -686,7 +689,7 @@ static WFDEC(translate_exprs, const ExpressionNode *expr)
 ///
 /// @param[in]  args  Function node and indentation that was used for function 
 ///                   definition.
-static WFDEC(translate_function, const TranslateFuncArgs *args)
+static WFDEC(translate_function, const TranslateFuncArgs *const args)
 {
   size_t i;
   char_u **data = (char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
@@ -852,7 +855,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
 ///
 /// @param[in]  node    Node to translate.
 /// @param[in]  indent  Indentation of the result.
-static WFDEC(translate_node, const CommandNode *node, size_t indent)
+static WFDEC(translate_node, const CommandNode *const node, size_t indent)
 {
   char_u *name;
   size_t start_from_arg = 0;
@@ -903,7 +906,7 @@ static WFDEC(translate_node, const CommandNode *node, size_t indent)
     return OK;
   } else if (node->type == kCmdFunction
              && node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
-    TranslateFuncArgs args = {node, indent};
+    const TranslateFuncArgs args = {node, indent};
     CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, TRUE, !node->bang,
                          (AssignmentValueDump) &translate_function,
                          (void *) &args)
@@ -1240,9 +1243,9 @@ static WFDEC(translate_node, const CommandNode *node, size_t indent)
 ///
 /// @param[in]  node    Pointer to the first node that will be translated.
 /// @param[in]  indent  Indentation of the result.
-static WFDEC(translate_nodes, const CommandNode *node, size_t indent)
+static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
 {
-  CommandNode *current_node;
+  const CommandNode *current_node;
 
   for (current_node = node; current_node != NULL;
        current_node = current_node->next) {
@@ -1310,7 +1313,7 @@ static WFDEC(translate_nodes, const CommandNode *node, size_t indent)
 /// @param[in]  cookie  Last argument to the above function.
 ///
 /// @return OK in case of success, FAIL otherwise.
-int translate_script(const CommandNode *node, Writer write, void *cookie)
+int translate_script(const CommandNode *const node, Writer write, void *cookie)
 {
   TranslationOptions to = kTransScript;
 
@@ -1332,7 +1335,7 @@ int translate_script(const CommandNode *node, Writer write, void *cookie)
 /// @param[in]  node  Pointer to the first command inside this script.
 ///
 /// @return OK in case of success, FAIL otherwise.
-static int translate_script_stdout(const CommandNode *node)
+static int translate_script_stdout(const CommandNode *const node)
 {
   return translate_script(node, write_file, (void *) stdout);
 }
@@ -1387,7 +1390,8 @@ int translate_script_std(void)
 /// @param[in]  fname  Target filename.
 ///
 /// @return OK in case of success, FAIL otherwise.
-int translate_script_str_to_file(const char_u *str, const char *fname)
+int translate_script_str_to_file(const char_u *const str,
+                                 const char *const fname)
 {
   CommandNode *node;
   CommandParserOptions o = {0, FALSE};
@@ -1396,7 +1400,7 @@ int translate_script_str_to_file(const char_u *str, const char *fname)
   char_u **pp;
   FILE *f;
 
-  pp = &str;
+  pp = (char_u **) &str;
 
   if ((node = parse_cmd_sequence(o, position, (LineGetter) &fgetline_string,
                                  pp)) == NULL)
