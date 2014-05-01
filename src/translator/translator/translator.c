@@ -12,75 +12,115 @@
 #include "translator/parser/command_definitions.h"
 #include "translator/printer/ex_commands.h"
 
-typedef enum {
-  kTransUser = 0,
-  kTransScript,
-  kTransFunc,
-} TranslationOptions;
-
+/// Returns function declaration with additional arguments
+///
+/// Additional arguments are writer function, its last argument and translation 
+/// options.
 #define WFDEC(f, ...) int f(__VA_ARGS__, Writer write, void *cookie, \
                             TranslationOptions to)
+/// Call function with additional arguments, propagate FAIL
 #define CALL(f, ...) \
     { \
       if (f(__VA_ARGS__, write, cookie, to) == FAIL) \
         return FAIL; \
     }
+/// Call function with additional arguments, goto error_label if it failed
 #define CALL_ERR(error_label, f, ...) \
     { \
       if (f(__VA_ARGS__, write, cookie) == FAIL) \
         goto error_label; \
     }
+/// Same as CALL, but with different translation options
+///
+/// Translation options used define translated function as being :function 
+/// definition contents
 #define CALL_FUNC(f, ...) \
     { \
       TranslationOptions to = kTransFunc; \
       CALL(f, __VA_ARGS__) \
     }
+/// Same as CALL_ERR, but with different translation options
+///
+/// Translation options used define translated function as being :function 
+/// definition contents
 #define CALL_FUNC_ERR(error_label, f, ...) \
     { \
       TranslationOptions to = kTransFunc; \
       CALL_ERR(error_label, f, __VA_ARGS__) \
     }
+/// Same as CALL, but with different translation options
+///
+/// Translation options used define translated function as being .vim file 
+/// contents
 #define CALL_SCRIPT(f, ...) \
     { \
       TranslationOptions to = kTransScript; \
       CALL(f, __VA_ARGS__) \
     }
+/// Same as CALL_ERR, but with different translation options
+///
+/// Translation options used define translated function as being .vim file 
+/// contents
 #define CALL_SCRIPT_ERR(error_label, f, ...) \
     { \
       TranslationOptions to = kTransScript; \
       CALL_ERR(error_label, f, __VA_ARGS__) \
     }
+/// Write string with given length, propagate FAIL
 #define W_LEN(s, len) \
     CALL(write_string_len, (char *) s, len)
+/// Write string with given length, goto error_label in case of failure
 #define W_LEN_ERR(error_label, s, len) \
     CALL_ERR(error_label, write_string_len, (char *) s, len)
+/// Write NUL-terminated string, propagate FAIL
 #define W(s) \
     W_LEN(s, STRLEN(s))
+/// Write NUL-terminated string, goto error_label in case of failure
 #define W_ERR(error_label, s) \
     W_LEN_ERR(error_label, s, STRLEN(s))
+/// Write string given its start and end, propagate FAIL
 #define W_END(s, e) \
     W_LEN(s, e - s + 1)
+/// Write string given its start and end, goto error_label in case of failure
 #define W_END_ERR(error_label, s, e) \
     W_LEN_ERR(error_label, s, e - s + 1)
+/// Write ExpressionNode, propagate FAIL
+///
+/// Data written is string between expr->position and expr->end_position, 
+/// inclusive.
 #define W_EXPR_POS(expr) \
     W_END(expr->position, expr->end_position)
+/// Write ExpressionNode, goto error_label in case of failure
+///
+/// Data written is string between expr->position and expr->end_position, 
+/// inclusive.
 #define W_EXPR_POS_ERR(error_label, expr) \
     W_END_ERR(error_label, expr->position, expr->end_position)
+/// Same as W_EXPR_POS, but written string is escaped
 #define W_EXPR_POS_ESCAPED(expr) \
     CALL(dump_string_len, expr->position, \
          expr->end_position - expr->position + 1)
+/// Same as W_EXPR_POS_ERR, but written string is escaped
 #define W_EXPR_POS_ESCAPED_ERR(error_label, expr) \
     CALL_ERR(error_label, dump_string_len, expr->position, \
              expr->end_position - expr->position + 1)
+/// Write static string
+///
+/// Same as W, but string length is determined at compile time
 #define WS(s) \
     W_LEN(s, sizeof(s) - 1)
+/// Write static string
+///
+/// Same as W_ERR, but string length is determined at compile time
 #define WS_ERR(error_label, s) \
     W_LEN_ERR(error_label, s, sizeof(s) - 1)
+/// Write indentation, indentation level is indent, propagate FAIL
 #define WINDENT(indent) \
     { \
       for (size_t i = 0; i < indent; i++) \
         WS("  ") \
     }
+/// Write indentation as with WINDENT, but goto error_label in case of failure
 #define WINDENT_ERR(error_label, indent) \
     { \
       for (size_t i = 0; i < indent; i++) \
@@ -92,6 +132,12 @@ typedef struct {
   const CommandNode *node;
   const size_t indent;
 } TranslateFuncArgs;
+
+typedef enum {
+  kTransUser = 0,
+  kTransScript,
+  kTransFunc,
+} TranslationOptions;
 
 // {{{ Function declarations
 static WFDEC(write_string_len, const char *const s, size_t len);
