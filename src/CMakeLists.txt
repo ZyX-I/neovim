@@ -32,6 +32,24 @@ list(APPEND NEOVIM_SOURCES "${MSGPACK_DISPATCH}")
 file( GLOB OS_SOURCES os/*.c )
 file( GLOB TRANSLATOR_SOURCES translator/*/*.c )
 
+set(CONV_SRCS
+  api.c
+  arabic.c
+  garray.c
+  memory.c
+  os/env.c
+  os/event.c
+  os/job.c
+  os/mem.c
+  os/rstream.c
+  os/signal.c
+  os/users.c
+  os/wstream.c
+  )
+
+set_source_files_properties(
+  ${CONV_SRCS} PROPERTIES COMPILE_FLAGS "${COMPILE_FLAGS} -Wconversion")
+
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
   if(DEFINED ENV{SANITIZE})
     message(STATUS "Enabling the sanitizers")
@@ -55,8 +73,13 @@ check_library_exists(curses tgetent "" HAVE_LIBCURSES)
 if (HAVE_LIBCURSES)
   list(APPEND NVIM_LINK_LIBRARIES curses)
 else()
-  find_package(Curses REQUIRED)
-  list(APPEND NVIM_LINK_LIBRARIES ${CURSES_LIBRARIES})
+  check_library_exists(tinfo tgetent "" HAVE_LIBTINFO)
+  if (HAVE_LIBTINFO)
+    list(APPEND NVIM_LINK_LIBRARIES tinfo)
+  else()
+    find_package(Curses REQUIRED)
+    list(APPEND NVIM_LINK_LIBRARIES ${CURSES_LIBRARIES})
+  endif()
 endif()
 
 # Put these last on the link line, since multiple things may depend on them.
@@ -77,5 +100,3 @@ if(NOT DEFINED ENV{SKIP_UNITTEST})
   add_library(nvim-test MODULE EXCLUDE_FROM_ALL ${NEOVIM_SOURCES} ${OS_SOURCES} ${TRANSLATOR_SOURCES})
   target_link_libraries(nvim-test ${NVIM_LINK_LIBRARIES})
 endif()
-
-include_directories("${PROJECT_SOURCE_DIR}/src/proto")

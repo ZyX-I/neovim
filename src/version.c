@@ -113,7 +113,7 @@ static char *(features[]) = {
   "+mouse",
   "-mouseshape",
 
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
   "+mouse_dec",
   "-mouse_gpm",
 # ifdef FEAT_MOUSE_JSB
@@ -122,15 +122,15 @@ static char *(features[]) = {
   "-mouse_jsbterm",
 # endif  // ifdef FEAT_MOUSE_JSB
   "+mouse_netterm",
-#endif  // if defined(UNIX) || defined(VMS)
+#endif  // if defined(UNIX)
 
 
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
   "+mouse_sgr",
   "-mouse_sysmouse",
   "+mouse_urxvt",
   "+mouse_xterm",
-#endif  // if defined(UNIX) || defined(VMS)
+#endif  // if defined(UNIX)
 
   "+multi_byte",
   "+multi_lang",
@@ -159,9 +159,9 @@ static char *(features[]) = {
 #else  // ifdef FEAT_TAG_ANYWHITE
   "-tag_any_white",
 #endif  // ifdef FEAT_TAG_ANYWHITE
-#if defined(UNIX) || defined(__EMX__)
+#if defined(UNIX)
 
-  // only Unix (or OS/2 with EMX!) can have terminfo instead of termcap
+  // only Unix can have terminfo instead of termcap
 # ifdef TERMINFO
   "+terminfo",
 # else // ifdef TERMINFO
@@ -173,7 +173,7 @@ static char *(features[]) = {
 # else  // ifdef HAVE_TGETENT
   "-tgetent",
 # endif  // ifdef HAVE_TGETENT
-#endif  // if defined(UNIX) || defined(__EMX__)
+#endif  // if defined(UNIX)
   "+termresponse",
   "+textobjects",
   "+title",
@@ -189,19 +189,34 @@ static char *(features[]) = {
   "+wildmenu",
   "+windows",
   "+writebackup",
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
   "-X11",
-#endif  // if defined(UNIX) || defined(VMS)
+#endif  // if defined(UNIX)
   "-xfontset",
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
   "-xsmp",
   "-xterm_clipboard",
-#endif  // if defined(UNIX) || defined(VMS)
+#endif  // if defined(UNIX)
   NULL
 };
 
 static int included_patches[] = {
   // Add new patch number below this line
+  //273,
+  272,
+  //271,
+  //270,
+  269,
+  268,
+  //267,
+  266,
+  265,
+  264,
+  //263,
+  262,
+  261,
+  260,
+  //259,
   //258,
   //257,
   //256,
@@ -219,11 +234,11 @@ static int included_patches[] = {
   //244,
   //243,
   //242,
-  //241,
+  241,
   240,
   239,
   //238,
-  //237,
+  237,
   236,
   //235,
   234,
@@ -505,7 +520,7 @@ int has_patch(int n)
 void ex_version(exarg_T *eap)
 {
   // Ignore a ":version 9.99" command.
-  if (*eap->arg == NUL) {
+  if (*eap->arg == '\0') {
     msg_putchar('\n');
     list_version();
   }
@@ -627,15 +642,15 @@ void list_version(void)
 
 #ifdef HAVE_PATHDEF
 
-  if ((*compiled_user != NUL) || (*compiled_sys != NUL)) {
+  if ((*compiled_user != '\0') || (*compiled_sys != '\0')) {
     MSG_PUTS(_("\nCompiled "));
 
-    if (*compiled_user != NUL) {
+    if (*compiled_user != '\0') {
       MSG_PUTS(_("by "));
       MSG_PUTS(compiled_user);
     }
 
-    if (*compiled_sys != NUL) {
+    if (*compiled_sys != '\0') {
       MSG_PUTS("@");
       MSG_PUTS(compiled_sys);
     }
@@ -680,13 +695,13 @@ void list_version(void)
 #endif  // ifdef USR_EXRC_FILE2
 #ifdef HAVE_PATHDEF
 
-  if (*default_vim_dir != NUL) {
+  if (*default_vim_dir != '\0') {
     version_msg(_("  fall-back for $VIM: \""));
     version_msg((char *)default_vim_dir);
     version_msg("\"\n");
   }
 
-  if (*default_vimruntime_dir != NUL) {
+  if (*default_vimruntime_dir != '\0') {
     version_msg(_(" f-b for $VIMRUNTIME: \""));
     version_msg((char *)default_vimruntime_dir);
     version_msg("\"\n");
@@ -820,7 +835,7 @@ void intro_message(int colon)
         }
       }
 
-      if (*p != NUL) {
+      if (*p != '\0') {
         do_intro_line(row, (char_u *)_(p), i == 2, 0);
       }
       row++;
@@ -878,10 +893,10 @@ static void do_intro_line(int row, char_u *mesg, int add_version, int attr)
   }
 
   // Split up in parts to highlight <> items differently.
-  for (p = mesg; *p != NUL; p += l) {
+  for (p = mesg; *p != '\0'; p += l) {
     clen = 0;
 
-    for (l = 0; p[l] != NUL
+    for (l = 0; p[l] != '\0'
          && (l == 0 || (p[l] != '<' && p[l - 1] != '>')); ++l) {
       if (has_mbyte) {
         clen += ptr2cells(p + l);

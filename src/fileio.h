@@ -21,7 +21,7 @@ void filemess(buf_T *buf, char_u *name, char_u *s, int attr);
 int readfile(char_u *fname, char_u *sfname, linenr_T from,
              linenr_T lines_to_skip, linenr_T lines_to_read, exarg_T *eap,
              int flags);
-int prep_exarg(exarg_T *eap, buf_T *buf);
+void prep_exarg(exarg_T *eap, buf_T *buf);
 void set_file_options(int set_options, exarg_T *eap);
 void set_forced_fenc(exarg_T *eap);
 int prepare_crypt_read(FILE *fp);
@@ -93,5 +93,5 @@ char_u *file_pat_to_reg_pat(char_u *pat, char_u *pat_end,
                             int no_bslash);
 long read_eintr(int fd, void *buf, size_t bufsize);
 long write_eintr(int fd, void *buf, size_t bufsize);
-/* vim: set ft=c : */
+
 #endif /* NEOVIM_FILEIO_H */

@@ -1266,8 +1266,7 @@ static char_u *fgetline_file(int c, FILE *file, int indent)
   char *res;
   size_t len;
 
-  if ((res = ALLOC_CLEAR_NEW(char, 1024)) == NULL)
-    return NULL;
+  res = XCALLOC_NEW(char, 1024);
 
   if (fgets(res, 1024, file) == NULL)
     return NULL;

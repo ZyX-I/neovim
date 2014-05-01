@@ -17,11 +17,20 @@ check_and_report() {
 	)
 }
 
-# setup environment for using the /opt/neovim-deps prefix
-export PATH="/opt/neovim-deps/bin:$PATH"
-export PKG_CONFIG_PATH="/opt/neovim-deps/lib/pkgconfig"
-export DEPS_CMAKE_FLAGS="-DUSE_BUNDLED_LIBUV=OFF -DUSE_BUNDLED_LUAJIT=OFF -DUSE_BUNDLED_MSGPACK=OFF -DUSE_BUNDLED_LUAROCKS=OFF"
-eval $(/opt/neovim-deps/bin/luarocks path)
+set_environment() {
+	local prefix="$1"
+	eval $($prefix/bin/luarocks path)
+	export PATH="$prefix/bin:$PATH"
+	export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
+	export DEPS_CMAKE_FLAGS="-DUSE_BUNDLED_LIBUV=OFF -DUSE_BUNDLED_LUAJIT=OFF -DUSE_BUNDLED_MSGPACK=OFF -DUSE_BUNDLED_LUAROCKS=OFF"
+}
+
+# install prebuilt dependencies
+if [ ! -d /opt/neovim-deps ]; then
+	cd /opt
+	sudo git clone --depth=1 git://github.com/tarruda/neovim-deps
+	cd -
+fi
 
 # Travis reports back that it has 32-cores via /proc/cpuinfo, but it's not
 # what we really have available.  According to their documentation, it only has
@@ -31,7 +40,19 @@ eval $(/opt/neovim-deps/bin/luarocks path)
 # for more information.
 MAKE_CMD="make -j2"
 
-if [ "$CC" = "clang" ]; then
+if [ "$TRAVIS_BUILD_TYPE" = "clang/asan" ]; then
+	if [ ! -d /usr/local/clang-3.4 ]; then
+		echo "Downloading clang 3.4..."
+		sudo sh <<- "EOF"
+		mkdir /usr/local/clang-3.4
+		wget -q -O - http://llvm.org/releases/3.4/clang+llvm-3.4-x86_64-unknown-ubuntu12.04.tar.xz |
+		unxz -c | tar xf - --strip-components=1 -C /usr/local/clang-3.4
+		EOF
+	fi
+	sudo pip install cpp-coveralls
+
+	export CC=clang
+	set_environment /opt/neovim-deps
 	if test -f /usr/local/clang-3.4/bin/clang; then
 		USE_CLANG_34=true
 		export CC=/usr/local/clang-3.4/bin/clang
@@ -56,7 +77,7 @@ if [ "$CC" = "clang" ]; then
 		export ASAN_OPTIONS="detect_leaks=1:"
 	else
 		symbolizer=/usr/local/clang-3.3/bin/llvm-symbolizer
-        fi
+	fi
 
 	export SANITIZE=1
 	export ASAN_SYMBOLIZER_PATH=$symbolizer
@@ -74,10 +95,38 @@ if [ "$CC" = "clang" ]; then
 		exit 1
 	fi
 	check_and_report
+	coveralls --encoding iso-8859-1
 	$MAKE_CMD install
-else
+elif [ "$TRAVIS_BUILD_TYPE" = "gcc/unittest" ]; then
+	sudo pip install cpp-coveralls
+	export CC=gcc
+	set_environment /opt/neovim-deps
 	export SKIP_EXEC=1
-	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DBUSTED_OUTPUT_TYPE=TAP -DUSE_GCOV=ON"
-	$MAKE_CMD cmake CMAKE_EXTRA_FLAGS="-DUSE_GCOV=ON"
-	$MAKE_CMD unittest
+	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DBUSTED_OUTPUT_TYPE=TAP -DUSE_GCOV=ON" unittest
+	coveralls --encoding iso-8859-1
+elif [ "$TRAVIS_BUILD_TYPE" = "gcc/ia32" ]; then
+	set_environment /opt/neovim-deps/32
+
+	# Pins the version of the java package installed on the Travis VMs
+	# and avoids a lengthy upgrade process for them.
+	sudo apt-mark hold oracle-java7-installer oracle-java8-installer
+
+	sudo apt-get update
+
+	# Need this to keep apt-get from removing gcc when installing libncurses
+	# below.
+	sudo apt-get install libc6-dev libc6-dev:i386
+
+	# Do this separately so that things get configured correctly, otherwise
+	# libncurses fails to install.
+	sudo apt-get install gcc-multilib g++-multilib
+
+	# Install the dev version to get the pkg-config and symlinks installed
+	# correctly.
+	sudo apt-get install libncurses5-dev:i386
+
+	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DBUSTED_OUTPUT_TYPE=TAP -DCMAKE_TOOLCHAIN_FILE=cmake/i386-linux-gnu.toolchain.cmake" unittest
+	$MAKE_CMD test
+elif [ "$TRAVIS_BUILD_TYPE" = "clint" ]; then
+	./scripts/clint.sh
 fi

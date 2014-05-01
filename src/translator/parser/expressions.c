@@ -18,6 +18,7 @@
 #include "misc2.h"
 #include "types.h"
 #include "charset.h"
+#include "ascii.h"
 
 #include "translator/parser/expressions.h"
 
@@ -26,8 +27,7 @@
 
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = expr_alloc(type)) == NULL) \
-      return FAIL; \
+    top_node = expr_alloc(type); \
     next_node = &((*old_top_node)->next); \
     top_node->children = *old_top_node; \
     *old_top_node = top_node; \
@@ -35,16 +35,14 @@
 
 #define TOP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = expr_alloc(type)) == NULL) \
-      return FAIL; \
+    top_node = expr_alloc(type); \
     next_node = &(top_node->children); \
     *old_top_node = top_node; \
   }
 
 #define VALUE_NODE(type, error, node, pos, end_pos) \
   { \
-    if ((*node = expr_alloc(type)) == NULL) \
-      return FAIL; \
+    *node = expr_alloc(type); \
     (*node)->position = pos; \
     (*node)->end_position = end_pos; \
   }
@@ -128,15 +126,15 @@ static int parse1(char_u **arg,
 ///
 /// @param[in]  type   Node type.
 ///
-/// @return Pointer to allocated block of memory or NULL in case of error.
+/// @return Pointer to allocated block of memory.
 static ExpressionNode *expr_alloc(ExpressionType type)
 {
   ExpressionNode *node;
 
-  if ((node = ALLOC_CLEAR_NEW(ExpressionNode, 1)) == NULL)
-    return NULL;
+  node = XCALLOC_NEW(ExpressionNode, 1);
 
   node->type = type;
+
   return node;
 }
 
@@ -400,10 +398,7 @@ static int parse_dictionary(char_u **arg,
       return NOTDONE;
   }
 
-  if ((top_node = expr_alloc(kExprDictionary)) == NULL) {
-    free_expr(*parse1_node);
-    return FAIL;
-  }
+  top_node = expr_alloc(kExprDictionary);
   next_node = &(top_node->children);
   *node = top_node;
 
@@ -590,8 +585,7 @@ static int parse_dot_subscript(char_u **arg,
   // XXX Workaround for concat ambiguity: s:autoload#var
   if (*e == AUTOLOAD_CHAR)
     return OK;
-  if ((top_node = expr_alloc(kExprConcatOrSubscript)) == NULL)
-    return FAIL;
+  top_node = expr_alloc(kExprConcatOrSubscript);
   top_node->children = *node;
   top_node->position = s + 1;
   top_node->end_position = e - 1;
@@ -1057,8 +1051,7 @@ static int parse7(char_u **arg,
           break;
         }
       }
-      if ((top_node = expr_alloc(type)) == NULL)
-        return FAIL;
+      top_node = expr_alloc(type);
       top_node->children = *node;
       *node = top_node;
     }
@@ -1546,7 +1539,7 @@ TestExprResult *parse0_test(char_u *arg)
 {
   TestExprResult *result;
 
-  if ((result = ALLOC_CLEAR_NEW(TestExprResult, 1)) == NULL)
+  if ((result = XCALLOC_NEW(TestExprResult, 1)) == NULL)
     return NULL;
 
   result->end = arg;

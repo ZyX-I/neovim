@@ -141,7 +141,7 @@ void do_debug(char_u *cmd)
   if (sourcing_name != NULL)
     msg(sourcing_name);
   if (sourcing_lnum != 0)
-    smsg((char_u *)_("line %ld: %s"), (long)sourcing_lnum, cmd);
+    smsg((char_u *)_("line %" PRId64 ": %s"), (int64_t)sourcing_lnum, cmd);
   else
     smsg((char_u *)_("cmd: %s"), cmd);
 
@@ -179,7 +179,7 @@ void do_debug(char_u *cmd)
        * If not, reset "last_cmd".
        * For a blank line use previous command. */
       p = skipwhite(cmdline);
-      if (*p != NUL) {
+      if (*p != '\0') {
         switch (*p) {
         case 'c': last_cmd = CMD_CONT;
           tail = "ont";
@@ -204,7 +204,7 @@ void do_debug(char_u *cmd)
         if (last_cmd != 0) {
           /* Check that the tail matches. */
           ++p;
-          while (*p != NUL && *p == *tail) {
+          while (*p != '\0' && *p == *tail) {
             ++p;
             ++tail;
           }
@@ -320,10 +320,10 @@ void dbg_check_breakpoint(exarg_T *eap)
         p = (char_u *)"<SNR>";
       else
         p = (char_u *)"";
-      smsg((char_u *)_("Breakpoint in \"%s%s\" line %ld"),
+      smsg((char_u *)_("Breakpoint in \"%s%s\" line %" PRId64),
           p,
-          debug_breakpoint_name + (*p == NUL ? 0 : 3),
-          (long)debug_breakpoint_lnum);
+          debug_breakpoint_name + (*p == '\0' ? 0 : 3),
+          (int64_t)debug_breakpoint_lnum);
       debug_breakpoint_name = NULL;
       do_debug(eap->cmd);
     } else {
@@ -448,8 +448,8 @@ dbg_parsearg (
     bp->dbg_lnum = 0;
 
   /* Find the function or file name.  Don't accept a function name with (). */
-  if ((!here && *p == NUL)
-      || (here && *p != NUL)
+  if ((!here && *p == '\0')
+      || (here && *p != '\0')
       || (bp->dbg_type == DBG_FUNC && strstr((char *)p, "()") != NULL)) {
     EMSG2(_(e_invarg2), arg);
     return FAIL;
@@ -615,11 +615,11 @@ void ex_breaklist(exarg_T *eap)
       bp = &BREAKP(i);
       if (bp->dbg_type == DBG_FILE)
         home_replace(NULL, bp->dbg_name, NameBuff, MAXPATHL, TRUE);
-      smsg((char_u *)_("%3d  %s %s  line %ld"),
+      smsg((char_u *)_("%3d  %s %s  line %" PRId64),
           bp->dbg_nr,
           bp->dbg_type == DBG_FUNC ? "func" : "file",
           bp->dbg_type == DBG_FUNC ? bp->dbg_name : NameBuff,
-          (long)bp->dbg_lnum);
+          (int64_t)bp->dbg_lnum);
     }
 }
 
@@ -937,7 +937,7 @@ void ex_profile(exarg_T *eap)
   len = (int)(e - eap->arg);
   e = skipwhite(e);
 
-  if (len == 5 && STRNCMP(eap->arg, "start", 5) == 0 && *e != NUL) {
+  if (len == 5 && STRNCMP(eap->arg, "start", 5) == 0 && *e != '\0') {
     vim_free(profile_fname);
     profile_fname = vim_strsave(e);
     do_profiling = PROF_YES;
@@ -1010,7 +1010,7 @@ void set_context_in_profile_cmd(expand_T *xp, char_u *arg)
   xp->xp_pattern = arg;
 
   end_subcmd = skiptowhite(arg);
-  if (*end_subcmd == NUL)
+  if (*end_subcmd == '\0')
     return;
 
   if (end_subcmd - arg == 5 && STRNCMP(arg, "start", 5) == 0) {
@@ -1529,7 +1529,7 @@ static char_u *do_one_arg(char_u *str)
     }
   }
   str = skipwhite(str);
-  *p = NUL;
+  *p = '\0';
 
   return str;
 }
@@ -1541,7 +1541,7 @@ static char_u *do_one_arg(char_u *str)
 void get_arglist(garray_T *gap, char_u *str)
 {
   ga_init(gap, (int)sizeof(char_u *), 20);
-  while (*str != NUL) {
+  while (*str != '\0') {
     ga_grow(gap, 1);
     ((char_u **)gap->ga_data)[gap->ga_len++] = str;
 
@@ -1898,7 +1898,7 @@ void ex_next(exarg_T *eap)
              || !check_changed(curbuf, CCGD_AW
                  | (eap->forceit ? CCGD_FORCEIT : 0)
                  | CCGD_EXCMD)) {
-    if (*eap->arg != NUL) {                 /* redefine file list */
+    if (*eap->arg != '\0') {                 /* redefine file list */
       if (do_arglist(eap->arg, AL_SET, 0) == FAIL)
         return;
       i = 0;
@@ -1963,7 +1963,7 @@ void ex_argdelete(exarg_T *eap)
     if (eap->line2 > ARGCOUNT)
       eap->line2 = ARGCOUNT;
     n = eap->line2 - eap->line1 + 1;
-    if (*eap->arg != NUL || n <= 0)
+    if (*eap->arg != '\0' || n <= 0)
       EMSG(_(e_invarg));
     else {
       for (i = eap->line1; i <= eap->line2; ++i)
@@ -1976,7 +1976,7 @@ void ex_argdelete(exarg_T *eap)
       else if (curwin->w_arg_idx > eap->line1)
         curwin->w_arg_idx = eap->line1;
     }
-  } else if (*eap->arg == NUL)
+  } else if (*eap->arg == '\0')
     EMSG(_(e_argreq));
   else
     do_arglist(eap->arg, AL_DEL, 0);
@@ -2153,7 +2153,7 @@ void ex_compiler(exarg_T *eap)
   char_u      *old_cur_comp = NULL;
   char_u      *p;
 
-  if (*eap->arg == NUL) {
+  if (*eap->arg == '\0') {
     /* List all compiler scripts. */
     do_cmdline_cmd((char_u *)"echo globpath(&rtp, 'compiler/*.vim')");
     /* ) keep the indenter happy... */
@@ -2272,7 +2272,7 @@ void        *cookie;
 
     /* Loop over all entries in 'runtimepath'. */
     rtp = rtp_copy;
-    while (*rtp != NUL && (all || !did_one)) {
+    while (*rtp != '\0' && (all || !did_one)) {
       /* Copy the path from 'runtimepath' to buf[]. */
       copy_option_part(&rtp, buf, MAXPATHL, ",");
       if (name == NULL) {
@@ -2285,7 +2285,7 @@ void        *cookie;
 
         /* Loop over all patterns in "name" */
         np = name;
-        while (*np != NUL && (all || !did_one)) {
+        while (*np != '\0' && (all || !did_one)) {
           /* Append the pattern from "name" to buf[]. */
           copy_option_part(&np, tail, (int)(MAXPATHL - (tail - buf)),
               "\t ");
@@ -2341,7 +2341,7 @@ void ex_source(exarg_T *eap)
 
 static void cmd_source(char_u *fname, exarg_T *eap)
 {
-  if (*fname == NUL)
+  if (*fname == '\0')
     EMSG(_(e_argreq));
 
   else if (eap != NULL && eap->forceit)
@@ -2532,8 +2532,8 @@ do_source (
       if (sourcing_name == NULL)
         smsg((char_u *)_("could not source \"%s\""), fname);
       else
-        smsg((char_u *)_("line %ld: could not source \"%s\""),
-            sourcing_lnum, fname);
+        smsg((char_u *)_("line %" PRId64 ": could not source \"%s\""),
+            (int64_t)sourcing_lnum, fname);
       verbose_leave();
     }
     goto theend;
@@ -2549,8 +2549,8 @@ do_source (
     if (sourcing_name == NULL)
       smsg((char_u *)_("sourcing \"%s\""), fname);
     else
-      smsg((char_u *)_("line %ld: sourcing \"%s\""),
-          sourcing_lnum, fname);
+      smsg((char_u *)_("line %" PRId64 ": sourcing \"%s\""),
+          (int64_t)sourcing_lnum, fname);
     verbose_leave();
   }
   if (is_vimrc == DOSO_VIMRC)
@@ -2560,7 +2560,7 @@ do_source (
 
 #ifdef USE_CRNL
   /* If no automatic file format: Set default to CR-NL. */
-  if (*p_ffs == NUL)
+  if (*p_ffs == '\0')
     cookie.fileformat = EOL_DOS;
   else
     cookie.fileformat = EOL_UNKNOWN;
@@ -2569,7 +2569,7 @@ do_source (
 
 #ifdef USE_CR
   /* If no automatic file format: Set default to CR. */
-  if (*p_ffs == NUL)
+  if (*p_ffs == '\0')
     cookie.fileformat = EOL_MAC;
   else
     cookie.fileformat = EOL_UNKNOWN;
@@ -2810,19 +2810,6 @@ void free_scriptnames(void)
 
 
 #if defined(USE_CR) || defined(PROTO)
-
-# if defined(__MSL__) && (__MSL__ >= 22)
-/*
- * Newer version of the Metrowerks library handle DOS and UNIX files
- * without help.
- * Test with earlier versions, MSL 2.2 is the library supplied with
- * Codewarrior Pro 2.
- */
-char *fgets_cr(char *s, int n, FILE *stream)
-{
-  return fgets(s, n, stream);
-}
-# else
 /*
  * Version of fgets() which also works for lines ending in a <CR> only
  * (Macintosh format).
@@ -2855,7 +2842,6 @@ char *fgets_cr(char *s, int n, FILE *stream)
 
   return s;
 }
-# endif
 #endif
 
 /*
@@ -2928,7 +2914,7 @@ char_u *getsourceline(int c, void *cookie, int indent)
         }
         ga_concat(&ga, p + 1);
       }
-      ga_append(&ga, NUL);
+      ga_append(&ga, '\0');
       vim_free(line);
       line = ga.ga_data;
     }
@@ -2999,7 +2985,7 @@ static char_u *get_one_sourceline(struct source_cookie *sp)
     if (       (len == 1 || (len >= 2 && buf[len - 2] == '\n'))
                && sp->fileformat == EOL_DOS
                && buf[len - 1] == Ctrl_Z) {
-      buf[len - 1] = NUL;
+      buf[len - 1] = '\0';
       break;
     }
 #endif
@@ -3070,7 +3056,7 @@ static char_u *get_one_sourceline(struct source_cookie *sp)
         continue;
       }
 
-      buf[len - 1] = NUL;               /* remove the NL */
+      buf[len - 1] = '\0';               /* remove the NL */
     }
 
     /*
@@ -3176,7 +3162,7 @@ void ex_scriptencoding(exarg_T *eap)
     return;
   }
 
-  if (*eap->arg != NUL) {
+  if (*eap->arg != '\0') {
     name = enc_canonize(eap->arg);
     if (name == NULL)           /* out of memory */
       return;
@@ -3304,9 +3290,9 @@ char_u *get_mess_lang(void)
 #  endif
 # else
   p = os_getenv((char_u *)"LC_ALL");
-  if (p == NULL || *p == NUL) {
+  if (p == NULL || *p == '\0') {
     p = os_getenv((char_u *)"LC_MESSAGES");
-    if (p == NULL || *p == NUL)
+    if (p == NULL || *p == '\0')
       p = os_getenv((char_u *)"LANG");
   }
 # endif
@@ -3325,14 +3311,14 @@ static char_u *get_mess_env(void)
   char_u      *p;
 
   p = (char_u *)os_getenv("LC_ALL");
-  if (p == NULL || *p == NUL) {
+  if (p == NULL || *p == '\0') {
     p = (char_u *)os_getenv("LC_MESSAGES");
-    if (p == NULL || *p == NUL) {
+    if (p == NULL || *p == '\0') {
       p = (char_u *)os_getenv("LANG");
       if (p != NULL && VIM_ISDIGIT(*p))
         p = NULL;                       /* ignore something like "1043" */
 # ifdef HAVE_GET_LOCALE_VAL
-      if (p == NULL || *p == NUL)
+      if (p == NULL || *p == '\0')
         p = (char_u *)get_locale_val(LC_CTYPE);
 # endif
     }
@@ -3397,7 +3383,7 @@ void ex_language(exarg_T *eap)
    * Allow abbreviation, but require at least 3 characters to avoid
    * confusion with a two letter language name "me" or "ct". */
   p = skiptowhite(eap->arg);
-  if ((*p == NUL || vim_iswhite(*p)) && p - eap->arg >= 3) {
+  if ((*p == '\0' || vim_iswhite(*p)) && p - eap->arg >= 3) {
     if (STRNICMP(eap->arg, "messages", p - eap->arg) == 0) {
       what = VIM_LC_MESSAGES;
       name = skipwhite(p);
@@ -3413,14 +3399,14 @@ void ex_language(exarg_T *eap)
     }
   }
 
-  if (*name == NUL) {
+  if (*name == '\0') {
 #ifdef HAVE_WORKING_LIBINTL
     if (what == VIM_LC_MESSAGES)
       p = get_mess_env();
     else
 #endif
     p = (char_u *)setlocale(what, NULL);
-    if (p == NULL || *p == NUL)
+    if (p == NULL || *p == '\0')
       p = (char_u *)"Unknown";
     smsg((char_u *)_("Current %slanguage: \"%s\""), whatstr, p);
   } else {

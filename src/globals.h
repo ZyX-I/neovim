@@ -189,7 +189,7 @@ EXTERN int did_wait_return INIT(= FALSE);       /* wait_return() was used and
 EXTERN int need_maketitle INIT(= TRUE);      /* call maketitle() soon */
 
 EXTERN int quit_more INIT(= FALSE);         /* 'q' hit at "--more--" msg */
-#if defined(UNIX) || defined(__EMX__) || defined(VMS) || defined(MACOS_X)
+#if defined(UNIX) || defined(MACOS_X)
 EXTERN int newline_on_exit INIT(= FALSE);       /* did msg in altern. screen */
 EXTERN int intr_char INIT(= 0);             /* extra interrupt character */
 #endif
@@ -550,7 +550,7 @@ EXTERN colnr_T ai_col INIT(= 0);
  * the "end" comment leader when the COM_AUTO_END flag is given for that
  * comment end in 'comments'.  It is only valid when did_ai is TRUE.
  */
-EXTERN int end_comment_pending INIT(= NUL);
+EXTERN int end_comment_pending INIT(= '\0');
 
 /*
  * This flag is set after a ":syncbind" to let the check_scrollbind() function
@@ -900,12 +900,12 @@ EXTERN char_u   *globaldir INIT(= NULL);
 
 /* Characters from 'listchars' option */
 EXTERN int lcs_eol INIT(= '$');
-EXTERN int lcs_ext INIT(= NUL);
-EXTERN int lcs_prec INIT(= NUL);
-EXTERN int lcs_nbsp INIT(= NUL);
-EXTERN int lcs_tab1 INIT(= NUL);
-EXTERN int lcs_tab2 INIT(= NUL);
-EXTERN int lcs_trail INIT(= NUL);
+EXTERN int lcs_ext INIT(= '\0');
+EXTERN int lcs_prec INIT(= '\0');
+EXTERN int lcs_nbsp INIT(= '\0');
+EXTERN int lcs_tab1 INIT(= '\0');
+EXTERN int lcs_tab2 INIT(= '\0');
+EXTERN int lcs_trail INIT(= '\0');
 EXTERN int lcs_conceal INIT(= '-');
 
 /* Characters from 'fillchars' option */
@@ -952,7 +952,7 @@ EXTERN int typebuf_was_filled INIT(= FALSE);      /* received text from client
                                                      or from feedkeys() */
 
 
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
 EXTERN int term_is_xterm INIT(= FALSE);         /* xterm-like 'term' */
 #endif
 
@@ -1080,11 +1080,8 @@ EXTERN char_u e_readerrf[] INIT(= N_("E47: Error while reading errorfile"));
 EXTERN char_u e_sandbox[] INIT(= N_("E48: Not allowed in sandbox"));
 #endif
 EXTERN char_u e_secure[] INIT(= N_("E523: Not allowed here"));
-#if defined(AMIGA) || defined(MACOS) || defined(MSWIN)  \
-  || defined(UNIX) || defined(VMS) || defined(OS2)
 EXTERN char_u e_screenmode[] INIT(= N_(
         "E359: Screen mode setting not supported"));
-#endif
 EXTERN char_u e_scroll[] INIT(= N_("E49: Invalid scroll size"));
 EXTERN char_u e_shellempty[] INIT(= N_("E91: 'shell' option is empty"));
 EXTERN char_u e_signdata[] INIT(= N_("E255: Couldn't read in sign data!"));
@@ -1120,10 +1117,6 @@ EXTERN char top_bot_msg[] INIT(= N_("search hit TOP, continuing at BOTTOM"));
 EXTERN char bot_top_msg[] INIT(= N_("search hit BOTTOM, continuing at TOP"));
 
 EXTERN char need_key_msg[] INIT(= N_("Need encryption key for \"%s\""));
-
-/*
- * Comms. with the session manager (XSMP)
- */
 
 /* For undo we need to know the lowest time possible. */
 EXTERN time_t starttime;

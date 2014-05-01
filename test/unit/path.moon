@@ -1,17 +1,7 @@
 {:cimport, :internalize, :eq, :neq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 require 'lfs'
 
-path = lib
-
-ffi.cdef [[
-typedef enum file_comparison {
-  kEqualFiles = 1, kDifferentFiles = 2, kBothFilesMissing = 4, kOneFileMissing = 6, kEqualFileNames = 7
-} FileComparison;
-FileComparison path_full_compare(char_u *s1, char_u *s2, int checkname);
-char_u *path_tail(char_u *fname);
-char_u *path_tail_with_sep(char_u *fname);
-char_u *path_next_component(char_u *fname);
-]]
+path = cimport './src/path.h'
 
 -- import constants parsed by ffi
 {:kEqualFiles, :kDifferentFiles, :kBothFilesMissing, :kOneFileMissing, :kEqualFileNames} = path
@@ -102,6 +92,48 @@ describe 'path function', ->
     it 'returns empty string if given file contains no seperator', ->
       eq '', path_next_component 'file.txt'
 
+  describe 'path_shorten_fname', ->
+    it 'returns NULL if `full_path` is NULL', ->
+      dir = to_cstr 'some/directory/file.txt'
+      eq NULL, (path.path_shorten_fname NULL, dir)
+
+    it 'returns NULL if the path and dir does not match', ->
+      dir = to_cstr 'not/the/same'
+      full = to_cstr 'as/this.txt'
+      eq NULL, (path.path_shorten_fname full, dir)
+
+    it 'returns NULL if the path is not separated properly', ->
+      dir = to_cstr 'some/very/long/'
+      full = to_cstr 'some/very/long/directory/file.txt'
+      eq NULL, (path.path_shorten_fname full, dir)
+
+    it 'shortens the filename if `dir_name` is the start of `full_path`', ->
+      full = to_cstr 'some/very/long/directory/file.txt'
+      dir = to_cstr 'some/very/long'
+      eq 'directory/file.txt', (ffi.string path.path_shorten_fname full, dir)
+
+describe 'path_shorten_fname_if_possible', ->
+  before_each ->
+      lfs.mkdir 'ut_directory'
+  after_each ->
+      lfs.chdir '..'
+      lfs.rmdir 'ut_directory'
+
+  describe 'path_shorten_fname_if_possible', ->
+    it 'returns shortened path if possible', ->
+      lfs.chdir 'ut_directory'
+      full = to_cstr lfs.currentdir! .. '/subdir/file.txt'
+      eq 'subdir/file.txt', (ffi.string path.path_shorten_fname_if_possible full)
+
+    it 'returns `full_path` if a shorter version is not possible', ->
+      old = lfs.currentdir!
+      lfs.chdir 'ut_directory'
+      full = old .. '/subdir/file.txt'
+      eq full, (ffi.string path.path_shorten_fname_if_possible to_cstr full)
+
+    it 'returns NULL if `full_path` is NULL', ->
+      eq NULL, (path.path_shorten_fname_if_possible NULL)
+
 describe 'more path function', ->
   setup ->
     lfs.mkdir 'unit-test-directory'
@@ -120,8 +152,6 @@ describe 'more path function', ->
     lfs.rmdir 'unit-test-directory'
 
   describe 'vim_FullName', ->
-    ffi.cdef 'int vim_FullName(char *fname, char *buf, int len, int force);'
-
     vim_FullName = (filename, buffer, length, force) ->
       filename = to_cstr filename
       path.vim_FullName filename, buffer, length, force
@@ -209,8 +239,6 @@ describe 'more path function', ->
       eq OK, result
 
   describe 'append_path', ->
-    ffi.cdef 'int append_path(char *path, char *to_append, int max_len);'
-
     it 'joins given paths with a slash', ->
      path1 = cstr 100, 'path1'
      to_append = to_cstr 'path2'
@@ -247,8 +275,6 @@ describe 'more path function', ->
       eq '/path2', (ffi.string path1)
 
   describe 'path_is_absolute_path', ->
-    ffi.cdef 'int path_is_absolute_path(char *fname);'
-
     path_is_absolute_path = (filename) ->
       filename = to_cstr filename
       path.path_is_absolute_path filename

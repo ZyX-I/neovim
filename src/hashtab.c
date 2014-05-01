@@ -141,7 +141,7 @@ hashitem_T* hash_lookup(hashtab_T *ht, char_u *key, hash_T hash)
     // count a "miss" for hashtab lookup
     hash_count_perturb++;
 #endif  // ifdef HT_DEBUG
-    idx = (unsigned)((idx << 2U) + idx + perturb + 1U);
+    idx = 5 * idx + perturb + 1;
     hi = &ht->ht_array[idx & ht->ht_mask];
 
     if (hi->hi_key == NULL) {
@@ -167,10 +167,12 @@ void hash_debug_results(void)
 {
 #ifdef HT_DEBUG
   fprintf(stderr, "\r\n\r\n\r\n\r\n");
-  fprintf(stderr, "Number of hashtable lookups: %ld\r\n", hash_count_lookup);
-  fprintf(stderr, "Number of perturb loops: %ld\r\n", hash_count_perturb);
-  fprintf(stderr, "Percentage of perturb loops: %ld%%\r\n",
-          hash_count_perturb * 100 / hash_count_lookup);
+  fprintf(stderr, "Number of hashtable lookups: %" PRId64 "\r\n",
+          (int64_t)hash_count_lookup);
+  fprintf(stderr, "Number of perturb loops: %" PRId64 "\r\n",
+          (int64_t)hash_count_perturb);
+  fprintf(stderr, "Percentage of perturb loops: %" PRId64 "%%\r\n",
+          (int64_t)(hash_count_perturb * 100 / hash_count_lookup));
 #endif  // ifdef HT_DEBUG
 }
 
@@ -376,7 +378,7 @@ static int hash_may_resize(hashtab_T *ht, int minitems)
       newitem = &newarray[newi];
       if (newitem->hi_key != NULL) {
         for (perturb = olditem->hi_hash;; perturb >>= PERTURB_SHIFT) {
-          newi = (unsigned)((newi << 2U) + newi + perturb + 1U);
+          newi = 5 * newi + perturb + 1;
           newitem = &newarray[newi & newmask];
           if (newitem->hi_key == NULL) {
             break;
@@ -421,7 +423,7 @@ hash_T hash_hash(char_u *key)
 
   // A simplistic algorithm that appears to do very well.
   // Suggested by George Reilly.
-  while (*p != NUL) {
+  while (*p != '\0') {
     hash = hash * 101 + *p++;
   }
 

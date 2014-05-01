@@ -63,9 +63,9 @@ dictitem_T *dict_lookup(hashitem_T *hi);
 listitem_T *list_find(list_T *l, long n);
 char_u *list_find_str(list_T *l, long idx);
 void list_append(list_T *l, listitem_T *item);
-int list_append_tv(list_T *l, typval_T *tv);
-int list_append_dict(list_T *list, dict_T *dict);
-int list_append_string(list_T *l, char_u *str, int len);
+void list_append_tv(list_T *l, typval_T *tv);
+void list_append_dict(list_T *list, dict_T *dict);
+void list_append_string(list_T *l, char_u *str, int len);
 int list_insert_tv(list_T *l, typval_T *tv, listitem_T *item);
 void list_remove(list_T *l, listitem_T *item, listitem_T *item2);
 void list_insert(list_T *l, listitem_T *ni, listitem_T *item);
@@ -148,5 +148,5 @@ int modify_fname(char_u *src, int *usedlen, char_u **fnamep,
                  int *fnamelen);
 char_u *do_string_sub(char_u *str, char_u *pat, char_u *sub,
                       char_u *flags);
-/* vim: set ft=c : */
+
 #endif /* NEOVIM_EVAL_H */

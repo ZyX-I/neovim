@@ -61,7 +61,7 @@ void ui_write(char_u *s, int len)
 #endif
 }
 
-#if defined(UNIX) || defined(VMS) || defined(PROTO) || defined(WIN3264)
+#if defined(UNIX) || defined(PROTO) || defined(WIN3264)
 /*
  * When executing an external program, there may be some typed characters that
  * are not consumed by it.  Give them back to ui_inchar() and they are stored
@@ -344,8 +344,7 @@ void set_input_buf(char_u *p)
 
 #if defined(FEAT_GUI) \
   || defined(FEAT_MOUSE_GPM) || defined(FEAT_SYSMOUSE) \
-  || defined(FEAT_XCLIPBOARD) || defined(VMS) \
-  || defined(PROTO)
+  || defined(FEAT_XCLIPBOARD) || defined(PROTO)
 /*
  * Add the given bytes to the input buffer
  * Special keys start with CSI.  A real CSI must have been translated to
@@ -428,7 +427,7 @@ int read_from_input_buf(char_u *buf, long maxlen)
 
 void fill_input_buf(int exit_on_error)
 {
-#if defined(UNIX) || defined(OS2) || defined(VMS) || defined(MACOS_X_UNIX)
+#if defined(UNIX) || defined(MACOS_X_UNIX)
   int len;
   int try;
   static char_u *rest = NULL;       /* unconverted rest of previous read */
@@ -436,7 +435,7 @@ void fill_input_buf(int exit_on_error)
   int unconverted;
 #endif
 
-#if defined(UNIX) || defined(OS2) || defined(VMS) || defined(MACOS_X_UNIX)
+#if defined(UNIX) || defined(MACOS_X_UNIX)
   if (vim_is_input_buf_full())
     return;
   /*
@@ -514,9 +513,9 @@ void fill_input_buf(int exit_on_error)
       ++inbufcount;
     }
   }
-#endif /* UNIX or OS2 or VMS*/
+#endif /* UNIX */
 }
-#endif /* defined(UNIX) || defined(FEAT_GUI) || defined(OS2)  || defined(VMS) */
+#endif /* defined(UNIX) || defined(FEAT_GUI) */
 
 /*
  * Exit because of an input read error.
@@ -540,7 +539,7 @@ void ui_cursor_shape(void)
   conceal_check_cursur_line();
 }
 
-#if defined(FEAT_CLIPBOARD) || defined(FEAT_GUI) || defined(FEAT_RIGHTLEFT) \
+#if defined(FEAT_GUI) || defined(FEAT_RIGHTLEFT) \
   || defined(FEAT_MBYTE) || defined(PROTO)
 /*
  * Check bounds for column number
@@ -566,11 +565,6 @@ int check_row(int row)
   return row;
 }
 #endif
-
-/*
- * Stuff for the X clipboard.  Shared between VMS and Unix.
- */
-
 
 #if defined(FEAT_XCLIPBOARD) || defined(FEAT_GUI_X11) \
   || defined(FEAT_GUI_GTK) || defined(PROTO)
@@ -1081,7 +1075,7 @@ int vcol2col(win_T *wp, linenr_T lnum, int vcol)
   char_u      *start;
 
   start = ptr = ml_get_buf(wp->w_buffer, lnum, FALSE);
-  while (count < vcol && *ptr != NUL) {
+  while (count < vcol && *ptr != '\0') {
     count += win_lbr_chartabsize(wp, ptr, count, NULL);
     mb_ptr_adv(ptr);
   }

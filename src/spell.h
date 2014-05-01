@@ -1,6 +1,6 @@
 #ifndef NEOVIM_SPELL_H
 #define NEOVIM_SPELL_H
-/* spell.c */
+
 int spell_check(win_T *wp, char_u *ptr, hlf_T *attrp, int *capcol,
                 int docount);
 int spell_move_to(win_T *wp, int dir, int allwords, int curline,
@@ -29,5 +29,5 @@ char_u *spell_to_word_end(char_u *start, win_T *win);
 int spell_word_start(int startcol);
 void spell_expand_check_cap(colnr_T col);
 int expand_spelling(linenr_T lnum, char_u *pat, char_u ***matchp);
-/* vim: set ft=c : */
-#endif /* NEOVIM_SPELL_H */
+
+#endif // NEOVIM_SPELL_H

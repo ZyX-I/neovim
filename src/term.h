@@ -76,5 +76,4 @@ void update_tcap(int attr);
                             (vim_strchr(p_cpo, CPO_KEYCODE) == NULL \
                              ? 0 \
                              : FLAG_CPO_KEYCODE))
-/* vim: set ft=c : */
 #endif /* NEOVIM_TERM_H */

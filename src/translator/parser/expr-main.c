@@ -196,11 +196,9 @@ char_u *skipwhite(char_u *q)
   return p;
 }
 
-char_u *alloc_clear(unsigned size)
+char_u *xcalloc(size_t nmemb, size_t size)
 {
-  void *res = (char_u *) malloc(size);
-  memset(res, 0, size);
-  return res;
+  return calloc(nmemb, size);
 }
 
 void vim_free(void *v)

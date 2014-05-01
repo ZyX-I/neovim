@@ -28,10 +28,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Does google-lint on c++ files.
+"""Does neovim-lint on c files.
 
 The goal of this script is to identify places in the code that *may*
-be in non-compliance with google style.  It does not attempt to fix
+be in non-compliance with neovim style.  It does not attempt to fix
 up these problems -- the point is to educate.  It does also not
 attempt to find all problems, or to ensure that everything it does
 find is legitimately a problem.
@@ -65,7 +65,7 @@ Syntax: clint.py [--verbose=#] [--output=vs7] [--filter=-x,+y,...]
         <file> [file] ...
 
   The style guidelines this tries to follow are those in
-    http://google-styleguide.googlecode.com/svn/trunk/cppguide.xml
+    http://neovim.org/development-wiki/style-guide/style-guide.xml
 
   Note: This is Google's cpplint.py modified for use with the Neovim project,
   which follows the Google C++ coding convention except with the following
@@ -351,8 +351,7 @@ class _IncludeState(dict):
   filename and line number on which that file was included.
 
   Call CheckNextIncludeOrder() once for each header in the file, passing
-  in the type constants defined above. Calls in an illegal order will
-  raise an _IncludeError with an appropriate error message.
+  in the type constants defined above.
 
   """
   # self._section will move monotonically through this set. If it ever
@@ -613,11 +612,6 @@ class _FunctionState(object):
     self.in_a_function = False
 
 
-class _IncludeError(Exception):
-  """Indicates a problem with the include order in a file."""
-  pass
-
-
 class FileInfo:
   """Provides utility functions for filenames.
 
@@ -673,14 +667,6 @@ class FileInfo:
   def Extension(self):
     """File extension - text following the final period."""
     return self.Split()[2]
-
-  def NoExtension(self):
-    """File has no source file extension."""
-    return '/'.join(self.Split()[0:2])
-
-  def IsSource(self):
-    """File has a source file extension."""
-    return self.Extension()[1:] == 'c'
 
 
 def _ShouldPrintError(category, confidence, linenum):
@@ -1442,7 +1428,7 @@ def CheckForNonStandardConstructs(filename, clean_lines, linenum,
   not standard C++.  Warning about these in lint is one way to ease the
   transition to new compilers.
   - put storage class first (e.g. "static const" instead of "const static").
-  - "%lld" instead of %qd" in printf-type functions.
+  - "%" PRId64 instead of %qd" in printf-type functions.
   - "%1$d" is non-standard in printf-type functions.
   - "\%" is an undefined character escape sequence.
   - text after #endif is not allowed.
@@ -1468,7 +1454,7 @@ def CheckForNonStandardConstructs(filename, clean_lines, linenum,
 
   if Search(r'printf\s*\(.*".*%[-+ ]?\d*q', line):
     error(filename, linenum, 'runtime/printf_format', 3,
-          '%q in format strings is deprecated.  Use %ll instead.')
+          '"%q" in format strings is deprecated.  Use "%" PRId64 instead.')
 
   if Search(r'printf\s*\(.*".*%\d+\$', line):
     error(filename, linenum, 'runtime/printf_format', 2,
@@ -2900,7 +2886,7 @@ def ProcessFileData(filename, file_extension, lines, error,
   CheckForNewlineAtEOF(filename, lines, error)
 
 def ProcessFile(filename, vlevel, extra_check_functions=[]):
-  """Does google-lint on a single file.
+  """Does neovim-lint on a single file.
 
   Args:
     filename: The name of the file to parse.

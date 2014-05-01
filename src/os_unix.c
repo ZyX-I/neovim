@@ -10,7 +10,6 @@
 
 /*
  * os_unix.c -- code for all flavors of Unix (BSD, SYSV, SVR4, POSIX, ...)
- *	     Also for OS/2, using the excellent EMX package!!!
  *	     Also for BeOS and Atari MiNT.
  *
  * A lot of this file was originally written by Juergen Weigert and later
@@ -57,7 +56,22 @@
 #include "os/signal.h"
 #include "os/job.h"
 
-#include "os_unixx.h"       /* unix includes for os_unix.c only */
+#if defined(HAVE_SYS_IOCTL_H)
+# include <sys/ioctl.h>
+#endif
+
+#ifdef HAVE_STROPTS_H
+# include <stropts.h>
+#endif
+
+#if defined(HAVE_TERMIOS_H)
+# include <termios.h>
+#endif
+
+/* shared library access */
+#if defined(HAVE_DLFCN_H) && defined(USE_DLOPEN)
+# include <dlfcn.h>
+#endif
 
 #ifdef HAVE_SELINUX
 # include <selinux/selinux.h>
@@ -75,8 +89,8 @@ static int did_set_icon = FALSE;
 static int have_wildcard(int, char_u **);
 static int have_dollars(int, char_u **);
 
-static int save_patterns(int num_pat, char_u **pat, int *num_file,
-                         char_u ***file);
+static void save_patterns(int num_pat, char_u **pat, int *num_file,
+                          char_u ***file);
 
 /*
  * Write s[len] to the screen.
@@ -236,22 +250,22 @@ void mch_settitle(char_u *title, char_u *icon)
    * Note: if "t_ts" is set, title is set with escape sequence rather
    *	     than x11 calls, because the x11 calls don't always work
    */
-  if ((type || *T_TS != NUL) && title != NULL) {
+  if ((type || *T_TS != '\0') && title != NULL) {
     if (oldtitle == NULL
         )                       /* first call but not in GUI, save title */
       (void)get_x11_title(FALSE);
 
-    if (*T_TS != NUL)                   /* it's OK if t_fs is empty */
+    if (*T_TS != '\0')                   /* it's OK if t_fs is empty */
       term_settitle(title);
     did_set_title = TRUE;
   }
 
-  if ((type || *T_CIS != NUL) && icon != NULL) {
+  if ((type || *T_CIS != '\0') && icon != NULL) {
     if (oldicon == NULL
         )                       /* first call, save icon */
       get_x11_icon(FALSE);
 
-    if (*T_CIS != NUL) {
+    if (*T_CIS != '\0') {
       out_str(T_CIS);                           /* set icon start */
       out_str_nf(icon);
       out_str(T_CIE);                           /* set icon end */
@@ -382,7 +396,7 @@ int len;              /* buffer size, only used when name gets longer */
       dirp = opendir(".");
       tail = name;
     } else {
-      *slash = NUL;
+      *slash = '\0';
       dirp = opendir((char *)name);
       *slash = '/';
       tail = slash + 1;
@@ -743,7 +757,7 @@ void get_stty()
     buf[0] = keys.sg_erase;
     intr_char = keys.sg_kill;
 #endif
-    buf[1] = NUL;
+    buf[1] = '\0';
     add_termcode((char_u *)"kb", buf, FALSE);
 
     /*
@@ -818,7 +832,7 @@ void check_mouse_termcode()
     set_mouse_termcode(KS_MOUSE, (char_u *)(term_is_8bit(T_NAME)
                                             ? IF_EB("\233M", CSI_STR "M")
                                             : IF_EB("\033[M", ESC_STR "[M")));
-    if (*p_mouse != NUL) {
+    if (*p_mouse != '\0') {
       /* force mouse off and maybe on to send possibly new mouse
        * activation sequence to the xterm, with(out) drag tracing. */
       mch_setmouse(FALSE);
@@ -853,7 +867,7 @@ void check_mouse_termcode()
                                                   ? IF_EB("\233", CSI_STR)
                                                   : IF_EB("\033[", ESC_STR "[")));
 
-    if (*p_mouse != NUL) {
+    if (*p_mouse != '\0') {
       mch_setmouse(FALSE);
       setmouse();
     }
@@ -866,24 +880,13 @@ void check_mouse_termcode()
                                                 ? IF_EB("\233<", CSI_STR "<")
                                                 : IF_EB("\033[<", ESC_STR "[<")));
 
-    if (*p_mouse != NUL) {
+    if (*p_mouse != '\0') {
       mch_setmouse(FALSE);
       setmouse();
     }
   } else
     del_mouse_termcode(KS_SGR_MOUSE);
 }
-
-/*
- * set screen mode, always fails.
- */
-int mch_screenmode(arg)
-char_u   *arg;
-{
-  EMSG(_(e_screenmode));
-  return FAIL;
-}
-
 
 /*
  * Try to get the current window size:
@@ -898,10 +901,6 @@ int mch_get_shellsize()
   long rows = 0;
   long columns = 0;
   char_u      *p;
-
-  /*
-   * For OS/2 use _scrsize().
-   */
 
   /*
    * 1. try using an ioctl. It is the most accurate method.
@@ -1023,9 +1022,6 @@ int flags;                      /* EW_* flags */
   bool dir;
   char_u *extra_shell_arg = NULL;
   ShellOpts shellopts = kShellOptExpand | kShellOptSilent;
-  /*
-   * This is the non-OS/2 implementation (really Unix).
-   */
   int j;
   char_u      *tempname;
   char_u      *command;
@@ -1052,8 +1048,10 @@ int flags;                      /* EW_* flags */
    * If there are no wildcards, just copy the names to allocated memory.
    * Saves a lot of time, because we don't have to start a new shell.
    */
-  if (!have_wildcard(num_pat, pat))
-    return save_patterns(num_pat, pat, num_file, file);
+  if (!have_wildcard(num_pat, pat)) {
+    save_patterns(num_pat, pat, num_file, file);
+    return OK;
+  }
 
 # ifdef HAVE_SANDBOX
   /* Don't allow any shell command in the sandbox. */
@@ -1117,7 +1115,7 @@ int flags;                      /* EW_* flags */
     /* Count the length of the patterns in the same way as they are put in
      * "command" below. */
     ++len;                              /* add space */
-    for (j = 0; pat[i][j] != NUL; ++j) {
+    for (j = 0; pat[i][j] != '\0'; ++j) {
       if (vim_strchr(SHELL_SPECIAL, pat[i][j]) != NULL)
         ++len;                  /* may add a backslash */
       ++len;
@@ -1171,10 +1169,10 @@ int flags;                      /* EW_* flags */
 
       p = command + STRLEN(command);
       *p++ = ' ';
-      for (j = 0; pat[i][j] != NUL; ++j) {
+      for (j = 0; pat[i][j] != '\0'; ++j) {
         if (pat[i][j] == '`')
           intick = !intick;
-        else if (pat[i][j] == '\\' && pat[i][j + 1] != NUL) {
+        else if (pat[i][j] == '\\' && pat[i][j + 1] != '\0') {
           /* Remove a backslash, take char literally.  But keep
            * backslash inside backticks, before a special character
            * and before a backtick. */
@@ -1192,7 +1190,7 @@ int flags;                      /* EW_* flags */
         /* Copy one character. */
         *p++ = pat[i][j];
       }
-      *p = NUL;
+      *p = '\0';
     }
 
   if (flags & EW_SILENT) {
@@ -1299,12 +1297,12 @@ int flags;                      /* EW_* flags */
   }
   /* file names are separated with NL */
   else if (shell_style == STYLE_BT || shell_style == STYLE_VIMGLOB) {
-    buffer[len] = NUL;                  /* make sure the buffer ends in NUL */
+    buffer[len] = '\0';                  /* make sure the buffer ends in NUL */
     p = buffer;
-    for (i = 0; *p != NUL; ++i) {       /* count number of entries */
-      while (*p != '\n' && *p != NUL)
+    for (i = 0; *p != '\0'; ++i) {       /* count number of entries */
+      while (*p != '\n' && *p != '\0')
         ++p;
-      if (*p != NUL)
+      if (*p != '\0')
         ++p;
       p = skipwhite(p);                 /* skip leading white space */
     }
@@ -1322,7 +1320,7 @@ int flags;                      /* EW_* flags */
     check_spaces = FALSE;
     if (shell_style == STYLE_PRINT && !did_find_nul) {
       /* If there is a NUL, set did_find_nul, else set check_spaces */
-      buffer[len] = NUL;
+      buffer[len] = '\0';
       if (len && (int)STRLEN(buffer) < (int)len)
         did_find_nul = TRUE;
       else
@@ -1333,15 +1331,15 @@ int flags;                      /* EW_* flags */
      * Make sure the buffer ends with a NUL.  For STYLE_PRINT there
      * already is one, for STYLE_GLOB it needs to be added.
      */
-    if (len && buffer[len - 1] == NUL)
+    if (len && buffer[len - 1] == '\0')
       --len;
     else
-      buffer[len] = NUL;
+      buffer[len] = '\0';
     i = 0;
     for (p = buffer; p < buffer + len; ++p)
-      if (*p == NUL || (*p == ' ' && check_spaces)) {       /* count entry */
+      if (*p == '\0' || (*p == ' ' && check_spaces)) {       /* count entry */
         ++i;
-        *p = NUL;
+        *p = '\0';
       }
     if (len)
       ++i;                              /* count last entry */
@@ -1368,12 +1366,12 @@ int flags;                      /* EW_* flags */
     if (shell_style == STYLE_ECHO || shell_style == STYLE_BT
         || shell_style == STYLE_VIMGLOB) {
       while (!(shell_style == STYLE_ECHO && *p == ' ')
-             && *p != '\n' && *p != NUL)
+             && *p != '\n' && *p != '\0')
         ++p;
       if (p == buffer + len)                    /* last entry */
-        *p = NUL;
+        *p = '\0';
       else {
-        *p++ = NUL;
+        *p++ = '\0';
         p = skipwhite(p);                       /* skip to next entry */
       }
     } else {          /* NUL separates */
@@ -1418,14 +1416,16 @@ int flags;                      /* EW_* flags */
   return OK;
 
 notfound:
-  if (flags & EW_NOTFOUND)
-    return save_patterns(num_pat, pat, num_file, file);
+  if (flags & EW_NOTFOUND) {
+    save_patterns(num_pat, pat, num_file, file);
+    return OK;
+  }
   return FAIL;
 
 }
 
 
-static int save_patterns(num_pat, pat, num_file, file)
+static void save_patterns(num_pat, pat, num_file, file)
 int num_pat;
 char_u      **pat;
 int         *num_file;
@@ -1434,9 +1434,8 @@ char_u      ***file;
   int i;
   char_u      *s;
 
-  *file = (char_u **)alloc(num_pat * sizeof(char_u *));
-  if (*file == NULL)
-    return FAIL;
+  *file = xmalloc((size_t)num_pat * sizeof(char_u *));
+
   for (i = 0; i < num_pat; i++) {
     s = vim_strsave(pat[i]);
     if (s != NULL)
@@ -1446,7 +1445,6 @@ char_u      ***file;
     (*file)[i] = s;
   }
   *num_file = num_pat;
-  return OK;
 }
 
 /*
@@ -1457,7 +1455,7 @@ int mch_has_exp_wildcard(p)
 char_u  *p;
 {
   for (; *p; mb_ptr_adv(p)) {
-    if (*p == '\\' && p[1] != NUL)
+    if (*p == '\\' && p[1] != '\0')
       ++p;
     else if (vim_strchr((char_u *)
                  "*?[{'"
@@ -1475,12 +1473,12 @@ int mch_has_wildcard(p)
 char_u  *p;
 {
   for (; *p; mb_ptr_adv(p)) {
-    if (*p == '\\' && p[1] != NUL)
+    if (*p == '\\' && p[1] != '\0')
       ++p;
     else if (vim_strchr((char_u *)
                  "*?[{`'$"
                  , *p) != NULL
-             || (*p == '~' && p[1] != NUL))
+             || (*p == '~' && p[1] != '\0'))
       return TRUE;
   }
   return FALSE;

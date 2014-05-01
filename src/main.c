@@ -86,7 +86,7 @@ typedef struct {
   int window_count;                     /* number of windows to use */
   int window_layout;                    /* 0, WIN_HOR, WIN_VER or WIN_TABS */
 
-#if (!defined(UNIX) && !defined(__EMX__)) || defined(ARCHIE)
+#if !defined(UNIX)
   int literal;                          /* don't expand file names */
 #endif
   int diff_mode;                        /* start with 'diff' set */
@@ -99,7 +99,7 @@ typedef struct {
 #define EDIT_TAG    3       /* tag name argument given, use tagname */
 #define EDIT_QF     4       /* start in quickfix mode */
 
-#if (defined(UNIX) || defined(VMS)) && !defined(NO_VIM_MAIN)
+#if defined(UNIX) && !defined(NO_VIM_MAIN)
 static int file_owned(char *fname);
 #endif
 static void mainerr(int, char_u *);
@@ -277,7 +277,6 @@ static char *(main_errors[]) =
   /*
    * mch_init() sets up the terminal (window) for use.  This must be
    * done after resetting full_screen, otherwise it may move the cursor
-   * (MSDOS).
    * Note that we may use mch_exit() before mch_init()!
    */
   mch_init();
@@ -375,7 +374,7 @@ static char *(main_errors[]) =
    * Read in registers, history etc, but not marks, from the viminfo file.
    * This is where v:oldfiles gets filled.
    */
-  if (*p_viminfo != NUL) {
+  if (*p_viminfo != '\0') {
     read_viminfo(NULL, VIF_WANT_INFO | VIF_GET_OLDFILES);
     TIME_MSG("reading viminfo");
   }
@@ -410,10 +409,10 @@ static char *(main_errors[]) =
   if (params.edit_type == EDIT_STDIN && !recoverymode)
     read_stdin();
 
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
   /* When switching screens and something caused a message from a vimrc
    * script, need to output an extra newline on exit. */
-  if ((did_emsg || msg_didout) && *T_TI != NUL)
+  if ((did_emsg || msg_didout) && *T_TI != '\0')
     newline_on_exit = TRUE;
 #endif
 
@@ -830,7 +829,7 @@ void getout(int exitval)
     apply_autocmds(EVENT_VIMLEAVEPRE, NULL, NULL, FALSE, curbuf);
   }
 
-  if (p_viminfo && *p_viminfo != NUL)
+  if (p_viminfo && *p_viminfo != '\0')
     /* Write out the registers, history, marks etc, to the viminfo file */
     write_viminfo(NULL, FALSE);
 
@@ -899,7 +898,7 @@ static void init_locale(void)
     /* expand_env() doesn't work yet, because chartab[] is not initialized
      * yet, call vim_getenv() directly */
     p = vim_getenv((char_u *)"VIMRUNTIME", &mustfree);
-    if (p != NULL && *p != NUL) {
+    if (p != NULL && *p != '\0') {
       vim_snprintf((char *)NameBuff, MAXPATHL, "%s/lang", p);
       bindtextdomain(VIMPACKAGE, (char *)NameBuff);
     }
@@ -1012,7 +1011,7 @@ static void command_line_scan(mparm_T *parmp)
       if (parmp->n_commands >= MAX_ARG_CMDS)
         mainerr(ME_EXTRA_CMD, NULL);
       argv_idx = -1;                /* skip to next argument */
-      if (argv[0][1] == NUL)
+      if (argv[0][1] == '\0')
         parmp->commands[parmp->n_commands++] = (char_u *)"$";
       else
         parmp->commands[parmp->n_commands++] = (char_u *)&(argv[0][1]);
@@ -1024,7 +1023,7 @@ static void command_line_scan(mparm_T *parmp)
       want_argument = FALSE;
       c = argv[0][argv_idx++];
       switch (c) {
-        case NUL:                 /* "vim -"  read from stdin */
+        case '\0':                 /* "vim -"  read from stdin */
           /* "ex -" silent mode */
           if (exmode_active)
             silent_mode = TRUE;
@@ -1054,7 +1053,7 @@ static void command_line_scan(mparm_T *parmp)
             msg_didout = FALSE;
             mch_exit(0);
           } else if (STRNICMP(argv[0] + argv_idx, "literal", 7) == 0) {
-#if (!defined(UNIX) && !defined(__EMX__)) || defined(ARCHIE)
+#if !defined(UNIX)
             parmp->literal = TRUE;
 #endif
           } else if (STRNICMP(argv[0] + argv_idx, "nofork", 6) == 0) {
@@ -1226,7 +1225,7 @@ static void command_line_scan(mparm_T *parmp)
         case 'V':                 /* "-V{N}"	Verbose level */
           /* default is 10: a little bit verbose */
           p_verbose = get_number_arg((char_u *)argv[0], &argv_idx, 10);
-          if (argv[0][argv_idx] != NUL) {
+          if (argv[0][argv_idx] != '\0') {
             set_option_value((char_u *)"verbosefile", 0L,
                 (char_u *)argv[0] + argv_idx, 0);
             argv_idx = (int)STRLEN(argv[0]);
@@ -1260,7 +1259,7 @@ static void command_line_scan(mparm_T *parmp)
 
         case 'c':                 /* "-c{command}" or "-c {command}" execute
                                      command */
-          if (argv[0][argv_idx] != NUL) {
+          if (argv[0][argv_idx] != '\0') {
             if (parmp->n_commands >= MAX_ARG_CMDS)
               mainerr(ME_EXTRA_CMD, NULL);
             parmp->commands[parmp->n_commands++] = (char_u *)argv[0]
@@ -1289,7 +1288,7 @@ static void command_line_scan(mparm_T *parmp)
         /*
          * Check for garbage immediately after the option letter.
          */
-        if (argv[0][argv_idx] != NUL)
+        if (argv[0][argv_idx] != '\0')
           mainerr(ME_GARBAGE, (char_u *)argv[0]);
 
         --argc;
@@ -1432,10 +1431,8 @@ scripterror:
         char_u      *r;
 
         r = concat_fnames(p, path_tail(alist_name(&GARGLIST[0])), TRUE);
-        if (r != NULL) {
-          vim_free(p);
-          p = r;
-        }
+        vim_free(p);
+        p = r;
       }
 
 #ifdef USE_FNAME_CASE
@@ -1444,7 +1441,7 @@ scripterror:
 #endif
 
       alist_add(&global_alist, p,
-#if (!defined(UNIX) && !defined(__EMX__)) || defined(ARCHIE)
+#if !defined(UNIX)
           parmp->literal ? 2 : 0                /* add buffer nr after exp. */
 #else
           2                     /* add buffer number now and use curbuf */
@@ -1458,7 +1455,7 @@ scripterror:
      * argument.  argv_idx is set to -1 when the current argument is to be
      * skipped.
      */
-    if (argv_idx <= 0 || argv[0][argv_idx] == NUL) {
+    if (argv_idx <= 0 || argv[0][argv_idx] == '\0') {
       --argc;
       ++argv;
       argv_idx = 1;
@@ -1535,7 +1532,7 @@ static void check_and_set_isatty(mparm_T *paramp)
  */
 static char_u *get_fname(mparm_T *parmp)
 {
-#if (!defined(UNIX) && !defined(__EMX__)) || defined(ARCHIE)
+#if !defined(UNIX)
   /*
    * Expand wildcards in file names.
    */
@@ -2027,7 +2024,7 @@ static void source_startup_scripts(mparm_T *parmp)
      * SYS_VIMRC_FILE.
      */
     if (p_exrc) {
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
       /* If ".vimrc" file is not owned by user, set 'secure' mode. */
       if (!file_owned(VIMRC_FILE))
 #endif
@@ -2052,7 +2049,7 @@ static void source_startup_scripts(mparm_T *parmp)
         i = do_source((char_u *)VIMRC_FILE, TRUE, DOSO_VIMRC);
 
       if (i == FAIL) {
-#if defined(UNIX) || defined(VMS)
+#if defined(UNIX)
         /* if ".exrc" is not owned by user set 'secure' mode */
         if (!file_owned(EXRC_FILE))
           secure = p_secure;
@@ -2104,7 +2101,7 @@ process_env (
   scid_T save_sid;
 
   initstr = (char_u *)os_getenv((char *)env);
-  if (initstr != NULL && *initstr != NUL) {
+  if (initstr != NULL && *initstr != '\0') {
     if (is_viminit)
       vimrc_found(NULL, NULL);
     save_sourcing_name = sourcing_name;
@@ -2122,7 +2119,7 @@ process_env (
   return FAIL;
 }
 
-#if (defined(UNIX) || defined(VMS)) && !defined(NO_VIM_MAIN)
+#if defined(UNIX) && !defined(NO_VIM_MAIN)
 /*
  * Return TRUE if we are certain the user owns the file "fname".
  * Used for ".vimrc" and ".exrc".
@@ -2131,11 +2128,7 @@ process_env (
 static int file_owned(char *fname)
 {
   struct stat s;
-# ifdef UNIX
   uid_t uid = getuid();
-# else   /* VMS */
-  uid_t uid = ((getgid() << 16) | getuid());
-# endif
 
   return !(mch_stat(fname, &s) != 0 || s.st_uid != uid
 # ifdef HAVE_LSTAT
@@ -2213,7 +2206,7 @@ static void usage(void)
 
   mch_msg(_("\n\nArguments:\n"));
   main_msg(_("--\t\t\tOnly file names after this"));
-#if (!defined(UNIX) && !defined(__EMX__)) || defined(ARCHIE)
+#if !defined(UNIX)
   main_msg(_("--literal\t\tDon't expand wildcards"));
 #endif
   main_msg(_("-v\t\t\tVi mode (like \"vi\")"));

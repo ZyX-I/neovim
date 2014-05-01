@@ -36,12 +36,6 @@
 # if (SIZEOF_INT == 0)
 Error: configure did not run properly.Check auto/config.log.
 # endif
-
-/*
- * Cygwin may have fchdir() in a newer release, but in most versions it
- * doesn't work well and avoiding it keeps the binary backward compatible.
- */
-
 #endif
 
 /* user ID of root is usually zero, but not for everybody */
@@ -90,20 +84,6 @@ Error: configure did not run properly.Check auto/config.log.
 #  define __w64
 typedef unsigned long __w64 long_u;
 typedef          long __w64 long_i;
-# define SCANF_HEX_LONG_U       "%lx"
-# define SCANF_DECIMAL_LONG_U   "%lu"
-# define PRINTF_HEX_LONG_U      "0x%lx"
-#define PRINTF_DECIMAL_LONG_U SCANF_DECIMAL_LONG_U
-
-/*
- * Only systems which use configure will have SIZEOF_OFF_T and SIZEOF_LONG
- * defined, which is ok since those are the same systems which can have
- * varying sizes for off_t.  The other systems will continue to use "%ld" to
- * print off_t since off_t is simply a typedef to long for them.
- */
-#if defined(SIZEOF_OFF_T) && (SIZEOF_OFF_T > SIZEOF_LONG)
-# define LONG_LONG_OFF_T
-#endif
 
 /*
  * The characters and attributes cached for the screen.
@@ -842,7 +822,6 @@ typedef enum {
                        don't really exist in the text */
   , HLF_D           /* directories in CTRL-D listing */
   , HLF_E           /* error messages */
-  , HLF_H           /* obsolete, ignored */
   , HLF_I           /* incremental search */
   , HLF_L           /* last search string */
   , HLF_M           /* "--More--" message */
@@ -885,11 +864,10 @@ typedef enum {
 
 /* The HL_FLAGS must be in the same order as the HLF_ enums!
  * When changing this also adjust the default for 'highlight'. */
-#define HL_FLAGS {'8', '@', 'd', 'e', 'h', 'i', 'l', 'm', 'M', \
-                  'n', 'N', 'r', 's', 'S', 'c', 't', 'v', 'V', 'w', 'W', \
-                  'f', 'F', 'A', 'C', 'D', 'T', '-', '>', \
-                  'B', 'P', 'R', 'L', \
-                  '+', '=', 'x', 'X', '*', '#', '_', '!', '.', 'o'}
+#define HL_FLAGS {'8', '@', 'd', 'e', 'i', 'l', 'm', 'M', 'n', 'N', 'r', 's', \
+                  'S', 'c', 't', 'v', 'V', 'w', 'W', 'f', 'F', 'A', 'C', 'D', \
+                  'T', '-', '>', 'B', 'P', 'R', 'L', '+', '=', 'x', 'X', '*', \
+                  '#', '_', '!', '.', 'o'}
 
 /*
  * Boolean constants
@@ -996,12 +974,6 @@ typedef enum {
 # define APPENDBIN  "a"
 #endif
 
-/*
- * EMX doesn't have a global way of making open() use binary I/O.
- * Use O_BINARY for all open() calls.
- */
-# define O_EXTRA    0
-
 #ifndef O_NOFOLLOW
 # define O_NOFOLLOW 0
 #endif
@@ -1060,7 +1032,7 @@ typedef enum {
 #define EMSG2(s, p)                 emsg2((char_u *)(s), (char_u *)(p))
 #define EMSG3(s, p, q)              emsg3((char_u *)(s), (char_u *)(p), \
     (char_u *)(q))
-#define EMSGN(s, n)                 emsgn((char_u *)(s), (long)(n))
+#define EMSGN(s, n)                 emsgn((char_u *)(s), (int64_t)(n))
 #define EMSGU(s, n)                 emsgu((char_u *)(s), (long_u)(n))
 #define OUT_STR(s)                  out_str((char_u *)(s))
 #define OUT_STR_NF(s)               out_str_nf((char_u *)(s))
@@ -1076,25 +1048,7 @@ typedef enum {
   (void) emsg3((char_u *) "%s: %s", (char_u *)msg, (char_u *)strerror(errno))
 
 #define MAXLNUM (0x7fffffffL)           /* maximum (invalid) line number */
-
-/*
- * Well, you won't believe it, but some S/390 machines ("host", now also known
- * as zServer) use 31 bit pointers. There are also some newer machines, that
- * use 64 bit pointers. I don't know how to distinguish between 31 and 64 bit
- * machines, so the best way is to assume 31 bits whenever we detect OS/390
- * Unix.
- * With this we restrict the maximum line length to 1073741823. I guess this is
- * not a real problem. BTW:  Longer lines are split.
- */
-#if SIZEOF_INT >= 4
-# ifdef __MVS__
-#  define MAXCOL (0x3fffffffL)          /* maximum column number, 30 bits */
-# else
-#  define MAXCOL (0x7fffffffL)          /* maximum column number, 31 bits */
-# endif
-#else
-# define MAXCOL (0x7fff)                /* maximum column number, 15 bits */
-#endif
+#define MAXCOL (0x7fffffffL)          /* maximum column number, 31 bits */
 
 #define SHOWCMD_COLS 10                 /* columns needed by shown command */
 #define STL_MAX_ITEM 80                 /* max nr of %<flag> in statusline */
@@ -1111,7 +1065,7 @@ typedef void        *vim_acl_T;         /* dummy to pass an ACL to a function */
 #define fnamencmp(x, y, n) vim_fnamencmp((char_u *)(x), (char_u *)(y), \
     (size_t)(n))
 
-#if defined(UNIX) || defined(FEAT_GUI) || defined(OS2) || defined(VMS)
+#if defined(UNIX) || defined(FEAT_GUI)
 # define USE_INPUT_BUF
 #endif
 
@@ -1327,27 +1281,6 @@ typedef int VimClipboard;       /* This is required for the prototypes. */
 
 
 #include "globals.h"        /* global variables and messages */
-
-
-
-/*
- * If console dialog not supported, but GUI dialog is, use the GUI one.
- */
-
-/*
- * Default filters for gui_mch_browse().
- * The filters are almost system independent.  Except for the difference
- * between "*" and "*.*" for MSDOS-like systems.
- * NOTE: Motif only uses the very first pattern.  Therefore
- * BROWSE_FILTER_DEFAULT should start with a "*" pattern.
- */
-
-/* stop using fastcall for Borland */
-
-
-/*
- * The following macros stop display/event loop nesting at the wrong time.
- */
 
 /*
  * Return byte length of character that starts with byte "b".

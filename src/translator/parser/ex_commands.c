@@ -20,6 +20,7 @@
 #include "menu.h"
 #include "option.h"
 #include "regexp.h"
+#include "ascii.h"
 
 #include "translator/parser/expressions.h"
 #include "translator/parser/ex_commands.h"
@@ -241,16 +242,15 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
   if (type != kCmdUnknown)
     size += sizeof(CommandArg) * CMDDEF(type).num_args;
 
-  if ((node = (CommandNode *) alloc_clear(size)) != NULL) {
-    char_u *fname;
-    if ((fname = vim_strsave(position->fname)) == NULL) {
-      vim_free(node);
-      return NULL;
-    }
-    node->type = type;
-    node->position = *position;
-    node->position.fname = fname;
+  node = (CommandNode *) xcalloc(1, size);
+  char_u *fname;
+  if ((fname = vim_strsave(position->fname)) == NULL) {
+    vim_free(node);
+    return NULL;
   }
+  node->type = type;
+  node->position = *position;
+  node->position.fname = fname;
 
   return node;
 }
@@ -282,13 +282,14 @@ static Regex *regex_alloc(const char_u *string, size_t len)
 ///
 /// @param[in]  type  Part type.
 ///
-/// @return Pointer to allocated block of memory or NULL in case of error.
+/// @return Pointer to allocated block of memory.
 static Glob *glob_alloc(GlobType type)
 {
   Glob *glob;
 
-  if ((glob = ALLOC_CLEAR_NEW(Glob, 1)) != NULL)
-    glob->type = type;
+  glob = XCALLOC_NEW(Glob, 1);
+
+  glob->type = type;
 
   return glob;
 }
@@ -297,13 +298,14 @@ static Glob *glob_alloc(GlobType type)
 ///
 /// @param[in]  type  Followup type.
 ///
-/// @return Pointer to allocated block of memory or NULL in case of error.
+/// @return Pointer to allocated block of memory.
 static AddressFollowup *address_followup_alloc(AddressFollowupType type)
 {
   AddressFollowup *followup;
 
-  if ((followup = ALLOC_CLEAR_NEW(AddressFollowup, 1)) != NULL)
-    followup->type = type;
+  followup = XCALLOC_NEW(AddressFollowup, 1);
+
+  followup->type = type;
 
   return followup;
 }
@@ -670,11 +672,8 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
       if (literal_start != NULL) {
         char_u *s;
         char_u *t;
-        if ((*next = glob_alloc(kPatLiteral)) == NULL)
-          goto get_glob_error_return;
-        if (((*next)->data.str = ALLOC_CLEAR_NEW(char_u, literal_length + 1))
-            == NULL)
-          goto get_glob_error_return;
+        *next = glob_alloc(kPatLiteral);
+        (*next)->data.str = XCALLOC_NEW(char_u, literal_length + 1);
         s = (*next)->data.str;
 
         for (t = literal_start; t < p; t++) {
@@ -691,8 +690,7 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
       }
       if (type == kPatMissing)
         break;
-      if ((*next = glob_alloc(type)) == NULL)
-        goto get_glob_error_return;
+      *next = glob_alloc(type);
       switch (type) {
         case kGlobExpression: {
           ExpressionParserError expr_error;
@@ -717,8 +715,7 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
           break;
         }
         case kGlobShell: {
-          if ((*next = glob_alloc(kGlobShell)) == NULL)
-            goto get_glob_error_return;
+          *next = glob_alloc(kGlobShell);
           if (((*next)->data.str = vim_strsave(p)) == NULL)
             goto get_glob_error_return;
           p += STRLEN(p);
@@ -1161,7 +1158,7 @@ static int do_parse_map(char_u **pp,
     assert(!unmap);
     if (STRICMP(rhs, "<nop>") == 0) {
       // Empty string
-      rhs = ALLOC_CLEAR_NEW(char_u, 1);
+      rhs = XCALLOC_NEW(char_u, 1);
     } else {
       if (set_node_rhs(rhs, ARG_MAP_RHS, node, map_flags&FLAG_MAP_SPECIAL,
                        map_flags&FLAG_MAP_EXPR, o, position)
@@ -1304,8 +1301,7 @@ static int parse_menu(char_u **pp,
     for (; i < MENUDEPTH && !vim_iswhite(*p); i++) {
     }
     if (i) {
-      if ((pris = ALLOC_CLEAR_NEW(int, i + 1)) == NULL)
-        return FAIL;
+      pris = XCALLOC_NEW(int, i + 1);
       node->args[ARG_MENU_PRI].arg.numbers = pris;
       for (i = 0; i < MENUDEPTH && !vim_iswhite(*p); i++) {
         pris[i] = (int) getdigits(&p);
@@ -1363,8 +1359,7 @@ static int parse_menu(char_u **pp,
       menu_path_end = p;
     }
     if (menu_path_end != NULL) {
-      if ((sub = ALLOC_CLEAR_NEW(MenuItem, 1)) == NULL)
-        return FAIL;
+      sub = XCALLOC_NEW(MenuItem, 1);
 
       if (node->args[ARG_MENU_NAME].arg.menu_item == NULL)
         node->args[ARG_MENU_NAME].arg.menu_item = sub;
@@ -2304,8 +2299,7 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
   }
   if (type != kAddressFollowupMissing) {
     p++;
-    if ((fw = address_followup_alloc(type)) == NULL)
-      return FAIL;
+    fw = address_followup_alloc(type);
     fw->type = type;
     switch (type) {
       case kAddressFollowupShift: {
@@ -2858,11 +2852,7 @@ int parse_one_cmd(char_u **pp,
       if ((*next_node = cmd_alloc(kCmdMissing, position)) == NULL)
         return FAIL;
       (*next_node)->range.address.type = kAddrCurrent;
-      if ((fw = address_followup_alloc(kAddressFollowupShift)) == NULL) {
-        free_cmd(*next_node);
-        *next_node = NULL;
-        return FAIL;
-      }
+      fw = address_followup_alloc(kAddressFollowupShift);
       fw->data.shift = 1;
       (*next_node)->range.address.followups = fw;
       (*next_node)->end_col = position->col + (*pp - s);
@@ -2999,11 +2989,7 @@ int parse_one_cmd(char_u **pp,
       if (*p == '%') {
         current_range.address.type = kAddrFixed;
         current_range.address.data.lnr = 1;
-        if ((current_range.next = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
-          free_range_data(&range);
-          free_range_data(&current_range);
-          return FAIL;
-        }
+        current_range.next = XCALLOC_NEW(Range, 1);
         current_range.next->address.type = kAddrEnd;
         range = current_range;
         p++;
@@ -3011,11 +2997,7 @@ int parse_one_cmd(char_u **pp,
       } else if (*p == '*' && !(o.flags&FLAG_POC_CPO_STAR)) {
         current_range.address.type = kAddrMark;
         current_range.address.data.mark = '<';
-        if ((current_range.next = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
-          free_range_data(&range);
-          free_range_data(&current_range);
-          return FAIL;
-        }
+        current_range.next = XCALLOC_NEW(Range, 1);
         current_range.next->address.type = kAddrMark;
         current_range.next->address.data.mark = '>';
         range = current_range;
@@ -3028,11 +3010,7 @@ int parse_one_cmd(char_u **pp,
       Range **target = (&(range.next));
       while (*target != NULL)
         target = &((*target)->next);
-      if ((*target = ALLOC_CLEAR_NEW(Range, 1)) == NULL) {
-        free_range_data(&range);
-        free_range_data(&current_range);
-        return FAIL;
-      }
+      *target = XCALLOC_NEW(Range, 1);
       **target = current_range;
     } else {
       range = current_range;

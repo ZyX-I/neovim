@@ -219,8 +219,8 @@ static void u_check(int newhead_may_be_NULL)                 {
     EMSGN("b_u_curhead invalid: 0x%x", curbuf->b_u_curhead);
   if (header_count != curbuf->b_u_numhead) {
     EMSG("b_u_numhead invalid");
-    smsg((char_u *)"expected: %ld, actual: %ld",
-        (long)header_count, (long)curbuf->b_u_numhead);
+    smsg((char_u *)"expected: %" PRId64 ", actual: %" PRId64,
+        (int64_t)header_count, (int64_t)curbuf->b_u_numhead);
   }
 }
 
@@ -694,7 +694,7 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
   /* Loop over 'undodir'.  When reading find the first file that exists.
    * When not reading use the first directory that exists or ".". */
   dirp = p_udir;
-  while (*dirp != NUL) {
+  while (*dirp != '\0') {
     dir_len = copy_option_part(&dirp, dir_name, IOSIZE, ",");
     if (dir_len == 1 && dir_name[0] == '.') {
       /* Use same directory as the ffname,
@@ -707,13 +707,13 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
       *p = '.';
       STRCAT(p, ".un~");
     } else {
-      dir_name[dir_len] = NUL;
+      dir_name[dir_len] = '\0';
       if (os_isdir(dir_name)) {
         if (munged_name == NULL) {
           munged_name = vim_strsave(ffname);
           if (munged_name == NULL)
             return NULL;
-          for (p = munged_name; *p != NUL; mb_ptr_adv(p))
+          for (p = munged_name; *p != '\0'; mb_ptr_adv(p))
             if (vim_ispathsep(*p))
               *p = '%';
         }
@@ -721,11 +721,11 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
       }
     }
 
-    /* When reading check if the file exists. */
-    if (undo_file_name != NULL && (!reading
-                                   || mch_stat((char *)undo_file_name,
-                                       &st) >= 0))
+    // When reading check if the file exists.
+    if (undo_file_name != NULL &&
+        (!reading || mch_stat((char *)undo_file_name, &st) >= 0)) {
       break;
+    }
     vim_free(undo_file_name);
     undo_file_name = NULL;
   }
@@ -763,7 +763,7 @@ static size_t fwrite_crypt(buf_T *buf, char_u *ptr, size_t len, FILE *fp)
   char_u small_buf[100];
   size_t i;
 
-  if (*buf->b_p_key == NUL)
+  if (*buf->b_p_key == '\0')
     return fwrite(ptr, len, (size_t)1, fp);
   if (len < 100)
     copy = small_buf;      /* no malloc()/free() for short strings */
@@ -786,7 +786,7 @@ static char_u *read_string_decrypt(buf_T *buf, FILE *fd, int len)
   char_u  *ptr;
 
   ptr = read_string(fd, len);
-  if (ptr != NULL && *buf->b_p_key != NUL)
+  if (ptr != NULL && *buf->b_p_key != '\0')
     crypt_decode(ptr, len);
   return ptr;
 }
@@ -801,7 +801,7 @@ static int serialize_header(FILE *fp, buf_T *buf, char_u *hash)
 
   /* If the buffer is encrypted then all text bytes following will be
    * encrypted.  Numbers and other info is not crypted. */
-  if (*buf->b_p_key != NUL) {
+  if (*buf->b_p_key != '\0') {
     char_u *header;
     int header_len;
 
@@ -1155,7 +1155,7 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
   if (os_file_exists(file_name)) {
     if (name == NULL || !forceit) {
       /* Check we can read it and it's an undo file. */
-      fd = mch_open((char *)file_name, O_RDONLY|O_EXTRA, 0);
+      fd = mch_open((char *)file_name, O_RDONLY, 0);
       if (fd < 0) {
         if (name != NULL || p_verbose > 0) {
           if (name == NULL)
@@ -1200,7 +1200,7 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
   }
 
   fd = mch_open((char *)file_name,
-      O_CREAT|O_EXTRA|O_WRONLY|O_EXCL|O_NOFOLLOW, perm);
+      O_CREAT|O_WRONLY|O_EXCL|O_NOFOLLOW, perm);
   if (fd < 0) {
     EMSG2(_(e_not_open), file_name);
     goto theend;
@@ -1253,7 +1253,7 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
    */
   if (serialize_header(fp, buf, hash) == FAIL)
     goto write_error;
-  if (*buf->b_p_key != NUL)
+  if (*buf->b_p_key != '\0')
     do_crypt = TRUE;
 
   /*
@@ -1291,8 +1291,8 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
     write_ok = TRUE;
 #ifdef U_DEBUG
   if (headers_written != buf->b_u_numhead) {
-    EMSGN("Written %ld headers, ...", headers_written);
-    EMSGN("... but numhead is %ld", buf->b_u_numhead);
+    EMSGN("Written %" PRId64 " headers, ...", headers_written);
+    EMSGN("... but numhead is %" PRId64, buf->b_u_numhead);
   }
 #endif
 
@@ -1404,7 +1404,7 @@ void u_read_undo(char_u *name, char_u *hash, char_u *orig_name)
   }
   version = get2c(fp);
   if (version == UF_VERSION_CRYPT) {
-    if (*curbuf->b_p_key == NUL) {
+    if (*curbuf->b_p_key == '\0') {
       EMSG2(_("E832: Non-encrypted file has encrypted undo file: %s"),
           file_name);
       goto error;
@@ -1509,8 +1509,9 @@ void u_read_undo(char_u *name, char_u *hash, char_u *orig_name)
   }
 
 #ifdef U_DEBUG
-  uhp_table_used = (int *)alloc_clear(
-      (unsigned)(sizeof(int) * num_head + 1));
+  size_t amount = num_head * sizeof(int) + 1;
+  uhp_table_used = xmalloc(amount);
+  memset(uhp_table_used, 0, amount);
 # define SET_FLAG(j) ++ uhp_table_used[j]
 #else
 # define SET_FLAG(j)
@@ -1593,7 +1594,7 @@ void u_read_undo(char_u *name, char_u *hash, char_u *orig_name)
 #ifdef U_DEBUG
   for (i = 0; i < num_head; ++i)
     if (uhp_table_used[i] == 0)
-      EMSGN("uhp_table entry %ld not used, leaking memory", i);
+      EMSGN("uhp_table entry %" PRId64 " not used, leaking memory", i);
   vim_free(uhp_table_used);
   u_check(TRUE);
 #endif
@@ -1910,7 +1911,7 @@ void undo_time(long step, int sec, int file, int absolute)
       break;
 
     if (absolute) {
-      EMSGN(_("E830: Undo number %ld not found"), step);
+      EMSGN(_("E830: Undo number %" PRId64 " not found"), step);
       return;
     }
 
@@ -2316,7 +2317,7 @@ u_undo_end (
     uhp = curbuf->b_u_newhead;
 
   if (uhp == NULL)
-    *msgbuf = NUL;
+    *msgbuf = '\0';
   else
     u_add_time(msgbuf, sizeof(msgbuf), uhp->uh_time);
 
@@ -2330,11 +2331,11 @@ u_undo_end (
     }
   }
 
-  smsg((char_u *)_("%ld %s; %s #%ld  %s"),
-      u_oldcount < 0 ? -u_oldcount : u_oldcount,
+  smsg((char_u *)_("%" PRId64 " %s; %s #%" PRId64 "  %s"),
+      u_oldcount < 0 ? (int64_t)-u_oldcount : (int64_t)u_oldcount,
       _(msgstr),
       did_undo ? _("before") : _("after"),
-      uhp == NULL ? 0L : uhp->uh_seq,
+      uhp == NULL ? (int64_t)0L : (int64_t)uhp->uh_seq,
       msgbuf);
 }
 
@@ -2465,8 +2466,8 @@ static void u_add_time(char_u *buf, size_t buflen, time_t tt)
       /* longer ago */
       (void)strftime((char *)buf, buflen, "%Y/%m/%d %H:%M:%S", curtime);
   } else
-  vim_snprintf((char *)buf, buflen, _("%ld seconds ago"),
-      (long)(time(NULL) - tt));
+  vim_snprintf((char *)buf, buflen, _("%" PRId64 " seconds ago"),
+      (int64_t)(time(NULL) - tt));
 }
 
 /*

@@ -181,11 +181,11 @@ void set_context_in_cscope_cmd(expand_T *xp, char_u *arg, cmdidx_T cmdidx)
                 ? EXP_SCSCOPE_SUBCMD : EXP_CSCOPE_SUBCMD;
 
   /* (part of) subcommand already typed */
-  if (*arg != NUL) {
+  if (*arg != '\0') {
     p = skiptowhite(arg);
-    if (*p != NUL) {                /* past first word */
+    if (*p != '\0') {                /* past first word */
       xp->xp_pattern = skipwhite(p);
-      if (*skiptowhite(xp->xp_pattern) != NUL)
+      if (*skiptowhite(xp->xp_pattern) != '\0')
         xp->xp_context = EXPAND_NOTHING;
       else if (STRNICMP(arg, "add", p - arg) == 0)
         xp->xp_context = EXPAND_FILES;
@@ -262,7 +262,7 @@ void do_cstag(exarg_T *eap)
 {
   int ret = FALSE;
 
-  if (*eap->arg == NUL) {
+  if (*eap->arg == '\0') {
     (void)EMSG(_("E562: Usage: cstag <ident>"));
     return;
   }
@@ -598,7 +598,7 @@ static int cs_check_for_connections(void)
 
 static int cs_check_for_tags(void)
 {
-  return p_tags[0] != NUL && curbuf->b_p_tags != NULL;
+  return p_tags[0] != '\0' && curbuf->b_p_tags != NULL;
 } /* cs_check_for_tags */
 
 /*
@@ -623,7 +623,7 @@ cs_reading_emsg (
     int idx        /* connection index */
 )
 {
-  EMSGN(_("E262: error reading cscope connection %ld"), idx);
+  EMSGN(_("E262: error reading cscope connection %" PRId64), idx);
 }
 
 #define CSREAD_BUFSIZE  2048
@@ -960,7 +960,7 @@ static int cs_find(exarg_T *eap)
    * spaces to correctly display the quickfix/location list window's title.
    */
   for (i = 0; i < eap_arg_len; ++i)
-    if (NUL == eap->arg[i])
+    if ('\0' == eap->arg[i])
       eap->arg[i] = ' ';
 
   return cs_find_common(opt, pat, eap->forceit, TRUE,
@@ -1286,7 +1286,7 @@ static int cs_insert_filelist(char *fname, char *ppath, char *flags, struct stat
        * be enough for most users.  If more is needed, csinfo will be
        * reallocated. */
       csinfo_size = 1;
-      csinfo = (csinfo_T *)alloc_clear(sizeof(csinfo_T));
+      csinfo = xcalloc(1, sizeof(csinfo_T));
     } else {
       /* Reallocate space for more connections. */
       csinfo_size *= 2;
@@ -1456,19 +1456,16 @@ static char *cs_make_vim_style_matches(char *fname, char *slno, char *search, ch
    * by new ones on the tag stack.
    */
   char *buf;
-  int amt;
+  size_t amt;
 
   if (search != NULL) {
-    amt =
-      (int)(strlen(fname) + strlen(slno) + strlen(tagstr) + strlen(search)+6);
-    if ((buf = (char *)alloc(amt)) == NULL)
-      return NULL;
+    amt = strlen(fname) + strlen(slno) + strlen(tagstr) + strlen(search) + 6;
+    buf = xmalloc(amt);
 
     (void)sprintf(buf, "%s\t%s\t%s;\"\t%s", tagstr, fname, slno, search);
   } else {
-    amt = (int)(strlen(fname) + strlen(slno) + strlen(tagstr) + 5);
-    if ((buf = (char *)alloc(amt)) == NULL)
-      return NULL;
+    amt = strlen(fname) + strlen(slno) + strlen(tagstr) + 5;
+    buf = xmalloc(amt);
 
     (void)sprintf(buf, "%s\t%s\t%s;\"", tagstr, fname, slno);
   }
@@ -1669,10 +1666,9 @@ static void cs_fill_results(char *tagstr, int totmatches, int *nummatches_a, cha
 
   assert(totmatches > 0);
 
-  buf = (char *)alloc(CSREAD_BUFSIZE);
-
-  matches = (char **)alloc(sizeof(char *) * totmatches);
-  cntxts = (char **)alloc(sizeof(char *) * totmatches);
+  buf = xmalloc(CSREAD_BUFSIZE);
+  matches = xmalloc(sizeof(char *) * totmatches);
+  cntxts = xmalloc(sizeof(char *) * totmatches);
 
   for (i = 0; i < csinfo_size; i++) {
     if (nummatches_a[i] < 1)
@@ -1683,21 +1679,21 @@ static void cs_fill_results(char *tagstr, int totmatches, int *nummatches_a, cha
                &slno, &search)) == NULL)
         continue;
 
-      matches[totsofar] = cs_make_vim_style_matches(fullname, slno,
-          search, tagstr);
+      matches[totsofar] = cs_make_vim_style_matches(fullname, slno, search,
+                                                    tagstr);
 
       vim_free(fullname);
 
       if (strcmp(cntx, "<global>") == 0)
         cntxts[totsofar] = NULL;
-      else
+      else {
         /* note: if vim_strsave returns NULL, then the context
          * will be "<global>", which is misleading.
          */
         cntxts[totsofar] = (char *)vim_strsave((char_u *)cntx);
+      }
 
-      if (matches[totsofar] != NULL)
-        totsofar++;
+      totsofar++;
 
     }     /* for all matches */
 
@@ -1885,11 +1881,11 @@ static int cs_read_prompt(int i)
         if (buf != NULL) {
           /* append character to the message */
           buf[bufpos++] = ch;
-          buf[bufpos] = NUL;
+          buf[bufpos] = '\0';
           if (bufpos >= epromptlen
               && strcmp(&buf[bufpos - epromptlen], eprompt) == 0) {
             /* remove eprompt from buf */
-            buf[bufpos - epromptlen] = NUL;
+            buf[bufpos - epromptlen] = '\0';
 
             /* print message to user */
             (void)EMSG2(cs_emsg, buf);
@@ -1900,7 +1896,7 @@ static int cs_read_prompt(int i)
 
             /* clear buf */
             bufpos = 0;
-            buf[bufpos] = NUL;
+            buf[bufpos] = '\0';
           }
         }
       }
@@ -1910,7 +1906,7 @@ static int cs_read_prompt(int i)
         ch = getc(csinfo[i].fr_fp);
       if (ch == EOF) {
         PERROR("cs_read_prompt EOF");
-        if (buf != NULL && buf[0] != NUL)
+        if (buf != NULL && buf[0] != '\0')
           (void)EMSG2(cs_emsg, buf);
         else if (p_csverbose)
           cs_reading_emsg(i);           /* don't have additional information */
@@ -2080,9 +2076,9 @@ static int cs_reset(exarg_T *eap)
     return CSCOPE_SUCCESS;
 
   /* malloc our db and ppath list */
-  dblist = (char **)alloc(csinfo_size * sizeof(char *));
-  pplist = (char **)alloc(csinfo_size * sizeof(char *));
-  fllist = (char **)alloc(csinfo_size * sizeof(char *));
+  dblist = xmalloc(csinfo_size * sizeof(char *));
+  pplist = xmalloc(csinfo_size * sizeof(char *));
+  fllist = xmalloc(csinfo_size * sizeof(char *));
 
   for (i = 0; i < csinfo_size; i++) {
     dblist[i] = csinfo[i].fname;
@@ -2161,9 +2157,9 @@ static char *cs_resolve_file(int i, char *name)
       && (strncmp(name, csinfo[i].ppath, strlen(csinfo[i].ppath)) != 0)
       && (name[0] != '/')
       ) {
-    fullname = (char *)alloc(len);
+    fullname = xmalloc(len);
     (void)sprintf(fullname, "%s/%s", csinfo[i].ppath, name);
-  } else if (csdir != NULL && csinfo[i].fname != NULL && *csdir != NUL) {
+  } else if (csdir != NULL && csinfo[i].fname != NULL && *csdir != '\0') {
     /* Check for csdir to be non empty to avoid empty path concatenated to
      * cscope output. */
     fullname = (char *)concat_fnames(csdir, (char_u *)name, TRUE);

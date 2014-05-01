@@ -15,5 +15,5 @@ void server_to_input_buf(char_u *str);
 char_u *eval_client_expr_to_string(char_u *expr);
 char_u *serverConvert(char_u *client_enc, char_u *data, char_u **tofree);
 void allocate_generic_buffers(void);
-/* vim: set ft=c : */
+
 #endif /* NEOVIM_MAIN_H */

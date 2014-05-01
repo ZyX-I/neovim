@@ -172,7 +172,7 @@ do_window (
     STRCPY(cbuf, "split #");
     if (Prenum)
       vim_snprintf((char *)cbuf + 7, sizeof(cbuf) - 7,
-          "%ld", Prenum);
+          "%" PRId64, (int64_t)Prenum);
     do_cmdline_cmd(cbuf);
     break;
 
@@ -183,9 +183,9 @@ do_window (
 newwindow:
     if (Prenum)
       /* window height */
-      vim_snprintf((char *)cbuf, sizeof(cbuf) - 5, "%ld", Prenum);
+      vim_snprintf((char *)cbuf, sizeof(cbuf) - 5, "%" PRId64, (int64_t)Prenum);
     else
-      cbuf[0] = NUL;
+      cbuf[0] = '\0';
     if (nchar == 'v' || nchar == Ctrl_V)
       STRCAT(cbuf, "v");
     STRCAT(cbuf, "new");
@@ -418,7 +418,7 @@ newwindow:
 
     /* Execute the command right here, required when
      * "wincmd ]" was used in a function. */
-    do_nv_ident(Ctrl_RSB, NUL);
+    do_nv_ident(Ctrl_RSB, '\0');
     break;
 
   /* edit file name under cursor in a new window */
@@ -470,9 +470,9 @@ wingotofile:
      * cursor in a new window.
      */
     if (bt_quickfix(curbuf)) {
-      sprintf((char *)cbuf, "split +%ld%s",
-          (long)curwin->w_cursor.lnum,
-          (curwin->w_llist_ref == NULL) ? "cc" : "ll");
+      sprintf((char *)cbuf, "split +%" PRId64 "%s",
+              (int64_t)curwin->w_cursor.lnum,
+              (curwin->w_llist_ref == NULL) ? "cc" : "ll");
       do_cmdline_cmd(cbuf);
     }
     break;
@@ -487,7 +487,7 @@ wingotofile:
 #endif
     ++ no_mapping;
     ++allow_keys;               /* no mapping for xchar, but allow key codes */
-    if (xchar == NUL)
+    if (xchar == '\0')
       xchar = plain_vgetc();
     LANGMAP_ADJUST(xchar, TRUE);
     --no_mapping;
@@ -753,10 +753,6 @@ int win_split_ins(int size, int flags, win_T *new_wp, int dir)
       return FAIL;
 
     new_frame(wp);
-    if (wp->w_frame == NULL) {
-      win_free(wp, NULL);
-      return FAIL;
-    }
 
     /* make the contents of the new window the same as the current one */
     win_init(wp, curwin, flags);
@@ -788,7 +784,7 @@ int win_split_ins(int size, int flags, win_T *new_wp, int dir)
   }
   if (curfrp->fr_parent == NULL || curfrp->fr_parent->fr_layout != layout) {
     /* Need to create a new frame in the tree to make a branch. */
-    frp = (frame_T *)alloc_clear((unsigned)sizeof(frame_T));
+    frp = xcalloc(1, sizeof(frame_T));
     *frp = *curfrp;
     curfrp->fr_layout = layout;
     frp->fr_parent = curfrp;
@@ -1520,8 +1516,7 @@ win_equal_rec (
         if (totwincount == 0)
           new_size = room;
         else
-          new_size = (wincount * room + ((unsigned)totwincount >> 1))
-                     / totwincount;
+          new_size = (wincount * room + (totwincount / 2)) / totwincount;
         if (hnc) {                  /* add next_curwin size */
           next_curwin_size -= p_wiw - (m - n);
           new_size += next_curwin_size;
@@ -1642,8 +1637,7 @@ win_equal_rec (
         if (totwincount == 0)
           new_size = room;
         else
-          new_size = (wincount * room + ((unsigned)totwincount >> 1))
-                     / totwincount;
+          new_size = (wincount * room + (totwincount / 2)) / totwincount;
         if (hnc) {                  /* add next_curwin size */
           next_curwin_size -= p_wh - (m - n);
           new_size += next_curwin_size;
@@ -2755,7 +2749,8 @@ void win_init_empty(win_T *wp)
 /*
  * Allocate the first window and put an empty buffer in it.
  * Called from main().
- * Return FAIL when something goes wrong (out of memory).
+ *
+ * Return FAIL when something goes wrong.
  */
 int win_alloc_first(void)
 {
@@ -2763,8 +2758,6 @@ int win_alloc_first(void)
     return FAIL;
 
   first_tabpage = alloc_tabpage();
-  if (first_tabpage == NULL)
-    return FAIL;
   first_tabpage->tp_topframe = topframe;
   curtab = first_tabpage;
 
@@ -2778,11 +2771,9 @@ int win_alloc_first(void)
 void win_alloc_aucmd_win(void)
 {
   aucmd_win = win_alloc(NULL, TRUE);
-  if (aucmd_win != NULL) {
-    win_init_some(aucmd_win, curwin);
-    RESET_BINDING(aucmd_win);
-    new_frame(aucmd_win);
-  }
+  win_init_some(aucmd_win, curwin);
+  RESET_BINDING(aucmd_win);
+  new_frame(aucmd_win);
 }
 
 /*
@@ -2799,7 +2790,7 @@ static int win_alloc_firstwin(win_T *oldwin)
     /* Very first window, need to create an empty buffer for it and
      * initialize from scratch. */
     curbuf = buflist_new(NULL, NULL, 1L, BLN_LISTED);
-    if (curwin == NULL || curbuf == NULL)
+    if (curbuf == NULL)
       return FAIL;
     curwin->w_buffer = curbuf;
     curwin->w_s = &(curbuf->b_s);
@@ -2815,8 +2806,6 @@ static int win_alloc_firstwin(win_T *oldwin)
   }
 
   new_frame(curwin);
-  if (curwin->w_frame == NULL)
-    return FAIL;
   topframe = curwin->w_frame;
   topframe->fr_width = Columns;
   topframe->fr_height = Rows - p_ch;
@@ -2830,7 +2819,7 @@ static int win_alloc_firstwin(win_T *oldwin)
  */
 static void new_frame(win_T *wp)
 {
-  frame_T *frp = (frame_T *)alloc_clear((unsigned)sizeof(frame_T));
+  frame_T *frp = xcalloc(1, sizeof(frame_T));
 
   wp->w_frame = frp;
   frp->fr_layout = FR_LEAF;
@@ -2850,23 +2839,14 @@ void win_init_size(void)
 
 /*
  * Allocate a new tabpage_T and init the values.
- * Returns NULL when out of memory.
  */
 static tabpage_T *alloc_tabpage(void)
 {
-  tabpage_T   *tp;
-
-
-  tp = (tabpage_T *)alloc_clear((unsigned)sizeof(tabpage_T));
+  tabpage_T *tp = xcalloc(1, sizeof(tabpage_T));
 
   /* init t: variables */
   tp->tp_vars = dict_alloc();
-  if (tp->tp_vars == NULL) {
-    vim_free(tp);
-    return NULL;
-  }
   init_var_dict(tp->tp_vars, &tp->tp_winvar, VAR_SCOPE);
-
   tp->tp_diff_invalid = TRUE;
   tp->tp_ch_used = p_ch;
 
@@ -2903,8 +2883,6 @@ int win_new_tabpage(int after)
   int n;
 
   newtp = alloc_tabpage();
-  if (newtp == NULL)
-    return FAIL;
 
   /* Remember the current windows in this Tab page. */
   if (leave_tabpage(curbuf, TRUE) == FAIL) {
@@ -3585,25 +3563,14 @@ win_T *buf_jump_open_tab(buf_T *buf)
  */
 static win_T *win_alloc(win_T *after, int hidden)
 {
-  win_T       *new_wp;
-
   /*
    * allocate window structure and linesizes arrays
    */
-  new_wp = (win_T *)alloc_clear((unsigned)sizeof(win_T));
-
-  if (win_alloc_lines(new_wp) == FAIL) {
-    vim_free(new_wp);
-    return NULL;
-  }
+  win_T *new_wp = xcalloc(1, sizeof(win_T));
+  win_alloc_lines(new_wp);
 
   /* init w: variables */
   new_wp->w_vars = dict_alloc();
-  if (new_wp->w_vars == NULL) {
-    win_free_lsize(new_wp);
-    vim_free(new_wp);
-    return NULL;
-  }
   init_var_dict(new_wp->w_vars, &new_wp->w_winvar, VAR_SCOPE);
 
   /* Don't execute autocommands while the window is not properly
@@ -3794,15 +3761,12 @@ static void frame_remove(frame_T *frp)
 
 /*
  * Allocate w_lines[] for window "wp".
- * Return FAIL for failure, OK for success.
  */
-int win_alloc_lines(win_T *wp)
+void win_alloc_lines(win_T *wp)
 {
   wp->w_lines_valid = 0;
-  wp->w_lines = (wline_T *)alloc_clear((unsigned)(Rows * sizeof(wline_T)));
-  if (wp->w_lines == NULL)
-    return FAIL;
-  return OK;
+  assert(Rows >= 0);
+  wp->w_lines = xcalloc(Rows, sizeof(wline_T));
 }
 
 /*
@@ -4678,7 +4642,7 @@ void win_new_width(win_T *wp, int width)
 
 void win_comp_scroll(win_T *wp)
 {
-  wp->w_p_scr = ((unsigned)wp->w_height >> 1);
+  wp->w_p_scr = wp->w_height / 2;
   if (wp->w_p_scr == 0)
     wp->w_p_scr = 1;
 }
@@ -4827,9 +4791,9 @@ file_name_in_line (
    * search forward for what could be the start of a file name
    */
   ptr = line + col;
-  while (*ptr != NUL && !vim_isfilec(*ptr))
+  while (*ptr != '\0' && !vim_isfilec(*ptr))
     mb_ptr_adv(ptr);
-  if (*ptr == NUL) {            /* nothing found */
+  if (*ptr == '\0') {            /* nothing found */
     if (options & FNAME_MESS)
       EMSG(_("E446: No file name under cursor"));
     return NULL;
@@ -4875,7 +4839,7 @@ file_name_in_line (
     /* Get the number after the file name and a separator character */
     p = ptr + len;
     p = skipwhite(p);
-    if (*p != NUL) {
+    if (*p != '\0') {
       if (!isdigit(*p))
         ++p;                        /* skip the separator */
       p = skipwhite(p);
@@ -5055,7 +5019,7 @@ void make_snapshot(int idx)
 
 static void make_snapshot_rec(frame_T *fr, frame_T **frp)
 {
-  *frp = (frame_T *)alloc_clear((unsigned)sizeof(frame_T));
+  *frp = xcalloc(1, sizeof(frame_T));
   (*frp)->fr_layout = fr->fr_layout;
   (*frp)->fr_width = fr->fr_width;
   (*frp)->fr_height = fr->fr_height;
@@ -5260,17 +5224,19 @@ int match_add(win_T *wp, char_u *grp, char_u *pat, int prio, int id)
   int hlg_id;
   regprog_T   *regprog;
 
-  if (*grp == NUL || *pat == NUL)
+  if (*grp == '\0' || *pat == '\0')
     return -1;
   if (id < -1 || id == 0) {
-    EMSGN("E799: Invalid ID: %ld (must be greater than or equal to 1)", id);
+    EMSGN("E799: Invalid ID: %" PRId64
+          " (must be greater than or equal to 1)",
+          id);
     return -1;
   }
   if (id != -1) {
     cur = wp->w_match_head;
     while (cur != NULL) {
       if (cur->id == id) {
-        EMSGN("E801: ID already taken: %ld", id);
+        EMSGN("E801: ID already taken: %" PRId64, id);
         return -1;
       }
       cur = cur->next;
@@ -5334,8 +5300,9 @@ int match_delete(win_T *wp, int id, int perr)
 
   if (id < 1) {
     if (perr == TRUE)
-      EMSGN("E802: Invalid ID: %ld (must be greater than or equal to 1)",
-          id);
+      EMSGN("E802: Invalid ID: %" PRId64
+            " (must be greater than or equal to 1)",
+            id);
     return -1;
   }
   while (cur != NULL && cur->id != id) {
@@ -5344,7 +5311,7 @@ int match_delete(win_T *wp, int id, int perr)
   }
   if (cur == NULL) {
     if (perr == TRUE)
-      EMSGN("E803: ID not found: %ld", id);
+      EMSGN("E803: ID not found: %" PRId64, id);
     return -1;
   }
   if (cur == prev)

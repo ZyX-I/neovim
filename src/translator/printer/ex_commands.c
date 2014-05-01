@@ -59,10 +59,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 
   len = node_repr_len(&default_po, node, 0, FALSE);
 
-  if ((repr = ALLOC_CLEAR_NEW(char, len + 1)) == NULL) {
-    free_cmd(node);
-    return NULL;
-  }
+  repr = XCALLOC_NEW(char, len + 1);
 
   r = repr;
 

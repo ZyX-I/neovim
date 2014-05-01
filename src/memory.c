@@ -43,17 +43,6 @@
 #include "os/os.h"
 
 static void try_to_free_memory();
-static void *xmallocz(size_t size);
-
-/// Allocates (len + 1) bytes of memory, duplicates `len` bytes of
-/// `data` to the allocated memory, zero terminates the allocated memory,
-/// and returns a pointer to the allocated memory. If the allocation fails,
-/// the program dies.
-///
-/// @see {xmalloc}
-/// @param data Pointer to the data that will be copied
-/// @param len number of bytes that will be copied
-static void *xmemdupz(const void *data, size_t len);
 
 /*
  * Note: if unsigned is 16 bits we can only allocate up to 64K with alloc().
@@ -62,14 +51,6 @@ static void *xmemdupz(const void *data, size_t len);
 char_u *alloc(unsigned size)
 {
   return lalloc((long_u)size, TRUE);
-}
-
-/*
- * Allocate memory and set all bytes to zero.
- */
-char_u *alloc_clear(unsigned size)
-{
-  return (char_u *)xcalloc(1, (size_t)size);
 }
 
 /// Try to free memory. Used when trying to recover from out of memory errors.
@@ -92,24 +73,40 @@ static void try_to_free_memory()
   trying_to_free = false;
 }
 
-void *xmalloc(size_t size)
+void *try_malloc(size_t size)
 {
   void *ret = malloc(size);
 
-  if (!ret && !size)
+  if (!ret && !size) {
     ret = malloc(1);
-
+  }
   if (!ret) {
     try_to_free_memory();
     ret = malloc(size);
-    if (!ret && !size)
+    if (!ret && !size) {
       ret = malloc(1);
-    if (!ret) {
-      OUT_STR("Vim: Error: Out of memory.\n");
-      preserve_exit();
     }
   }
+  return ret;
+}
 
+void *verbose_try_malloc(size_t size)
+{
+  void *ret = try_malloc(size);
+  if (!ret) {
+    do_outofmem_msg((long_u)size);
+  }
+  return ret;
+}
+
+void *xmalloc(size_t size)
+{
+  void *ret = try_malloc(size);
+
+  if (!ret) {
+    OUT_STR("Vim: Error: Out of memory.\n");
+    preserve_exit();
+  }
   return ret;
 }
 
@@ -155,6 +152,47 @@ void *xrealloc(void *ptr, size_t size)
   return ret;
 }
 
+void *xmallocz(size_t size)
+{
+  size_t total_size = size + 1;
+  void *ret;
+
+  if (total_size < size) {
+    OUT_STR("Vim: Data too large to fit into virtual memory space\n");
+    preserve_exit();
+  }
+
+  ret = xmalloc(total_size);
+  ((char*)ret)[size] = 0;
+
+  return ret;
+}
+
+void *xmemdupz(const void *data, size_t len)
+{
+  return memcpy(xmallocz(len), data, len);
+}
+
+char *xstpcpy(char *restrict dst, const char *restrict src)
+{
+  const size_t len = strlen(src);
+  return (char *)memcpy(dst, src, len + 1) + len;
+}
+
+char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen)
+{
+    const char *p = memchr(src, '\0', maxlen);
+    if (p) {
+        size_t srclen = (size_t)(p - src);
+        memcpy(dst, src, srclen);
+        memset(dst + srclen, 0, maxlen - srclen);
+        return dst + srclen;
+    } else {
+        memcpy(dst, src, maxlen);
+        return dst + maxlen;
+    }
+}
+
 char * xstrdup(const char *str)
 {
   char *ret = strdup(str);
@@ -197,7 +235,7 @@ void do_outofmem_msg(long_u size)
      * message fails, e.g. when setting v:errmsg. */
     did_outofmem_msg = TRUE;
 
-    EMSGN(_("E342: Out of memory!  (allocating %lu bytes)"), size);
+    EMSGN(_("E342: Out of memory!  (allocating %" PRIu64 " bytes)"), size);
   }
 }
 
@@ -349,25 +387,4 @@ void free_all_mem(void)
 }
 
 #endif
-
-static void *xmallocz(size_t size)
-{
-  size_t total_size = size + 1;
-  void *ret;
-
-  if (total_size < size) {
-    OUT_STR("Vim: Data too large to fit into virtual memory space\n");
-    preserve_exit();
-  }
-
-  ret = xmalloc(total_size);
-  ((char*)ret)[size] = 0;
-
-  return ret;
-}
-
-static void *xmemdupz(const void *data, size_t len)
-{
-  return memcpy(xmallocz(len), data, len);
-}
 

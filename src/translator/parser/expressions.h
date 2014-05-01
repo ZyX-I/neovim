@@ -91,7 +91,7 @@ typedef enum {
 //    ==#  kCCStrategyMatchCase
 //    ==?  kCCStrategyIgnoreCase
 typedef enum {
-  kCCStrategyUseOption = 0,  // 0 for alloc_clear
+  kCCStrategyUseOption = 0,  // 0 for xcalloc
   kCCStrategyMatchCase,
   kCCStrategyIgnoreCase,
 } CaseCompareStrategy;

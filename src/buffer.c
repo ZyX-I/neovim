@@ -747,7 +747,7 @@ do_bufdel (
           break;
       } else {    /* addr_count == 1 */
         arg = skipwhite(arg);
-        if (*arg == NUL)
+        if (*arg == '\0')
           break;
         if (!VIM_ISDIGIT(*arg)) {
           p = skiptowhite_esc(arg);
@@ -916,7 +916,7 @@ do_buffer (
     if (start == DOBUF_FIRST) {
       /* don't warn when deleting */
       if (!unload)
-        EMSGN(_("E86: Buffer %ld does not exist"), count);
+        EMSGN(_("E86: Buffer %" PRId64 " does not exist"), count);
     } else if (dir == FORWARD)
       EMSG(_("E87: Cannot go beyond last buffer"));
     else
@@ -948,9 +948,9 @@ do_buffer (
         if (bufIsChanged(buf))
           return FAIL;
       } else {
-        EMSGN(_(
-                "E89: No write since last change for buffer %ld (add ! to override)"),
-            buf->b_fnum);
+        EMSGN(_("E89: No write since last change for buffer %" PRId64
+                " (add ! to override)"),
+              buf->b_fnum);
         return FAIL;
       }
     }
@@ -1232,7 +1232,7 @@ void enter_buffer(buf_T *buf)
     /* If there is no filetype, allow for detecting one.  Esp. useful for
      * ":ball" used in a autocommand.  If there already is a filetype we
      * might prefer to keep it. */
-    if (*curbuf->b_p_ft == NUL)
+    if (*curbuf->b_p_ft == '\0')
       did_filetype = FALSE;
 
     open_buffer(FALSE, NULL, 0);
@@ -1265,7 +1265,7 @@ void enter_buffer(buf_T *buf)
     (void)keymap_init();
   /* May need to set the spell language.  Can only do this after the buffer
    * has been properly setup. */
-  if (!curbuf->b_help && curwin->w_p_spell && *curwin->w_s->b_p_spl != NUL)
+  if (!curbuf->b_help && curwin->w_p_spell && *curwin->w_s->b_p_spl != '\0')
     (void)did_set_spelllang(curwin);
 
   redraw_later(NOT_VALID);
@@ -1378,14 +1378,9 @@ buflist_new (
     }
   }
   if (buf != curbuf || curbuf == NULL) {
-    buf = (buf_T *)alloc_clear((unsigned)sizeof(buf_T));
+    buf = xcalloc(1, sizeof(buf_T));
     /* init b: variables */
     buf->b_vars = dict_alloc();
-    if (buf->b_vars == NULL) {
-      vim_free(ffname);
-      vim_free(buf);
-      return NULL;
-    }
     init_var_dict(buf->b_vars, &buf->b_bufvar, VAR_SCOPE);
   }
 
@@ -1395,7 +1390,7 @@ buflist_new (
   }
 
   clear_wininfo(buf);
-  buf->b_wininfo = (wininfo_T *)alloc_clear((unsigned)sizeof(wininfo_T));
+  buf->b_wininfo = xcalloc(1, sizeof(wininfo_T));
 
   if (ffname != NULL && (buf->b_ffname == NULL || buf->b_sfname == NULL)) {
     vim_free(buf->b_ffname);
@@ -1575,7 +1570,7 @@ int buflist_getfile(int n, linenr_T lnum, int options, int forceit)
     if ((options & GETF_ALT) && n == 0)
       EMSG(_(e_noalt));
     else
-      EMSGN(_("E92: Buffer %ld not found"), n);
+      EMSGN(_("E92: Buffer %" PRId64 " not found"), n);
     return FAIL;
   }
 
@@ -1773,7 +1768,7 @@ buflist_findpat (
       for (attempt = 0; attempt <= 3; ++attempt) {
         /* may add '^' and '$' */
         if (toggledollar)
-          *patend = (attempt < 2) ? NUL : '$';           /* add/remove '$' */
+          *patend = (attempt < 2) ? '\0' : '$';           /* add/remove '$' */
         p = pat;
         if (*p == '^' && !(attempt & 1))                 /* add/remove '^' */
           ++p;
@@ -2004,7 +1999,7 @@ static void buflist_setfpos(buf_T *buf, win_T *win, linenr_T lnum, colnr_T col, 
       break;
   if (wip == NULL) {
     /* allocate a new entry */
-    wip = (wininfo_T *)alloc_clear((unsigned)sizeof(wininfo_T));
+    wip = xcalloc(1, sizeof(wininfo_T));
     wip->wi_win = win;
     if (lnum == 0)              /* set lnum even when it's 0 */
       lnum = 1;
@@ -2184,8 +2179,9 @@ void buflist_list(exarg_T *eap)
       IObuff[len++] = ' ';
     } while (--i > 0 && len < IOSIZE - 18);
     vim_snprintf((char *)IObuff + len, (size_t)(IOSIZE - len),
-        _("line %ld"), buf == curbuf ? curwin->w_cursor.lnum
-        : (long)buflist_findlnum(buf));
+        _("line %" PRId64),
+        buf == curbuf ? (int64_t)curwin->w_cursor.lnum
+                      : (int64_t)buflist_findlnum(buf));
     msg_outtrans(IObuff);
     out_flush();            /* output one line at a time */
     ui_breakcheck();
@@ -2231,7 +2227,7 @@ setfname (
   struct stat st;
 #endif
 
-  if (ffname == NULL || *ffname == NUL) {
+  if (ffname == NULL || *ffname == '\0') {
     /* Removing the name. */
     vim_free(buf->b_ffname);
     vim_free(buf->b_sfname);
@@ -2447,7 +2443,7 @@ static int otherfile_buf(buf_T *buf, char_u *ffname
 )
 {
   /* no name is different */
-  if (ffname == NULL || *ffname == NUL || buf->b_ffname == NULL)
+  if (ffname == NULL || *ffname == '\0' || buf->b_ffname == NULL)
     return TRUE;
   if (fnamecmp(ffname, buf->b_ffname) == 0)
     return FALSE;
@@ -2574,13 +2570,13 @@ fileinfo (
     if (curbuf->b_ml.ml_line_count == 1)
       vim_snprintf_add((char *)buffer, IOSIZE, _("1 line --%d%%--"), n);
     else
-      vim_snprintf_add((char *)buffer, IOSIZE, _("%ld lines --%d%%--"),
-          (long)curbuf->b_ml.ml_line_count, n);
+      vim_snprintf_add((char *)buffer, IOSIZE, _("%" PRId64 " lines --%d%%--"),
+          (int64_t)curbuf->b_ml.ml_line_count, n);
   } else {
     vim_snprintf_add((char *)buffer, IOSIZE,
-        _("line %ld of %ld --%d%%-- col "),
-        (long)curwin->w_cursor.lnum,
-        (long)curbuf->b_ml.ml_line_count,
+        _("line %" PRId64 " of %" PRId64 " --%d%%-- col "),
+        (int64_t)curwin->w_cursor.lnum,
+        (int64_t)curbuf->b_ml.ml_line_count,
         n);
     validate_virtcol();
     len = STRLEN(buffer);
@@ -2657,7 +2653,7 @@ void maketitle(void)
     }
 
     t_str = buf;
-    if (*p_titlestring != NUL) {
+    if (*p_titlestring != '\0') {
       if (stl_syntax & STL_IN_TITLE) {
         int use_sandbox = FALSE;
         int save_called_emsg = called_emsg;
@@ -2718,7 +2714,7 @@ void maketitle(void)
           vim_strncpy(buf + off, (char_u *)_("help"),
               (size_t)(SPACE_FOR_DIR - off - 1));
         else
-          *p = NUL;
+          *p = '\0';
 
         /* Translate unprintable chars and concatenate.  Keep some
          * room for the server name.  When there is no room (very long
@@ -2749,7 +2745,7 @@ void maketitle(void)
 
   if (p_icon) {
     i_str = buf;
-    if (*p_iconstring != NUL) {
+    if (*p_iconstring != '\0') {
       if (stl_syntax & STL_IN_ICON) {
         int use_sandbox = FALSE;
         int save_called_emsg = called_emsg;
@@ -2770,7 +2766,7 @@ void maketitle(void)
         i_name = buf_spname(curbuf);
       else                          /* use file name only in icon */
         i_name = path_tail(curbuf->b_ffname);
-      *i_str = NUL;
+      *i_str = '\0';
       /* Truncate name at 100 bytes. */
       len = (int)STRLEN(i_name);
       if (len > 100) {
@@ -2918,7 +2914,7 @@ build_stl_str_hl (
   /* Get line & check if empty (cursorpos will show "0-1").  Note that
    * p will become invalid when getting another buffer line. */
   p = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum, FALSE);
-  empty_line = (*p == NUL);
+  empty_line = (*p == '\0');
 
   /* Get the byte value now, in case we need it below. This is more
    * efficient than making a copy of the line. */
@@ -2943,22 +2939,22 @@ build_stl_str_hl (
       break;
     }
 
-    if (*s != NUL && *s != '%')
+    if (*s != '\0' && *s != '%')
       prevchar_isflag = prevchar_isitem = FALSE;
 
     /*
      * Handle up to the next '%' or the end.
      */
-    while (*s != NUL && *s != '%' && p + 1 < out + outlen)
+    while (*s != '\0' && *s != '%' && p + 1 < out + outlen)
       *p++ = *s++;
-    if (*s == NUL || p + 1 >= out + outlen)
+    if (*s == '\0' || p + 1 >= out + outlen)
       break;
 
     /*
      * Handle one '%' item.
      */
     s++;
-    if (*s == NUL)      /* ignore trailing % */
+    if (*s == '\0')      /* ignore trailing % */
       break;
     if (*s == '%') {
       if (p + 1 >= out + outlen)
@@ -2988,7 +2984,7 @@ build_stl_str_hl (
       groupdepth--;
 
       t = item[groupitem[groupdepth]].start;
-      *p = NUL;
+      *p = '\0';
       l = vim_strsize(t);
       if (curitem > groupitem[groupdepth] + 1
           && item[groupitem[groupdepth]].minwid == 0) {
@@ -3148,7 +3144,7 @@ build_stl_str_hl (
     case STL_VIM_EXPR:     /* '{' */
       itemisflag = TRUE;
       t = p;
-      while (*s != '}' && *s != NUL && p + 1 < out + outlen)
+      while (*s != '}' && *s != '\0' && p + 1 < out + outlen)
         *p++ = *s++;
       if (*s != '}')            /* missing '}' or out of space */
         break;
@@ -3171,7 +3167,7 @@ build_stl_str_hl (
       do_unlet((char_u *)"g:actual_curbuf", TRUE);
 
       if (str != NULL && *str != 0) {
-        if (*skipdigits(str) == NUL) {
+        if (*skipdigits(str) == '\0') {
           num = atoi((char *)str);
           vim_free(str);
           str = NULL;
@@ -3198,7 +3194,7 @@ build_stl_str_hl (
     case STL_VIRTCOL_ALT:
       /* In list mode virtcol needs to be recomputed */
       virtcol = wp->w_virtcol;
-      if (wp->w_p_list && lcs_tab1 == NUL) {
+      if (wp->w_p_list && lcs_tab1 == '\0') {
         wp->w_p_list = FALSE;
         getvcol(wp, &wp->w_cursor, NULL, &virtcol, NULL);
         wp->w_p_list = TRUE;
@@ -3277,7 +3273,7 @@ build_stl_str_hl (
       break;
 
     case STL_FILETYPE:
-      if (*wp->w_buffer->b_p_ft != NUL
+      if (*wp->w_buffer->b_p_ft != '\0'
           && STRLEN(wp->w_buffer->b_p_ft) < TMPLEN - 3) {
         vim_snprintf((char *)tmp, sizeof(tmp), "[%s]",
             wp->w_buffer->b_p_ft);
@@ -3287,7 +3283,7 @@ build_stl_str_hl (
 
     case STL_FILETYPE_ALT:
       itemisflag = TRUE;
-      if (*wp->w_buffer->b_p_ft != NUL
+      if (*wp->w_buffer->b_p_ft != '\0'
           && STRLEN(wp->w_buffer->b_p_ft) < TMPLEN - 2) {
         vim_snprintf((char *)tmp, sizeof(tmp), ",%s",
             wp->w_buffer->b_p_ft);
@@ -3329,7 +3325,7 @@ build_stl_str_hl (
 
     case STL_HIGHLIGHT:
       t = s;
-      while (*s != '#' && *s != NUL)
+      while (*s != '#' && *s != '\0')
         ++s;
       if (*s == '#') {
         item[curitem].type = Highlight;
@@ -3337,7 +3333,7 @@ build_stl_str_hl (
         item[curitem].minwid = -syn_namen2id(t, (int)(s - t));
         curitem++;
       }
-      if (*s != NUL)
+      if (*s != '\0')
         ++s;
       continue;
     }
@@ -3436,7 +3432,7 @@ build_stl_str_hl (
       prevchar_isflag = FALSE;              /* Item not NULL, but not a flag */
     curitem++;
   }
-  *p = NUL;
+  *p = '\0';
   itemcnt = curitem;
 
   if (usefmt != fmt)
@@ -3501,7 +3497,7 @@ build_stl_str_hl (
       while (++width < maxwidth) {
         s = s + STRLEN(s);
         *s++ = fillchar;
-        *s = NUL;
+        *s = '\0';
       }
 
       --n;              /* count the '<' */
@@ -3699,7 +3695,7 @@ do_arg_all (
   setpcmark();
 
   opened_len = ARGCOUNT;
-  opened = alloc_clear((unsigned)opened_len);
+  opened = xcalloc(opened_len, 1);
 
   /* Autocommands may do anything to the argument list.  Make sure it's not
    * freed while we are working here by "locking" it.  We still have to
@@ -4135,7 +4131,7 @@ chk_modeline (
   scid_T save_SID;
 
   prev = -1;
-  for (s = ml_get(lnum); *s != NUL; ++s) {
+  for (s = ml_get(lnum); *s != '\0'; ++s) {
     if (prev == -1 || vim_isspace(prev)) {
       if ((prev != -1 && STRNCMP(s, "ex:", (size_t)3) == 0)
           || STRNCMP(s, "vi:", (size_t)3) == 0)
@@ -4178,17 +4174,17 @@ chk_modeline (
     end = FALSE;
     while (end == FALSE) {
       s = skipwhite(s);
-      if (*s == NUL)
+      if (*s == '\0')
         break;
 
       /*
        * Find end of set command: ':' or end of line.
        * Skip over "\:", replacing it with ":".
        */
-      for (e = s; *e != ':' && *e != NUL; ++e)
+      for (e = s; *e != ':' && *e != '\0'; ++e)
         if (e[0] == '\\' && e[1] == ':')
           STRMOVE(e, e + 1);
-      if (*e == NUL)
+      if (*e == '\0')
         end = TRUE;
 
       /*
@@ -4205,9 +4201,9 @@ chk_modeline (
         end = TRUE;
         s = vim_strchr(s, ' ') + 1;
       }
-      *e = NUL;                         /* truncate the set command */
+      *e = '\0';                         /* truncate the set command */
 
-      if (*s != NUL) {                  /* skip over an empty "::" */
+      if (*s != '\0') {                  /* skip over an empty "::" */
         save_SID = current_SID;
         current_SID = SID_MODELINE;
         retval = do_set(s, OPT_MODELINE | OPT_LOCAL | flags);
@@ -4259,7 +4255,7 @@ int read_viminfo_bufferlist(vir_T *virp, int writing)
     /* Expand "~/" in the file name at "line + 1" to a full path.
      * Then try shortening it by comparing with the current directory */
     expand_env(xline, NameBuff, MAXPATHL);
-    sfname = shorten_fname1(NameBuff);
+    sfname = path_shorten_fname_if_possible(NameBuff);
 
     buf = buflist_new(NameBuff, sfname, (linenr_T)0, BLN_LISTED);
     if (buf != NULL) {          /* just in case... */
@@ -4306,8 +4302,8 @@ void write_viminfo_bufferlist(FILE *fp)
       break;
     putc('%', fp);
     home_replace(NULL, buf->b_ffname, line, MAXPATHL, TRUE);
-    vim_snprintf_add((char *)line, LINE_BUF_LEN, "\t%ld\t%d",
-        (long)buf->b_last_cursor.lnum,
+    vim_snprintf_add((char *)line, LINE_BUF_LEN, "\t%" PRId64 "\t%d",
+        (int64_t)buf->b_last_cursor.lnum,
         buf->b_last_cursor.col);
     viminfo_writestring(fp, line);
   }
@@ -4595,8 +4591,8 @@ void sign_list_placed(buf_T *rbuf)
             msg_putchar('\n');
         }
         for (p = buf->b_signlist; p != NULL && !got_int; p = p->next) {
-            vim_snprintf(lbuf, BUFSIZ, _("    line=%ld  id=%d  name=%s"),
-                    (long)p->lnum, p->id, sign_typenr2name(p->typenr));
+            vim_snprintf(lbuf, BUFSIZ, _("    line=%" PRId64 "  id=%d  name=%s"),
+                    (int64_t)p->lnum, p->id, sign_typenr2name(p->typenr));
             MSG_PUTS(lbuf);
             msg_putchar('\n');
         }
@@ -4659,10 +4655,7 @@ int buf_contents_changed(buf_T *buf)
     return TRUE;
 
   /* Force the 'fileencoding' and 'fileformat' to be equal. */
-  if (prep_exarg(&ea, buf) == FAIL) {
-    wipe_buffer(newbuf, FALSE);
-    return TRUE;
-  }
+  prep_exarg(&ea, buf);
 
   /* set curwin/curbuf to buf and save a few things */
   aucmd_prepbuf(&aco, newbuf);

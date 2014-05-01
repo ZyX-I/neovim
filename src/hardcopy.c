@@ -439,9 +439,9 @@ static void prt_header(prt_settings_T *psettings, int pagenum, linenr_T lnum)
   if (prt_use_number())
     width += PRINT_NUMBER_WIDTH;
 
-  tbuf = alloc(width + IOSIZE);
+  tbuf = xmalloc(width + IOSIZE);
 
-  if (*p_header != NUL) {
+  if (*p_header != '\0') {
     linenr_T tmp_lnum, tmp_topline, tmp_botline;
     int use_sandbox = FALSE;
 
@@ -478,7 +478,7 @@ static void prt_header(prt_settings_T *psettings, int pagenum, linenr_T lnum)
   /* Use a negative line number to indicate printing in the top margin. */
   page_line = 0 - prt_header_height();
   mch_print_start_line(TRUE, page_line);
-  for (p = tbuf; *p != NUL; ) {
+  for (p = tbuf; *p != '\0'; ) {
     if (mch_print_text_out(p,
             (l = (*mb_ptr2len)(p))
             )) {
@@ -535,7 +535,7 @@ void ex_hardcopy(exarg_T *eap)
       return;
     }
     settings.outfile = skipwhite(eap->arg + 1);
-  } else if (*eap->arg != NUL)
+  } else if (*eap->arg != '\0')
     settings.arguments = eap->arg;
 
   /*
@@ -778,7 +778,7 @@ static colnr_T hardcopy_line(prt_settings_T *psettings, int page_line, prt_pos_T
   /*
    * Loop over the columns until the end of the file line or right margin.
    */
-  for (col = ppos->column; line[col] != NUL && !need_break; col += outputlen) {
+  for (col = ppos->column; line[col] != '\0' && !need_break; col += outputlen) {
     outputlen = 1;
     if (has_mbyte && (outputlen = (*mb_ptr2len)(line + col)) < 1)
       outputlen = 1;
@@ -843,7 +843,7 @@ static colnr_T hardcopy_line(prt_settings_T *psettings, int page_line, prt_pos_T
    * line, unless we are doing a formfeed.
    */
   if (!ppos->ff
-      && (line[col] == NUL
+      && (line[col] == '\0'
           || (printer_opts[OPT_PRINT_WRAP].present
               && TOLOWER_ASC(printer_opts[OPT_PRINT_WRAP].string[0])
               == 'n')))
@@ -1271,7 +1271,7 @@ static int prt_resfile_strncmp(int offset, char *string, int len);
 static int prt_resfile_skip_nonws(int offset);
 static int prt_resfile_skip_ws(int offset);
 static int prt_next_dsc(struct prt_dsc_line_S *p_dsc_line);
-static int prt_build_cid_fontname(int font, char_u *name, int name_len);
+static void prt_build_cid_fontname(int font, char_u *name, int name_len);
 static void prt_def_cidfont(char *new_name, int height, char *cidfont);
 static void prt_dup_cidfont(char *original_name, char *new_name);
 static int prt_match_encoding(char *p_encoding,
@@ -1584,7 +1584,7 @@ static void prt_resource_name(char_u *filename, void *cookie)
   char_u *resource_filename = cookie;
 
   if (STRLEN(filename) >= MAXPATHL)
-    *resource_filename = NUL;
+    *resource_filename = '\0';
   else
     STRCPY(resource_filename, filename);
 }
@@ -1594,7 +1594,7 @@ static int prt_find_resource(char *name, struct prt_ps_resource_S *resource)
   char_u      *buffer;
   int retval;
 
-  buffer = alloc(MAXPATHL + 1);
+  buffer = xmallocz(MAXPATHL);
 
   vim_strncpy(resource->name, (char_u *)name, 63);
   /* Look for named resource file in runtimepath */
@@ -1602,10 +1602,10 @@ static int prt_find_resource(char *name, struct prt_ps_resource_S *resource)
   add_pathsep(buffer);
   vim_strcat(buffer, (char_u *)name, MAXPATHL);
   vim_strcat(buffer, (char_u *)".ps", MAXPATHL);
-  resource->filename[0] = NUL;
+  resource->filename[0] = '\0';
   retval = (do_in_runtimepath(buffer, FALSE, prt_resource_name,
                 resource->filename)
-            && resource->filename[0] != NUL);
+            && resource->filename[0] != '\0');
   vim_free(buffer);
   return retval;
 }
@@ -1746,7 +1746,7 @@ static int prt_open_resource(struct prt_ps_resource_S *resource)
     EMSG2(_("E624: Can't open file \"%s\""), resource->filename);
     return FALSE;
   }
-  memset(prt_resfile.buffer, NUL, PRT_FILE_BUFFER_LEN);
+  memset(prt_resfile.buffer, '\0', PRT_FILE_BUFFER_LEN);
 
   /* Parse first line to ensure valid resource file */
   prt_resfile.len = (int)fread((char *)prt_resfile.buffer, sizeof(char_u),
@@ -2084,17 +2084,10 @@ static int prt_get_cpl(void)
   return (int)((prt_right_margin - prt_left_margin) / prt_char_width);
 }
 
-static int prt_build_cid_fontname(int font, char_u *name, int name_len)
+static void prt_build_cid_fontname(int font, char_u *name, int name_len)
 {
-  char    *fontname;
-
-  fontname = (char *)alloc(name_len + 1);
-  if (fontname == NULL)
-    return FALSE;
-  vim_strncpy((char_u *)fontname, name, name_len);
+  char *fontname = xstrndup((char *)name, name_len);
   prt_ps_mb_font.ps_fontname[font] = fontname;
-
-  return TRUE;
 }
 
 /*
@@ -2156,7 +2149,7 @@ static int prt_match_charset(char *p_charset, struct prt_ps_mbfont_S *p_cmap, st
   struct prt_ps_charset_S *p_mbchar;
 
   /* Look for recognised character set, using default if one is not given */
-  if (*p_charset == NUL)
+  if (*p_charset == '\0')
     p_charset = p_cmap->defcs;
   char_len = (int)STRLEN(p_charset);
   p_mbchar = p_cmap->charsets;
@@ -2193,7 +2186,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
    * Set up font and encoding.
    */
   p_encoding = enc_skip(p_penc);
-  if (*p_encoding == NUL)
+  if (*p_encoding == '\0')
     p_encoding = enc_skip(p_enc);
 
   /* Look for a multi-byte font that matches the encoding and character set.
@@ -2202,7 +2195,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
    * uniquely identify a CJK character set to use. */
   p_mbenc = NULL;
   props = enc_canon_props(p_encoding);
-  if (!(props & ENC_8BIT) && ((*p_pmcs != NUL) || !(props & ENC_UNICODE))) {
+  if (!(props & ENC_8BIT) && ((*p_pmcs != '\0') || !(props & ENC_UNICODE))) {
     p_mbenc_first = NULL;
     for (cmap = 0; cmap < (int)NUM_ELEMENTS(prt_ps_mbfonts); cmap++)
       if (prt_match_encoding((char *)p_encoding, &prt_ps_mbfonts[cmap],
@@ -2222,7 +2215,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
   prt_out_mbyte = (p_mbenc != NULL);
   if (prt_out_mbyte) {
     /* Build CMap name - will be same for all multi-byte fonts used */
-    prt_cmap[0] = NUL;
+    prt_cmap[0] = '\0';
 
     prt_custom_cmap = (p_mbchar == NULL);
     if (!prt_custom_cmap) {
@@ -2240,7 +2233,7 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
       }
     } else {
       /* Add custom CMap character set name */
-      if (*p_pmcs == NUL) {
+      if (*p_pmcs == '\0') {
         EMSG(_("E674: printmbcharset cannot be empty with multi-byte encoding."));
         return FALSE;
       }
@@ -2262,25 +2255,25 @@ int mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
     }
 
     /* Derive CID font names with fallbacks if not defined */
-    if (!prt_build_cid_fontname(PRT_PS_FONT_ROMAN,
-            mbfont_opts[OPT_MBFONT_REGULAR].string,
-            mbfont_opts[OPT_MBFONT_REGULAR].strlen))
-      return FALSE;
-    if (mbfont_opts[OPT_MBFONT_BOLD].present)
-      if (!prt_build_cid_fontname(PRT_PS_FONT_BOLD,
-              mbfont_opts[OPT_MBFONT_BOLD].string,
-              mbfont_opts[OPT_MBFONT_BOLD].strlen))
-        return FALSE;
-    if (mbfont_opts[OPT_MBFONT_OBLIQUE].present)
-      if (!prt_build_cid_fontname(PRT_PS_FONT_OBLIQUE,
-              mbfont_opts[OPT_MBFONT_OBLIQUE].string,
-              mbfont_opts[OPT_MBFONT_OBLIQUE].strlen))
-        return FALSE;
-    if (mbfont_opts[OPT_MBFONT_BOLDOBLIQUE].present)
-      if (!prt_build_cid_fontname(PRT_PS_FONT_BOLDOBLIQUE,
-              mbfont_opts[OPT_MBFONT_BOLDOBLIQUE].string,
-              mbfont_opts[OPT_MBFONT_BOLDOBLIQUE].strlen))
-        return FALSE;
+    prt_build_cid_fontname(PRT_PS_FONT_ROMAN,
+                           mbfont_opts[OPT_MBFONT_REGULAR].string,
+                           mbfont_opts[OPT_MBFONT_REGULAR].strlen);
+    if (mbfont_opts[OPT_MBFONT_BOLD].present) {
+      prt_build_cid_fontname(PRT_PS_FONT_BOLD,
+                             mbfont_opts[OPT_MBFONT_BOLD].string,
+                             mbfont_opts[OPT_MBFONT_BOLD].strlen);
+
+    }
+    if (mbfont_opts[OPT_MBFONT_OBLIQUE].present) {
+      prt_build_cid_fontname(PRT_PS_FONT_OBLIQUE,
+                             mbfont_opts[OPT_MBFONT_OBLIQUE].string,
+                             mbfont_opts[OPT_MBFONT_OBLIQUE].strlen);
+    }
+    if (mbfont_opts[OPT_MBFONT_BOLDOBLIQUE].present) {
+      prt_build_cid_fontname(PRT_PS_FONT_BOLDOBLIQUE,
+                             mbfont_opts[OPT_MBFONT_BOLDOBLIQUE].string,
+                             mbfont_opts[OPT_MBFONT_BOLDOBLIQUE].strlen);
+    }
 
     /* Check if need to use Courier for ASCII code range, and if so pick up
      * the encoding to use */
@@ -2513,14 +2506,10 @@ int mch_print_begin(prt_settings_T *psettings)
   struct prt_ps_resource_S *res_cmap;
   int retval = FALSE;
 
-  res_prolog = (struct prt_ps_resource_S *)
-               alloc(sizeof(struct prt_ps_resource_S));
-  res_encoding = (struct prt_ps_resource_S *)
-                 alloc(sizeof(struct prt_ps_resource_S));
-  res_cidfont = (struct prt_ps_resource_S *)
-                alloc(sizeof(struct prt_ps_resource_S));
-  res_cmap = (struct prt_ps_resource_S *)
-             alloc(sizeof(struct prt_ps_resource_S));
+  res_prolog = xmalloc(sizeof(struct prt_ps_resource_S));
+  res_encoding = xmalloc(sizeof(struct prt_ps_resource_S));
+  res_cidfont = xmalloc(sizeof(struct prt_ps_resource_S));
+  res_cmap = xmalloc(sizeof(struct prt_ps_resource_S));
 
   /*
    * PS DSC Header comments - no PS code!
@@ -2538,7 +2527,7 @@ int mch_print_begin(prt_settings_T *psettings)
   /* Note: ctime() adds a \n so we have to remove it :-( */
   p = vim_strchr((char_u *)p_time, '\n');
   if (p != NULL)
-    *p = NUL;
+    *p = '\0';
   prt_dsc_textline("CreationDate", p_time);
   prt_dsc_textline("DocumentData", "Clean8Bit");
   prt_dsc_textline("Orientation", "Portrait");
@@ -2616,7 +2605,7 @@ int mch_print_begin(prt_settings_T *psettings)
    */
   if (!prt_out_mbyte) {
     p_encoding = enc_skip(p_penc);
-    if (*p_encoding == NUL
+    if (*p_encoding == '\0'
         || !prt_find_resource((char *)p_encoding, res_encoding)) {
       /* 'printencoding' not set or not supported - find alternate */
       int props;
@@ -2641,7 +2630,7 @@ int mch_print_begin(prt_settings_T *psettings)
      * perform */
   } else {
     p_encoding = enc_skip(p_penc);
-    if (*p_encoding == NUL)
+    if (*p_encoding == '\0')
       p_encoding = enc_skip(p_enc);
     if (prt_use_courier) {
       /* Include ASCII range encoding vector */
@@ -3130,7 +3119,7 @@ int mch_print_text_out(char_u *p, int len)
   }
 
   /* Need to free any translated characters */
-  if (prt_do_conv && (*p != NUL))
+  if (prt_do_conv && (*p != '\0'))
     vim_free(p);
 
   prt_text_run += char_width;

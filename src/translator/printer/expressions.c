@@ -218,7 +218,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
   memset(&po, 0, sizeof(PrinterOptions));
 
   if ((p0_result = parse0_test(arg)) == NULL)
-    goto theend;
+    goto parse0_repr_end;
 
   if (p0_result->error.message != NULL)
     len = 6 + STRLEN(p0_result->error.message);
@@ -235,8 +235,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
 
   len += shift + 1;
 
-  if (!(result = ALLOC_CLEAR_NEW(char, len + 1)))
-    goto theend;
+  result = XCALLOC_NEW(char, len + 1);
 
   p = result;
 
@@ -256,7 +255,7 @@ char *parse0_repr(char_u *arg, bool dump_as_expr)
     (dump_as_expr ? expr_node_dump : node_repr)(&po, p0_result->node, &p);
   }
 
-theend:
+parse0_repr_end:
   free_test_expr_result(p0_result);
   return result;
 }
