@@ -50,7 +50,8 @@ typedef struct {
 ///
 /// Uses type argument to determine how much memory it should allocate.
 ///
-/// @param[in]  type  Node type.
+/// @param[in]  type      Node type.
+/// @param[in]  position  Position of command start.
 ///
 /// @return Pointer to allocated block of memory or NULL in case of error.
 static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
