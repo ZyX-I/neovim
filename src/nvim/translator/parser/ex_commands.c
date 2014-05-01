@@ -84,19 +84,18 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
 /// @param[in]  len     String length. It is not required for string[len] to be 
 ///                     a NUL byte.
 ///
-/// @return Pointer to allocated block of memory or NULL in case of error.
+/// @return Pointer to allocated block of memory.
 static Regex *regex_alloc(const char_u *string, size_t len)
 {
   Regex *regex;
 
-  if ((regex = (Regex *) alloc(offsetof(Regex, string) + len + 1)) != NULL) {
-    memcpy(regex->string, string, len);
-    regex->string[len] = NUL;
-    regex->prog = NULL;
-    // FIXME: use vim_regcomp, but make it save errors in place of throwing 
-    //        them right away.
-    // regex->prog = vim_regcomp(reg->string, 0);
-  }
+  regex = (Regex *) xmalloc(offsetof(Regex, string) + len + 1);
+  memcpy(regex->string, string, len);
+  regex->string[len] = NUL;
+  regex->prog = NULL;
+  // FIXME: use vim_regcomp, but make it save errors in place of throwing 
+  //        them right away.
+  // regex->prog = vim_regcomp(reg->string, 0);
 
   return regex;
 }
@@ -718,8 +717,7 @@ static int get_regex(char_u **pp, CommandParserError *error, Regex **regex,
     }
   }
 
-  if ((*regex = regex_alloc(s, p - s)) == NULL)
-    return FAIL;
+  *regex = regex_alloc(s, p - s);
 
   if (*p != NUL)
     p++;
