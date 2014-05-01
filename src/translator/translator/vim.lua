@@ -54,6 +54,9 @@ new_state = function()
       return state
     end,
     stack={},
+    get_local_option=function(self, other, name)
+      return other.options[name] or self.options[name]
+    end,
   }
   state.g = new_scope(true)
   state.current_scope = state.g
