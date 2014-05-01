@@ -43,7 +43,13 @@ libnvim.init_homedir()
 libnvim.set_init_1()
 libnvim.set_lang_var()
 
-libnvim.translate_script_str_to_file(to_cstr(arg[1]), to_cstr('test.lua'))
+local s
+if(arg[1]) then
+  s = arg[1]
+else
+  s = io.stdin:read('*a')
+end
+libnvim.translate_script_str_to_file(to_cstr(s), to_cstr('test.lua'))
 
 package.path = './src/translator/translator/?.lua;' .. package.path
 
