@@ -96,21 +96,22 @@ typedef enum {
   kCCStrategyIgnoreCase,
 } CaseCompareStrategy;
 
+/// Structure to represent VimL expressions
 typedef struct expression_node {
-  ExpressionType type;
-  // Position of start inside a line.
-  char_u *position;
-  // Only valid for value nodes and kExprConcatOrSubscript.
-  char_u *end_position;
-  // Only valid for kExpr(Greater|Less)*, kExpr[Not]Matches, kExpr[Not]Equals: 
-  // determines whether case should be ignored
-  CaseCompareStrategy ignore_case;
-  // Only valid for operators, subscripts (except for kExprConcatOrSubscript) 
-  // and complex value nodes: represents operator arguments, nodes inside 
-  // a list, …
-  struct expression_node *children;
-  // Subnodes are arranged in a linked list.
-  struct expression_node *next;
+  ExpressionType type;   ///< Node type.
+  char_u *position;      ///< Position of expression token start inside
+                         ///< a parsed string.
+  char_u *end_position;  ///< Position of last character of expression token.
+  CaseCompareStrategy ignore_case;  ///< Determines whether case should be 
+                                    ///< ignored while comparing. Only valid for 
+                                    ///< comparison operators: 
+                                    ///< kExpr(Greater|Less)*, 
+                                    ///< kExpr[Not]Matches, kExpr[Not]Equals.
+  struct expression_node *children;  ///< Subexpressions: valid for operators,
+                                     ///< subscripts (including kExprCall), 
+                                     ///< complex variable names.
+  struct expression_node *next;  ///< Next node: expression nodes are arranged 
+                                 ///< as a linked list.
 } ExpressionNode;
 
 typedef struct error {
