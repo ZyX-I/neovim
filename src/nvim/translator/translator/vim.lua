@@ -149,6 +149,12 @@ number = {
   end,
 }
 
+string = {
+  new=function(state, s)
+    return s
+  end,
+}
+
 float = {
   new=function(state, f)
     -- TODO
@@ -166,6 +172,11 @@ VIM_FLOAT      = 5
 -- {{{1 Error manipulation
 err = {
   matches=function(state, err, regex)
+    if (err:match(regex)) then
+      return true
+    else
+      return false
+    end
   end,
   propagate=function(state, err)
   end,
@@ -717,6 +728,7 @@ return {
   greater=greater,
   less=less,
   number=number,
+  string=string,
   float=float,
   err=err,
   assign_scope=assign_scope,
