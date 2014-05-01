@@ -97,21 +97,36 @@ typedef struct {
 } TranslateFuncArgs;
 
 // {{{ Function declarations
-static WFDEC(write_string_len, char *s, size_t len);
+static WFDEC(write_string_len, const char *s, size_t len);
 static WFDEC(dump_number, long number);
-static WFDEC(dump_string, char_u *s);
+static WFDEC(dump_string, const char_u *s);
+static WFDEC(dump_string_len, const char_u *s, size_t len);
 static WFDEC(dump_bool, bool b);
-static WFDEC(translate_regex, Regex *regex);
-static WFDEC(translate_address_followup, AddressFollowup *followup);
-static WFDEC(translate_range, Range *range);
+static WFDEC(translate_regex, const Regex *regex);
+static WFDEC(translate_address_followup, const AddressFollowup *followup);
+static WFDEC(translate_range, const Range *range);
 static WFDEC(translate_ex_flags, uint_least8_t exflags);
-static WFDEC(translate_node, CommandNode *node, size_t indent);
-static WFDEC(translate_nodes, CommandNode *node, size_t indent);
-static int translate_script_stdout(CommandNode *node);
+static WFDEC(translate_number, ExpressionType type, const char_u *s,
+             const char_u *e);
+static WFDEC(translate_scope, char_u **start, const ExpressionNode *expr,
+             uint_least8_t flags);
+static WFDEC(translate_expr, const ExpressionNode *expr);
+static WFDEC(translate_exprs, const ExpressionNode *expr);
+static WFDEC(translate_function, const TranslateFuncArgs *args);
+static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
+                             bool unique,
+                             AssignmentValueDump dump, void *dump_cookie);
+static WFDEC(translate_node, const CommandNode *node, size_t indent);
+static WFDEC(translate_nodes, const CommandNode *node, size_t indent);
+static int translate_script_stdout(const CommandNode *node);
 static char_u *fgetline_file(int c, FILE *file, int indent);
 // }}}
 
-static WFDEC(write_string_len, char *s, size_t len)
+/// Write string with the given length
+///
+/// @param[in]  s    String that will be written.
+/// @param[in]  len  Length of this string.
+static WFDEC(write_string_len, const char *s, size_t len)
 {
   size_t written;
   if (len) {
@@ -129,6 +144,8 @@ static Writer write_file = (Writer) &fwrite;
 /// Dump number that is not a vim Number
 ///
 /// Use translate_number to dump vim Numbers (kExpr*Number)
+///
+/// @param[in]  number  Number that will be written.
 static WFDEC(dump_number, long number)
 {
   char buf[NUMBUFLEN];
@@ -144,7 +161,9 @@ static WFDEC(dump_number, long number)
 /// Dump string that is not a vim String
 ///
 /// Use translate_string to dump vim String (kExpr*String)
-static WFDEC(dump_string, char_u *s)
+///
+/// @param[in]  s  NUL-terminated string that will be written.
+static WFDEC(dump_string, const char_u *s)
 {
   // FIXME escape characters
   WS("'")
@@ -156,7 +175,10 @@ static WFDEC(dump_string, char_u *s)
 /// Dump string that is not a vim String
 ///
 /// Use translate_string to dump vim String (kExpr*String)
-static WFDEC(dump_string_len, char_u *s, size_t len)
+///
+/// @param[in]  s    String that will be written.
+/// @param[in]  len  Length of this string.
+static WFDEC(dump_string_len, const char_u *s, size_t len)
 {
   // FIXME escape characters
   WS("'")
@@ -165,6 +187,11 @@ static WFDEC(dump_string_len, char_u *s, size_t len)
   return OK;
 }
 
+/// Dump boolean value
+///
+/// Writes true or false depending on its argument
+///
+/// @param[in]  b  Checked value.
 static WFDEC(dump_bool, bool b)
 {
   if (b)
@@ -175,14 +202,21 @@ static WFDEC(dump_bool, bool b)
   return OK;
 }
 
-static WFDEC(translate_regex, Regex *regex)
+/// Dump regular expression
+///
+/// @param[in]  regex  Regular expression that will be dumped.
+static WFDEC(translate_regex, const Regex *regex)
 {
   CALL(dump_string, regex->string)
   return OK;
 }
 
-static WFDEC(translate_address_followup, AddressFollowup *followup)
+/// Dump address followup
+///
+/// @param[in]  followup  Address followup that will be dumped.
+static WFDEC(translate_address_followup, const AddressFollowup *followup)
 {
+  // FIXME Replace magic numbers with constants
   switch (followup->type) {
     case kAddressFollowupShift: {
       WS("0, ")
@@ -206,7 +240,10 @@ static WFDEC(translate_address_followup, AddressFollowup *followup)
   return OK;
 }
 
-static WFDEC(translate_range, Range *range)
+/// Dump Ex command range
+///
+/// @param[in]  range  Range that will be dumped.
+static WFDEC(translate_range, const Range *range)
 {
   Range *current_range = range;
 
@@ -302,6 +339,9 @@ static WFDEC(translate_range, Range *range)
   return OK;
 }
 
+/// Dump Ex command flags
+///
+/// @param[in]  exflags  Flags to dump.
 static WFDEC(translate_ex_flags, uint_least8_t exflags)
 {
   WS("{")
@@ -315,7 +355,13 @@ static WFDEC(translate_ex_flags, uint_least8_t exflags)
   return OK;
 }
 
-static WFDEC(translate_number, ExpressionType type, char_u *s, char_u *e)
+/// Dump VimL integer number
+///
+/// @param[in]  type  Type of the number node being dumped.
+/// @param[in]  s     Pointer to first character in dumped number.
+/// @param[in]  e     Pointer to last character in dumped number.
+static WFDEC(translate_number, ExpressionType type, const char_u *s,
+             const char_u *e)
 {
   WS("vim.number.new(state, ")
   switch (type) {
@@ -383,7 +429,7 @@ static WFDEC(translate_number, ExpressionType type, char_u *s, char_u *e)
 /// @endparblock
 ///
 /// @return FAIL in case of unrecoverable error, OK otherwise.
-static WFDEC(translate_scope, char_u **start, ExpressionNode *expr,
+static WFDEC(translate_scope, char_u **start, const ExpressionNode *expr,
              uint_least8_t flags)
 {
   assert(expr->type == kExprSimpleVariableName);
@@ -458,7 +504,10 @@ static WFDEC(translate_scope, char_u **start, ExpressionNode *expr,
   return OK;
 }
 
-static WFDEC(translate_expr, ExpressionNode *expr)
+/// Dump parsed VimL expression
+///
+/// @param[in]  expr  Expression being dumped.
+static WFDEC(translate_expr, const ExpressionNode *expr)
 {
   switch (expr->type) {
     case kExprFloat: {
@@ -618,7 +667,10 @@ static WFDEC(translate_expr, ExpressionNode *expr)
   return OK;
 }
 
-static WFDEC(translate_exprs, ExpressionNode *expr)
+/// Dump a sequence of VimL expressions (e.g. for :echo 1 2 3)
+///
+/// @param[in]  expr  Pointer to the first expression that will be dumped.
+static WFDEC(translate_exprs, const ExpressionNode *expr)
 {
   ExpressionNode *current_expr = expr;
 
@@ -634,7 +686,11 @@ static WFDEC(translate_exprs, ExpressionNode *expr)
   return OK;
 }
 
-static WFDEC(translate_function, TranslateFuncArgs *args)
+/// Dump a VimL function definition
+///
+/// @param[in]  args  Function node and indentation that was used for function 
+///                   definition.
+static WFDEC(translate_function, const TranslateFuncArgs *args)
 {
   size_t i;
   char_u **data = (char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
@@ -796,7 +852,11 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
 #undef ADD_ASSIGN
 }
 
-static WFDEC(translate_node, CommandNode *node, size_t indent)
+/// Dump VimL Ex command
+///
+/// @param[in]  node    Node to translate.
+/// @param[in]  indent  Indentation of the result.
+static WFDEC(translate_node, const CommandNode *node, size_t indent)
 {
   char_u *name;
   size_t start_from_arg = 0;
@@ -1180,7 +1240,11 @@ static WFDEC(translate_node, CommandNode *node, size_t indent)
   return OK;
 }
 
-static WFDEC(translate_nodes, CommandNode *node, size_t indent)
+/// Dump a sequence of Ex commands
+///
+/// @param[in]  node    Pointer to the first node that will be translated.
+/// @param[in]  indent  Indentation of the result.
+static WFDEC(translate_nodes, const CommandNode *node, size_t indent)
 {
   CommandNode *current_node;
 
@@ -1243,7 +1307,14 @@ static WFDEC(translate_nodes, CommandNode *node, size_t indent)
   return OK;
 }
 
-int translate_script(CommandNode *node, Writer write, void *cookie)
+/// Dump .vim script as lua module.
+///
+/// @param[in]  node    Pointer to the first command inside this script.
+/// @param[in]  write   Function that will be used to write the result.
+/// @param[in]  cookie  Last argument to the above function.
+///
+/// @return OK in case of success, FAIL otherwise.
+int translate_script(const CommandNode *node, Writer write, void *cookie)
 {
   TranslationOptions to = kTransScript;
 
@@ -1260,11 +1331,22 @@ int translate_script(CommandNode *node, Writer write, void *cookie)
   return OK;
 }
 
-static int translate_script_stdout(CommandNode *node)
+/// Translate given sequence of nodes as a .vim script and dump result to stdout
+///
+/// @param[in]  node  Pointer to the first command inside this script.
+///
+/// @return OK in case of success, FAIL otherwise.
+static int translate_script_stdout(const CommandNode *node)
 {
   return translate_script(node, write_file, (void *) stdout);
 }
 
+/// Get line from file
+///
+/// @param[in]  file  File from which line will be obtained.
+///
+/// @return String in allocated memory or NULL in case of error or when there 
+///         are no more lines.
 static char_u *fgetline_file(int c, FILE *file, int indent)
 {
   char *res;
@@ -1284,6 +1366,9 @@ static char_u *fgetline_file(int c, FILE *file, int indent)
   return (char_u *) res;
 }
 
+/// Translate script passed through stdin to stdout
+///
+/// @return OK in case of success, FAIL otherwise.
 int translate_script_std(void)
 {
   CommandNode *node;
@@ -1301,7 +1386,13 @@ int translate_script_std(void)
   return ret;
 }
 
-int translate_script_str_to_file(char_u *str, char *fname)
+/// Translate script passed as a single string to given file
+///
+/// @param[in]  str    Translated script.
+/// @param[in]  fname  Target filename.
+///
+/// @return OK in case of success, FAIL otherwise.
+int translate_script_str_to_file(const char_u *str, const char *fname)
 {
   CommandNode *node;
   CommandParserOptions o = {0, FALSE};
