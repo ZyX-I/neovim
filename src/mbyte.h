@@ -100,4 +100,7 @@ char_u *string_convert(vimconv_T *vcp, char_u *ptr, int *lenp);
 char_u *string_convert_ext(vimconv_T *vcp, char_u *ptr, int *lenp,
                            int *unconvlenp);
 
+/// Maximum length of one character
+#define MAX_CHAR_LEN 6
+
 #endif /* NEOVIM_MBYTE_H */

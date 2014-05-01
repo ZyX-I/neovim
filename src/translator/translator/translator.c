@@ -5,6 +5,9 @@
 #include "vim.h"
 #include "memory.h"
 #include "misc2.h"
+#include "mbyte.h"
+#include "charset.h"
+#include "keymap.h"
 
 #include "translator/translator/translator.h"
 #include "translator/parser/expressions.h"
@@ -27,7 +30,7 @@
 /// Call function with additional arguments, goto error_label if it failed
 #define CALL_ERR(error_label, f, ...) \
     { \
-      if (f(__VA_ARGS__, write, cookie) == FAIL) \
+      if (f(__VA_ARGS__, write, cookie, to) == FAIL) \
         goto error_label; \
     }
 /// Same as CALL, but with different translation options
@@ -127,23 +130,24 @@
         WS_ERR(error_label, "  ") \
     }
 
-typedef WFDEC((*AssignmentValueDump), void *dump_cookie);
-typedef struct {
-  const CommandNode *node;
-  const size_t indent;
-} TranslateFuncArgs;
-
 typedef enum {
   kTransUser = 0,
   kTransScript,
   kTransFunc,
 } TranslationOptions;
 
+typedef WFDEC((*AssignmentValueDump), void *dump_cookie);
+typedef struct {
+  const CommandNode *node;
+  const size_t indent;
+} TranslateFuncArgs;
+
 // {{{ Function declarations
 static WFDEC(write_string_len, const char *const s, size_t len);
 static WFDEC(dump_number, long number);
-static WFDEC(dump_string, const char_u *const s);
+static WFDEC(dump_char, char_u c);
 static WFDEC(dump_string_len, const char_u *const s, size_t len);
+static WFDEC(dump_string, const char_u *const s);
 static WFDEC(dump_bool, bool b);
 static WFDEC(translate_regex, const Regex *const regex);
 static WFDEC(translate_address_followup, const AddressFollowup *const followup);
@@ -201,17 +205,187 @@ static WFDEC(dump_number, long number)
   return OK;
 }
 
-/// Dump string that is not a vim String
+/// Dump one character
 ///
-/// Use translate_string to dump vim String (kExpr*String)
-///
-/// @param[in]  s  NUL-terminated string that will be written.
-static WFDEC(dump_string, const char_u *const s)
+/// @param[in]  c  Dumped character
+static WFDEC(dump_char, char_u c)
 {
-  // FIXME escape characters
-  WS("'")
-  W(s)
-  WS("'")
+  switch (c) {
+#define CHAR(c, s) \
+    case c: { \
+      WS("\\" s) \
+      break; \
+    }
+    CHAR(NUL,  "000")
+    CHAR(1,    "001")
+    CHAR(2,    "002")
+    CHAR(3,    "003")
+    CHAR(4,    "004")
+    CHAR(5,    "005")
+    CHAR(6,    "006")
+    CHAR(BELL, "a")
+    CHAR(BS,   "b")
+    CHAR(TAB,  "t")
+    CHAR(NL,   "n")
+    CHAR(VTAB, "v")
+    CHAR(FF,   "f")
+    CHAR(CAR,  "r")
+    CHAR(14,   "014")
+    CHAR(15,   "015")
+    CHAR(16,   "016")
+    CHAR(17,   "017")
+    CHAR(18,   "018")
+    CHAR(19,   "019")
+    CHAR(20,   "020")
+    CHAR(21,   "021")
+    CHAR(22,   "022")
+    CHAR(23,   "023")
+    CHAR(24,   "024")
+    CHAR(25,   "025")
+    CHAR(26,   "026")
+    CHAR(ESC,  "027")
+    CHAR(28,   "028")
+    CHAR(29,   "029")
+    CHAR(30,   "030")
+    CHAR(31,   "031")
+    CHAR('"',  "\"")
+    CHAR('\'', "'")
+    CHAR('\\', "\\")
+    CHAR(127,   "127")
+    CHAR(128,   "128")
+    CHAR(129,   "129")
+    CHAR(130,   "130")
+    CHAR(131,   "131")
+    CHAR(132,   "132")
+    CHAR(133,   "133")
+    CHAR(134,   "134")
+    CHAR(135,   "135")
+    CHAR(136,   "136")
+    CHAR(137,   "137")
+    CHAR(138,   "138")
+    CHAR(139,   "139")
+    CHAR(140,   "140")
+    CHAR(141,   "141")
+    CHAR(142,   "142")
+    CHAR(143,   "143")
+    CHAR(144,   "144")
+    CHAR(145,   "145")
+    CHAR(146,   "146")
+    CHAR(147,   "147")
+    CHAR(148,   "148")
+    CHAR(149,   "149")
+    CHAR(150,   "150")
+    CHAR(151,   "151")
+    CHAR(152,   "152")
+    CHAR(153,   "153")
+    CHAR(154,   "154")
+    CHAR(155,   "155")
+    CHAR(156,   "156")
+    CHAR(157,   "157")
+    CHAR(158,   "158")
+    CHAR(159,   "159")
+    CHAR(160,   "160")
+    CHAR(161,   "161")
+    CHAR(162,   "162")
+    CHAR(163,   "163")
+    CHAR(164,   "164")
+    CHAR(165,   "165")
+    CHAR(166,   "166")
+    CHAR(167,   "167")
+    CHAR(168,   "168")
+    CHAR(169,   "169")
+    CHAR(170,   "170")
+    CHAR(171,   "171")
+    CHAR(172,   "172")
+    CHAR(173,   "173")
+    CHAR(174,   "174")
+    CHAR(175,   "175")
+    CHAR(176,   "176")
+    CHAR(177,   "177")
+    CHAR(178,   "178")
+    CHAR(179,   "179")
+    CHAR(180,   "180")
+    CHAR(181,   "181")
+    CHAR(182,   "182")
+    CHAR(183,   "183")
+    CHAR(184,   "184")
+    CHAR(185,   "185")
+    CHAR(186,   "186")
+    CHAR(187,   "187")
+    CHAR(188,   "188")
+    CHAR(189,   "189")
+    CHAR(190,   "190")
+    CHAR(191,   "191")
+    CHAR(192,   "192")
+    CHAR(193,   "193")
+    CHAR(194,   "194")
+    CHAR(195,   "195")
+    CHAR(196,   "196")
+    CHAR(197,   "197")
+    CHAR(198,   "198")
+    CHAR(199,   "199")
+    CHAR(200,   "200")
+    CHAR(201,   "201")
+    CHAR(202,   "202")
+    CHAR(203,   "203")
+    CHAR(204,   "204")
+    CHAR(205,   "205")
+    CHAR(206,   "206")
+    CHAR(207,   "207")
+    CHAR(208,   "208")
+    CHAR(209,   "209")
+    CHAR(210,   "210")
+    CHAR(211,   "211")
+    CHAR(212,   "212")
+    CHAR(213,   "213")
+    CHAR(214,   "214")
+    CHAR(215,   "215")
+    CHAR(216,   "216")
+    CHAR(217,   "217")
+    CHAR(218,   "218")
+    CHAR(219,   "219")
+    CHAR(220,   "220")
+    CHAR(221,   "221")
+    CHAR(222,   "222")
+    CHAR(223,   "223")
+    CHAR(224,   "224")
+    CHAR(225,   "225")
+    CHAR(226,   "226")
+    CHAR(227,   "227")
+    CHAR(228,   "228")
+    CHAR(229,   "229")
+    CHAR(230,   "230")
+    CHAR(231,   "231")
+    CHAR(232,   "232")
+    CHAR(233,   "233")
+    CHAR(234,   "234")
+    CHAR(235,   "235")
+    CHAR(236,   "236")
+    CHAR(237,   "237")
+    CHAR(238,   "238")
+    CHAR(239,   "239")
+    CHAR(240,   "240")
+    CHAR(241,   "241")
+    CHAR(242,   "242")
+    CHAR(243,   "243")
+    CHAR(244,   "244")
+    CHAR(245,   "245")
+    CHAR(246,   "246")
+    CHAR(247,   "247")
+    CHAR(248,   "248")
+    CHAR(249,   "249")
+    CHAR(250,   "250")
+    CHAR(251,   "251")
+    CHAR(252,   "252")
+    CHAR(253,   "253")
+    CHAR(254,   "254")
+    CHAR(255,   "255")
+#undef CHAR
+    default: {
+      W_LEN(&c, 1)
+      break;
+    }
+  }
   return OK;
 }
 
@@ -223,10 +397,30 @@ static WFDEC(dump_string, const char_u *const s)
 /// @param[in]  len  Length of this string.
 static WFDEC(dump_string_len, const char_u *const s, size_t len)
 {
-  // FIXME escape characters
+  const char_u *p;
+  const char_u *const e = s + len;
   WS("'")
-  W_LEN(s, len)
+  for (p = s; p < e; p++) {
+    size_t charlen = mb_ptr2len((char_u *) p);
+    if (charlen == 1) {
+      CALL(dump_char, *p);
+    } else {
+      W_LEN(p, charlen);
+      p += charlen - 1;
+    }
+  }
   WS("'")
+  return OK;
+}
+
+/// Dump string that is not a vim String
+///
+/// Use translate_string to dump vim String (kExpr*String)
+///
+/// @param[in]  s  NUL-terminated string that will be written.
+static WFDEC(dump_string, const char_u *const s)
+{
+  CALL(dump_string_len, s, STRLEN(s))
   return OK;
 }
 
@@ -438,6 +632,191 @@ static WFDEC(translate_number, ExpressionType type, const char_u *const s,
   return OK;
 }
 
+/// Dump VimL string
+///
+/// @param[in]  type  Type of the string node being dumped.
+/// @param[in]  s     Pointer to first character in dumped string.
+/// @param[in]  e     Pointer to last character in dumped string.
+static WFDEC(translate_string, ExpressionType type, const char_u *const s,
+             const char_u *const e)
+{
+  WS("vim.string.new(state, ")
+  bool can_dump_as_is = TRUE;
+  switch (type) {
+    case kExprSingleQuotedString: {
+      for (const char_u *p = s + 1; p < e; p++) {
+        if (*p == '\'' || *p < 0x20) {
+          can_dump_as_is = FALSE;
+          break;
+        }
+      }
+      if (can_dump_as_is) {
+        W_END(s, e)
+      } else {
+        assert(e > s);
+
+        const size_t len = (e - s) + 1;
+        char_u *const new = XMALLOC_NEW(char_u, len);
+
+        memcpy(new, s, len);
+
+        for (char_u *p = new + 1; p < new + len - 1; p++) {
+          if (*p == '\'') {
+            *p = '\\';
+            p++;
+          }
+        }
+        W_LEN_ERR(translate_string_sq_cant_err, new, len)
+        vim_free(new);
+        break;
+translate_string_sq_cant_err:
+        vim_free(new);
+        return FAIL;
+      }
+      break;
+    }
+    case kExprDoubleQuotedString: {
+      for (const char_u *p = s + 1; p < e; p++) {
+        if (*p < 0x20) {
+          can_dump_as_is = FALSE;
+          break;
+        }
+        if (*p == '\\') {
+          p++;
+          switch (*p) {
+            case 'r':
+            case 'n':
+            case 'f':
+            case 'b':
+            case '\\':
+            case '\"':
+            // Escaping single quote, "[" and "]" result in the escaped 
+            // character both in lua and in VimL.
+            case '\'':
+            case '[':
+            case ']': {
+              break;
+            }
+            default: {
+              can_dump_as_is = FALSE;
+              break;
+            }
+          }
+          if (!can_dump_as_is)
+            break;
+        }
+      }
+      if (can_dump_as_is) {
+        W_END(s, e)
+      } else {
+        assert(e > s);
+
+        WS("\"")
+        for (const char_u *p = s + 1; p < e; p++) {
+          switch (*p) {
+            case '\\': {
+              p++;
+              switch (*p) {
+                case 'r':
+                case 'n':
+                case 'f':
+                case 'b':
+                case '\\':
+                case '\"': {
+                  W_LEN(p - 1, 2)
+                  break;
+                }
+                case 'e': {
+                  WS("\\027")
+                  break;
+                }
+                case 'x':
+                case 'X':
+                case 'u':
+                case 'U': {
+                  if (vim_isxdigit(p[1])) {
+                    uint_least8_t n;
+                    uint_least32_t nr = 0;
+                    bool isx = (*p == 'X' || *p == 'x');
+
+                    if (isx)
+                      n = 2;
+                    else
+                      n = 4;
+
+                    while (--n >= 0 && vim_isxdigit(p[1])) {
+                      p++;
+                      nr = (nr << 4) + hex2nr(*p);
+                    }
+                    p++;
+                    if (isx || nr < 0x7F) {
+                      CALL(dump_char, nr)
+                    } else {
+                      char_u buf[MAX_CHAR_LEN];
+                      size_t len;
+
+                      len = (*mb_char2bytes)(nr, buf);
+                      W_LEN(buf, len)
+                    }
+                  } else {
+                    CALL(dump_char, *p)
+                  }
+                  break;
+                }
+                case '0':
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7': {
+                  char_u c;
+                  c = *p++ - '0';
+                  if ('0' <= *p && *p <= '7') {
+                    c = (c << 3) + (*p++ - '0');
+                    if ('0' <= *p && *p <= '7')
+                      c = (c << 3) + (*p++ - '0');
+                  }
+                  CALL(dump_char, c)
+                  break;
+                }
+                case '<': {
+                  char_u buf[MAX_CHAR_LEN * 6];
+                  size_t len;
+
+                  len = trans_special((char_u **) &p, buf, FALSE);
+
+                  for (size_t i = 0; i < len; i++)
+                    CALL(dump_char, buf[i]);
+
+                  break;
+                }
+                default: {
+                  CALL(dump_char, *p)
+                  break;
+                }
+              }
+              break;
+            }
+            default: {
+              CALL(dump_char, *p)
+              break;
+            }
+          }
+        }
+        WS("\"")
+      }
+      break;
+    }
+    default: {
+      assert(FALSE);
+    }
+  }
+  WS(")")
+  return OK;
+}
+
 #define TS_LAST_SEGMENT 0x01
 #define TS_ONLY_SEGMENT 0x02
 #define TS_FUNCCALL     0x04
@@ -565,6 +944,11 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
     case kExprOctalNumber:
     case kExprHexNumber: {
       CALL(translate_number, expr->type, expr->position, expr->end_position)
+      break;
+    }
+    case kExprDoubleQuotedString:
+    case kExprSingleQuotedString: {
+      CALL(translate_string, expr->type, expr->position, expr->end_position)
       break;
     }
     case kExprOption: {
@@ -1110,7 +1494,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
             WS("\n")
         } else {
           WINDENT(indent + 1)
-          WS("if (vim.error.matches(state, ")
+          WS("if (vim.err.matches(state, ")
           ADDINDENTVAR(err_var)
           WS(", ")
           CALL(translate_regex, next->args[ARG_REG_REG].arg.reg)
