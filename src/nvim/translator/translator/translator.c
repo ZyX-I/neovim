@@ -134,6 +134,11 @@
         WS_ERR(error_label, "  ") \
     }
 
+#define VIM_ZERO  "vim.number.new(state, 0)"
+#define VIM_FALSE VIM_ZERO
+#define VIM_TRUE  "vim.number.new(state, 1)"
+#define VIM_EMPTY_STRING "vim.string.new(state, '')"
+
 typedef enum {
   kTransUser = 0,
   kTransScript,
@@ -145,6 +150,12 @@ typedef struct {
   const CommandNode *node;
   const size_t indent;
 } TranslateFuncArgs;
+
+typedef enum {
+  kOptDefault = 0,
+  kOptLocal,
+  kOptGlobal,
+} OptionType;
 
 // {{{ Function declarations
 static WFDEC(write_string_len, const char *const s, size_t len);
@@ -956,7 +967,76 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
       break;
     }
     case kExprOption: {
-      // TODO
+      char_u *name_start;
+      OptionType type;
+      uint_least8_t option_properties;
+      char_u *s = expr->position;
+      char_u *e = expr->end_position;
+
+      if (e - s > 2 && s[1] == ':') {
+        assert(*s == 'g' || *s == 'l');
+        type = (*s == 'g' ? kOptGlobal : kOptLocal);
+        name_start = s + 2;
+      } else {
+        type = kOptDefault;
+        name_start = s;
+      }
+
+      option_properties = get_option_properties(name_start, e - name_start + 1);
+      // If option is not available in this version of neovim …
+      if (option_properties & GOP_DISABLED) {
+        // … just dump static value
+        switch (option_properties & GOP_TYPE_MASK) {
+          case GOP_BOOLEAN: {
+            WS(VIM_FALSE)
+            break;
+          }
+          case GOP_NUMERIC: {
+            WS(VIM_ZERO)
+            break;
+          }
+          case GOP_STRING: {
+            WS(VIM_EMPTY_STRING)
+            break;
+          }
+          default: {
+            // Option may only be boolean, string or numeric, not a combination 
+            // of these
+            assert(FALSE);
+          }
+        }
+      } else {
+            // Requested global option when there is global value
+        if ((type == kOptGlobal && (option_properties & GOP_GLOBAL))
+            // Or requested option that has nothing, but global value
+            || !((option_properties & GOP_LOCALITY_MASK) ^ GOP_GLOBAL)) {
+          WS("state.options['")
+          W_END(name_start, e)
+          WS("']")
+        } else {
+          if (option_properties & GOP_GLOBAL)
+            WS("state:get_local_option(")
+
+          if (option_properties & GOP_BUFFER_LOCAL)
+            WS("state.buffer")
+          else if (option_properties & GOP_WINDOW_LOCAL)
+            WS("state.window")
+          else
+            assert(FALSE);
+
+          if (option_properties & GOP_GLOBAL)
+            WS(", ")
+          else
+            WS("[")
+          WS("'")
+          W_END(name_start, e)
+          WS("'")
+          if (option_properties & GOP_GLOBAL)
+            WS(")")
+          else
+            WS("]")
+        }
+      }
       break;
     }
     case kExprRegister: {
@@ -1145,7 +1225,7 @@ static WFDEC(translate_function, const TranslateFuncArgs *const args)
     // Empty function: do not bother creating scope dictionaries, just return 
     // zero
     WINDENT(args->indent + 1)
-    WS("return vim.number.new(state, 0)\n")
+    WS("return " VIM_ZERO "\n")
   }
   WINDENT(args->indent)
   WS("end")
@@ -1734,7 +1814,7 @@ static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
 
   if (current_node == NULL && to == kTransFunc) {
     WINDENT(indent)
-    WS("return vim.number.new(state, 0)\n")
+    WS("return " VIM_ZERO "\n")
   }
 
   return OK;
