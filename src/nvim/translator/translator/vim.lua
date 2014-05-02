@@ -8,19 +8,20 @@ copy_table = function(state)
 end
 
 new_scope = function(is_default_scope)
-  -- TODO: use dict.new
-  return {[':is_default_scope']=is_default_scope}
+  ret = dict.new(state, ':is_default_scope', is_default_scope)
+  ret[type_idx] = 'scope'
+  return ret
 end
 
 new_state = function()
   local state = {
     is_trying=false,
     is_silent=false,
-    functions={},
+    functions={[type_idx]='func_dict'},
     options={},
-    buffer={b={}, options={}},
-    window={w={}, options={}},
-    tabpage={t={}},
+    buffer={b=new_scope(false), options={}},
+    window={w=new_scope(false), options={}},
+    tabpage={t=new_scope(false)},
     registers={},
     trying=function(self)
       local state = copy_table(self)
@@ -33,10 +34,10 @@ new_state = function()
       return state
     end,
     redir_callbacks={},
-    v={},
-    a={},
-    l={},
-    user_functions={},
+    v=new_scope(false),
+    a=nil,
+    l=nil,
+    user_functions={[type_idx]='func_dict'},
     user_commands={},
     call_stack={},
     set_script_locals=function(self, s)
@@ -68,6 +69,10 @@ get_state = function()
 end
 
 -- {{{1 Types
+-- Special values that cannot be assigned from VimL
+type_idx = true
+locks_idx = false
+
 list = {
   insert=function(state, lst, position, value, value_position)
     if (lst.fixed) then
@@ -87,13 +92,13 @@ list = {
     return lst[index + 1]
   end,
   subscript=function(state, lst, lst_position, index, index_position)
-    length = list.length(state, lst, lst_position)
+    local length = list.length(state, lst, lst_position)
     if (index < 0) then
       index = length + index
     end
     if (index >= length) then
       err.err(state, lst_position, true,
-              'E684: list index out of range: ' .. index)
+              'E684: list index out of range: %i', index)
       return nil
     end
     return list.raw_subscript(lst, index)
@@ -105,19 +110,20 @@ list = {
     return true
   end,
   next=function(it_state, lst)
-    i = it_state.i
+    local i = it_state.i
     it_state.i = it_state.i + 1
     return i, list.raw_subscript(lst, i)
   end,
   iterator=function(state, lst)
-    it_state = {
+    local it_state = {
       i=0,
     }
     table.insert(lst.iterators, it_state)
     return list.next, it_state, lst
   end,
   new=function(state, ...)
-    ret = {...}
+    local ret = {...}
+    ret[type_idx] = 'list'
     ret.iterators = {}
     ret.locked = false
     ret.fixed = false
@@ -127,14 +133,44 @@ list = {
 
 dict = {
   new=function(state, ...)
-    -- TODO
-    return {}
+    local i = 1
+    local key
+    local val
+    local ret
+    local t
+    local max
+    t = {...}
+    ret = {}
+    ret[type_idx] = 'dict'
+    max = table.maxn(t)
+    if max % 2 == 1 then
+      err.err(state, position, true,
+              'Internal error: odd number of arguments to dict.new')
+      return nil
+    end
+    while i < max / 2 do
+      key = get_string(state, t[i*2], nil)
+      val = t[i*2 + 1]
+      if key == nil or val == nil then
+        return nil
+      end
+      ret[key] = val
+      i = i + 1
+    end
+    return ret
   end,
   subscript=function(state, dct, dct_position, key, key_position)
     ret = dct[key]
     if (ret == nil) then
-      err.err(state, value_position, true,
-              'E716: Key not present in Dictionary: ' .. index)
+      local message
+      if dct[type_idx] == 'dict' then
+        message = 'E716: Key not present in Dictionary'
+      elseif dct[type_idx] == 'scope' then
+        message = 'E121: Undefined variable'
+      elseif dct[type_idx] == 'func_dict' then
+        message = 'E117: Unknown function'
+      end
+      err.err(state, value_position, true, message .. ': %s', key)
     end
     return ret
   end,
@@ -191,6 +227,18 @@ err = {
   end,
 }
 
+non_nil = function(wrapped)
+  return function(state, ...)
+    local k, v
+    for k, v in pairs({...}) do
+      if v == nil then
+        return nil
+      end
+    end
+    return wrapped(state, ...)
+  end
+end
+
 -- {{{1 Command implementations
 parse = function(state, command, range, bang, args)
   return args, nil
@@ -228,7 +276,7 @@ run_user_command = function(state, command, range, bang, args)
 end
 
 -- {{{1 Assign support
-assign_dict = function(state, val, dct, key)
+assign_dict = non_nil(function(state, val, dct, key)
   if (key == '') then
     err.err(state, key_position, true,
             'E713: Cannot use empty key for dictionary')
@@ -236,28 +284,28 @@ assign_dict = function(state, val, dct, key)
   end
   return dict.assign_subscript(state, dct, dct_position, key, key_position,
                                       val, val_position)
-end
+end)
 
-assign_dict_function = function(state, unique, val, dct, key)
+assign_dict_function = non_nil(function(state, unique, val, dct, key)
   if (unique and dct[key] ~= nil) then
     err.err(state, key_position, true, 'E717: Dictionary entry already exists')
     return nil
   end
   return assign_dict(state, val, dct, key)
-end
+end)
 
 assign_scope = assign_dict
 
-assign_scope_function = function(state, unique, val, scope, key)
+assign_scope_function = non_nil(function(state, unique, val, scope, key)
   if (unique and scope[key] ~= nil) then
     err.err(state, key_position, true,
             'E122: Function %s already exists, add ! to replace it', key)
     return nil
   end
   return assign_scope(state, val, scope, key)
-end
+end)
 
-assign_subscript = function(state, val, dct, key)
+assign_subscript = non_nil(function(state, val, dct, key)
   t = vim_type(dct)
   if (t == VIM_DICTIONARY) then
     return assign_dict(state, val, dct, key)
@@ -269,17 +317,17 @@ assign_subscript = function(state, val, dct, key)
             'E689: Can only index a List or Dictionary')
     return nil
   end
-end
+end)
 
-assign_subscript_function = function(state, unique, val, dct, key)
+assign_subscript_function = non_nil(function(state, unique, val, dct, key)
   t = vim_type(dct)
   if (t == VIM_DICTIONARY) then
     return assign_dict_function(state, unique, val, dct, key)
   end
   return assign_subscript(state, val, dct, key)
-end
+end)
 
-assign_slice = function(state, val, lst, index1, index2)
+assign_slice = non_nil(function(state, val, lst, index1, index2)
   t = vim_type(lst)
   if (t == VIM_LIST) then
     -- TODO
@@ -291,9 +339,9 @@ assign_slice = function(state, val, lst, index1, index2)
             'E689: Can only index a List or Dictionary')
     return nil
   end
-end
+end)
 
-assign_slice_function = function(state, unique, val, lst, index1, index2)
+assign_slice_function = non_nil(function(state, unique, val, lst, index1, index2)
   t = vim_type(lst)
   if (t == VIM_LIST) then
     err.err(state, lst_position, true,
@@ -302,7 +350,7 @@ assign_slice_function = function(state, unique, val, lst, index1, index2)
   else
     return assign_slice(state, val, lst, index1, index2)
   end
-end
+end)
 
 -- {{{1 Range handling
 range={
@@ -331,24 +379,26 @@ range={
 
 -- {{{1 Type manipulations
 vim_type = function(state, value, position)
+  if (value == nil) then
+    return nil
+  end
   t = type(value)
   if (t == 'string') then
     return VIM_STRING
   elseif (t == 'number') then
     return VIM_NUMBER
   elseif (t == 'table') then
-    meta = getmetatable(value)
-    if (meta == funcref_meta) then
+    if (value[type_idx] == 'func') then
       return VIM_FUNCREF
-    elseif (meta == list_meta) then
+    elseif (value[type_idx] == 'list') then
       return VIM_LIST
-    elseif (meta == dictionary_meta) then
+    elseif (value[type_idx] == 'dict' or value[type_idx] == 'scope'
+            or value[type_idx] == 'func_dict') then
       return VIM_DICTIONARY
-    elseif (meta == float_meta) then
+    elseif (value[type_idx] == 'float') then
       return VIM_FLOAT
     else
-      err.err(state, position, true,
-              'Internal error: table with unknown metatable')
+      err.err(state, position, true, 'Internal error: table with unknown type')
     end
   else
     err.err(state, position, true, 'Internal error: unknown type')
@@ -357,7 +407,9 @@ end
 
 get_number = function(state, value, position)
   t = vim_type(state, value, position)
-  if (t == VIM_FLOAT) then
+  if (t == nil) then
+    return nil
+  elseif (t == VIM_FLOAT) then
     return value:number()
   elseif (t == VIM_NUMBER) then
     return value
@@ -379,7 +431,9 @@ end
 
 get_string = function(state, value, position)
   t = vim_type(state, value, position)
-  if (t == VIM_FLOAT) then
+  if (t == nil) then
+    return nil
+  elseif (t == VIM_FLOAT) then
     err.err(state, position, true, 'E806: Using Float as a String')
     return nil
   elseif (t == VIM_NUMBER) then
@@ -399,9 +453,10 @@ get_string = function(state, value, position)
 end
 
 -- {{{1 Basic operations
-iterop = function(state, converter, opfunc, ...)
+iterop = non_nil(function(state, converter, opfunc, ...)
   local result
-  for i, v in ipairs(arg) do
+  local i, v
+  for i, v in ipairs({...}) do
     local curarg = converter(state, v, position)
     if (curarg == nil) then
       return nil
@@ -415,8 +470,11 @@ iterop = function(state, converter, opfunc, ...)
       end
     end
   end
+  if i == nil or i == 1 then
+    return nil
+  end
   return result
-end
+end)
 
 add = function(state, ...)
   return iterop(state, get_number, function(state, result, a2, a2_position)
@@ -466,7 +524,7 @@ end
 vim_true = 1
 vim_false = 0
 
-negate_logical = function(state, value)
+negate_logical = non_nil(function(state, value)
   value = get_number(state, value, position)
   if (value == nil) then
     return nil
@@ -475,14 +533,16 @@ negate_logical = function(state, value)
   else
     return vim_false
   end
-end
+end)
 
 promote_integer = function(state, value)
   return get_number(state, value, position)
 end
 
 same_complex_types = function(state, t1, t2, arg2_position)
-  if (t1 == VIM_LIST) then
+  if (t1 == nil or t2 == nil) then
+    return nil
+  elseif (t1 == VIM_LIST) then
     if (t2 == VIM_LIST) then
       return 1
     end
@@ -554,7 +614,7 @@ equals = function(state, ic, arg1, arg2)
   end
 end
 
-identical = function(state, ic, arg1, arg2)
+identical = non_nil(function(state, ic, arg1, arg2)
   t1 = vim_type(state, arg1, arg1_position)
   t2 = vim_type(state, arg2, arg2_position)
   if (t1 ~= t2) then
@@ -564,11 +624,11 @@ identical = function(state, ic, arg1, arg2)
   else
     return equals(state, ic, arg1, arg2)
   end
-end
+end)
 
-matches = function(state, ic, arg1, arg2)
+matches = non_nil(function(state, ic, arg1, arg2)
   -- TODO
-end
+end)
 
 less_greater_cmp = function(state, ic, cmp, string_icmp, arg1, arg1_position,
                                                          arg2, arg2_position)
@@ -644,12 +704,10 @@ subscript = function(state, value, index)
   t = vim_type(state, value, value_position)
   if (t == nil) then
     return nil
-  end
-  if (t == VIM_FLOAT) then
+  elseif (t == VIM_FLOAT) then
     err.err(state, value_position, true, 'E806: Using Float as a String')
     return nil
-  end
-  if (t == VIM_NUMBER) then
+  elseif (t == VIM_NUMBER) then
     value = value .. ''
     t = VIM_STRING
   end
@@ -683,24 +741,25 @@ subscript = function(state, value, index)
   end
 end
 
-concat_or_subscript = function(state, dct, key)
+concat_or_subscript = non_nil(function(state, dct, key)
   t = vim_type(dct)
   if (t == VIM_DICTIONARY) then
     return dict.subscript(state, dct, dct_position, key, key_position)
   else
     return concat(state, dct, key)
   end
-end
+end)
 
-slice = function(state, value, start_index, end_index)
+slice = non_nil(function(state, value, start_index, end_index)
   -- TODO
-end
+end)
 
-call = function(state, caller_dict, caller_key, ...)
+call = non_nil(function(state, caller_dict, caller_key, ...)
   -- TODO
-end
+end)
 
 -- {{{1 return
+zero=number.new(state, 0)
 return {
   eq=eq,
   add=add,
@@ -740,4 +799,7 @@ return {
   assign_subscript_function=assign_subscript_function,
   assign_slice=assign_slice,
   assign_slice_function=assign_slice_function,
+  zero_=zero,
+  false_=zero,
+  true_=number.new(state, 1),
 }
