@@ -284,18 +284,6 @@ char_u *concat_fnames(char_u *fname1, char_u *fname2, int sep)
 }
 
 /*
- * Concatenate two strings and return the result in allocated memory.
- */
-char_u *concat_str(char_u *str1, char_u *str2)
-{
-  size_t l = STRLEN(str1);
-  char_u *dest = xmalloc(l + STRLEN(str2) + 1);
-  STRCPY(dest, str1);
-  STRCPY(dest + l, str2);
-  return dest;
-}
-
-/*
  * Add a path separator to a file name, unless it already ends in a path
  * separator.
  */
@@ -1580,12 +1568,8 @@ char_u *fix_fname(char_u *fname)
   fname = vim_strsave(fname);
 
 # ifdef USE_FNAME_CASE
-#  ifdef USE_LONG_FNAME
-  if (USE_LONG_FNAME)
-#  endif
-  {
-    if (fname != NULL)
-      fname_case(fname, 0);             /* set correct case for file name */
+  if (fname != NULL) {
+    fname_case(fname, 0);             /* set correct case for file name */
   }
 # endif
 

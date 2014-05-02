@@ -691,9 +691,6 @@ enum {
   , BV_QE
   , BV_RO
   , BV_SI
-#ifndef SHORT_FNAME
-  , BV_SN
-#endif
   , BV_SMC
   , BV_SYN
   , BV_SPC

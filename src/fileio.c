@@ -2997,9 +2997,6 @@ buf_write (
       struct stat st_new;
       char_u      *dirp;
       char_u      *rootname;
-#if defined(UNIX) && !defined(SHORT_FNAME)
-      int did_set_shortname;
-#endif
 
       copybuf = verbose_try_malloc(BUFSIZE + 1);
       if (copybuf == NULL) {
@@ -3038,24 +3035,11 @@ buf_write (
           goto nobackup;
         }
 
-#if defined(UNIX) && !defined(SHORT_FNAME)
-        did_set_shortname = FALSE;
-#endif
-
-        /*
-         * May try twice if 'shortname' not set.
-         */
-        for (;; ) {
+        {
           /*
            * Make backup file name.
            */
-          backup = buf_modname(
-#ifdef SHORT_FNAME
-              TRUE,
-#else
-              (buf->b_p_sn || buf->b_shortname),
-#endif
-              rootname, backup_ext, FALSE);
+          backup = modname(rootname, backup_ext, FALSE);
           if (backup == NULL) {
             vim_free(rootname);
             some_error = TRUE;                          /* out of memory */
@@ -3069,29 +3053,14 @@ buf_write (
 #ifdef UNIX
             /*
              * Check if backup file is same as original file.
-             * May happen when modname() gave the same file back.
-             * E.g. silly link, or file name-length reached.
-             * If we don't check here, we either ruin the file
-             * when copying or erase it after writing. jw.
+             * May happen when modname() gave the same file back (e.g. silly
+             * link). If we don't check here, we either ruin the file when
+             * copying or erase it after writing.
              */
             if (st_new.st_dev == st_old.st_dev
                 && st_new.st_ino == st_old.st_ino) {
               vim_free(backup);
               backup = NULL;                    /* no backup file to delete */
-# ifndef SHORT_FNAME
-              /*
-               * may try again with 'shortname' set
-               */
-              if (!(buf->b_shortname || buf->b_p_sn)) {
-                buf->b_shortname = TRUE;
-                did_set_shortname = TRUE;
-                continue;
-              }
-              /* setting shortname didn't help */
-              if (did_set_shortname)
-                buf->b_shortname = FALSE;
-# endif
-              break;
             }
 #endif
 
@@ -3116,7 +3085,6 @@ buf_write (
               }
             }
           }
-          break;
         }
         vim_free(rootname);
 
@@ -3247,13 +3215,7 @@ nobackup:
         if (rootname == NULL)
           backup = NULL;
         else {
-          backup = buf_modname(
-#ifdef SHORT_FNAME
-              TRUE,
-#else
-              (buf->b_p_sn || buf->b_shortname),
-#endif
-              rootname, backup_ext, FALSE);
+          backup = modname(rootname, backup_ext, FALSE);
           vim_free(rootname);
         }
 
@@ -3890,13 +3852,7 @@ restore_backup:
    * the backup file our 'original' file.
    */
   if (*p_pm && dobackup) {
-    char *org = (char *)buf_modname(
-#ifdef SHORT_FNAME
-        TRUE,
-#else
-        (buf->b_p_sn || buf->b_shortname),
-#endif
-        fname, p_pm, FALSE);
+    char *org = (char *)modname(fname, p_pm, FALSE);
 
     if (backup != NULL) {
       struct stat st;
@@ -4672,8 +4628,7 @@ void shorten_fnames(int force)
 }
 
 /*
- * add extension to file name - change path/fo.o.h to path/fo.o.h.ext or
- * fo_o_h.ext when shortname option set.
+ * add extension to file name - change path/fo.o.h to path/fo.o.h.ext
  *
  * Assumed that fname is a valid name found in the filesystem we assure that
  * the return value is a different name and ends in 'ext'.
@@ -4684,23 +4639,6 @@ void shorten_fnames(int force)
  */
 char_u *
 modname (
-    char_u *fname,
-    char_u *ext,
-    int prepend_dot                /* may prepend a '.' to file name */
-)
-{
-  return buf_modname(
-#ifdef SHORT_FNAME
-      TRUE,
-#else
-      (curbuf->b_p_sn || curbuf->b_shortname),
-#endif
-      fname, ext, prepend_dot);
-}
-
-char_u *
-buf_modname (
-    int shortname,                  /* use 8.3 file name */
     char_u *fname,
     char_u *ext,
     int prepend_dot                /* may prepend a '.' to file name */
@@ -4729,9 +4667,7 @@ buf_modname (
       retval[fnamelen++] = PATHSEP;
       retval[fnamelen] = NUL;
     }
-#ifndef SHORT_FNAME
     prepend_dot = FALSE;            /* nothing to prepend a dot to */
-#endif
   } else {
     fnamelen = (int)STRLEN(fname);
     retval = alloc((unsigned)(fnamelen + extlen + 3));
@@ -4739,22 +4675,10 @@ buf_modname (
   }
 
   /*
-   * search backwards until we hit a '/', '\' or ':' replacing all '.'
-   * by '_' when shortname option set and ext starts with a dot.
-   * Then truncate what is after the '/', '\' or ':'.
+   * search backwards until we hit a '/', '\' or ':'.
+   * Then truncate what is after the '/', '\' or ':' to BASENAMELEN characters.
    */
   for (ptr = retval + fnamelen; ptr > retval; mb_ptr_back(retval, ptr)) {
-    if (*ext == '.'
-#ifdef USE_LONG_FNAME
-        && (!USE_LONG_FNAME || shortname)
-#else
-# ifndef SHORT_FNAME
-        && shortname
-# endif
-#endif
-        )
-      if (*ptr == '.')          /* replace '.' by '_' */
-        *ptr = '_';
     if (vim_ispathsep(*ptr)) {
       ++ptr;
       break;
@@ -4762,58 +4686,12 @@ buf_modname (
   }
 
   /* the file name has at most BASENAMELEN characters. */
-#ifndef SHORT_FNAME
-  if (STRLEN(ptr) > (unsigned)BASENAMELEN)
+  if (STRLEN(ptr) > BASENAMELEN)
     ptr[BASENAMELEN] = '\0';
-#endif
 
   s = ptr + STRLEN(ptr);
 
-  /*
-   * For 8.3 file names we may have to reduce the length.
-   */
-#ifdef USE_LONG_FNAME
-  if (!USE_LONG_FNAME || shortname)
-#else
-# ifndef SHORT_FNAME
-  if (shortname)
-# endif
-#endif
-  {
-    /*
-     * If there is no file name, or the file name ends in '/', and the
-     * extension starts with '.', put a '_' before the dot, because just
-     * ".ext" is invalid.
-     */
-    if (fname == NULL || *fname == NUL
-        || vim_ispathsep(fname[STRLEN(fname) - 1])) {
-      if (*ext == '.')
-        *s++ = '_';
-    }
-    /*
-     * If the extension starts with '.', truncate the base name at 8
-     * characters
-     */
-    else if (*ext == '.') {
-      if ((size_t)(s - ptr) > (size_t)8) {
-        s = ptr + 8;
-        *s = '\0';
-      }
-    }
-    /*
-     * If the extension doesn't start with '.', and the file name
-     * doesn't have an extension yet, append a '.'
-     */
-    else if ((e = vim_strchr(ptr, '.')) == NULL)
-      *s++ = '.';
-    /*
-     * If the extension doesn't start with '.', and there already is an
-     * extension, it may need to be truncated
-     */
-    else if ((int)STRLEN(e) + extlen > 4)
-      s = e + 4 - extlen;
-  }
-#if defined(USE_LONG_FNAME) || defined(WIN3264)
+#if defined(WIN3264)
   /*
    * If there is no file name, and the extension starts with '.', put a
    * '_' before the dot, because just ".ext" may be invalid if it's on a
@@ -4829,19 +4707,13 @@ buf_modname (
    */
   STRCPY(s, ext);
 
-#ifndef SHORT_FNAME
   /*
    * Prepend the dot.
    */
-  if (prepend_dot && !shortname && *(e = path_tail(retval)) != '.'
-#ifdef USE_LONG_FNAME
-      && USE_LONG_FNAME
-#endif
-      ) {
+  if (prepend_dot && *(e = path_tail(retval)) != '.') {
     STRMOVE(e + 1, e);
     *e = '.';
   }
-#endif
 
   /*
    * Check that, after appending the extension, the file name is really

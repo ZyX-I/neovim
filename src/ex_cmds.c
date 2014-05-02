@@ -1510,7 +1510,6 @@ void write_viminfo(char_u *file, int forceit)
   mode_t umask_save;
 #endif
 #ifdef UNIX
-  int shortname = FALSE;                /* use 8.3 file name */
   struct stat st_old;           /* mch_stat() of existing viminfo file */
 #endif
 
@@ -1569,53 +1568,17 @@ void write_viminfo(char_u *file, int forceit)
     }
 #endif
 
-    /*
-     * Make tempname.
-     * May try twice: Once normal and once with shortname set, just in
-     * case somebody puts his viminfo file in an 8.3 filesystem.
-     */
-    for (;; ) {
-      tempname = buf_modname(
-#ifdef UNIX
-          shortname,
-#else
-# ifdef SHORT_FNAME
-          TRUE,
-# else
-          FALSE,
-# endif
-#endif
-          fname,
-          (char_u *)".tmp",
-          FALSE);
-      if (tempname == NULL)                     /* out of memory */
-        break;
-
+    // Make tempname
+    tempname = modname(fname, (char_u *)".tmp", FALSE);
+    if (tempname != NULL) {
       /*
        * Check if tempfile already exists.  Never overwrite an
        * existing file!
        */
       if (mch_stat((char *)tempname, &st_new) == 0) {
-#ifdef UNIX
-        /*
-         * Check if tempfile is same as original file.  May happen
-         * when modname() gave the same file back.  E.g.  silly
-         * link, or file name-length reached.  Try again with
-         * shortname set.
-         */
-        if (!shortname && st_new.st_dev == st_old.st_dev
-            && st_new.st_ino == st_old.st_ino) {
-          vim_free(tempname);
-          tempname = NULL;
-          shortname = TRUE;
-          continue;
-        }
-#endif
         /*
          * Try another name.  Change one character, just before
-         * the extension.  This should also work for an 8.3
-         * file name, when after adding the extension it still is
-         * the same file as the original.
+         * the extension.
          */
         wp = tempname + STRLEN(tempname) - 5;
         if (wp < path_tail(tempname))                 /* empty file name? */
@@ -1633,7 +1596,6 @@ void write_viminfo(char_u *file, int forceit)
           }
         }
       }
-      break;
     }
 
     if (tempname != NULL) {
@@ -2659,9 +2621,6 @@ do_ecmd (
     if (sfname == NULL)
       sfname = ffname;
 #ifdef USE_FNAME_CASE
-# ifdef USE_LONG_FNAME
-    if (USE_LONG_FNAME)
-# endif
     if (sfname != NULL)
       fname_case(sfname, 0);             /* set correct case for sfname */
 #endif
