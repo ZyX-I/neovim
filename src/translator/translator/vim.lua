@@ -220,8 +220,14 @@ err = {
   propagate=function(state, err)
   end,
   err=function(state, position, vim_error, message, ...)
+    local formatted_message
+    formatted_message = (message):format(...)
     -- TODO show context
-    error((message):format(...), 1)
+    if state.is_trying then
+      error(formatted_message, 0)
+    else
+      io.stderr:write(formatted_message .. '\n')
+    end
   end,
   throw=function(...)
   end,
@@ -403,6 +409,7 @@ vim_type = function(state, value, position)
   else
     err.err(state, position, true, 'Internal error: unknown type')
   end
+  return nil
 end
 
 get_number = function(state, value, position)
