@@ -139,6 +139,9 @@ static void print_node(int indent, ExpressionNode *node)
     case kExprEmptySubscript: {
       if (name == NULL) name = "kExprEmptySubscript";
     }
+    case kExprListRest: {
+      if (name == NULL) name = "kExprListRest";
+    }
     case kExprModulo: {
       if (name == NULL) name = "kExprModulo";
       printf("%*s%s\n", indent, "", name);

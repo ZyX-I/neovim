@@ -79,6 +79,8 @@ typedef enum {
   kExprCall,                  // expr(expr, )
 
   kExprEmptySubscript,        // empty lhs or rhs in [lhs:rhs]
+
+  kExprListRest,              // Node after ";" in lval lists
 } ExpressionType;
 
 #define LOGICAL_LENGTH (LOGICAL_END - LOGICAL_START + 1)

@@ -1630,6 +1630,9 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       }
       break;
     }
+    case kExprListRest: {
+      break;
+    }
     case kExprVariableName: {
       break;
     }

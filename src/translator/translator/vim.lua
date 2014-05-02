@@ -17,7 +17,10 @@ new_state = function()
   local state = {
     is_trying=false,
     is_silent=false,
-    functions={[type_idx]='func_dict'},
+    functions={
+      [type_idx]='func_dict',
+      type=vim_type,
+    },
     options={},
     buffer={b=new_scope(false), options={}},
     window={w=new_scope(false), options={}},
@@ -85,14 +88,15 @@ list = {
     table.insert(self, value)
     return lst
   end,
+  raw_length=table.maxn,
   length=function(state, lst, position)
-    return table.maxn(self, lst)
+    return list.raw_length(lst)
   end,
   raw_subscript=function(lst, index)
     return lst[index + 1]
   end,
   subscript=function(state, lst, lst_position, index, index_position)
-    local length = list.length(state, lst, lst_position)
+    local length = list.raw_length(lst)
     if (index < 0) then
       index = length + index
     end
@@ -103,10 +107,24 @@ list = {
     end
     return list.raw_subscript(lst, index)
   end,
+  raw_assign_subscript = function(lst, index, val)
+    lst[index + 1] = val
+  end,
+  slice=function(state, lst, index1, index2)
+    local i
+    ret = list.new(state)
+    for i = index1,index2 do
+      list.raw_assign_subscript(ret, i - index1, list.raw_subscript(lst, i))
+    end
+    return ret
+  end,
+  slice_to_end=function(state, lst, index1)
+    return list.slice(state, lst, index1, list.raw_length(lst))
+  end,
   assign_subscript=function(state, lst, lst_position, index, index_position,
                                    val, val_position)
     -- TODO check for locks, check for out of range
-    lst[index + 1] = val
+    raw_assign_subscript(lst, index, val)
     return true
   end,
   next=function(it_state, lst)
@@ -773,7 +791,7 @@ call = non_nil(function(state, caller_dict, caller_key, ...)
   -- TODO
 end)
 
-get_scope_and_key = non_nil(function(state, value)
+get_scope_and_key = non_nil(function(state, key)
   -- TODO
 end)
 
@@ -823,4 +841,10 @@ return {
   zero_=zero,
   false_=zero,
   true_=number.new(state, 1),
+  VIM_NUMBER=VIM_NUMBER,
+  VIM_STRING=VIM_STRING,
+  VIM_FUNCREF=VIM_FUNCREF,
+  VIM_LIST=VIM_LIST,
+  VIM_DICTIONARY=VIM_DICTIONARY,
+  VIM_FLOAT=VIM_FLOAT,
 }

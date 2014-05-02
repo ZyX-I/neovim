@@ -169,7 +169,15 @@ static FDEC(node_dump, ExpressionNode *node)
         child = child->next;
         if (child != NULL || po->expression.list.trailing_comma) {
           SPACES(po->expression.list.item.before)
-          ADD_CHAR(',');
+          if (child != NULL && child->type == kExprListRest) {
+            assert(child->children != NULL);
+            assert(child->next == NULL);
+            assert(child->children->next == NULL);
+            child = child->children;
+            ADD_CHAR(';');
+          } else {
+            ADD_CHAR(',');
+          }
           SPACES(po->expression.list.item.after)
         }
       }
