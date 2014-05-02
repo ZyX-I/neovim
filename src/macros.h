@@ -1,3 +1,6 @@
+#ifndef NEOVIM_MACROS_H
+#define NEOVIM_MACROS_H
+
 /*
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -31,13 +34,13 @@
 /*
  * lineempty() - return TRUE if the line is empty
  */
-#define lineempty(p) (*ml_get(p) == '\0')
+#define lineempty(p) (*ml_get(p) == NUL)
 
 /*
  * bufempty() - return TRUE if the current buffer is empty
  */
 #define bufempty() (curbuf->b_ml.ml_line_count == 1 && *ml_get((linenr_T)1) == \
-                    '\0')
+                    NUL)
 
 /*
  * toupper() and tolower() that use the current locale.
@@ -159,3 +162,5 @@
 # define PTR2CHAR(p)        (has_mbyte ? mb_ptr2char(p) : (int)*(p))
 
 # define RESET_BINDING(wp)  (wp)->w_p_scb = FALSE; (wp)->w_p_crb = FALSE
+
+#endif  // NEOVIM_MACROS_H

@@ -179,7 +179,7 @@ void do_debug(char_u *cmd)
        * If not, reset "last_cmd".
        * For a blank line use previous command. */
       p = skipwhite(cmdline);
-      if (*p != '\0') {
+      if (*p != NUL) {
         switch (*p) {
         case 'c': last_cmd = CMD_CONT;
           tail = "ont";
@@ -204,7 +204,7 @@ void do_debug(char_u *cmd)
         if (last_cmd != 0) {
           /* Check that the tail matches. */
           ++p;
-          while (*p != '\0' && *p == *tail) {
+          while (*p != NUL && *p == *tail) {
             ++p;
             ++tail;
           }
@@ -322,7 +322,7 @@ void dbg_check_breakpoint(exarg_T *eap)
         p = (char_u *)"";
       smsg((char_u *)_("Breakpoint in \"%s%s\" line %" PRId64),
           p,
-          debug_breakpoint_name + (*p == '\0' ? 0 : 3),
+          debug_breakpoint_name + (*p == NUL ? 0 : 3),
           (int64_t)debug_breakpoint_lnum);
       debug_breakpoint_name = NULL;
       do_debug(eap->cmd);
@@ -448,8 +448,8 @@ dbg_parsearg (
     bp->dbg_lnum = 0;
 
   /* Find the function or file name.  Don't accept a function name with (). */
-  if ((!here && *p == '\0')
-      || (here && *p != '\0')
+  if ((!here && *p == NUL)
+      || (here && *p != NUL)
       || (bp->dbg_type == DBG_FUNC && strstr((char *)p, "()") != NULL)) {
     EMSG2(_(e_invarg2), arg);
     return FAIL;
@@ -676,13 +676,9 @@ debuggy_find (
 
   /* Replace K_SNR in function name with "<SNR>". */
   if (!file && fname[0] == K_SPECIAL) {
-    name = alloc((unsigned)STRLEN(fname) + 3);
-    if (name == NULL)
-      name = fname;
-    else {
-      STRCPY(name, "<SNR>");
-      STRCPY(name + 5, fname + 3);
-    }
+    name = xmalloc(STRLEN(fname) + 3);
+    STRCPY(name, "<SNR>");
+    STRCPY(name + 5, fname + 3);
   }
 
   for (i = 0; i < gap->ga_len; ++i) {
@@ -937,7 +933,7 @@ void ex_profile(exarg_T *eap)
   len = (int)(e - eap->arg);
   e = skipwhite(e);
 
-  if (len == 5 && STRNCMP(eap->arg, "start", 5) == 0 && *e != '\0') {
+  if (len == 5 && STRNCMP(eap->arg, "start", 5) == 0 && *e != NUL) {
     vim_free(profile_fname);
     profile_fname = vim_strsave(e);
     do_profiling = PROF_YES;
@@ -1010,7 +1006,7 @@ void set_context_in_profile_cmd(expand_T *xp, char_u *arg)
   xp->xp_pattern = arg;
 
   end_subcmd = skiptowhite(arg);
-  if (*end_subcmd == '\0')
+  if (*end_subcmd == NUL)
     return;
 
   if (end_subcmd - arg == 5 && STRNCMP(arg, "start", 5) == 0) {
@@ -1373,9 +1369,7 @@ check_changed_any (
   if (bufcount == 0)
     return FALSE;
 
-  bufnrs = (int *)alloc(sizeof(int) * bufcount);
-  if (bufnrs == NULL)
-    return FALSE;
+  bufnrs = xmalloc(sizeof(*bufnrs) * bufcount);
 
   /* curbuf */
   bufnrs[bufnum++] = curbuf->b_fnum;
@@ -1529,7 +1523,7 @@ static char_u *do_one_arg(char_u *str)
     }
   }
   str = skipwhite(str);
-  *p = '\0';
+  *p = NUL;
 
   return str;
 }
@@ -1541,7 +1535,7 @@ static char_u *do_one_arg(char_u *str)
 void get_arglist(garray_T *gap, char_u *str)
 {
   ga_init(gap, (int)sizeof(char_u *), 20);
-  while (*str != '\0') {
+  while (*str != NUL) {
     ga_grow(gap, 1);
     ((char_u **)gap->ga_data)[gap->ga_len++] = str;
 
@@ -1898,7 +1892,7 @@ void ex_next(exarg_T *eap)
              || !check_changed(curbuf, CCGD_AW
                  | (eap->forceit ? CCGD_FORCEIT : 0)
                  | CCGD_EXCMD)) {
-    if (*eap->arg != '\0') {                 /* redefine file list */
+    if (*eap->arg != NUL) {                 /* redefine file list */
       if (do_arglist(eap->arg, AL_SET, 0) == FAIL)
         return;
       i = 0;
@@ -1963,7 +1957,7 @@ void ex_argdelete(exarg_T *eap)
     if (eap->line2 > ARGCOUNT)
       eap->line2 = ARGCOUNT;
     n = eap->line2 - eap->line1 + 1;
-    if (*eap->arg != '\0' || n <= 0)
+    if (*eap->arg != NUL || n <= 0)
       EMSG(_(e_invarg));
     else {
       for (i = eap->line1; i <= eap->line2; ++i)
@@ -1976,7 +1970,7 @@ void ex_argdelete(exarg_T *eap)
       else if (curwin->w_arg_idx > eap->line1)
         curwin->w_arg_idx = eap->line1;
     }
-  } else if (*eap->arg == '\0')
+  } else if (*eap->arg == NUL)
     EMSG(_(e_argreq));
   else
     do_arglist(eap->arg, AL_DEL, 0);
@@ -2153,54 +2147,52 @@ void ex_compiler(exarg_T *eap)
   char_u      *old_cur_comp = NULL;
   char_u      *p;
 
-  if (*eap->arg == '\0') {
+  if (*eap->arg == NUL) {
     /* List all compiler scripts. */
     do_cmdline_cmd((char_u *)"echo globpath(&rtp, 'compiler/*.vim')");
     /* ) keep the indenter happy... */
   } else {
-    buf = alloc((unsigned)(STRLEN(eap->arg) + 14));
-    if (buf != NULL) {
-      if (eap->forceit) {
-        /* ":compiler! {name}" sets global options */
-        do_cmdline_cmd((char_u *)
-            "command -nargs=* CompilerSet set <args>");
-      } else {
-        /* ":compiler! {name}" sets local options.
-         * To remain backwards compatible "current_compiler" is always
-         * used.  A user's compiler plugin may set it, the distributed
-         * plugin will then skip the settings.  Afterwards set
-         * "b:current_compiler" and restore "current_compiler".
-         * Explicitly prepend "g:" to make it work in a function. */
-        old_cur_comp = get_var_value((char_u *)"g:current_compiler");
-        if (old_cur_comp != NULL)
-          old_cur_comp = vim_strsave(old_cur_comp);
-        do_cmdline_cmd((char_u *)
-            "command -nargs=* CompilerSet setlocal <args>");
-      }
-      do_unlet((char_u *)"g:current_compiler", TRUE);
-      do_unlet((char_u *)"b:current_compiler", TRUE);
+    buf = xmalloc(STRLEN(eap->arg) + 14);
+    if (eap->forceit) {
+      /* ":compiler! {name}" sets global options */
+      do_cmdline_cmd((char_u *)
+          "command -nargs=* CompilerSet set <args>");
+    } else {
+      /* ":compiler! {name}" sets local options.
+       * To remain backwards compatible "current_compiler" is always
+       * used.  A user's compiler plugin may set it, the distributed
+       * plugin will then skip the settings.  Afterwards set
+       * "b:current_compiler" and restore "current_compiler".
+       * Explicitly prepend "g:" to make it work in a function. */
+      old_cur_comp = get_var_value((char_u *)"g:current_compiler");
+      if (old_cur_comp != NULL)
+        old_cur_comp = vim_strsave(old_cur_comp);
+      do_cmdline_cmd((char_u *)
+          "command -nargs=* CompilerSet setlocal <args>");
+    }
+    do_unlet((char_u *)"g:current_compiler", TRUE);
+    do_unlet((char_u *)"b:current_compiler", TRUE);
 
-      sprintf((char *)buf, "compiler/%s.vim", eap->arg);
-      if (source_runtime(buf, TRUE) == FAIL)
-        EMSG2(_("E666: compiler not supported: %s"), eap->arg);
-      vim_free(buf);
+    sprintf((char *)buf, "compiler/%s.vim", eap->arg);
+    if (source_runtime(buf, TRUE) == FAIL)
+      EMSG2(_("E666: compiler not supported: %s"), eap->arg);
+    vim_free(buf);
 
-      do_cmdline_cmd((char_u *)":delcommand CompilerSet");
+    do_cmdline_cmd((char_u *)":delcommand CompilerSet");
 
-      /* Set "b:current_compiler" from "current_compiler". */
-      p = get_var_value((char_u *)"g:current_compiler");
-      if (p != NULL)
-        set_internal_string_var((char_u *)"b:current_compiler", p);
+    /* Set "b:current_compiler" from "current_compiler". */
+    p = get_var_value((char_u *)"g:current_compiler");
+    if (p != NULL)
+      set_internal_string_var((char_u *)"b:current_compiler", p);
 
-      /* Restore "current_compiler" for ":compiler {name}". */
-      if (!eap->forceit) {
-        if (old_cur_comp != NULL) {
-          set_internal_string_var((char_u *)"g:current_compiler",
-              old_cur_comp);
-          vim_free(old_cur_comp);
-        } else
-          do_unlet((char_u *)"g:current_compiler", TRUE);
-      }
+    /* Restore "current_compiler" for ":compiler {name}". */
+    if (!eap->forceit) {
+      if (old_cur_comp != NULL) {
+        set_internal_string_var((char_u *)"g:current_compiler",
+            old_cur_comp);
+        vim_free(old_cur_comp);
+      } else
+        do_unlet((char_u *)"g:current_compiler", TRUE);
     }
   }
 }
@@ -2261,8 +2253,8 @@ void        *cookie;
   /* Make a copy of 'runtimepath'.  Invoking the callback may change the
    * value. */
   rtp_copy = vim_strsave(p_rtp);
-  buf = alloc(MAXPATHL);
-  if (buf != NULL && rtp_copy != NULL) {
+  buf = xmalloc(MAXPATHL);
+  if (rtp_copy != NULL) {
     if (p_verbose > 1 && name != NULL) {
       verbose_enter();
       smsg((char_u *)_("Searching for \"%s\" in \"%s\""),
@@ -2272,7 +2264,7 @@ void        *cookie;
 
     /* Loop over all entries in 'runtimepath'. */
     rtp = rtp_copy;
-    while (*rtp != '\0' && (all || !did_one)) {
+    while (*rtp != NUL && (all || !did_one)) {
       /* Copy the path from 'runtimepath' to buf[]. */
       copy_option_part(&rtp, buf, MAXPATHL, ",");
       if (name == NULL) {
@@ -2285,7 +2277,7 @@ void        *cookie;
 
         /* Loop over all patterns in "name" */
         np = name;
-        while (*np != '\0' && (all || !did_one)) {
+        while (*np != NUL && (all || !did_one)) {
           /* Append the pattern from "name" to buf[]. */
           copy_option_part(&np, tail, (int)(MAXPATHL - (tail - buf)),
               "\t ");
@@ -2341,7 +2333,7 @@ void ex_source(exarg_T *eap)
 
 static void cmd_source(char_u *fname, exarg_T *eap)
 {
-  if (*fname == '\0')
+  if (*fname == NUL)
     EMSG(_(e_argreq));
 
   else if (eap != NULL && eap->forceit)
@@ -2560,7 +2552,7 @@ do_source (
 
 #ifdef USE_CRNL
   /* If no automatic file format: Set default to CR-NL. */
-  if (*p_ffs == '\0')
+  if (*p_ffs == NUL)
     cookie.fileformat = EOL_DOS;
   else
     cookie.fileformat = EOL_UNKNOWN;
@@ -2569,7 +2561,7 @@ do_source (
 
 #ifdef USE_CR
   /* If no automatic file format: Set default to CR. */
-  if (*p_ffs == '\0')
+  if (*p_ffs == NUL)
     cookie.fileformat = EOL_MAC;
   else
     cookie.fileformat = EOL_UNKNOWN;
@@ -2914,7 +2906,7 @@ char_u *getsourceline(int c, void *cookie, int indent)
         }
         ga_concat(&ga, p + 1);
       }
-      ga_append(&ga, '\0');
+      ga_append(&ga, NUL);
       vim_free(line);
       line = ga.ga_data;
     }
@@ -2985,7 +2977,7 @@ static char_u *get_one_sourceline(struct source_cookie *sp)
     if (       (len == 1 || (len >= 2 && buf[len - 2] == '\n'))
                && sp->fileformat == EOL_DOS
                && buf[len - 1] == Ctrl_Z) {
-      buf[len - 1] = '\0';
+      buf[len - 1] = NUL;
       break;
     }
 #endif
@@ -3056,7 +3048,7 @@ static char_u *get_one_sourceline(struct source_cookie *sp)
         continue;
       }
 
-      buf[len - 1] = '\0';               /* remove the NL */
+      buf[len - 1] = NUL;               /* remove the NL */
     }
 
     /*
@@ -3162,7 +3154,7 @@ void ex_scriptencoding(exarg_T *eap)
     return;
   }
 
-  if (*eap->arg != '\0') {
+  if (*eap->arg != NUL) {
     name = enc_canonize(eap->arg);
     if (name == NULL)           /* out of memory */
       return;
@@ -3290,9 +3282,9 @@ char_u *get_mess_lang(void)
 #  endif
 # else
   p = os_getenv((char_u *)"LC_ALL");
-  if (p == NULL || *p == '\0') {
+  if (p == NULL || *p == NUL) {
     p = os_getenv((char_u *)"LC_MESSAGES");
-    if (p == NULL || *p == '\0')
+    if (p == NULL || *p == NUL)
       p = os_getenv((char_u *)"LANG");
   }
 # endif
@@ -3311,14 +3303,14 @@ static char_u *get_mess_env(void)
   char_u      *p;
 
   p = (char_u *)os_getenv("LC_ALL");
-  if (p == NULL || *p == '\0') {
+  if (p == NULL || *p == NUL) {
     p = (char_u *)os_getenv("LC_MESSAGES");
-    if (p == NULL || *p == '\0') {
+    if (p == NULL || *p == NUL) {
       p = (char_u *)os_getenv("LANG");
       if (p != NULL && VIM_ISDIGIT(*p))
         p = NULL;                       /* ignore something like "1043" */
 # ifdef HAVE_GET_LOCALE_VAL
-      if (p == NULL || *p == '\0')
+      if (p == NULL || *p == NUL)
         p = (char_u *)get_locale_val(LC_CTYPE);
 # endif
     }
@@ -3383,7 +3375,7 @@ void ex_language(exarg_T *eap)
    * Allow abbreviation, but require at least 3 characters to avoid
    * confusion with a two letter language name "me" or "ct". */
   p = skiptowhite(eap->arg);
-  if ((*p == '\0' || vim_iswhite(*p)) && p - eap->arg >= 3) {
+  if ((*p == NUL || vim_iswhite(*p)) && p - eap->arg >= 3) {
     if (STRNICMP(eap->arg, "messages", p - eap->arg) == 0) {
       what = VIM_LC_MESSAGES;
       name = skipwhite(p);
@@ -3399,14 +3391,14 @@ void ex_language(exarg_T *eap)
     }
   }
 
-  if (*name == '\0') {
+  if (*name == NUL) {
 #ifdef HAVE_WORKING_LIBINTL
     if (what == VIM_LC_MESSAGES)
       p = get_mess_env();
     else
 #endif
     p = (char_u *)setlocale(what, NULL);
-    if (p == NULL || *p == '\0')
+    if (p == NULL || *p == NUL)
       p = (char_u *)"Unknown";
     smsg((char_u *)_("Current %slanguage: \"%s\""), whatstr, p);
   } else {
