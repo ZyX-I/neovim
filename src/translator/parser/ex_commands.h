@@ -120,7 +120,7 @@ typedef struct {
 /// A structure to represent line range
 typedef struct range {
   Address address;     ///< Ex address
-  bool setpos;         ///< TRUE if next address in range was separated from 
+  bool setpos;         ///< true if next address in range was separated from 
                        ///< this address by ';'
   struct range *next;  ///< Next address in range. There is no limit in 
                        ///< a number of consequent addresses
@@ -185,7 +185,7 @@ typedef struct command_node {
   char_u *enc;                    ///< Encoding from ++enc
   Glob *glob;                     ///< File name(s)
   char_u *expr;                   ///< Saved expression used in "`=expr`"
-  bool bang;                      ///< TRUE if command was used with a bang
+  bool bang;                      ///< true if command was used with a bang
   struct command_argument {
     union {
       // least32 is essential to hold 24-bit color and additional 4 flag bits 

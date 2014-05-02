@@ -758,7 +758,7 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
           do {
             int cret;
             p++;
-            if ((cret = get_glob(&p, error, cnext, expr, TRUE, is_glob))
+            if ((cret = get_glob(&p, error, cnext, expr, true, is_glob))
                 == FAIL)
               return FAIL;
             if (cret == NOTDONE) {
@@ -766,12 +766,12 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
               goto get_glob_error_return;
             }
             cnext = &((*cnext)->next);
-          } while(*p == ',');
+          } while (*p == ',');
           break;
         }
         case kPatMissing:
         case kPatLiteral: {
-          assert(FALSE);
+          assert(false);
         }
       }
       next = &((*next)->next);
@@ -951,10 +951,10 @@ static int parse_append(char_u **pp,
 ///         expression node->children will point to syntax error node.
 /// @endparblock
 /// @param[in,out]  node     Node whose argument rhs should be saved to.
-/// @param[in]      special  TRUE if explicit <special> was supplied.
-/// @param[in]      expr     TRUE if it is <expr>-type mapping.
+/// @param[in]      special  true if explicit <special> was supplied.
+/// @param[in]      expr     true if it is <expr>-type mapping.
 /// @parblock
-///   @note If this argument is always FALSE then you do not need to care about 
+///   @note If this argument is always false then you do not need to care about 
 ///         rhs_idx + 1 and node->children.
 /// @endparblock
 /// @param[in]      o         Options that control parsing behavior.
@@ -967,7 +967,7 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
 {
   char_u *rhs_buf;
 
-  rhs = replace_termcodes(rhs, &rhs_buf, FALSE, TRUE, special,
+  rhs = replace_termcodes(rhs, &rhs_buf, false, true, special,
                           FLAG_POC_TO_FLAG_CPO(o.flags));
   if (rhs_buf == NULL)
     return FAIL;
@@ -1144,7 +1144,7 @@ static int do_parse_map(char_u **pp,
     //       before result is actually used and 2. option value at the 
     //       execution stage will make results invalid.
     *lhs_end = NUL;
-    lhs = replace_termcodes(lhs, &lhs_buf, TRUE, TRUE,
+    lhs = replace_termcodes(lhs, &lhs_buf, true, true,
                             map_flags&FLAG_MAP_SPECIAL,
                             FLAG_POC_TO_FLAG_CPO(o.flags));
     *lhs_end = saved;
@@ -1178,7 +1178,7 @@ static int parse_map(char_u **pp,
                      LineGetter fgetline,
                      void *cookie)
 {
-  return do_parse_map(pp, node, error, o, position, fgetline, cookie, FALSE);
+  return do_parse_map(pp, node, error, o, position, fgetline, cookie, false);
 }
 
 static int parse_unmap(char_u **pp,
@@ -1189,7 +1189,7 @@ static int parse_unmap(char_u **pp,
                        LineGetter fgetline,
                        void *cookie)
 {
-  return do_parse_map(pp, node, error, o, position, fgetline, cookie, TRUE);
+  return do_parse_map(pp, node, error, o, position, fgetline, cookie, true);
 }
 
 static int parse_mapclear(char_u **pp,
@@ -1411,7 +1411,7 @@ static int parse_menu(char_u **pp,
       return NOTDONE;
     }
     if (set_node_rhs(map_to, ARG_MENU_RHS, node, menu_flags&FLAG_MENU_SPECIAL, 
-                     FALSE, o, position) == FAIL)
+                     false, o, position) == FAIL)
       return FAIL;
   }
 
@@ -1451,7 +1451,7 @@ static int do_parse_expr(char_u **pp,
   expr_str_start = expr_str;
 
   if (multi)
-    expr = parse_mult(&expr_str, &expr_error, &parse0_err, FALSE,
+    expr = parse_mult(&expr_str, &expr_error, &parse0_err, false,
                       (char_u *) "\n|");
   else
     expr = parse0_err(&expr_str, &expr_error);
@@ -1481,7 +1481,7 @@ static int parse_expr(char_u **pp,
 {
   if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp))
     return OK;
-  return do_parse_expr(pp, node, error, o, FALSE);
+  return do_parse_expr(pp, node, error, o, false);
 }
 
 static int parse_exprs(char_u **pp,
@@ -1494,7 +1494,7 @@ static int parse_exprs(char_u **pp,
 {
   if (ENDS_EXCMD_NOCOMMENT(**pp))
     return OK;
-  return do_parse_expr(pp, node, error, o, TRUE);
+  return do_parse_expr(pp, node, error, o, true);
 }
 
 static int parse_rest_line(char_u **pp,
@@ -1585,7 +1585,7 @@ static int parse_do(char_u **pp,
 ///                           kExprOption, kExprRegister and 
 ///                           kExprEnvironmentVariable nodes.
 ///
-/// @return TRUE if check failed, FALSE otherwise.
+/// @return true if check failed, false otherwise.
 static bool check_lval(ExpressionNode *expr, CommandParserError *error,
                        bool allow_list, bool allow_lower, bool allow_env)
 {
@@ -1606,7 +1606,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
             N_("E128: Function name must start with a capital "
                "or contain a colon or a hash");
         error->position = expr->position;
-        return TRUE;
+        return true;
       }
       break;
     }
@@ -1616,7 +1616,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
           error->message = N_("E475: Cannot assign to environment variable "
                               "with an empty name");
           error->position = expr->end_position;
-          return TRUE;
+          return true;
         }
       }
       // fallthrough
@@ -1626,7 +1626,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       if (!allow_env) {
         error->message = N_("E15: Only variable names are allowed");
         error->position = expr->position;
-        return TRUE;
+        return true;
       }
       break;
     }
@@ -1644,7 +1644,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
         error->message =
             N_("E475: Expected variable name or a list of variable names");
         error->position = root->position;
-        return TRUE;
+        return true;
       }
       break;
     }
@@ -1656,18 +1656,18 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
           error->message =
               N_("E475: Expected non-empty list of variable names");
           error->position = expr->position;
-          return TRUE;
+          return true;
         }
 
         while (item != NULL) {
-          if (check_lval(item, error, FALSE, allow_lower, allow_env))
-            return TRUE;
+          if (check_lval(item, error, false, allow_lower, allow_env))
+            return true;
           item = item->next;
         }
       } else {
         error->message = N_("E475: Expected variable name");
         error->position = expr->position;
-        return TRUE;
+        return true;
       }
       break;
     }
@@ -1682,10 +1682,10 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
       else
         error->message = N_("E475: Expected variable name");
       error->position = root->position;
-      return TRUE;
+      return true;
     }
   }
-  return FALSE;
+  return false;
 }
 
 #define FLAG_PLVAL_SPACEMULT 0x01
@@ -1729,7 +1729,7 @@ static int parse_lval(char_u **pp,
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
   if (flags&FLAG_PLVAL_SPACEMULT)
-    *expr = parse_mult(pp, &expr_error, &parse7_nofunc, TRUE,
+    *expr = parse_mult(pp, &expr_error, &parse7_nofunc, true,
                        (char_u *) "\n\"|-.+=");
   else
     *expr = parse7_nofunc(pp, &expr_error);
@@ -1743,8 +1743,8 @@ static int parse_lval(char_u **pp,
   }
 
   if ((*expr)->next != NULL) {
-    allow_list = FALSE;
-    allow_env = FALSE;
+    allow_list = false;
+    allow_env = false;
   }
 
   next = *expr;
@@ -1892,7 +1892,7 @@ static int parse_function(char_u **pp,
   char_u *expr_str_start;
   garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.strs);
   uint_least32_t flags = 0;
-  bool mustend = FALSE;
+  bool mustend = false;
 
   if (ENDS_EXCMD(*p))
     return OK;
@@ -1939,7 +1939,7 @@ static int parse_function(char_u **pp,
     if (p[0] == '.' && p[1] == '.' && p[2] == '.') {
       flags |= FLAG_FUNC_VARARGS;
       p += 3;
-      mustend = TRUE;
+      mustend = true;
     } else {
       char_u *arg_start = p;
       char_u *arg;
@@ -1990,7 +1990,7 @@ static int parse_function(char_u **pp,
     if (*p == ',') {
       p++;
     } else {
-      mustend = TRUE;
+      mustend = true;
       notend_message = N_("E475: Expected end of arguments list or comma");
     }
     p = skipwhite(p);
@@ -2165,7 +2165,7 @@ static int parse_scriptencoding(char_u **pp,
 /// @param[in]      cmd  Name of the command which is checked for.
 /// @param[in]      len  Minimal length required to accept a match.
 ///
-/// @return TRUE if requested command was found, FALSE otherwise.
+/// @return true if requested command was found, false otherwise.
 static int checkforcmd(char_u **pp, char_u *cmd, int len)
 {
   int i;
@@ -2176,9 +2176,9 @@ static int checkforcmd(char_u **pp, char_u *cmd, int len)
 
   if ((i >= len) && !isalpha((*pp)[i])) {
     *pp = skipwhite(*pp + i);
-    return TRUE;
+    return true;
   }
-  return FALSE;
+  return false;
 }
 
 /// Get a single Ex adress
@@ -2318,7 +2318,7 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
         break;
       }
       default: {
-        assert(FALSE);
+        assert(false);
       }
     }
     *followup = fw;
@@ -2422,7 +2422,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
     *type = kCmdSubstitute;
     p++;
   } else {
-    bool found = FALSE;
+    bool found = false;
 
     while (ASCII_ISALPHA(*p))
       p++;
@@ -2453,7 +2453,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
     for (; (int)cmdidx < (int)kCmdSIZE;
          cmdidx = (CommandType)((int)cmdidx + 1)) {
       if (STRNCMP(CMDDEF(cmdidx).name, (char *) (*pp), (size_t) len) == 0) {
-        found = TRUE;
+        found = true;
         break;
       }
     }
@@ -2646,9 +2646,9 @@ static int parse_argopt(char_u **pp,
                         CommandParserOptions o,
                         CommandParserError *error)
 {
-  bool do_ff = FALSE;
-  bool do_enc = FALSE;
-  bool do_bad = FALSE;
+  bool do_ff = false;
+  bool do_enc = false;
+  bool do_bad = false;
   char_u *arg_start;
 
   *pp += 2;
@@ -2676,19 +2676,19 @@ static int parse_argopt(char_u **pp,
 
   if (STRNCMP(*pp, "ff", 2) == 0) {
     *pp += 2;
-    do_ff = TRUE;
+    do_ff = true;
   } else if (STRNCMP(*pp, "fileformat", 10) == 0) {
     *pp += 10;
-    do_ff = TRUE;
+    do_ff = true;
   } else if (STRNCMP(*pp, "enc", 3) == 0) {
     if (STRNCMP(*pp, "encoding", 8) == 0)
       *pp += 8;
     else
       *pp += 3;
-    do_enc = TRUE;
+    do_enc = true;
   } else if (STRNCMP(*pp, "bad", 3) == 0) {
     *pp += 3;
-    do_bad = TRUE;
+    do_bad = true;
   } else {
     error->message = N_("E474: Unknown ++opt");
     error->position = *pp;
@@ -2737,7 +2737,7 @@ static int parse_argopt(char_u **pp,
         break;
       }
       default: {
-        assert(FALSE);
+        assert(false);
       }
     }
   } else if (do_enc) {
@@ -2761,7 +2761,7 @@ static int parse_argopt(char_u **pp,
       return NOTDONE;
     }
   } else {
-    assert(FALSE);
+    assert(false);
   }
   *pp = skipwhite(*pp);
   return OK;
@@ -2809,7 +2809,7 @@ int parse_one_cmd(char_u **pp,
   char_u *nextcmd = NULL;
   char_u *name = NULL;
   char_u *range_start = NULL;
-  bool bang = FALSE;
+  bool bang = false;
   uint_least8_t exflags = 0;
   uint_least32_t optflags = 0;
   char_u *enc = NULL;
@@ -2922,7 +2922,7 @@ int parse_one_cmd(char_u **pp,
           (*next_node)->cnt.count = getdigits(&pstart);
         }
         if (*p == '!') {
-          (*next_node)->bang = TRUE;
+          (*next_node)->bang = true;
           p++;
         }
         (*next_node)->position.col = position->col + (mod_start - s);
@@ -3095,7 +3095,7 @@ int parse_one_cmd(char_u **pp,
   if (*p == '!') {
     if (CMDDEF(type).flags & BANG) {
       p++;
-      bang = TRUE;
+      bang = true;
     } else {
       free_range_data(&range);
       error.message = (char *) e_nobang;
@@ -3177,7 +3177,7 @@ int parse_one_cmd(char_u **pp,
 
   if (CMDDEF(type).flags & XFILE) {
     int ret;
-    if ((ret = get_glob(&p, &error, &glob, &expr, FALSE, TRUE)) == FAIL) {
+    if ((ret = get_glob(&p, &error, &glob, &expr, false, true)) == FAIL) {
       free_range_data(&range);
       return FAIL;
     }
@@ -3224,7 +3224,7 @@ int parse_one_cmd(char_u **pp,
 
   if (parse != NULL) {
     int ret;
-    bool used_get_cmd_arg = FALSE;
+    bool used_get_cmd_arg = false;
     char_u *cmd_arg = p;
     char_u *cmd_arg_start = p;
     size_t next_cmd_offset = 0;
@@ -3232,7 +3232,7 @@ int parse_one_cmd(char_u **pp,
     // ISGREP commands may have bangs inside patterns
     // ISEXPR commands may have bangs inside "" or as logical OR
     if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR|LITERAL))) {
-      used_get_cmd_arg = TRUE;
+      used_get_cmd_arg = true;
       if (get_cmd_arg(type, o, p, &cmd_arg_start, &next_cmd_offset)
           == FAIL) {
         free_cmd(*next_node);
@@ -3300,7 +3300,7 @@ static void get_block_options(CommandType type, CommandBlockOptions *bo)
       bo->find_in_stack_2 = kCmdElseif;
       bo->find_in_stack   = kCmdIf;
       bo->not_after = kCmdElse;
-      bo->push_stack = TRUE;
+      bo->push_stack = true;
       break;
     }
     case kCmdElse: {
@@ -3308,7 +3308,7 @@ static void get_block_options(CommandType type, CommandBlockOptions *bo)
       bo->duplicate_message = N_("E583: multiple :else");
       bo->find_in_stack_2 = kCmdElseif;
       bo->find_in_stack   = kCmdIf;
-      bo->push_stack = TRUE;
+      bo->push_stack = true;
       break;
     }
     case kCmdEndfunction: {
@@ -3328,7 +3328,7 @@ static void get_block_options(CommandType type, CommandBlockOptions *bo)
       bo->duplicate_message = N_("E607: multiple :finally");
       bo->find_in_stack_2 = kCmdCatch;
       bo->find_in_stack   = kCmdTry;
-      bo->push_stack = TRUE;
+      bo->push_stack = true;
       break;
     }
     case kCmdCatch: {
@@ -3337,7 +3337,7 @@ static void get_block_options(CommandType type, CommandBlockOptions *bo)
       bo->find_in_stack_2 = kCmdCatch;
       bo->find_in_stack   = kCmdTry;
       bo->not_after = kCmdFinally;
-      bo->push_stack = TRUE;
+      bo->push_stack = true;
       break;
     }
     case kCmdEndfor: {
@@ -3359,7 +3359,7 @@ static void get_block_options(CommandType type, CommandBlockOptions *bo)
     case kCmdTry:
     case kCmdFor:
     case kCmdWhile: {
-      bo->push_stack = TRUE;
+      bo->push_stack = true;
       break;
     }
     default: {
@@ -3406,7 +3406,7 @@ static char *get_missing_message(CommandType type)
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
   return missing_message;
@@ -3425,7 +3425,7 @@ const CommandNode nocmd = {
       NULL
     },
     NULL,
-    FALSE
+    false
   },
   {
     0,
@@ -3440,7 +3440,7 @@ const CommandNode nocmd = {
   NULL,
   NULL,
   NULL,
-  FALSE,
+  false,
   {
     {{0}}
   }

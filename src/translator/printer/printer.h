@@ -28,7 +28,7 @@ const _BeforeAfterSpaces _error_spaces;
               ? po->expression.operators.string.concat \
               : (UNARY_START <= op && op <= UNARY_END \
                  ? po->expression.operators.unary[op - UNARY_START] \
-                 : (assert(FALSE), _error_spaces))))))
+                 : (assert(false), _error_spaces))))))
 typedef struct {
   struct {
     struct {

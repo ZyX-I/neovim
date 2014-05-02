@@ -173,11 +173,11 @@ int main(int argc, char **argv) {
    * if (node != NULL)
    *   print_node(0, node);
    */
-  if ((result = parse0_repr((char_u *) argv[1], TRUE)) == NULL)
+  if ((result = parse0_repr((char_u *) argv[1], true)) == NULL)
     return 1;
   puts(result);
   vim_free(result);
-  if ((result = parse0_repr((char_u *) argv[1], FALSE)) == NULL)
+  if ((result = parse0_repr((char_u *) argv[1], false)) == NULL)
     return 1;
   puts(result);
   vim_free(result);
@@ -207,7 +207,7 @@ void vim_free(void *v)
 }
 
 /*
- * Return TRUE if 'c' is a normal identifier character:
+ * Return true if 'c' is a normal identifier character:
  * Letters and characters from the 'isident' option.
  */
 int vim_isIDc(int c)
