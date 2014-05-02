@@ -1460,9 +1460,9 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     WS("end\n")
     return OK;
   } else if (node->type == kCmdWhile) {
-    WS("while (")
+    WS("while vim.get_boolean(")
     CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
-    WS(") == " VIM_TRUE " do\n")
+    WS(") do\n")
 
     CALL(translate_nodes, node->children, indent + 1)
 

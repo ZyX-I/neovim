@@ -459,6 +459,14 @@ get_string = function(state, value, position)
   end
 end
 
+get_boolean = function(state, value, position)
+  num = get_number(state, value, position)
+  if num == nil then
+    return nil
+  end
+  return num == 0
+end
+
 -- {{{1 Basic operations
 iterop = non_nil(function(state, converter, opfunc, ...)
   local result
@@ -806,6 +814,7 @@ return {
   assign_subscript_function=assign_subscript_function,
   assign_slice=assign_slice,
   assign_slice_function=assign_slice_function,
+  get_boolean=get_boolean,
   zero_=zero,
   false_=zero,
   true_=number.new(state, 1),
