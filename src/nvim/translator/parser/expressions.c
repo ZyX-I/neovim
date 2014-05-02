@@ -87,8 +87,8 @@ void free_expr(ExpressionNode *node)
 ///
 /// @param[in]  c  Tested character.
 ///
-/// @return TRUE if character can be used in a variable of function name, 
-///         FALSE otherwise. Does not include '{' or '}' for magic braces.
+/// @return true if character can be used in a variable of function name, 
+///         false otherwise. Does not include '{' or '}' for magic braces.
 static bool isnamechar(int c)
   FUNC_ATTR_CONST
 {
@@ -743,7 +743,7 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
 
@@ -783,9 +783,9 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
 ///                                 flag is set in parse5 that handles 
 ///                                 concats.
 /// @param[in]      parse_funccall  Determines whether function calls should 
-///                                 be parsed. I.e. if this is TRUE then 
+///                                 be parsed. I.e. if this is true then 
 ///                                 "abc(def)" will be parsed as "call(abc, 
-///                                 def)", if this is FALSE it will parse this 
+///                                 def)", if this is false it will parse this 
 ///                                 as "abc" and stop at opening parenthesis.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
@@ -853,7 +853,7 @@ static int parse7(char_u **arg,
       if (type == kExprFloat) {
         *arg = e + 1;
       } else {
-        find_nr_end(arg, &type, TRUE, TRUE);
+        find_nr_end(arg, &type, true, true);
         e = *arg - 1;
       }
       VALUE_NODE(type, error, node, s, e)
@@ -1043,7 +1043,7 @@ static int parse6(char_u **arg,
   ExpressionNode **next_node = node;
 
   // Get the first variable.
-  if (parse7(arg, node, error, want_string, TRUE) == FAIL)
+  if (parse7(arg, node, error, want_string, true) == FAIL)
     return FAIL;
 
   // Repeat computing, until no '*', '/' or '%' is following.
@@ -1076,7 +1076,7 @@ static int parse6(char_u **arg,
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
-    if (parse7(arg, next_node, error, want_string, TRUE) == FAIL)
+    if (parse7(arg, next_node, error, want_string, true) == FAIL)
       return FAIL;
   }
   return OK;
@@ -1109,7 +1109,7 @@ static int parse5(char_u **arg,
   ExpressionNode **next_node = node;
 
   // Get the first variable.
-  if (parse6(arg, node, error, FALSE) == FAIL)
+  if (parse6(arg, node, error, false) == FAIL)
     return FAIL;
 
   // Repeat computing, until no '+', '-' or '.' is following.
@@ -1445,7 +1445,7 @@ ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
   error->position = NULL;
 
   *arg = skipwhite(*arg);
-  if (parse7(arg, &result, error, FALSE, FALSE) == FAIL) {
+  if (parse7(arg, &result, error, false, false) == FAIL) {
     free_expr(result);
     return NULL;
   }

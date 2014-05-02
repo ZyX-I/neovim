@@ -487,7 +487,7 @@ static WFDEC(translate_address_followup, const AddressFollowup *const followup)
       break;
     }
     case kAddressFollowupMissing: {
-      assert(FALSE);
+      assert(false);
     }
   }
   return OK;
@@ -570,7 +570,7 @@ static WFDEC(translate_range, const Range *const range)
         break;
       }
       case kAddrMissing: {
-        assert(FALSE);
+        assert(false);
       }
     }
 
@@ -641,7 +641,7 @@ static WFDEC(translate_number, ExpressionType type, const char_u *const s,
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
   WS(")")
@@ -657,12 +657,12 @@ static WFDEC(translate_string, ExpressionType type, const char_u *const s,
              const char_u *const e)
 {
   WS("vim.string.new(state, ")
-  bool can_dump_as_is = TRUE;
+  bool can_dump_as_is = true;
   switch (type) {
     case kExprSingleQuotedString: {
       for (const char_u *p = s + 1; p < e; p++) {
         if (*p == '\'' || *p < 0x20) {
-          can_dump_as_is = FALSE;
+          can_dump_as_is = false;
           break;
         }
       }
@@ -694,7 +694,7 @@ translate_string_sq_cant_err:
     case kExprDoubleQuotedString: {
       for (const char_u *p = s + 1; p < e; p++) {
         if (*p < 0x20) {
-          can_dump_as_is = FALSE;
+          can_dump_as_is = false;
           break;
         }
         if (*p == '\\') {
@@ -714,7 +714,7 @@ translate_string_sq_cant_err:
               break;
             }
             default: {
-              can_dump_as_is = FALSE;
+              can_dump_as_is = false;
               break;
             }
           }
@@ -801,7 +801,7 @@ translate_string_sq_cant_err:
                   char_u buf[MAX_CHAR_LEN * 6];
                   size_t len;
 
-                  len = trans_special((char_u **) &p, buf, FALSE);
+                  len = trans_special((char_u **) &p, buf, false);
 
                   for (size_t i = 0; i < len; i++)
                     CALL(dump_char, buf[i]);
@@ -826,7 +826,7 @@ translate_string_sq_cant_err:
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
   WS(")")
@@ -851,15 +851,15 @@ translate_string_sq_cant_err:
 ///   TS_LAST_SEGMENT
 ///   :   Determines whether currently dumped segment is the last one: if it is 
 ///       then single character name like "a" may only refer to the variable in 
-///       the current scope, if it is not it may be a construct like "a{':abc'}" 
-///       which refers to "a:abc" variable.
+///       the current scope, if it is not it may be a construct like 
+///       "a{':abc'}" which refers to "a:abc" variable.
 ///
 ///   TS_ONLY_SEGMENT
 ///   :   Determines whether this segment is the only one.
 ///
 ///   TS_FUNCCALL
-///   :   Use "state.functions" in place of "state.current_scope" in some cases. 
-///       Note that vim.call implementation should still be able to use 
+///   :   Use "state.functions" in place of "state.current_scope" in some 
+///       cases. Note that vim.call implementation should still be able to use 
 ///       "state.user_functions" if appropriate.
 ///
 ///   TS_FUNCASSIGN
@@ -921,14 +921,14 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
       }
     }
   } else {
-    bool isfunc = FALSE;
+    bool isfunc = false;
 
     *start = expr->position;
     if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position)) {
       char_u *s;
       for (s = expr->position + 1; s != expr->end_position; s++) {
         if (!(ASCII_ISLOWER(*s) || VIM_ISDIGIT(*s))) {
-          isfunc = TRUE;
+          isfunc = true;
           break;
         }
       }
@@ -1003,7 +1003,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
           default: {
             // Option may only be boolean, string or numeric, not a combination 
             // of these
-            assert(FALSE);
+            assert(false);
           }
         }
       } else {
@@ -1023,7 +1023,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
           else if (option_properties & GOP_WINDOW_LOCAL)
             WS("state.window")
           else
-            assert(FALSE);
+            assert(false);
 
           if (option_properties & GOP_GLOBAL)
             WS(", ")
@@ -1084,7 +1084,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
       WS("vim.concat_or_subscript(state, ")
       W_EXPR_POS_ESCAPED(expr)
       WS(", ")
-      CALL(translate_expr, expr->children, FALSE)
+      CALL(translate_expr, expr->children, false)
       WS(")")
       break;
     }
@@ -1094,13 +1094,13 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
     }
     case kExprExpression: {
       WS("(")
-      CALL(translate_expr, expr->children, FALSE)
+      CALL(translate_expr, expr->children, false)
       WS(")")
       break;
     }
     default: {
       const ExpressionNode *current_expr;
-      bool reversed = FALSE;
+      bool reversed = false;
 
       assert(expr->children != NULL
              || expr->type == kExprDictionary
@@ -1143,7 +1143,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
         case forward_type: \
         case rev_type: { \
           if (expr->type == rev_type) { \
-            reversed = TRUE; \
+            reversed = true; \
             WS("vim.negate_logical(state, ") \
           } \
           WS("vim." op "(state, ") \
@@ -1160,18 +1160,18 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
 #undef COMPARISON
 
         default: {
-          assert(FALSE);
+          assert(false);
         }
       }
 
       current_expr = expr->children;
       if (expr->type == kExprCall) {
-        CALL(translate_expr, current_expr, TRUE)
+        CALL(translate_expr, current_expr, true)
         current_expr = current_expr->next;
       }
       if (current_expr != NULL)
         for (;;) {
-          CALL(translate_expr, current_expr, FALSE)
+          CALL(translate_expr, current_expr, false)
           current_expr = current_expr->next;
           if (current_expr == NULL)
             break;
@@ -1197,7 +1197,7 @@ static WFDEC(translate_exprs, const ExpressionNode *const expr)
   const ExpressionNode *current_expr = expr;
 
   for (;;) {
-    CALL(translate_expr, current_expr, FALSE)
+    CALL(translate_expr, current_expr, false)
     current_expr = current_expr->next;
     if (current_expr == NULL)
       break;
@@ -1305,10 +1305,10 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
           W_END(start, expr->end_position)
           WS("'")
         }
-        add_concat = TRUE;
+        add_concat = true;
       } else {
         WS("vim.get_scope_and_key(state, ")
-        add_concat = FALSE;
+        add_concat = false;
       }
 
       for (current_expr = current_expr->next; current_expr != NULL;
@@ -1316,7 +1316,7 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
         if (add_concat)
           WS(" .. ")
         else
-          add_concat = TRUE;
+          add_concat = true;
         switch (current_expr->type) {
           case kExprIdentifier: {
             WS("'")
@@ -1326,12 +1326,12 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
           }
           case kExprCurlyName: {
             WS("(")
-            CALL(translate_expr, current_expr->children, FALSE)
+            CALL(translate_expr, current_expr->children, false)
             WS(")")
             break;
           }
           default: {
-            assert(FALSE);
+            assert(false);
           }
         }
       }
@@ -1342,7 +1342,7 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
       ADD_ASSIGN("dict")
       CALL(dump, dump_cookie)
       WS(", ")
-      CALL(translate_expr, expr->children, FALSE)
+      CALL(translate_expr, expr->children, false)
       WS(", '")
       W_EXPR_POS(expr)
       WS("')")
@@ -1355,18 +1355,18 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
         ADD_ASSIGN("slice")
       CALL(dump, dump_cookie)
       WS(", ")
-      CALL(translate_expr, expr->children, FALSE)
+      CALL(translate_expr, expr->children, false)
       WS(", ")
-      CALL(translate_expr, expr->children->next, FALSE)
+      CALL(translate_expr, expr->children->next, false)
       if (expr->children->next->next != NULL) {
         WS(", ")
-        CALL(translate_expr, expr->children->next->next, FALSE)
+        CALL(translate_expr, expr->children->next->next, false)
       }
       WS(")")
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
   WS("\n")
@@ -1382,8 +1382,8 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
 {
   char_u *name;
   size_t start_from_arg = 0;
-  bool do_arg_dump = TRUE;
-  bool add_comma = FALSE;
+  bool do_arg_dump = true;
+  bool add_comma = false;
 
   if (node->type == kCmdEndwhile
       || node->type == kCmdEndfor
@@ -1430,7 +1430,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
   } else if (node->type == kCmdFunction
              && node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
     const TranslateFuncArgs args = {node, indent};
-    CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, TRUE, !node->bang,
+    CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, true, !node->bang,
                          (AssignmentValueDump) &translate_function,
                          (void *) &args)
     return OK;
@@ -1439,7 +1439,8 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
 #define INDENTVAR(var, prefix) \
     char var[NUMBUFLEN + sizeof(prefix) - 1]; \
     size_t var##_len; \
-    if ((var##_len = sprintf(var, prefix "%ld", (long) indent)) <= 1) \
+    if ((var##_len = snprintf(var, NUMBUFLEN + sizeof(prefix) - 1, \
+                              prefix "%ld", (long) indent)) <= 1) \
       return FAIL;
 #define ADDINDENTVAR(var) \
     W_LEN(var, var##_len)
@@ -1453,7 +1454,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     WS("for _, ")
     ADDINDENTVAR(iter_var)
     WS(" in vim.list.iterator(state, ")
-    CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr, FALSE)
+    CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr, false)
     WS(") do\n")
 
     // TODO assign variables
@@ -1465,7 +1466,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     return OK;
   } else if (node->type == kCmdWhile) {
     WS("while vim.get_boolean(")
-    CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
+    CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false)
     WS(") do\n")
 
     CALL(translate_nodes, node->children, indent + 1)
@@ -1487,12 +1488,12 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       }
       case kCmdIf: {
         WS("if (")
-        CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
+        CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false)
         WS(") then\n")
         break;
       }
       default: {
-        assert(FALSE);
+        assert(false);
       }
     }
 
@@ -1524,7 +1525,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
           break;
         }
         default: {
-          assert(FALSE);
+          assert(false);
         }
       }
       break;
@@ -1567,7 +1568,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     }
 
     if (first_catch != NULL) {
-      bool did_first_if = FALSE;
+      bool did_first_if = false;
 
       WINDENT(indent)
       WS("if (not ")
@@ -1592,7 +1593,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
           WS(", ")
           CALL(translate_regex, next->args[ARG_REG_REG].arg.reg)
           WS(")\n")
-          did_first_if = TRUE;
+          did_first_if = true;
         }
         current_indent = indent + 1 + (did_first_if ? 1 : 0);
         WINDENT(current_indent)
@@ -1699,21 +1700,21 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     if (add_comma)
       WS(", ")
     CALL(translate_range, &(node->range))
-    add_comma = TRUE;
+    add_comma = true;
   }
 
   if (CMDDEF(node->type).flags & BANG) {
     if (add_comma)
       WS(", ")
     CALL(dump_bool, node->bang)
-    add_comma = TRUE;
+    add_comma = true;
   }
 
   if (CMDDEF(node->type).flags & EXFLAGS) {
     if (add_comma)
       WS(", ")
     CALL(translate_ex_flags, node->exflags)
-    add_comma = TRUE;
+    add_comma = true;
   }
 
   if (CMDDEF(node->type).parse == CMDDEF(kCmdAbclear).parse) {
@@ -1733,21 +1734,21 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     for (i = start_from_arg; i < num_args; i++) {
       if (add_comma)
         WS(", ")
-      add_comma = FALSE;
+      add_comma = false;
       switch (CMDDEF(node->type).arg_types[i]) {
         case kArgExpression: {
-          CALL(translate_expr, node->args[i].arg.expr, FALSE)
-          add_comma = TRUE;
+          CALL(translate_expr, node->args[i].arg.expr, false)
+          add_comma = true;
           break;
         }
         case kArgExpressions: {
           CALL(translate_exprs, node->args[i].arg.expr)
-          add_comma = TRUE;
+          add_comma = true;
           break;
         }
         case kArgString: {
           CALL(dump_string, node->args[i].arg.str)
-          add_comma = TRUE;
+          add_comma = true;
           break;
         }
         default: {
@@ -1806,7 +1807,7 @@ static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
           case kTransFunc: {
             WINDENT(indent)
             WS("return ")
-            CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
+            CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false)
             WS("\n")
             break;
           }
@@ -1894,7 +1895,7 @@ static char_u *fgetline_file(int c, FILE *file, int indent)
 int translate_script_std(void)
 {
   CommandNode *node;
-  CommandParserOptions o = {0, FALSE};
+  CommandParserOptions o = {0, false};
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
   int ret;
 
@@ -1918,7 +1919,7 @@ int translate_script_str_to_file(const char_u *const str,
                                  const char *const fname)
 {
   CommandNode *node;
-  CommandParserOptions o = {0, FALSE};
+  CommandParserOptions o = {0, false};
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
   int ret;
   char_u **pp;

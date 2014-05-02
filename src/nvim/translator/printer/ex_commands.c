@@ -39,7 +39,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 {
   CommandNode *node = NULL;
   CommandPosition position = {1, 1, (char_u *) "<test input>"};
-  CommandParserOptions o = {flags, FALSE};
+  CommandParserOptions o = {flags, false};
   char *repr;
   char *r;
   size_t len;
@@ -62,7 +62,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
       return NULL;
   }
 
-  len = node_repr_len(&default_po, node, 0, FALSE);
+  len = node_repr_len(&default_po, node, 0, false);
 
   if ((repr = ALLOC_CLEAR_NEW(char, len + 1)) == NULL) {
     free_cmd(node);
@@ -71,7 +71,7 @@ char *parse_cmd_test(char_u *arg, uint_least8_t flags, bool one)
 
   r = repr;
 
-  node_repr(&default_po, node, 0, FALSE, &r);
+  node_repr(&default_po, node, 0, false, &r);
 
   free_cmd(node);
   return repr;

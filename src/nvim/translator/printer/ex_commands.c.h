@@ -150,7 +150,7 @@ static FDEC(glob_repr, Glob *glob)
         break;
       }
       case kPatMissing: {
-        assert(FALSE);
+        assert(false);
       }
     }
   }
@@ -326,7 +326,7 @@ static FDEC(optflags_repr, uint_least32_t optflags, char_u *enc)
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
   switch (optflags & FLAG_OPT_BAD_MASK) {
@@ -403,8 +403,8 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
 {
   FUNCTION_START;
   size_t start_from_arg;
-  bool do_arg_dump = FALSE;
-  bool did_children = FALSE;
+  bool do_arg_dump = false;
+  bool did_children = false;
 
   if (node == NULL)
     RETURN;
@@ -418,12 +418,12 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
   F(optflags_repr, node->optflags, node->enc);
 
   if (CMDDEF(node->type).flags & EDITCMD && node->children) {
-    did_children = TRUE;
+    did_children = true;
     ADD_STATIC_STRING(" +");
 #ifndef DEFINE_LENGTH
     char *arg_start = p;
 #endif
-    F2(node_repr, node->children, indent, TRUE);
+    F2(node_repr, node->children, indent, true);
 #ifndef DEFINE_LENGTH
     {
       while (arg_start < p) {
@@ -531,7 +531,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
         ADD_CHAR('\n');
         // FIXME untranslate mappings
         F(node_repr, node->children, indent, barnext);
-        did_children = TRUE;
+        did_children = true;
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         ADD_CHAR(' ');
         // FIXME untranslate mappings
@@ -607,7 +607,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     }
 
     start_from_arg = ARG_MENU_RHS;
-    do_arg_dump = TRUE;
+    do_arg_dump = true;
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdFor).parse) {
     ADD_CHAR(' ');
     F(expr_node_dump, node->args[ARG_FOR_LHS].arg.expr);
@@ -617,7 +617,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
              || CMDDEF(node->type).parse == CMDDEF(kCmdEcho).parse
              || CMDDEF(node->type).parse == CMDDEF(kCmdDelfunction).parse) {
     start_from_arg = 1;
-    do_arg_dump = TRUE;
+    do_arg_dump = true;
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLockvar).parse) {
     if (node->args[ARG_LOCKVAR_DEPTH].arg.number) {
       ADD_CHAR(' ');
@@ -668,13 +668,13 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     if (node->args[ARG_LET_LHS].arg.expr != NULL) {
       LetAssignmentType ass_type =
           (LetAssignmentType) node->args[ARG_LET_ASS_TYPE].arg.flags;
-      bool add_rval = TRUE;
+      bool add_rval = true;
 
       ADD_CHAR(' ');
       F(expr_node_dump, node->args[ARG_LET_LHS].arg.expr);
       switch (ass_type) {
         case VAL_LET_NO_ASS: {
-          add_rval = FALSE;
+          add_rval = false;
           break;
         }
         case VAL_LET_ASSIGN: {
@@ -708,7 +708,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     }
   } else {
     start_from_arg = 0;
-    do_arg_dump = TRUE;
+    do_arg_dump = true;
   }
 
   if (do_arg_dump) {
@@ -749,7 +749,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
       F(node_repr, node->children, indent, barnext);
     } else if (CMDDEF(node->type).parse == CMDDEF(kCmdArgdo).parse) {
       ADD_CHAR(' ');
-      F(node_repr, node->children, indent, TRUE);
+      F(node_repr, node->children, indent, true);
     } else {
       if (barnext) {
         ADD_STATIC_STRING(" | ");

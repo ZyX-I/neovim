@@ -27,7 +27,7 @@ static FDEC(node_repr, ExpressionNode *node);
 static FDEC(node_dump, ExpressionNode *node)
 {
   FUNCTION_START;
-  bool add_ccs = FALSE;
+  bool add_ccs = false;
 
   switch (node->type) {
     case kExprGreater:
@@ -42,7 +42,7 @@ static FDEC(node_dump, ExpressionNode *node)
     case kExprNotMatches: {
       assert(node->children->next->next == NULL);
 
-      add_ccs = TRUE;
+      add_ccs = true;
       // fallthrough
     }
     case kExprLogicalOr:
@@ -254,7 +254,7 @@ static FDEC(node_dump, ExpressionNode *node)
       break;
     }
     default: {
-      assert(FALSE);
+      assert(false);
     }
   }
 

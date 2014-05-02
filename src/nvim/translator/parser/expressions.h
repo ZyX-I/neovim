@@ -103,8 +103,8 @@ typedef struct expression_node {
                          ///< a parsed string.
   char_u *end_position;  ///< Position of last character of expression token.
   CaseCompareStrategy ignore_case;  ///< Determines whether case should be 
-                                    ///< ignored while comparing. Only valid for 
-                                    ///< comparison operators: 
+                                    ///< ignored while comparing. Only valid 
+                                    ///< for comparison operators: 
                                     ///< kExpr(Greater|Less)*, 
                                     ///< kExpr[Not]Matches, kExpr[Not]Equals.
   struct expression_node *children;  ///< Subexpressions: valid for operators,
