@@ -130,10 +130,10 @@
         WS_ERR(error_label, "  ") \
     }
 
-#define VIM_ZERO  "vim.number.new(state, 0)"
-#define VIM_FALSE VIM_ZERO
-#define VIM_TRUE  "vim.number.new(state, 1)"
-#define VIM_EMPTY_STRING "vim.string.new(state, '')"
+#define VIM_ZERO  "vim.zero_"
+#define VIM_FALSE "vim.false_"
+#define VIM_TRUE  "vim.true_"
+#define VIM_EMPTY_STRING "vim.empty_string"
 
 typedef enum {
   kTransUser = 0,
@@ -168,12 +168,13 @@ static WFDEC(translate_number, ExpressionType type, const char_u *const s,
              const char_u *const e);
 static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
              uint_least8_t flags);
-static WFDEC(translate_expr, const ExpressionNode *const expr);
-static WFDEC(translate_exprs, ExpressionNode *const expr);
+static WFDEC(translate_expr, const ExpressionNode *const expr,
+                             const bool is_funccall);
+static WFDEC(translate_exprs, const ExpressionNode *const expr);
 static WFDEC(translate_function, const TranslateFuncArgs *const args);
-static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
-                             bool unique,
-                             AssignmentValueDump dump, void *dump_cookie);
+static WFDEC(translate_lval, const ExpressionNode *const expr,
+                             const bool is_funccall, const bool unique,
+                             const AssignmentValueDump dump, void *dump_cookie);
 static WFDEC(translate_node, const CommandNode *const node, size_t indent);
 static WFDEC(translate_nodes, const CommandNode *const node, size_t indent);
 static int translate_script_stdout(const CommandNode *const node);
@@ -850,8 +851,7 @@ translate_string_sq_cant_err:
 ///       which refers to "a:abc" variable.
 ///
 ///   TS_ONLY_SEGMENT
-///   :   Determines whether this segment is the only one. Affects cases when 
-///       "state.user_functions" is preferred over "state.current_scope".
+///   :   Determines whether this segment is the only one.
 ///
 ///   TS_FUNCCALL
 ///   :   Use "state.functions" in place of "state.current_scope" in some cases. 
@@ -875,7 +875,7 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
       *start = expr->position;
       if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position))
         WS("state.functions")
-      else if (flags & (TS_FUNCASSIGN|TS_ONLY_SEGMENT))
+      else if (flags & (TS_FUNCASSIGN|TS_FUNCCALL))
         WS("state.user_functions")
       else
         WS("state.current_scope")
@@ -909,7 +909,7 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
       }
       default: {
         *start = expr->position;
-        if (flags & (TS_FUNCASSIGN|TS_ONLY_SEGMENT))
+        if (flags & (TS_FUNCASSIGN|TS_FUNCCALL))
           WS("state.user_functions")
         else
           WS("state.current_scope")
@@ -931,7 +931,7 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
     }
     if (isfunc && !(flags & TS_FUNCASSIGN))
       WS("state.functions")
-    else if (flags & (TS_FUNCASSIGN|TS_ONLY_SEGMENT))
+    else if (flags & (TS_FUNCASSIGN|TS_FUNCCALL))
       WS("state.user_functions")
     else
       WS("state.current_scope")
@@ -942,7 +942,8 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
 /// Dump parsed VimL expression
 ///
 /// @param[in]  expr  Expression being dumped.
-static WFDEC(translate_expr, const ExpressionNode *const expr)
+static WFDEC(translate_expr, const ExpressionNode *const expr,
+                             const bool is_funccall)
 {
   switch (expr->type) {
     case kExprFloat: {
@@ -1054,7 +1055,9 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
     case kExprSimpleVariableName: {
       char_u *start;
       WS("vim.subscript(state, ")
-      CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT)
+      CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT | (is_funccall
+                                                             ? TS_FUNCCALL
+                                                             : 0))
       assert(start != NULL);
       WS(", '")
       W_END(start, expr->end_position)
@@ -1077,7 +1080,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
       WS("vim.concat_or_subscript(state, ")
       W_EXPR_POS_ESCAPED(expr)
       WS(", ")
-      CALL(translate_expr, expr->children)
+      CALL(translate_expr, expr->children, FALSE)
       WS(")")
       break;
     }
@@ -1087,12 +1090,12 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
     }
     case kExprExpression: {
       WS("(")
-      CALL(translate_expr, expr->children)
+      CALL(translate_expr, expr->children, FALSE)
       WS(")")
       break;
     }
     default: {
-      ExpressionNode *current_expr;
+      const ExpressionNode *current_expr;
       bool reversed = FALSE;
 
       assert(expr->children != NULL
@@ -1137,7 +1140,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
         case rev_type: { \
           if (expr->type == rev_type) { \
             reversed = TRUE; \
-            WS("(") \
+            WS("vim.negate_logical(state, ") \
           } \
           WS("vim." op "(state, ") \
           CALL(dump_bool, (bool) expr->ignore_case) \
@@ -1157,19 +1160,25 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
         }
       }
 
-      if (reversed)
-        WS(" == 1 and 0 or 1)")
-
       current_expr = expr->children;
-      for (;;) {
-        CALL(translate_expr, current_expr)
+      if (expr->type == kExprCall) {
+        CALL(translate_expr, current_expr, TRUE)
         current_expr = current_expr->next;
-        if (current_expr == NULL)
-          break;
-        else
-          WS(", ")
       }
+      if (current_expr != NULL)
+        for (;;) {
+          CALL(translate_expr, current_expr, FALSE)
+          current_expr = current_expr->next;
+          if (current_expr == NULL)
+            break;
+          else
+            WS(", ")
+        }
       WS(")")
+
+      if (reversed)
+        WS(")")
+
       break;
     }
   }
@@ -1179,12 +1188,12 @@ static WFDEC(translate_expr, const ExpressionNode *const expr)
 /// Dump a sequence of VimL expressions (e.g. for :echo 1 2 3)
 ///
 /// @param[in]  expr  Pointer to the first expression that will be dumped.
-static WFDEC(translate_exprs, ExpressionNode *const expr)
+static WFDEC(translate_exprs, const ExpressionNode *const expr)
 {
-  ExpressionNode *current_expr = expr;
+  const ExpressionNode *current_expr = expr;
 
   for (;;) {
-    CALL(translate_expr, current_expr)
+    CALL(translate_expr, current_expr, FALSE)
     current_expr = current_expr->next;
     if (current_expr == NULL)
       break;
@@ -1237,9 +1246,9 @@ static WFDEC(translate_function, const TranslateFuncArgs *const args)
 /// @param[in]  dump_cookie  First argument to the above function.
 ///
 /// @return FAIL in case of unrecoverable error, OK otherwise.
-static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
-                             bool unique,
-                             AssignmentValueDump dump, void *dump_cookie)
+static WFDEC(translate_lval, const ExpressionNode *const expr,
+                             const bool is_funccall, const bool unique,
+                             const AssignmentValueDump dump, void *dump_cookie)
 {
 #define ADD_ASSIGN(what) \
   { \
@@ -1268,7 +1277,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
       break;
     }
     case kExprVariableName: {
-      ExpressionNode *current_expr = expr->children;
+      const ExpressionNode *current_expr = expr->children;
       bool add_concat;
 
       assert(current_expr != NULL);
@@ -1313,7 +1322,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
           }
           case kExprCurlyName: {
             WS("(")
-            CALL(translate_expr, current_expr->children)
+            CALL(translate_expr, current_expr->children, FALSE)
             WS(")")
             break;
           }
@@ -1329,7 +1338,7 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
       ADD_ASSIGN("dict")
       CALL(dump, dump_cookie)
       WS(", ")
-      CALL(translate_expr, expr->children)
+      CALL(translate_expr, expr->children, FALSE)
       WS(", '")
       W_EXPR_POS(expr)
       WS("')")
@@ -1342,12 +1351,12 @@ static WFDEC(translate_lval, ExpressionNode *expr, bool is_funccall,
         ADD_ASSIGN("slice")
       CALL(dump, dump_cookie)
       WS(", ")
-      CALL(translate_expr, expr->children)
+      CALL(translate_expr, expr->children, FALSE)
       WS(", ")
-      CALL(translate_expr, expr->children->next)
+      CALL(translate_expr, expr->children->next, FALSE)
       if (expr->children->next->next != NULL) {
         WS(", ")
-        CALL(translate_expr, expr->children->next->next)
+        CALL(translate_expr, expr->children->next->next, FALSE)
       }
       WS(")")
       break;
@@ -1440,7 +1449,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     WS("for _, ")
     ADDINDENTVAR(iter_var)
     WS(" in vim.list.iterator(state, ")
-    CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr)
+    CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr, FALSE)
     WS(") do\n")
 
     // TODO assign variables
@@ -1452,8 +1461,8 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     return OK;
   } else if (node->type == kCmdWhile) {
     WS("while (")
-    CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr)
-    WS(") do\n")
+    CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
+    WS(") == " VIM_TRUE " do\n")
 
     CALL(translate_nodes, node->children, indent + 1)
 
@@ -1474,7 +1483,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       }
       case kCmdIf: {
         WS("if (")
-        CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr)
+        CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
         WS(") then\n")
         break;
       }
@@ -1723,7 +1732,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       add_comma = FALSE;
       switch (CMDDEF(node->type).arg_types[i]) {
         case kArgExpression: {
-          CALL(translate_expr, node->args[i].arg.expr)
+          CALL(translate_expr, node->args[i].arg.expr, FALSE)
           add_comma = TRUE;
           break;
         }
@@ -1793,7 +1802,7 @@ static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
           case kTransFunc: {
             WINDENT(indent)
             WS("return ")
-            CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr)
+            CALL(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, FALSE)
             WS("\n")
             break;
           }
