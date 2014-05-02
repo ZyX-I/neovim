@@ -171,6 +171,7 @@ static char *expression_type_string[] = {
   ".",
   "call",
   "empty",
+  ";",
 };
 
 static char *case_compare_strategy_string[] = {

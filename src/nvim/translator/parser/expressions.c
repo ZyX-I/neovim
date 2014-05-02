@@ -39,10 +39,9 @@
 
 #define TOP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = expr_alloc(type)) == NULL) \
-      return FAIL; \
-    next_node = &(top_node->children); \
+    top_node = expr_alloc(type); \
     *old_top_node = top_node; \
+    next_node = &(top_node->children); \
   }
 
 #define VALUE_NODE(type, error, node, pos, end_pos) \
@@ -265,6 +264,7 @@ static int parse_list(char_u **arg,
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
+  bool mustend = false;
 
   TOP_NODE(kExprList, error, node, top_node, next_node)
 
@@ -279,7 +279,14 @@ static int parse_list(char_u **arg,
 
     if (**arg == ']')
       break;
-    if (**arg != ',') {
+    if (mustend) {
+      return FAIL;
+    } else if (**arg == ';') {
+      // FIXME only allow this under certain circumstances
+      mustend = true;
+      TOP_NODE(kExprListRest, error, next_node, top_node, next_node)
+      top_node->position = *arg;
+    } else if (**arg != ',') {
       error->message = N_("E696: Missing comma in List");
       error->position = *arg;
       return FAIL;
