@@ -773,6 +773,10 @@ call = non_nil(function(state, caller_dict, caller_key, ...)
   -- TODO
 end)
 
+get_scope_and_key = non_nil(function(state, value)
+  -- TODO
+end)
+
 -- {{{1 return
 zero=number.new(state, 0)
 return {
@@ -799,6 +803,7 @@ return {
   promote_integer=promote_integer,
   concat=concat,
   concat_or_subscript=concat_or_subscript,
+  get_scope_and_key=get_scope_and_key,
   equals=equals,
   identical=identical,
   matches=matches,
