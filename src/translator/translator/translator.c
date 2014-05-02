@@ -172,6 +172,8 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
                              const bool is_funccall);
 static WFDEC(translate_exprs, const ExpressionNode *const expr);
 static WFDEC(translate_function, const TranslateFuncArgs *const args);
+static WFDEC(translate_varname, const ExpressionNode *const expr,
+                                const bool is_funccall);
 static WFDEC(translate_lval, const ExpressionNode *const expr,
                              const bool is_funccall, const bool unique,
                              const AssignmentValueDump dump, void *dump_cookie);
@@ -867,9 +869,11 @@ translate_string_sq_cant_err:
 static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
              uint_least8_t flags)
 {
-  assert(expr->type == kExprSimpleVariableName);
+  assert(expr->type == kExprSimpleVariableName ||
+         (expr->type == kExprIdentifier && !(flags&TS_ONLY_SEGMENT)));
   if (expr->end_position == expr->position) {
-    if (!(flags & (TS_LAST_SEGMENT|TS_ONLY_SEGMENT))) {
+    if (!(flags & (TS_LAST_SEGMENT|TS_ONLY_SEGMENT))
+        && vim_strchr((char_u *) "svalgtwb", *(expr->position)) != NULL) {
       *start = NULL;
     } else {
       *start = expr->position;
@@ -1065,16 +1069,15 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
       break;
     }
     case kExprVariableName: {
-      // TODO
+      WS("vim.subscript(state, ")
+      CALL(translate_varname, expr, FALSE)
+      WS(")")
       break;
     }
-    case kExprCurlyName: {
-      // TODO
-      break;
-    }
+    case kExprCurlyName:
     case kExprIdentifier: {
-      // TODO
-      break;
+      // Should have been handled by translate_varname above
+      assert(FALSE);
     }
     case kExprConcatOrSubscript: {
       WS("vim.concat_or_subscript(state, ")
@@ -1237,6 +1240,79 @@ static WFDEC(translate_function, const TranslateFuncArgs *const args)
   return OK;
 }
 
+/// Translate complex VimL variable name (i.e. name with curly brace expansion)
+///
+/// Translates to two arguments: scope and variable name in this scope. Must be 
+/// the last arguments to the outer function because it may translate to one 
+/// argument: a call of get_scope_and_key which will return two values.
+///
+/// @param[in]  expr         Translated variable name. Must be a node with 
+///                          kExprVariableName type.
+/// @param[in]  is_funccall  True if translating name of a called function.
+static WFDEC(translate_varname, const ExpressionNode *const expr,
+                                const bool is_funccall)
+{
+  const ExpressionNode *current_expr = expr->children;
+  bool add_concat;
+  bool close_parenthesis = false;
+
+  assert(expr->type == kExprVariableName);
+  assert(current_expr != NULL);
+
+  if (current_expr->type == kExprIdentifier) {
+    char_u *start;
+    CALL(translate_scope, &start, current_expr, (is_funccall
+                                                 ? TS_FUNCASSIGN
+                                                 : 0))
+    if (start == NULL) {
+
+      WS("vim.get_scope_and_key(state, vim.concat(state, '")
+      W_EXPR_POS(current_expr)
+      WS("'")
+      close_parenthesis = true;
+    } else {
+      WS(", vim.concat(state, '")
+      W_END(start, current_expr->end_position)
+      WS("'")
+    }
+    add_concat = true;
+  } else {
+    WS("vim.get_scope_and_key(state, vim.concat(state, ")
+    add_concat = false;
+    close_parenthesis = true;
+  }
+
+  for (current_expr = current_expr->next; current_expr != NULL;
+        current_expr = current_expr->next) {
+    if (add_concat)
+      WS(", ")
+    else
+      add_concat = true;
+    switch (current_expr->type) {
+      case kExprIdentifier: {
+        WS("'")
+        W_EXPR_POS(current_expr)
+        WS("'")
+        break;
+      }
+      case kExprCurlyName: {
+        CALL(translate_expr, current_expr->children, false)
+        break;
+      }
+      default: {
+        assert(false);
+      }
+    }
+  }
+
+  WS(")")
+
+  if (close_parenthesis)
+    WS(")")
+
+  return OK;
+}
+
 /// Translate lvalue into one of vim.assign_* calls
 ///
 /// @param[in]  expr         Translated expression.
@@ -1278,7 +1354,6 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
     }
     case kExprVariableName: {
       const ExpressionNode *current_expr = expr->children;
-      bool add_concat;
 
       assert(current_expr != NULL);
 
@@ -1286,51 +1361,8 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
       CALL(dump, dump_cookie)
       WS(", ")
 
-      if (current_expr->type == kExprIdentifier) {
-        char_u *start;
-        CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT
-                                            |(is_funccall
-                                              ? TS_FUNCASSIGN
-                                              : 0))
-        if (start == NULL) {
-          WS("vim.get_scope_and_key(state, '")
-          W_EXPR_POS(expr)
-          WS("'")
-        } else {
-          WS(", '")
-          W_END(start, expr->end_position)
-          WS("'")
-        }
-        add_concat = true;
-      } else {
-        WS("vim.get_scope_and_key(state, ")
-        add_concat = false;
-      }
+      CALL(translate_varname, expr, is_funccall)
 
-      for (current_expr = current_expr->next; current_expr != NULL;
-           current_expr = current_expr->next) {
-        if (add_concat)
-          WS(" .. ")
-        else
-          add_concat = true;
-        switch (current_expr->type) {
-          case kExprIdentifier: {
-            WS("'")
-            W_EXPR_POS(current_expr)
-            WS("'")
-            break;
-          }
-          case kExprCurlyName: {
-            WS("(")
-            CALL(translate_expr, current_expr->children, false)
-            WS(")")
-            break;
-          }
-          default: {
-            assert(false);
-          }
-        }
-      }
       WS(")")
       break;
     }
