@@ -19,7 +19,9 @@ new_state = function()
     is_silent=false,
     functions={
       [type_idx]='func_dict',
-      type=vim_type,
+      type=function(state, self, ...)
+        return vim_type(state, ...)
+      end,
     },
     options={},
     buffer={b=new_scope(false), options={}},
@@ -76,7 +78,33 @@ end
 type_idx = true
 locks_idx = false
 
+number = {
+  new=function(state, n)
+    return n
+  end,
+  to_string_echo=function(state, n, _)
+    return tostring(n)
+  end,
+}
+
+string = {
+  new=function(state, s)
+    return s
+  end,
+  to_string_echo=function(state, s, _)
+    return s
+  end,
+}
+
 list = {
+  new=function(state, ...)
+    local ret = {...}
+    ret[type_idx] = 'list'
+    ret.iterators = {}
+    ret.locked = false
+    ret.fixed = false
+    return ret
+  end,
   insert=function(state, lst, position, value, value_position)
     if (lst.fixed) then
       -- TODO error out
@@ -144,12 +172,21 @@ list = {
     table.insert(lst.iterators, it_state)
     return list.next, it_state, lst
   end,
-  new=function(state, ...)
-    local ret = {...}
-    ret[type_idx] = 'list'
-    ret.iterators = {}
-    ret.locked = false
-    ret.fixed = false
+  to_string_echo=function(state, lst, refs)
+    local ret = '['
+    local length = list.raw_length(lst)
+    local i
+    for i = 0,length-1 do
+      chunk = string_echo(state, lst, nil, refs)
+      if chunk == nil then
+        return nil
+      end
+      ret = ret .. chunk
+      if i ~= length-1 then
+        ret = ret .. ', '
+      end
+    end
+    ret = ret .. ']'
     return ret
   end,
 }
@@ -205,22 +242,14 @@ dict = {
   end,
 }
 
-number = {
-  new=function(state, n)
-    return n
-  end,
-}
-
-string = {
-  new=function(state, s)
-    return s
-  end,
-}
-
 float = {
   new=function(state, f)
     -- TODO
     return f
+  end,
+  to_string_echo=function(state, n, _)
+    -- TODO
+    return tostring(n)
   end,
 }
 
@@ -230,6 +259,15 @@ VIM_FUNCREF    = 2
 VIM_LIST       = 3
 VIM_DICTIONARY = 4
 VIM_FLOAT      = 5
+
+types = {
+  [VIM_NUMBER]=number,
+  [VIM_STRING]=string,
+  [VIM_FUNCREF]=funcref,
+  [VIM_LIST]=list,
+  [VIM_DICTIONARY]=dict,
+  [VIM_FLOAT]=float,
+}
 
 -- {{{1 Error manipulation
 err = {
@@ -273,21 +311,36 @@ parse = function(state, command, range, bang, args)
   return args, nil
 end
 
+string_echo = function(state, v, v_position, refs)
+  t = vim_type(state, v, v_position)
+  if t == nil then
+    return nil
+  end
+  if refs ~= nil then
+    -- TODO
+  end
+  return types[t].to_string_echo(state, v, refs)
+end
+
 commands={
   append=function(state, range, bang, lines)
   end,
   abclear=function(state, buffer)
   end,
-  echo=function(state, ...)
+  echo=non_nil(function(state, ...)
     mes = ''
     for i, s in ipairs({...}) do
       if (i > 1) then
         mes = mes .. ' '
       end
-      mes = mes .. s
+      chunk = string_echo(state, s, s_position, {})
+      if chunk == nil then
+        return nil
+      end
+      mes = mes .. chunk
     end
     print (mes)
-  end,
+  end),
 }
 
 run_user_command = function(state, command, range, bang, args)
@@ -738,6 +791,26 @@ greater = function(state, ic, arg1, arg2)
 end
 
 -- {{{1 Subscripting
+func_subscript = non_nil(function(state, value, index)
+  local t, f, ft
+  t = vim_type(state, value, value_position)
+  f = subscript(state, value, index)
+  ft = vim_type(state, f)
+  if ft ~= VIM_FUNCREF then
+    -- TODO echo error message
+    return nil
+  end
+  if t == VIM_DICTIONARY then
+    return function(state, self, ...)
+      return ft(state, value, ...)
+    end
+  else
+    return function(state, self, ...)
+      return ft(state, nil, ...)
+    end
+  end
+end)
+
 subscript = function(state, value, index)
   t = vim_type(state, value, value_position)
   if (t == nil) then
@@ -779,8 +852,36 @@ subscript = function(state, value, index)
   end
 end
 
+func_concat_or_subscript = non_nil(function(state, dct, key)
+  local t, f, ft
+  t = vim_type(state, dct, dct_position)
+  if t == VIM_DICTIONARY then
+    f = dict.subscript(state, dct, dct_position, key, key_position)
+    ft = vim_type(state, f)
+  else
+    local real_f
+    scope, key = get_scope_and_key(state, key)
+    real_f = dict.subscript(state, scope, key_position, key, key_position)
+    ft = vim_type(state, real_f)
+    f = function(state, self, ...)
+      return vim.concat(state, dct, ft(state, nil, ...))
+    end
+  end
+  if ft ~= VIM_FUNCREF then
+    -- TODO echo error message
+    return nil
+  end
+  if t == VIM_DICTIONARY then
+    return function(state, self, ...)
+      return f(state, dct, ...)
+    end
+  else
+    return f
+  end
+end)
+
 concat_or_subscript = non_nil(function(state, dct, key)
-  t = vim_type(dct)
+  t = vim_type(state, dct, dct_position)
   if (t == VIM_DICTIONARY) then
     return dict.subscript(state, dct, dct_position, key, key_position)
   else
@@ -792,8 +893,8 @@ slice = non_nil(function(state, value, start_index, end_index)
   -- TODO
 end)
 
-call = non_nil(function(state, caller_dict, caller_key, ...)
-  -- TODO
+call = non_nil(function(state, callee, ...)
+  return callee(state, nil, ...)
 end)
 
 get_scope_and_key = non_nil(function(state, key)
@@ -812,6 +913,7 @@ return {
   range=range,
   run_user_command=run_user_command,
   iter_start=iter_start,
+  func_subscript=func_subscript,
   subscript=subscript,
   slice=slice,
   list=list,
@@ -852,4 +954,5 @@ return {
   VIM_LIST=VIM_LIST,
   VIM_DICTIONARY=VIM_DICTIONARY,
   VIM_FLOAT=VIM_FLOAT,
+  type=vim_type,
 }
