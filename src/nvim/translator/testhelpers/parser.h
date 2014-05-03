@@ -1,0 +1,8 @@
+#ifndef NEOVIM_TRANSLATOR_TESTHELPERS_PARSER_H
+#define NEOVIM_TRANSLATOR_TESTHELPERS_PARSER_H
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/testhelpers/fgetline.h.generated.h"
+#endif
+
+#endif  // NEOVIM_TRANSLATOR_TESTHELPERS_PARSER_H

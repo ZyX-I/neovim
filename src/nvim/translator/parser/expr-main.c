@@ -6,7 +6,10 @@
 #include "nvim/misc2.h"
 #include "nvim/types.h"
 #include "nvim/charset.h"
-#include "nvim/translator/printer/expressions.h"
+#include "nvim/translator/parser/expressions.h"
+#include "nvim/translator/parser/ex_commands.h"
+#include "nvim/translator/printer/printer.h"
+#include "nvim/translator/testhelpers/parser.h"
 #include <stdio.h>
 static void print_node(int indent, ExpressionNode *node)
 {
@@ -177,11 +180,11 @@ int main(int argc, char **argv) {
    * if (node != NULL)
    *   print_node(0, node);
    */
-  if ((result = parse0_repr((char_u *) argv[1], true)) == NULL)
+  if ((result = parse0_repr(argv[1], true)) == NULL)
     return 1;
   puts(result);
   vim_free(result);
-  if ((result = parse0_repr((char_u *) argv[1], false)) == NULL)
+  if ((result = parse0_repr(argv[1], false)) == NULL)
     return 1;
   puts(result);
   vim_free(result);
@@ -207,9 +210,89 @@ char_u *alloc_clear(unsigned size)
   return res;
 }
 
+void *xrealloc(void *ptr, size_t size)
+{
+  return realloc(ptr, size);
+}
+
+void sort_strings(char_u **a, int b)
+{
+  return;
+}
+
+int vim_fnamecmp(char_u *a, char_u *b)
+{
+  return 0;
+}
+
+char *xstrdup(const char *s)
+{
+  return strdup(s);
+}
+
+void *xmallocz(size_t size)
+{
+  size_t total_size = size + 1;
+  void *ret;
+
+  ret = malloc(total_size);
+  ((char*)ret)[size] = 0;
+
+  return ret;
+}
+
+char *xstpcpy(char *restrict dst, const char *restrict src)
+{
+  const size_t len = strlen(src);
+  return (char *)memcpy(dst, src, len + 1) + len;
+}
+
+char_u *vim_strnsave(char_u *string, int len)
+{
+  char_u      *p;
+
+  p = xmallocz((unsigned)(len + 1));
+  STRNCPY(p, string, len);
+  return p;
+}
+
 void vim_free(void *v)
 {
   free(v);
+}
+
+int parse_one_cmd(char_u **pp,
+                  CommandNode **node,
+                  CommandParserOptions o,
+                  CommandPosition *position,
+                  LineGetter fgetline,
+                  void *cookie)
+{
+  return 0;
+}
+
+void free_cmd(CommandNode *cmd)
+{
+  return;
+}
+
+CommandNode *parse_cmd_sequence(CommandParserOptions o,
+                                CommandPosition position,
+                                LineGetter fgetline,
+                                void *cookie)
+{
+  return NULL;
+}
+
+void cmd_repr(const PrinterOptions *const po, const CommandNode *node,
+              char **pp)
+{
+  return;
+}
+
+size_t cmd_repr_len(const PrinterOptions *const po, const CommandNode *node)
+{
+  return 0;
 }
 
 /*

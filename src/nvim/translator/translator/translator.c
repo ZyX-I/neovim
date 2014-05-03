@@ -2,10 +2,8 @@
 #define __STDC_FORMAT_MACROS
 #include <stdbool.h>
 #include <stddef.h>
-#include <stdio.h>
 #include <inttypes.h>
 #include <stdint.h>
-#include <errno.h>
 #undef __STDC_LIMIT_MACROS
 #undef __STDC_FORMAT_MACROS
 
@@ -14,13 +12,11 @@
 #include "nvim/mbyte.h"
 #include "nvim/charset.h"
 #include "nvim/keymap.h"
-#include "nvim/garray.h"
 
 #include "nvim/translator/translator/translator.h"
 #include "nvim/translator/parser/expressions.h"
 #include "nvim/translator/parser/ex_commands.h"
 #include "nvim/translator/parser/command_definitions.h"
-#include "nvim/translator/printer/ex_commands.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/translator/translator.c.generated.h"
@@ -257,8 +253,6 @@ static WFDEC(translate_assignment, const ExpressionNode *const lval_expr,
 static WFDEC(translate_node, const CommandNode *const node,
                              const size_t indent);
 static WFDEC(translate_nodes, const CommandNode *const node, size_t indent);
-static int translate_script_stdout(const CommandNode *const node);
-static char_u *fgetline_file(int c, FILE *file, int indent);
 // }}}
 
 /// Write string with the given length
@@ -277,8 +271,6 @@ static WFDEC(write_string_len, const char *const s, size_t len)
   }
   return OK;
 }
-
-static Writer write_file = (Writer) &fwrite;
 
 /// Dump number that is not a vim Number
 ///
@@ -2151,98 +2143,4 @@ int translate_script(const CommandNode *const node, Writer write, void *cookie)
   WS("  end\n"
     "}\n")
   return OK;
-}
-
-/// Translate given sequence of nodes as a .vim script and dump result to stdout
-///
-/// @param[in]  node  Pointer to the first command inside this script.
-///
-/// @return OK in case of success, FAIL otherwise.
-static int translate_script_stdout(const CommandNode *const node)
-{
-  return translate_script(node, write_file, (void *) stdout);
-}
-
-/// Get line from file
-///
-/// @param[in]  file  File from which line will be obtained.
-///
-/// @return String in allocated memory or NULL in case of error or when there 
-///         are no more lines.
-static char_u *fgetline_file(int _, FILE *file, int indent)
-{
-  int c;
-  garray_T ga;
-
-  ga_init(&ga, sizeof(char), 1);
-
-  errno = 0;
-
-  while ((c = fgetc(file)) != EOF) {
-    if (c == '\n')
-      break;
-    ga_append(&ga, c);
-  }
-  ga_append(&ga, NUL);
-
-  if (c == EOF && errno != 0) {
-    ga_clear(&ga);
-    return NULL;
-  } else if (ga.ga_len == 0) {
-    return NULL;
-  } else {
-    return (char_u *) ga.ga_data;
-  }
-}
-
-/// Translate script passed through stdin to stdout
-///
-/// @return OK in case of success, FAIL otherwise.
-int translate_script_std(void)
-{
-  CommandNode *node;
-  CommandParserOptions o = {0, false};
-  CommandPosition position = {1, 1, (char_u *) "<test input>"};
-  int ret;
-
-  if ((node = parse_cmd_sequence(o, position, (LineGetter) &fgetline_file,
-                                 stdin)) == NULL)
-    return FAIL;
-
-  ret = translate_script_stdout(node);
-
-  free_cmd(node);
-  return ret;
-}
-
-/// Translate script passed as a single string to given file
-///
-/// @param[in]  str    Translated script.
-/// @param[in]  fname  Target filename.
-///
-/// @return OK in case of success, FAIL otherwise.
-int translate_script_str_to_file(const char_u *const str,
-                                 const char *const fname)
-{
-  CommandNode *node;
-  CommandParserOptions o = {0, false};
-  CommandPosition position = {1, 1, (char_u *) "<test input>"};
-  int ret;
-  char_u **pp;
-  FILE *f;
-
-  pp = (char_u **) &str;
-
-  if ((node = parse_cmd_sequence(o, position, (LineGetter) &fgetline_string,
-                                 pp)) == NULL)
-    return FAIL;
-
-  if ((f = fopen(fname, "w")) == NULL)
-    return FAIL;
-
-  ret = translate_script(node, write_file, (void *) f);
-
-  fclose(f);
-
-  return ret;
 }

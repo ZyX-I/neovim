@@ -1,10 +1,10 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
 
-expr = cimport('./src/nvim/translator/printer/expressions.h')
+libnvim = cimport('./src/nvim/translator/testhelpers/parser.h')
 
 p0 = (str) ->
   s = to_cstr(str)
-  parsed = expr.parse0_repr(s, false)
+  parsed = libnvim.parse0_repr(s, false)
   if parsed == nil
     error('parse0_dump returned nil')
   return ffi.string(parsed)

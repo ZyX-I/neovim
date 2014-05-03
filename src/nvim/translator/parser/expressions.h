@@ -121,12 +121,6 @@ typedef struct error {
   char_u *position;
 } ExpressionParserError;
 
-typedef struct {
-  ExpressionNode *node;
-  ExpressionParserError error;
-  char_u *end;
-} TestExprResult;
-
 typedef ExpressionNode *(*ExpressionParser)(char_u **, ExpressionParserError *);
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
