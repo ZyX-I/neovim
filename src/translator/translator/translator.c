@@ -9,12 +9,11 @@
 #undef __STDC_FORMAT_MACROS
 
 #include "vim.h"
-#include "memory.h"
 #include "strings.h"
-#include "misc2.h"
 #include "mbyte.h"
 #include "charset.h"
 #include "keymap.h"
+#include "memory.h"
 
 #include "translator/translator/translator.h"
 #include "translator/parser/expressions.h"
@@ -755,23 +754,17 @@ static WFDEC(translate_string, ExpressionType type, const char_u *const s,
       } else {
         assert(e > s);
 
-        const size_t len = (e - s) + 1;
-        char_u *const new = XMALLOC_NEW(char_u, len);
-
-        memcpy(new, s, len);
-
-        for (char_u *p = new + 1; p < new + len - 1; p++) {
+        WS("'")
+        for (const char_u *p = s + 1; p < e; p++) {
           if (*p == '\'') {
-            *p = '\\';
+            WS("\\'")
             p++;
+          } else {
+            W_LEN(p, 1)
           }
         }
-        W_LEN_ERR(translate_string_sq_cant_err, new, len)
-        vim_free(new);
+        WS("'")
         break;
-translate_string_sq_cant_err:
-        vim_free(new);
-        return FAIL;
       }
       break;
     }
