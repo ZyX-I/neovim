@@ -2,8 +2,9 @@
 #include <stdbool.h>
 
 #include "nvim/vim.h"
-#include "nvim/misc2.h"
 #include "nvim/memory.h"
+#include "nvim/strings.h"
+#include "nvim/misc2.h"
 
 #include "nvim/translator/parser/ex_commands.h"
 

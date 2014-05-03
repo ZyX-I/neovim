@@ -2,6 +2,7 @@
 #ifdef COMPILE_TEST_VERSION
 
 #include "nvim/vim.h"
+#include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/types.h"
 #include "nvim/charset.h"

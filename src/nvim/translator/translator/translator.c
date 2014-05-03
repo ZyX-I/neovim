@@ -4,6 +4,7 @@
 
 #include "nvim/vim.h"
 #include "nvim/memory.h"
+#include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/mbyte.h"
 #include "nvim/charset.h"

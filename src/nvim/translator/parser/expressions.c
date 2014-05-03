@@ -14,10 +14,12 @@
 #include <stddef.h>
 
 #include "nvim/vim.h"
+#include "nvim/memory.h"
+#include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/types.h"
 #include "nvim/charset.h"
-#include "nvim/memory.h"
+#include "nvim/ascii.h"
 
 #include "nvim/translator/parser/expressions.h"
 

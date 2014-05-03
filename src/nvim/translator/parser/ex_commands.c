@@ -10,6 +10,8 @@
 
 #include "nvim/vim.h"
 #include "nvim/types.h"
+#include "nvim/memory.h"
+#include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/charset.h"
 #include "nvim/globals.h"
@@ -19,7 +21,7 @@
 #include "nvim/menu.h"
 #include "nvim/option.h"
 #include "nvim/regexp.h"
-#include "nvim/memory.h"
+#include "nvim/ascii.h"
 
 #include "nvim/translator/parser/expressions.h"
 #include "nvim/translator/parser/ex_commands.h"
