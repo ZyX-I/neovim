@@ -177,7 +177,7 @@ list = {
     local length = list.raw_length(lst)
     local i
     for i = 0,length-1 do
-      chunk = string_echo(state, lst, nil, refs)
+      chunk = string_echo(state, list.raw_subscript(lst, i), nil, refs)
       if chunk == nil then
         return nil
       end
