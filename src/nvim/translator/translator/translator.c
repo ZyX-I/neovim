@@ -1,6 +1,12 @@
+#define __STDC_LIMIT_MACROS
+#define __STDC_FORMAT_MACROS
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
+#include <inttypes.h>
+#include <stdint.h>
+#undef __STDC_LIMIT_MACROS
+#undef __STDC_FORMAT_MACROS
 
 #include "nvim/vim.h"
 #include "nvim/memory.h"
@@ -19,6 +25,26 @@
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/translator/translator.c.generated.h"
 #endif
+
+#define _STRINGIFY(x) #x
+#define STRINGIFY(x) _STRINGIFY(x)
+
+// XXX -1 removes space for trailing zero. Note: STRINGIFY(INTMAX_MAX) may 
+//     return something like "(dddddL)": three or more characters wider then 
+//     actually needed.
+//     +1 is for minus sign.
+
+/// Length of a buffer capable of holding decimal intmax_t representation
+///
+/// @note Size of the buffer may be actually a few characters off compared to 
+///       minimum required size.
+#define MAXNUMBUFLEN (sizeof(STRINGIFY(INTMAX_MAX)) - 1 + 1)
+
+/// Length of a buffer capable of holding decimal size_t representation
+///
+/// @note Size of the buffer may be actually a few characters off compared to 
+///       minimum required size.
+#define SIZETBUFLEN  (sizeof(STRINGIFY(SIZE_MAX)) - 1)
 
 /// Returns function declaration with additional arguments
 ///
@@ -135,19 +161,28 @@
         WS_ERR(error_label, "  ") \
     }
 
+/// Create variable name based on indentation level
+///
+/// Created name is prefix concatenated with indentation level.
 #define INDENTVAR(var, prefix) \
-    char var[NUMBUFLEN + sizeof(prefix) - 1]; \
+    char var[SIZETBUFLEN + sizeof(prefix) - 1]; \
     size_t var##_len; \
-    if ((var##_len = snprintf(var, NUMBUFLEN + sizeof(prefix) - 1, \
-                              prefix "%ld", (long) indent)) <= 1) \
+    if ((var##_len = snprintf(var, SIZETBUFLEN + sizeof(prefix) - 1, \
+                              prefix "%zu", indent)) <= 1) \
       return FAIL;
+/// Write previously defined indentation variable name
 #define ADDINDENTVAR(var) \
     W_LEN(var, var##_len)
-#define INDENTVARARGS(var) \
-    var, var##_len
+/// Emit definitions for holding indentation variable inside a structure
 #define INDENTVARDEFS(var) \
     char *var; \
     size_t var##_len;
+/// Emit arguments for {} structure initializer
+///
+/// It is supposed that corresponding fields in structure were defined with the 
+/// above INDENTVARDEFS macros.
+#define INDENTVARARGS(var) \
+    var, var##_len
 
 
 #define VIM_ZERO  "vim.zero_"
@@ -185,7 +220,7 @@ typedef enum {
 
 // {{{ Function declarations
 static WFDEC(write_string_len, const char *const s, size_t len);
-static WFDEC(dump_number, long number);
+static WFDEC(dump_number, intmax_t number);
 static WFDEC(dump_char, char_u c);
 static WFDEC(dump_string_len, const char_u *const s, size_t len);
 static WFDEC(dump_string, const char_u *const s);
@@ -194,7 +229,7 @@ static WFDEC(translate_regex, const Regex *const regex);
 static WFDEC(translate_address_followup, const AddressFollowup *const followup);
 static WFDEC(translate_range, const Range *const range);
 static WFDEC(translate_ex_flags, uint_least8_t exflags);
-static WFDEC(translate_number, ExpressionType type, const char_u *const s,
+static WFDEC(translate_number, ExpressionType type, const char_u *s,
              const char_u *const e);
 static WFDEC(translate_string, ExpressionType type, const char_u *const s,
              const char_u *const e);
@@ -250,14 +285,15 @@ static Writer write_file = (Writer) &fwrite;
 /// Use translate_number to dump vim Numbers (kExpr*Number)
 ///
 /// @param[in]  number  Number that will be written.
-static WFDEC(dump_number, long number)
+static WFDEC(dump_number, intmax_t number)
 {
-  char buf[NUMBUFLEN];
+  char buf[MAXNUMBUFLEN];
+  size_t i;
 
-  if (snprintf(buf, NUMBUFLEN, "%ld", number) == 0)
+  if ((i = snprintf(buf, MAXNUMBUFLEN, "%" PRIiMAX, number)) == 0)
     return FAIL;
 
-  W(buf)
+  W_LEN(buf, i)
 
   return OK;
 }
@@ -514,7 +550,7 @@ static WFDEC(translate_address_followup, const AddressFollowup *const followup)
   switch (followup->type) {
     case kAddressFollowupShift: {
       WS("0, ")
-      CALL(dump_number, (long) followup->data.shift)
+      CALL(dump_number, (intmax_t) followup->data.shift)
       break;
     }
     case kAddressFollowupForwardPattern: {
@@ -567,7 +603,7 @@ static WFDEC(translate_range, const Range *const range)
 
     switch (current_range->address.type) {
       case kAddrFixed: {
-        CALL(dump_number, (long) current_range->address.data.lnr);
+        CALL(dump_number, (intmax_t) current_range->address.data.lnr);
         break;
       }
       case kAddrEnd: {
@@ -654,7 +690,7 @@ static WFDEC(translate_ex_flags, uint_least8_t exflags)
 /// @param[in]  type  Type of the number node being dumped.
 /// @param[in]  s     Pointer to first character in dumped number.
 /// @param[in]  e     Pointer to last character in dumped number.
-static WFDEC(translate_number, ExpressionType type, const char_u *const s,
+static WFDEC(translate_number, ExpressionType type, const char_u *s,
              const char_u *const e)
 {
   WS("vim.number.new(state, ")
@@ -665,21 +701,32 @@ static WFDEC(translate_number, ExpressionType type, const char_u *const s,
       break;
     }
     case kExprOctalNumber: {
-      unsigned long number;
-      char *num_s;
+#define MAXOCTALNUMBUFLEN (sizeof(intmax_t) * 8 / 3 + 1)
+      intmax_t number;
+      char num_s[MAXOCTALNUMBUFLEN + 1];
       int n;
 
-      // FIXME Remove unneeded allocation
-      if ((num_s = (char *) vim_strnsave((char_u *) s, (e - s) + 1)) == NULL)
-        return FAIL;
+      // Ignore leading zeroes
+      for (; *s == '0' && s < e; s++) {
+      }
+
+      if (((e - s) + 1) > (ptrdiff_t) MAXOCTALNUMBUFLEN) {
+        // Integer overflow is an undefined behavior, but we do not emit any 
+        // errors for overflow in other arguments, so just write zero
+        memcpy(num_s, "0", 2);
+      } else {
+        memcpy(num_s, s, (e - s) + 1);
+        num_s[e - s + 1] = NUL;
+      }
 
       if ((n = sscanf(num_s, "%lo", &number)) != (int) (e - s + 1)) {
         // TODO: check errno
         // TODO: give error message
         return FAIL;
       }
-      CALL(dump_number, (long) number)
+      CALL(dump_number, number)
       break;
+#undef MAXOCTALNUMBUFLEN
     }
     default: {
       assert(false);
