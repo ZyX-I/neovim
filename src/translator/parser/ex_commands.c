@@ -11,6 +11,7 @@
 #include "vim.h"
 #include "types.h"
 #include "memory.h"
+#include "strings.h"
 #include "misc2.h"
 #include "charset.h"
 #include "globals.h"

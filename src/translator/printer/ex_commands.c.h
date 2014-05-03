@@ -5,7 +5,7 @@
 
 #include "vim.h"
 #include "memory.h"
-#include "misc2.h"
+#include "strings.h"
 
 #include "translator/printer/ch_macros.h"
 #include "translator/printer/expressions.h"

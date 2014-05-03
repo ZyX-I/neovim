@@ -3,6 +3,7 @@
 
 #include "vim.h"
 #include "memory.h"
+#include "strings.h"
 #include "misc2.h"
 
 #include "translator/parser/ex_commands.h"
