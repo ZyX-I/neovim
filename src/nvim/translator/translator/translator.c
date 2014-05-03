@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <stdint.h>
+#include <errno.h>
 #undef __STDC_LIMIT_MACROS
 #undef __STDC_FORMAT_MACROS
 
@@ -13,7 +14,7 @@
 #include "nvim/mbyte.h"
 #include "nvim/charset.h"
 #include "nvim/keymap.h"
-#include "nvim/memory.h"
+#include "nvim/garray.h"
 
 #include "nvim/translator/translator/translator.h"
 #include "nvim/translator/parser/expressions.h"
@@ -2168,23 +2169,30 @@ static int translate_script_stdout(const CommandNode *const node)
 ///
 /// @return String in allocated memory or NULL in case of error or when there 
 ///         are no more lines.
-static char_u *fgetline_file(int c, FILE *file, int indent)
+static char_u *fgetline_file(int _, FILE *file, int indent)
 {
-  char *res;
-  size_t len;
+  int c;
+  garray_T ga;
 
-  if ((res = ALLOC_CLEAR_NEW(char, 1024)) == NULL)
+  ga_init(&ga, sizeof(char), 1);
+
+  errno = 0;
+
+  while ((c = fgetc(file)) != EOF) {
+    if (c == '\n')
+      break;
+    ga_append(&ga, c);
+  }
+  ga_append(&ga, NUL);
+
+  if (c == EOF && errno != 0) {
+    ga_clear(&ga);
     return NULL;
-
-  if (fgets(res, 1024, file) == NULL)
+  } else if (ga.ga_len == 0) {
     return NULL;
-
-  len = STRLEN(res);
-
-  if (res[len - 1] == '\n')
-    res[len - 1] = NUL;
-
-  return (char_u *) res;
+  } else {
+    return (char_u *) ga.ga_data;
+  }
 }
 
 /// Translate script passed through stdin to stdout
