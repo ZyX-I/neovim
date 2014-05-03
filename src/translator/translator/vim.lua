@@ -296,10 +296,14 @@ err = {
 
 non_nil = function(wrapped)
   return function(state, ...)
-    local k, v
-    for k, v in pairs({...}) do
-      if v == nil then
-        return nil
+    local i
+    local maxi = select('#', ...)
+    local t = {...}
+    if maxi ~= 0 then
+      for i = 1,maxi do
+        if t[i] == nil then
+          return nil
+        end
       end
     end
     return wrapped(state, ...)
@@ -423,7 +427,8 @@ assign_slice = non_nil(function(state, val, lst, index1, index2)
   end
 end)
 
-assign_slice_function = non_nil(function(state, unique, val, lst, index1, index2)
+assign_slice_function = non_nil(function(state, unique, val, lst, index1,
+                                         index2)
   t = vim_type(lst)
   if (t == VIM_LIST) then
     err.err(state, lst_position, true,
