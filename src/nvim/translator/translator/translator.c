@@ -254,7 +254,7 @@ static WFDEC(dump_number, long number)
 {
   char buf[NUMBUFLEN];
 
-  if (sprintf(buf, "%ld", number) == 0)
+  if (snprintf(buf, NUMBUFLEN, "%ld", number) == 0)
     return FAIL;
 
   W(buf)
@@ -968,10 +968,11 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
 
     *start = expr->position;
     if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position)) {
+      isfunc = true;
       char_u *s;
       for (s = expr->position + 1; s != expr->end_position; s++) {
         if (!(ASCII_ISLOWER(*s) || VIM_ISDIGIT(*s))) {
-          isfunc = true;
+          isfunc = false;
           break;
         }
       }
@@ -1154,24 +1155,28 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
              || expr->type == kExprList);
       switch (expr->type) {
         case kExprDictionary: {
-          WS("vim.dict.new(state, ")
+          WS("vim.dict.new(state")
           break;
         }
         case kExprList: {
-          WS("vim.list.new(state, ")
+          WS("vim.list.new(state")
           break;
         }
         case kExprSubscript: {
-          if (expr->children->next->next == NULL)
-            WS("vim.subscript(state, ")
-          else
-            WS("vim.slice(state, ")
+          if (expr->children->next->next == NULL) {
+            if (is_funccall)
+              WS("vim.func_subscript(state")
+            else
+              WS("vim.subscript(state")
+          } else {
+            WS("vim.slice(state")
+          }
           break;
         }
 
 #define OPERATOR(op_type, op) \
         case op_type: { \
-          WS("vim." op "(state, ") \
+          WS("vim." op "(state") \
           break; \
         }
 
@@ -1194,7 +1199,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
             reversed = true; \
             WS("vim.negate_logical(state, ") \
           } \
-          WS("vim." op "(state, ") \
+          WS("vim." op "(state") \
           CALL(dump_bool, (bool) expr->ignore_case) \
           WS(", ") \
           break; \
@@ -1214,18 +1219,14 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
 
       current_expr = expr->children;
       if (expr->type == kExprCall) {
+        WS(", ")
         CALL(translate_expr, current_expr, true)
         current_expr = current_expr->next;
       }
-      if (current_expr != NULL)
-        for (;;) {
-          CALL(translate_expr, current_expr, false)
-          current_expr = current_expr->next;
-          if (current_expr == NULL)
-            break;
-          else
-            WS(", ")
-        }
+      for (; current_expr != NULL; current_expr=current_expr->next) {
+        WS(", ")
+        CALL(translate_expr, current_expr, false)
+      }
       WS(")")
 
       if (reversed)
@@ -1538,7 +1539,7 @@ static WFDEC(translate_assignment, const ExpressionNode *const lval_expr,
     assert(val_num > 0);
 
     WINDENT(indent)
-    WS("if (state.functions.type(state, ")
+    WS("if (vim.type(state, ")
     ADDINDENTVAR(rhs_var)
     WS(") == vim.VIM_LIST) then\n")
 
