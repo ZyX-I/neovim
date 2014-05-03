@@ -1756,8 +1756,10 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     return OK;
   } else if (node->type == kCmdLet
              && node->args[ARG_LET_RHS].arg.expr != NULL) {
+    const ExpressionNode *lval_expr = node->args[ARG_LET_LHS].arg.expr;
+    const ExpressionNode *rval_expr = node->args[ARG_LET_RHS].arg.expr;
     do_arg_dump = false;
-    if (node->args[ARG_LET_LHS].arg.expr->type == kExprList) {
+    if (lval_expr->type == kExprList) {
       bool has_rest = false;
       size_t val_num = 0;
       const ExpressionNode *current_expr;
@@ -1766,10 +1768,10 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       WS("local ")
       ADDINDENTVAR(rhs_var)
       WS(" = ")
-      CALL(translate_expr, node->args[ARG_LET_RHS].arg.expr, false)
+      CALL(translate_expr, rval_expr, false)
       WS("\n")
 
-      current_expr = node->args[ARG_LET_LHS].arg.expr->children;
+      current_expr = lval_expr->children;
       for (; current_expr != NULL; current_expr = current_expr->next)
         if (current_expr->type == kExprListRest)
           has_rest = true;
@@ -1794,7 +1796,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       CALL(dump_number, (long) val_num)
       WS(") then\n")
 
-      current_expr = node->args[ARG_LET_LHS].arg.expr->children;
+      current_expr = lval_expr->children;
       for (size_t i = 0; i < val_num; i++) {
         LetListItemAssArgs args = {
           i,
@@ -1849,10 +1851,9 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       WINDENT(indent)
       WS("end\n")
     } else {
-      CALL(translate_lval, node->args[ARG_LET_LHS].arg.expr,
-                           false, false,
+      CALL(translate_lval, lval_expr, false, false,
                            (AssignmentValueDump) (&translate_rval_expr),
-                           node->args[ARG_LET_RHS].arg.expr)
+                           rval_expr)
     }
     return OK;
   }
