@@ -157,7 +157,7 @@ typedef enum {
   kTransFunc,
 } TranslationOptions;
 
-typedef WFDEC((*AssignmentValueDump), void *dump_cookie);
+typedef WFDEC((*AssignmentValueDump), const void *const dump_cookie);
 
 typedef struct {
   const CommandNode *node;
@@ -168,6 +168,10 @@ typedef struct {
   size_t idx;
   INDENTVARDEFS(var)
 } LetListItemAssArgs;
+
+typedef struct {
+  INDENTVARDEFS(var)
+} IndentVarAssArgs;
 
 typedef enum {
   kOptDefault = 0,
@@ -188,6 +192,8 @@ static WFDEC(translate_range, const Range *const range);
 static WFDEC(translate_ex_flags, uint_least8_t exflags);
 static WFDEC(translate_number, ExpressionType type, const char_u *const s,
              const char_u *const e);
+static WFDEC(translate_string, ExpressionType type, const char_u *const s,
+             const char_u *const e);
 static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
              uint_least8_t flags);
 static WFDEC(translate_expr, const ExpressionNode *const expr,
@@ -198,8 +204,19 @@ static WFDEC(translate_varname, const ExpressionNode *const expr,
                                 const bool is_funccall);
 static WFDEC(translate_lval, const ExpressionNode *const expr,
                              const bool is_funccall, const bool unique,
-                             const AssignmentValueDump dump, void *dump_cookie);
-static WFDEC(translate_node, const CommandNode *const node, size_t indent);
+                             const AssignmentValueDump dump,
+                             const void *const dump_cookie);
+static WFDEC(translate_let_list_item, const LetListItemAssArgs *const args);
+static WFDEC(translate_let_list_rest, const LetListItemAssArgs *const args);
+static WFDEC(translate_rval_expr, const ExpressionNode *const expr);
+static WFDEC(dump_indentvar, const IndentVarAssArgs *const args);
+static WFDEC(translate_assignment, const ExpressionNode *const lval_expr,
+                                   const size_t indent,
+                                   const char *const err_line,
+                                   AssignmentValueDump dump,
+                                   const void *const dump_cookie);
+static WFDEC(translate_node, const CommandNode *const node,
+                             const size_t indent);
 static WFDEC(translate_nodes, const CommandNode *const node, size_t indent);
 static int translate_script_stdout(const CommandNode *const node);
 static char_u *fgetline_file(int c, FILE *file, int indent);
@@ -1343,6 +1360,8 @@ static WFDEC(translate_varname, const ExpressionNode *const expr,
 
 /// Translate lvalue into one of vim.assign_* calls
 ///
+/// @note Newline is not written.
+///
 /// @param[in]  expr         Translated expression.
 /// @param[in]  is_funccall  True if it translates :function definition.
 /// @param[in]  unique       True if assignment must be unique.
@@ -1352,7 +1371,8 @@ static WFDEC(translate_varname, const ExpressionNode *const expr,
 /// @return FAIL in case of unrecoverable error, OK otherwise.
 static WFDEC(translate_lval, const ExpressionNode *const expr,
                              const bool is_funccall, const bool unique,
-                             const AssignmentValueDump dump, void *dump_cookie)
+                             const AssignmentValueDump dump,
+                             const void *const dump_cookie)
 {
 #define ADD_ASSIGN(what) \
   { \
@@ -1425,12 +1445,11 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
       assert(false);
     }
   }
-  WS("\n")
   return OK;
 #undef ADD_ASSIGN
 }
 
-static WFDEC(translate_let_list_item, LetListItemAssArgs *args)
+static WFDEC(translate_let_list_item, const LetListItemAssArgs *const args)
 {
   WS("vim.list.raw_subscript(")
   ADDINDENTVAR(args->var)
@@ -1440,7 +1459,7 @@ static WFDEC(translate_let_list_item, LetListItemAssArgs *args)
   return OK;
 }
 
-static WFDEC(translate_let_list_rest, LetListItemAssArgs *args)
+static WFDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
 {
   WS("vim.list.slice_to_end(state, ")
   ADDINDENTVAR(args->var)
@@ -1450,17 +1469,162 @@ static WFDEC(translate_let_list_rest, LetListItemAssArgs *args)
   return OK;
 }
 
-static WFDEC(translate_rval_expr, ExpressionNode *expr)
+static WFDEC(translate_rval_expr, const ExpressionNode *const expr)
 {
   CALL(translate_expr, expr, false)
   return OK;
+}
+
+static WFDEC(dump_indentvar, const IndentVarAssArgs *const args)
+{
+  ADDINDENTVAR(args->var)
+  return OK;
+}
+
+/// Translate assignment
+///
+/// @note It is assumed that this function is called with indent for the first 
+///       line already written.
+///
+/// @param[in]  lval_expr    Value being assigned to.
+/// @param[in]  indent       Current level of indentation.
+/// @param[in]  err_line     Line that should be run when error occurred. May be 
+///                          NULL.
+/// @param[in]  dump         Function used to dump value that will be assigned.
+/// @param[in]  dump_cookie  First argument to the above function.
+static WFDEC(translate_assignment, const ExpressionNode *const lval_expr,
+                                   const size_t indent,
+                                   const char *const err_line,
+                                   AssignmentValueDump dump,
+                                   const void *const dump_cookie)
+{
+#define ADD_ASSIGN(expr, err_line, indent, dump, dump_cookie) \
+      if (err_line != NULL) \
+        WS("if ") \
+      CALL(translate_lval, expr, false, false, dump, dump_cookie) \
+      if (err_line != NULL) { \
+        WS(" == nil then\n") \
+        WINDENT(indent + 1) \
+        W(err_line) \
+        WS("\n") \
+        WINDENT(indent) \
+        WS("end\n") \
+      } else { \
+        WS("\n") \
+      }
+  if (lval_expr->type == kExprList) {
+    bool has_rest = false;
+    size_t val_num = 0;
+    const ExpressionNode *current_expr;
+
+    INDENTVAR(rhs_var, "rhs")
+    WS("local ")
+    ADDINDENTVAR(rhs_var)
+    WS(" = ")
+    CALL(dump, dump_cookie)
+    WS("\n")
+
+    current_expr = lval_expr->children;
+    for (; current_expr != NULL; current_expr = current_expr->next)
+      if (current_expr->type == kExprListRest)
+        has_rest = true;
+      else
+        val_num++;
+
+    assert(val_num > 0);
+
+    WINDENT(indent)
+    WS("if (state.functions.type(state, ")
+    ADDINDENTVAR(rhs_var)
+    WS(") == vim.VIM_LIST) then\n")
+
+    WINDENT(indent + 1)
+    WS("if (vim.list.length(state, ")
+    ADDINDENTVAR(rhs_var)
+    WS(")")
+    if (has_rest)
+      WS(" >= ")
+    else
+      WS(" == ")
+    CALL(dump_number, (long) val_num)
+    WS(") then\n")
+
+    current_expr = lval_expr->children;
+    for (size_t i = 0; i < val_num; i++) {
+      LetListItemAssArgs args = {
+        i,
+        INDENTVARARGS(rhs_var)
+      };
+      WINDENT(indent + 2)
+      ADD_ASSIGN(current_expr, err_line, indent + 2,
+                 (AssignmentValueDump) (&translate_let_list_item), &args)
+      current_expr = current_expr->next;
+    }
+    if (has_rest) {
+      LetListItemAssArgs args = {
+        val_num,
+        INDENTVARARGS(rhs_var)
+      };
+      WINDENT(indent + 2)
+      ADD_ASSIGN(current_expr->children, err_line, indent + 2,
+                 (AssignmentValueDump) (&translate_let_list_rest), &args)
+    }
+
+    WINDENT(indent + 1)
+    WS("else\n")
+    WINDENT(indent + 2)
+    if (!has_rest) {
+      WS("if (vim.list.length(state, ")
+      ADDINDENTVAR(rhs_var)
+      WS(") > ")
+      CALL(dump_number, (long) val_num)
+      WS(") then\n")
+      WINDENT(indent + 3)
+    }
+    // TODO Dump position
+    WS("vim.err.err(state, nil, true, "
+        "\"E688: More targets than List items\")\n")
+    if (!has_rest) {
+      WINDENT(indent + 2)
+      WS("else\n")
+      WINDENT(indent + 3)
+      WS("vim.err.err(state, nil, true, "
+          "\"E687: Less targets than List items\")\n")
+      WINDENT(indent + 2)
+      WS("end\n")
+    }
+    if (err_line != NULL) {
+      WINDENT(indent + 2)
+      W(err_line)
+      WS("\n")
+    }
+    WINDENT(indent + 1)
+    WS("end\n")
+
+    WINDENT(indent)
+    WS("else\n")
+    WINDENT(indent + 1)
+    WS("vim.err.err(state, nil, true, \"E714: List required\")\n")
+    if (err_line != NULL) {
+      WINDENT(indent + 1)
+      W(err_line)
+      WS("\n")
+    }
+    WINDENT(indent)
+    WS("end\n")
+  } else {
+    ADD_ASSIGN(lval_expr, err_line, indent, dump, dump_cookie)
+  }
+  return OK;
+#undef ADD_ASSIGN
 }
 
 /// Dump VimL Ex command
 ///
 /// @param[in]  node    Node to translate.
 /// @param[in]  indent  Indentation of the result.
-static WFDEC(translate_node, const CommandNode *const node, size_t indent)
+static WFDEC(translate_node, const CommandNode *const node,
+                             const size_t indent)
 {
   char_u *name;
   size_t start_from_arg = 0;
@@ -1515,7 +1679,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     CALL(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, true, !node->bang,
                          (AssignmentValueDump) &translate_function,
                          (void *) &args)
-    return OK;
+    WS("\n")
     return OK;
   } else if (node->type == kCmdFor) {
     INDENTVAR(iter_var, "i")
@@ -1530,7 +1694,16 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
     CALL(translate_expr, node->args[ARG_FOR_RHS].arg.expr, false)
     WS(") do\n")
 
-    // TODO assign variables
+    {
+      IndentVarAssArgs args = {
+        INDENTVARARGS(iter_var)
+      };
+      WINDENT(indent + 1)
+      CALL(translate_assignment, node->args[ARG_FOR_LHS].arg.expr, indent + 1,
+                                 "break",
+                                 (AssignmentValueDump) (&dump_indentvar),
+                                 &args)
+    }
 
     CALL(translate_nodes, node->children, indent + 1)
 
@@ -1754,103 +1927,9 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
              && node->args[ARG_LET_RHS].arg.expr != NULL) {
     const ExpressionNode *lval_expr = node->args[ARG_LET_LHS].arg.expr;
     const ExpressionNode *rval_expr = node->args[ARG_LET_RHS].arg.expr;
-    do_arg_dump = false;
-    if (lval_expr->type == kExprList) {
-      bool has_rest = false;
-      size_t val_num = 0;
-      const ExpressionNode *current_expr;
-
-      INDENTVAR(rhs_var, "rhs")
-      WS("local ")
-      ADDINDENTVAR(rhs_var)
-      WS(" = ")
-      CALL(translate_expr, rval_expr, false)
-      WS("\n")
-
-      current_expr = lval_expr->children;
-      for (; current_expr != NULL; current_expr = current_expr->next)
-        if (current_expr->type == kExprListRest)
-          has_rest = true;
-        else
-          val_num++;
-
-      assert(val_num > 0);
-
-      WINDENT(indent)
-      WS("if (state.functions.type(state, ")
-      ADDINDENTVAR(rhs_var)
-      WS(") == vim.VIM_LIST) then\n")
-
-      WINDENT(indent + 1)
-      WS("if (vim.list.length(state, ")
-      ADDINDENTVAR(rhs_var)
-      WS(")")
-      if (has_rest)
-        WS(" >= ")
-      else
-        WS(" == ")
-      CALL(dump_number, (long) val_num)
-      WS(") then\n")
-
-      current_expr = lval_expr->children;
-      for (size_t i = 0; i < val_num; i++) {
-        LetListItemAssArgs args = {
-          i,
-          INDENTVARARGS(rhs_var)
-        };
-        WINDENT(indent + 2)
-        CALL(translate_lval, current_expr, false, false,
-                             (AssignmentValueDump) (&translate_let_list_item),
-                             &args)
-        current_expr = current_expr->next;
-      }
-      if (has_rest) {
-        LetListItemAssArgs args = {
-          val_num,
-          INDENTVARARGS(rhs_var)
-        };
-        CALL(translate_lval, current_expr->children, false, false,
-                             (AssignmentValueDump) (&translate_let_list_rest),
-                             &args)
-      }
-
-      WINDENT(indent + 1)
-      WS("else\n")
-      WINDENT(indent + 2)
-      if (!has_rest) {
-        WS("if (vim.list.length(state, ")
-        ADDINDENTVAR(rhs_var)
-        WS(") > ")
-        CALL(dump_number, (long) val_num)
-        WS(") then\n")
-        WINDENT(indent + 3)
-      }
-      // TODO Dump position
-      WS("vim.err.err(state, nil, true, "
-          "\"E688: More targets than List items\")\n")
-      if (!has_rest) {
-        WINDENT(indent + 2)
-        WS("else\n")
-        WINDENT(indent + 3)
-        WS("vim.err.err(state, nil, true, "
-            "\"E687: Less targets than List items\")\n")
-        WINDENT(indent + 2)
-        WS("end\n")
-      }
-      WINDENT(indent + 1)
-      WS("end\n")
-
-      WINDENT(indent)
-      WS("else\n")
-      WINDENT(indent + 1)
-      WS("vim.err.err(state, nil, true, \"E714: List required\")\n")
-      WINDENT(indent)
-      WS("end\n")
-    } else {
-      CALL(translate_lval, lval_expr, false, false,
-                           (AssignmentValueDump) (&translate_rval_expr),
-                           rval_expr)
-    }
+    CALL(translate_assignment, lval_expr, indent, NULL,
+                               (AssignmentValueDump) &translate_rval_expr,
+                               (void *) rval_expr)
     return OK;
   }
 
