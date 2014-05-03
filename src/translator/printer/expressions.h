@@ -8,9 +8,16 @@
 #include "translator/parser/expressions.h"
 #include "translator/printer/printer.h"
 
-char *parse0_repr(char_u *arg, bool dump_as_expr);
-size_t expr_node_dump_len(const PrinterOptions *const po, ExpressionNode *node);
-void expr_node_dump(const PrinterOptions *const po, ExpressionNode *node,
+size_t expr_node_dump_len(const PrinterOptions *const po,
+                          const ExpressionNode *const node);
+void expr_node_dump(const PrinterOptions *const po,
+                    const ExpressionNode *const node,
+                    char **pp);
+
+size_t expr_node_repr_len(const PrinterOptions *const po,
+                          const ExpressionNode *const node);
+void expr_node_repr(const PrinterOptions *const po,
+                    const ExpressionNode *const node,
                     char **pp);
 
 #endif  // NEOVIM_TRANSLATOR_PRINTER_EXPRESSIONS_H

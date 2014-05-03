@@ -1537,22 +1537,3 @@ ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
 
   return result;
 }
-
-void free_test_expr_result(TestExprResult *result)
-{
-  free_expr(result->node);
-  vim_free(result);
-}
-
-TestExprResult *parse0_test(char_u *arg)
-{
-  TestExprResult *result;
-
-  if ((result = XCALLOC_NEW(TestExprResult, 1)) == NULL)
-    return NULL;
-
-  result->end = arg;
-  result->node = parse0_err(&(result->end), &(result->error));
-
-  return result;
-}

@@ -1,5 +1,9 @@
 #ifndef NEOVIM_STRINGS_H
 #define NEOVIM_STRINGS_H
+
+#include <stdbool.h>
+#include "types.h"
+
 char_u *vim_strsave(char_u *string);
 char_u *vim_strnsave(char_u *string, int len);
 char_u *vim_strsave_escaped(char_u *string, char_u *esc_chars);

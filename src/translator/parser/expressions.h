@@ -121,18 +121,10 @@ typedef struct error {
   char_u *position;
 } ExpressionParserError;
 
-typedef struct {
-  ExpressionNode *node;
-  ExpressionParserError error;
-  char_u *end;
-} TestExprResult;
-
 typedef ExpressionNode *(*ExpressionParser)(char_u **, ExpressionParserError *);
 
 ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error);
 void free_expr(ExpressionNode *node);
-void free_test_expr_result(TestExprResult *result);
-TestExprResult *parse0_test(char_u *arg);
 ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error);
 ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
                            ExpressionParser parse, bool listends,

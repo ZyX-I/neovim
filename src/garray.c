@@ -10,6 +10,7 @@
 #include "memory.h"
 #include "path.h"
 #include "garray.h"
+#include "strings.h"
 
 // #include "globals.h"
 #include "memline.h"
