@@ -1450,6 +1450,12 @@ static WFDEC(translate_let_list_rest, LetListItemAssArgs *args)
   return OK;
 }
 
+static WFDEC(translate_rval_expr, ExpressionNode *expr)
+{
+  CALL(translate_expr, expr, false)
+  return OK;
+}
+
 /// Dump VimL Ex command
 ///
 /// @param[in]  node    Node to translate.
@@ -1769,7 +1775,6 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       assert(val_num > 0);
 
       WINDENT(indent)
-      // TODO Dump position
       WS("if (state.functions.type(state, ")
       ADDINDENTVAR(rhs_var)
       WS(") == vim.VIM_LIST) then\n")
@@ -1818,6 +1823,7 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
         WS(") then\n")
         WINDENT(indent + 3)
       }
+      // TODO Dump position
       WS("vim.err.err(state, nil, true, "
           "\"E688: More targets than List items\")\n")
       if (!has_rest) {
@@ -1838,6 +1844,11 @@ static WFDEC(translate_node, const CommandNode *const node, size_t indent)
       WS("vim.err.err(state, nil, true, \"E714: List required\")\n")
       WINDENT(indent)
       WS("end\n")
+    } else {
+      CALL(translate_lval, node->args[ARG_LET_LHS].arg.expr,
+                           false, false,
+                           (AssignmentValueDump) (&translate_rval_expr),
+                           node->args[ARG_LET_RHS].arg.expr)
     }
     return OK;
   }
