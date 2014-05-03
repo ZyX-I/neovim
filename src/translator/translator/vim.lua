@@ -127,14 +127,19 @@ list = {
     raw_assign_subscript(lst, index, val)
     return true
   end,
-  next=function(it_state, lst)
+  next=function(it_state, _)
     local i = it_state.i
+    if i >= it_state.maxi then
+      return nil
+    end
     it_state.i = it_state.i + 1
-    return i, list.raw_subscript(lst, i)
+    return i, list.raw_subscript(it_state.lst, i)
   end,
   iterator=function(state, lst)
     local it_state = {
       i=0,
+      maxi=list.raw_length(lst),
+      lst=lst,
     }
     table.insert(lst.iterators, it_state)
     return list.next, it_state, lst
