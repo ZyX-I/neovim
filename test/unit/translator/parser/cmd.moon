@@ -28,6 +28,7 @@ describe 'parse_one_cmd', ->
     itn 'leftabove join', 'lefta join'
     itn 'lockmarks join', 'loc   j'
     itn 'noautocmd join', 'noa   j'
+    itn 'noswapfile edit', 'nos\te'
     itn 'rightbelow join', 'rightb join'
     itn 'sandbox join', 'san   j'
     itn 'silent join', 'sil   j'
