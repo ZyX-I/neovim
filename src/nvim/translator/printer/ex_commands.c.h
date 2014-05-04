@@ -14,19 +14,23 @@
 #include "nvim/translator/parser/ex_commands.h"
 
 // {{{ Function declarations
-static FDEC(unumber_repr, uintmax_t unumber);
-static FDEC(number_repr, intmax_t number);
-static FDEC(glob_repr, Glob *glob);
-static FDEC(regex_repr, Regex *regex);
-static FDEC(address_followup_repr, AddressFollowup *followup);
-static FDEC(address_repr, Address *address);
-static FDEC(range_repr, Range *range);
-static FDEC(node_name_repr, CommandType node_type, char_u *node_name,
-            bool node_bang);
-static FDEC(optflags_repr, uint_least32_t optflags, char_u *enc);
-static FDEC(count_repr, CommandNode *node);
-static FDEC(exflags_repr, uint_least8_t exflags);
-static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext);
+static FDEC(unumber_repr, const uintmax_t unumber);
+static FDEC(number_repr, const intmax_t number);
+static FDEC(glob_repr, const Glob *const glob);
+static FDEC(regex_repr, const Regex *const regex);
+static FDEC(address_followup_repr, const AddressFollowup *const followup);
+static FDEC(address_repr, const Address *const address);
+static FDEC(range_repr, const Range *const range);
+static FDEC(node_name_repr, const CommandType node_type,
+                            const char_u *const node_name,
+                            const bool node_bang);
+static FDEC(optflags_repr, const uint_least32_t optflags,
+                           const char_u *const enc);
+static FDEC(count_repr, const CommandNode *const node);
+static FDEC(exflags_repr, const uint_least8_t exflags);
+static FDEC(node_repr, const CommandNode *const node,
+                       const size_t indent,
+                       const bool barnext);
 // }}}
 
 #ifndef DEFINE_LENGTH
@@ -38,7 +42,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext);
 
 #include "nvim/translator/printer/ch_macros.h"
 
-static FDEC(unumber_repr, uintmax_t unumber)
+static FDEC(unumber_repr, const uintmax_t unumber)
 {
   FUNCTION_START;
 #ifdef DEFINE_LENGTH
@@ -61,7 +65,7 @@ static FDEC(unumber_repr, uintmax_t unumber)
   FUNCTION_END;
 }
 
-static FDEC(number_repr, intmax_t number)
+static FDEC(number_repr, const intmax_t number)
 {
   FUNCTION_START;
   ADD_CHAR((number >= 0 ? '+' : '-'));
@@ -69,10 +73,10 @@ static FDEC(number_repr, intmax_t number)
   FUNCTION_END;
 }
 
-static FDEC(glob_repr, Glob *glob)
+static FDEC(glob_repr, const Glob *const glob)
 {
   FUNCTION_START;
-  Glob *cur_glob;
+  const Glob *cur_glob;
 
   if (glob == NULL)
     RETURN;
@@ -159,7 +163,7 @@ static FDEC(glob_repr, Glob *glob)
   FUNCTION_END;
 }
 
-static FDEC(regex_repr, Regex *regex)
+static FDEC(regex_repr, const Regex *const regex)
 {
   FUNCTION_START;
   assert(regex->string != NULL);
@@ -167,7 +171,7 @@ static FDEC(regex_repr, Regex *regex)
   FUNCTION_END;
 }
 
-static FDEC(address_followup_repr, AddressFollowup *followup)
+static FDEC(address_followup_repr, const AddressFollowup *const followup)
 {
   FUNCTION_START;
 
@@ -201,7 +205,7 @@ static FDEC(address_followup_repr, AddressFollowup *followup)
   FUNCTION_END;
 }
 
-static FDEC(address_repr, Address *address)
+static FDEC(address_repr, const Address *const address)
 {
   FUNCTION_START;
 
@@ -258,7 +262,7 @@ static FDEC(address_repr, Address *address)
   FUNCTION_END;
 }
 
-static FDEC(range_repr, Range *range)
+static FDEC(range_repr, const Range *const range)
 {
   FUNCTION_START;
 
@@ -275,16 +279,17 @@ static FDEC(range_repr, Range *range)
   FUNCTION_END;
 }
 
-static FDEC(node_name_repr, CommandType node_type, char_u *node_name,
-            bool node_bang)
+static FDEC(node_name_repr, const CommandType node_type,
+                            const char_u *const node_name,
+                            const bool node_bang)
 {
   FUNCTION_START;
-  char_u *name;
+  const char_u *name;
 
   if (node_name != NULL)
     name = node_name;
   else if (CMDDEF(node_type).name == NULL)
-    name = (char_u *) "";
+    name = (const char_u *) "";
   else
     name = CMDDEF(node_type).name;
 
@@ -296,7 +301,8 @@ static FDEC(node_name_repr, CommandType node_type, char_u *node_name,
   FUNCTION_END;
 }
 
-static FDEC(optflags_repr, uint_least32_t optflags, char_u *enc)
+static FDEC(optflags_repr, const uint_least32_t optflags,
+                           const char_u *const enc)
 {
   FUNCTION_START;
 
@@ -355,7 +361,7 @@ static FDEC(optflags_repr, uint_least32_t optflags, char_u *enc)
   FUNCTION_END;
 }
 
-static FDEC(count_repr, CommandNode *node)
+static FDEC(count_repr, const CommandNode *const node)
 {
   FUNCTION_START;
 
@@ -383,7 +389,7 @@ static FDEC(count_repr, CommandNode *node)
   FUNCTION_END;
 }
 
-static FDEC(exflags_repr, uint_least8_t exflags)
+static FDEC(exflags_repr, const uint_least8_t exflags)
 {
   FUNCTION_START;
 
@@ -400,7 +406,9 @@ static FDEC(exflags_repr, uint_least8_t exflags)
   FUNCTION_END;
 }
 
-static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
+static FDEC(node_repr, const CommandNode *const node,
+                       const size_t indent,
+                       const bool barnext)
 {
   FUNCTION_START;
   size_t start_from_arg;
@@ -451,9 +459,9 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
   }
 
   if (node->type == kCmdSyntaxError) {
-    char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
-    char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
-    size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
+    const char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
+    const char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
+    const size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
     size_t line_len;
 
     ADD_STATIC_STRING("\\ error: ");
@@ -478,8 +486,8 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
       ADD_STATIC_STRING("!!!");
     }
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdAppend).parse) {
-    garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
-    int ga_len = ga->ga_len;
+    const garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
+    const int ga_len = ga->ga_len;
     int i;
 
     for (i = 0; i < ga_len ; i++) {
@@ -490,7 +498,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     ADD_CHAR('.');
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMap).parse
              || CMDDEF(node->type).parse == CMDDEF(kCmdUnmap).parse) {
-    uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
+    const uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
 
     if (map_flags)
       ADD_CHAR(' ');
@@ -545,7 +553,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
       ADD_STATIC_STRING("<buffer>");
     }
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMenu).parse) {
-    uint_least32_t menu_flags = node->args[ARG_MENU_FLAGS].arg.flags;
+    const uint_least32_t menu_flags = node->args[ARG_MENU_FLAGS].arg.flags;
 
     if (menu_flags & (FLAG_MENU_SILENT|FLAG_MENU_SPECIAL|FLAG_MENU_SCRIPT))
       ADD_CHAR(' ');
@@ -567,7 +575,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     }
 
     if (node->args[ARG_MENU_PRI].arg.numbers != NULL) {
-      int *number = node->args[ARG_MENU_PRI].arg.numbers;
+      const int *number = node->args[ARG_MENU_PRI].arg.numbers;
 
       ADD_CHAR(' ');
 
@@ -632,8 +640,8 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
         ADD_CHAR(' ');
         F(expr_node_dump, node->args[ARG_FUNC_NAME].arg.expr);
         if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
-          uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
-          garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
+          const uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
+          const garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
           SPACES(po->command.function.before_sub)
           ADD_CHAR('(');
           SPACES(po->command.function.call.after_start)
@@ -667,7 +675,7 @@ static FDEC(node_repr, CommandNode *node, size_t indent, bool barnext)
     }
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLet).parse) {
     if (node->args[ARG_LET_LHS].arg.expr != NULL) {
-      LetAssignmentType ass_type =
+      const LetAssignmentType ass_type =
           (LetAssignmentType) node->args[ARG_LET_ASS_TYPE].arg.flags;
       bool add_rval = true;
 
