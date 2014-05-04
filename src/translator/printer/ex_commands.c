@@ -7,10 +7,10 @@
 void cmd_repr(const PrinterOptions *const po, const CommandNode *node,
               char **pp)
 {
-  node_repr(po, (CommandNode *) node, 0, false, pp);
+  node_repr(po, node, 0, false, pp);
 }
 
 size_t cmd_repr_len(const PrinterOptions *const po, const CommandNode *node)
 {
-  return node_repr_len(po, (CommandNode *) node, 0, false);
+  return node_repr_len(po, node, 0, false);
 }

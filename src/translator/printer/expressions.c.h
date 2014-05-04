@@ -10,8 +10,8 @@
 #include "translator/printer/ch_macros.h"
 
 // {{{ Function declarations
-static FDEC(node_dump, ExpressionNode *node);
-static FDEC(node_repr, ExpressionNode *node);
+static FDEC(node_dump, const ExpressionNode *const node);
+static FDEC(node_repr, const ExpressionNode *const node);
 // }}}
 
 #ifndef DEFINE_LENGTH
@@ -23,7 +23,7 @@ static FDEC(node_repr, ExpressionNode *node);
 
 #include "translator/printer/ch_macros.h"
 
-static FDEC(node_dump, ExpressionNode *node)
+static FDEC(node_dump, const ExpressionNode *const node)
 {
   FUNCTION_START;
   bool add_ccs = false;
@@ -268,7 +268,7 @@ static FDEC(node_dump, ExpressionNode *node)
   FUNCTION_END;
 }
 
-static FDEC(node_repr, ExpressionNode *node)
+static FDEC(node_repr, const ExpressionNode *const node)
 {
   FUNCTION_START;
 

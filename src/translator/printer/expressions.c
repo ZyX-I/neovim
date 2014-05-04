@@ -185,7 +185,7 @@ size_t expr_node_dump_len(const PrinterOptions *const po,
 
   while (next != NULL) {
     len++;
-    len += node_dump_len(po, (ExpressionNode *) next);
+    len += node_dump_len(po, next);
     next = next->next;
   }
 
@@ -202,7 +202,7 @@ void expr_node_dump(const PrinterOptions *const po,
 
   while (next != NULL) {
     *(*pp)++ = ' ';
-    node_dump(po, (ExpressionNode *) next, pp);
+    node_dump(po, next, pp);
     next = next->next;
   }
 }
@@ -210,12 +210,12 @@ void expr_node_dump(const PrinterOptions *const po,
 size_t expr_node_repr_len(const PrinterOptions *const po,
                           const ExpressionNode *const node)
 {
-  return node_repr_len(po, (ExpressionNode *) node);
+  return node_repr_len(po, node);
 }
 
 void expr_node_repr(const PrinterOptions *const po,
                     const ExpressionNode *const node,
                     char **pp)
 {
-  node_repr(po, (ExpressionNode *) node, pp);
+  node_repr(po, node, pp);
 }
