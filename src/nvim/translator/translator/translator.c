@@ -1487,6 +1487,14 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
 #undef ADD_ASSIGN
 }
 
+/// Helper function that dumps list element
+///
+/// List is located in indentvar described in args.
+///
+/// Indentvar is a variable with name based on indentation level. It is used to 
+/// make variable name unique in some scope.
+///
+/// @param[in]  args  Indentvar description and number of the dumped element.
 static WFDEC(translate_let_list_item, const LetListItemAssArgs *const args)
 {
   WS("vim.list.raw_subscript(")
@@ -1497,6 +1505,15 @@ static WFDEC(translate_let_list_item, const LetListItemAssArgs *const args)
   return OK;
 }
 
+/// Helper function that dumps tail of the list
+///
+/// List is located in indentvar described in args.
+///
+/// Indentvar is a variable with name based on indentation level. It is used to 
+/// make variable name unique in some scope.
+///
+/// @param[in]  args  Indentvar description and number of first element in 
+///                   dumped list.
 static WFDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
 {
   WS("vim.list.slice_to_end(state, ")
@@ -1507,12 +1524,23 @@ static WFDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
   return OK;
 }
 
+/// Helper functions that dumps expression
+///
+/// Proxy to translate_expr without the second argument.
+///
+/// @param[in]  expr  Dumped expression.
 static WFDEC(translate_rval_expr, const ExpressionNode *const expr)
 {
   CALL(translate_expr, expr, false)
   return OK;
 }
 
+/// Helper function for dumping rvalue indentvar
+///
+/// Indentvar is a variable with name based on indentation level. It is used to 
+/// make variable name unique in some scope.
+///
+/// @param[in]  args  Indentvar description.
 static WFDEC(dump_indentvar, const IndentVarAssArgs *const args)
 {
   ADDINDENTVAR(args->var)
