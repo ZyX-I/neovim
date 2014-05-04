@@ -100,10 +100,11 @@ typedef enum {
 
 /// Structure to represent VimL expressions
 typedef struct expression_node {
-  ExpressionType type;   ///< Node type.
-  char_u *position;      ///< Position of expression token start inside
-                         ///< a parsed string.
-  char_u *end_position;  ///< Position of last character of expression token.
+  ExpressionType type;     ///< Node type.
+  const char_u *position;  ///< Position of expression token start inside 
+                           ///< a parsed string.
+  const char_u *end_position;  ///< Position of last character of expression 
+                               ///< token.
   CaseCompareStrategy ignore_case;  ///< Determines whether case should be 
                                     ///< ignored while comparing. Only valid 
                                     ///< for comparison operators: 
@@ -117,11 +118,12 @@ typedef struct expression_node {
 } ExpressionNode;
 
 typedef struct error {
-  char *message;
-  char_u *position;
+  const char *message;
+  const char_u *position;
 } ExpressionParserError;
 
-typedef ExpressionNode *(*ExpressionParser)(char_u **, ExpressionParserError *);
+typedef ExpressionNode *(*ExpressionParser)(const char_u **,
+                                            ExpressionParserError *);
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/parser/expressions.h.generated.h"

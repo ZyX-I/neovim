@@ -26,6 +26,10 @@
 #include "nvim/translator/parser/expressions.h"
 #include "nvim/translator/parser/ex_commands.h"
 
+#define vim_strsave(arg) vim_strsave((char_u *) (arg))
+#define getdigits(arg) getdigits((char_u **) (arg))
+#define skipwhite(arg) skipwhite((char_u *) (arg))
+
 typedef struct {
   CommandType find_in_stack;
   CommandType find_in_stack_2;
@@ -363,15 +367,15 @@ void free_cmd(CommandNode *node)
   vim_free(node);
 }
 
-static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
+static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
                     char_u **expr, bool is_branch, bool is_glob)
 {
-  char_u *p = *pp;
+  const char_u *p = *pp;
   Glob **next = glob;
-  char_u *real_expr_start;
-  char_u *e;
+  const char_u *real_expr_start;
+  const char_u *e;
   size_t literal_length = 0;
-  char_u *literal_start = NULL;
+  const char_u *literal_start = NULL;
   int ret = FAIL;
 
   *glob = NULL;
@@ -493,12 +497,9 @@ static int get_glob(char_u **pp, CommandParserError *error, Glob **glob,
     } else {
       if (literal_start != NULL) {
         char_u *s;
-        char_u *t;
-        if ((*next = glob_alloc(kPatLiteral)) == NULL)
-          goto get_glob_error_return;
-        if (((*next)->data.str = ALLOC_CLEAR_NEW(char_u, literal_length + 1))
-            == NULL)
-          goto get_glob_error_return;
+        const char_u *t;
+        *next = glob_alloc(kPatLiteral);
+        (*next)->data.str = XCALLOC_NEW(char_u, literal_length + 1);
         s = (*next)->data.str;
 
         for (t = literal_start; t < p; t++) {
@@ -808,7 +809,7 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
   if (expr) {
     ExpressionParserError expr_error;
     ExpressionNode *expr = NULL;
-    char_u *rhs_end = rhs;
+    const char_u *rhs_end = rhs;
 
     expr_error.position = NULL;
     expr_error.message = NULL;
@@ -1273,13 +1274,13 @@ static int do_parse_expr(char_u **pp,
 {
   ExpressionNode *expr;
   ExpressionParserError expr_error;
-  char_u *expr_str_start;
-  char_u *expr_str;
+  const char_u *expr_str_start;
+  const char_u *expr_str;
 
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_EXPR_STR].arg.str = expr_str;
+  node->args[ARG_EXPR_STR].arg.str = (char_u *) expr_str;
   expr_str_start = expr_str;
 
   if (multi)
@@ -1551,7 +1552,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 ///
 /// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when 
 ///         out of memory.
-static int parse_lval(char_u **pp,
+static int parse_lval(const char_u **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       ExpressionNode **expr,
@@ -1559,7 +1560,7 @@ static int parse_lval(char_u **pp,
 {
   ExpressionParserError expr_error;
   ExpressionNode *next;
-  char_u *expr_start = *pp;
+  const char_u *expr_start = *pp;
   bool allow_list = (bool) (flags&FLAG_PLVAL_LISTMULT);
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
@@ -1609,14 +1610,14 @@ static int parse_lvals(char_u **pp,
                        void *cookie)
 {
   ExpressionNode *expr;
-  char_u *expr_str;
-  char_u *expr_str_start;
+  const char_u *expr_str;
+  const char_u *expr_str_start;
   int ret;
 
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_EXPRS_STR].arg.str = expr_str;
+  node->args[ARG_EXPRS_STR].arg.str = (char_u *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1665,14 +1666,14 @@ static int parse_for(char_u **pp,
   ExpressionNode *expr;
   ExpressionNode *list_expr;
   ExpressionParserError expr_error;
-  char_u *expr_str;
-  char_u *expr_str_start;
+  const char_u *expr_str;
+  const char_u *expr_str_start;
   int ret;
 
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_FOR_STR].arg.str = expr_str;
+  node->args[ARG_FOR_STR].arg.str = (char_u *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1723,8 +1724,8 @@ static int parse_function(char_u **pp,
   char_u *p = *pp;
   ExpressionNode *expr;
   int ret;
-  char_u *expr_str;
-  char_u *expr_str_start;
+  const char_u *expr_str;
+  const char_u *expr_str_start;
   garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.strs);
   uint_least32_t flags = 0;
   bool mustend = false;
@@ -1738,7 +1739,7 @@ static int parse_function(char_u **pp,
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_FUNC_STR].arg.str = expr_str;
+  node->args[ARG_FUNC_STR].arg.str = (char_u *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1871,8 +1872,8 @@ static int parse_let(char_u **pp,
   ExpressionNode *expr;
   ExpressionParserError expr_error;
   int ret;
-  char_u *expr_str;
-  char_u *expr_str_start;
+  const char_u *expr_str;
+  const char_u *expr_str_start;
   ExpressionNode *rval_expr;
   LetAssignmentType ass_type = 0;
 
@@ -1882,7 +1883,7 @@ static int parse_let(char_u **pp,
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_LET_STR].arg.str = expr_str;
+  node->args[ARG_LET_STR].arg.str = (char_u *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -3035,7 +3036,9 @@ int parse_one_cmd(char_u **pp,
 
   if (CMDDEF(type).flags & XFILE) {
     int ret;
-    if ((ret = get_glob(&p, &error, &glob, &expr, false, true)) == FAIL) {
+    // FIXME
+    if ((ret = get_glob((const char_u **)&p, &error, &glob, &expr, false, true))
+        == FAIL) {
       free_range_data(&range);
       return FAIL;
     }
