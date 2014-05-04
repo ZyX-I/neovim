@@ -228,8 +228,8 @@ typedef struct {
 } CommandParserOptions;
 
 typedef struct {
-  char_u *position;
-  char *message;
+  const char_u *position;
+  const char *message;
 } CommandParserError;
 
 typedef char_u *(*LineGetter)(int, void *, int);

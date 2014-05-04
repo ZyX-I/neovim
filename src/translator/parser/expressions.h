@@ -100,10 +100,11 @@ typedef enum {
 
 /// Structure to represent VimL expressions
 typedef struct expression_node {
-  ExpressionType type;   ///< Node type.
-  char_u *position;      ///< Position of expression token start inside
-                         ///< a parsed string.
-  char_u *end_position;  ///< Position of last character of expression token.
+  ExpressionType type;     ///< Node type.
+  const char_u *position;  ///< Position of expression token start inside 
+                           ///< a parsed string.
+  const char_u *end_position;  ///< Position of last character of expression 
+                               ///< token.
   CaseCompareStrategy ignore_case;  ///< Determines whether case should be 
                                     ///< ignored while comparing. Only valid 
                                     ///< for comparison operators: 
@@ -117,17 +118,18 @@ typedef struct expression_node {
 } ExpressionNode;
 
 typedef struct error {
-  char *message;
-  char_u *position;
+  const char *message;
+  const char_u *position;
 } ExpressionParserError;
 
-typedef ExpressionNode *(*ExpressionParser)(char_u **, ExpressionParserError *);
+typedef ExpressionNode *(*ExpressionParser)(const char_u **,
+                                            ExpressionParserError *);
 
-ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error);
+ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error);
 void free_expr(ExpressionNode *node);
-ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error);
-ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
-                           ExpressionParser parse, bool listends,
-                           char_u *endwith);
+ExpressionNode *parse7_nofunc(const char_u **arg, ExpressionParserError *error);
+ExpressionNode *parse_mult(const char_u **arg, ExpressionParserError *error,
+                           ExpressionParser parse, const bool listends,
+                           const char_u *endwith);
 
 #endif  // NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H

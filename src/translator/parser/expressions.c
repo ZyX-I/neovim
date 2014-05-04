@@ -55,73 +55,77 @@
 // {{{ Function declarations
 static ExpressionNode *expr_alloc(ExpressionType type);
 static bool isnamechar(int c);
-static char_u *find_id_end(char_u **arg);
-static int get_fname_script_len(char_u *p);
-static int parse_name(char_u **arg,
+static const char_u *find_id_end(const char_u **arg);
+static int get_fname_script_len(const char_u *p);
+static int parse_name(const char_u **arg,
                       ExpressionNode **node,
                       ExpressionParserError *error,
                       ExpressionNode *parse1_node,
-                      char_u *parse1_arg);
-static int parse_list(char_u **arg,
+                      const char_u *parse1_arg);
+static int parse_list(const char_u **arg,
                       ExpressionNode **node,
                       ExpressionParserError *error);
-static int parse_dictionary(char_u **arg,
+static int parse_dictionary(const char_u **arg,
                             ExpressionNode **node,
                             ExpressionParserError *error,
                             ExpressionNode **parse1_node,
-                            char_u **parse1_arg);
-static char_u *find_option_end(char_u **arg);
-static int parse_option(char_u **arg,
+                            const char_u **parse1_arg);
+static const char_u *find_option_end(const char_u **arg);
+static int parse_option(const char_u **arg,
                         ExpressionNode **node,
                         ExpressionParserError *error);
-static char_u *find_env_end(char_u **arg);
-static int parse_environment_variable(char_u **arg,
+static const char_u *find_env_end(const char_u **arg);
+static int parse_environment_variable(const char_u **arg,
                                       ExpressionNode **node,
                                       ExpressionParserError *error);
-static int parse_dot_subscript(char_u **arg,
+static int parse_dot_subscript(const char_u **arg,
                                ExpressionNode **node,
                                ExpressionParserError *error);
-static int parse_func_call(char_u **arg,
+static int parse_func_call(const char_u **arg,
                            ExpressionNode **node,
                            ExpressionParserError *error);
-static int parse_subscript(char_u **arg,
+static int parse_subscript(const char_u **arg,
                            ExpressionNode **node,
                            ExpressionParserError *error);
-static int handle_subscript(char_u **arg,
+static int handle_subscript(const char_u **arg,
                             ExpressionNode **node,
                             ExpressionParserError *error,
                             bool parse_funccall);
-static void find_nr_end(char_u **arg, ExpressionType *type,
+static void find_nr_end(const char_u **arg, ExpressionType *type,
                         bool dooct, bool dohex);
-static int parse7(char_u **arg,
+static int parse7(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
                   bool want_string,
                   bool parse_funccall);
-static int parse6(char_u **arg,
+static int parse6(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
                   bool want_string);
-static int parse5(char_u **arg,
+static int parse5(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
-static int parse4(char_u **arg,
+static int parse4(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
-static int parse23(char_u **arg,
+static int parse23(const char_u **arg,
                    ExpressionNode **node,
                    ExpressionParserError *error,
                    uint8_t level);
-static int parse3(char_u **arg,
+static int parse3(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
-static int parse2(char_u **arg,
+static int parse2(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
-static int parse1(char_u **arg,
+static int parse1(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error);
 // }}}
+
+#define skipwhite(arg) skipwhite((char_u *) (arg))
+#define skipdigits(arg) skipdigits((char_u *) (arg))
+#define vim_strchr(hs, n) vim_strchr((char_u *) hs, n)
 
 /// Allocate new expression node and assign its type property
 ///
@@ -167,9 +171,9 @@ static bool isnamechar(int c)
 ///
 /// @return Last character of the name if name was found (i.e. *arg - 1). NULL 
 ///         if name was not found
-static char_u *find_id_end(char_u **arg)
+static const char_u *find_id_end(const char_u **arg)
 {
-  char_u *p;
+  const char_u *p;
 
   // Find the end of the name.
   for (p = *arg; isnamechar(*p); p++) {
@@ -187,7 +191,7 @@ static char_u *find_id_end(char_u **arg)
 /// @return 5 if "p" starts with "<SID>" or "<SNR>" (ignoring case).
 ///         2 if "p" starts with "s:".
 ///         0 otherwise.
-static int get_fname_script_len(char_u *p)
+static int get_fname_script_len(const char_u *p)
 {
   if (p[0] == '<' && (   STRNICMP(p + 1, "SID>", 4) == 0
                       || STRNICMP(p + 1, "SNR>", 4) == 0))
@@ -212,15 +216,15 @@ static int get_fname_script_len(char_u *p)
 ///                              parse1_node.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_name(char_u **arg,
+static int parse_name(const char_u **arg,
                       ExpressionNode **node,
                       ExpressionParserError *error,
                       ExpressionNode *parse1_node,
-                      char_u *parse1_arg)
+                      const char_u *parse1_arg)
 {
   int len;
-  char_u *p;
-  char_u *s;
+  const char_u *p;
+  const char_u *s;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
@@ -320,7 +324,7 @@ static int parse_name(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_list(char_u **arg,
+static int parse_list(const char_u **arg,
                       ExpressionNode **node,
                       ExpressionParserError *error)
 {
@@ -382,16 +386,16 @@ static int parse_list(char_u **arg,
 ///
 /// @return FAIL if parsing failed, NOTDONE if curly braces name found, OK 
 ///         otherwise.
-static int parse_dictionary(char_u **arg,
+static int parse_dictionary(const char_u **arg,
                             ExpressionNode **node,
                             ExpressionParserError *error,
                             ExpressionNode **parse1_node,
-                            char_u **parse1_arg)
+                            const char_u **parse1_arg)
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
-  char_u *s = *arg;
-  char_u *start = skipwhite(*arg + 1);
+  const char_u *s = *arg;
+  const char_u *start = skipwhite(*arg + 1);
 
   *parse1_node = NULL;
 
@@ -466,9 +470,9 @@ static int parse_dictionary(char_u **arg,
 ///
 /// @return NULL if no option name found, pointer to the last character of the 
 ///         option name otherwise (i.e. *arg - 1).
-static char_u *find_option_end(char_u **arg)
+static const char_u *find_option_end(const char_u **arg)
 {
-  char_u      *p = *arg;
+  const char_u *p = *arg;
 
   p++;
   if (*p == 'g' && p[1] == ':')
@@ -499,12 +503,12 @@ static char_u *find_option_end(char_u **arg)
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_option(char_u **arg,
+static int parse_option(const char_u **arg,
                         ExpressionNode **node,
                         ExpressionParserError *error)
 {
-  char_u *option_end;
-  char_u *s = *arg;
+  const char_u *option_end;
+  const char_u *s = *arg;
 
   if ((option_end = find_option_end(arg)) == NULL) {
     error->message = N_("E112: Option name missing");
@@ -525,9 +529,9 @@ static int parse_option(char_u **arg,
 ///         the variable name otherwise (i.e. *arg - 1).
 ///
 /// @note Uses vim_isIDc() function: depends on &isident option.
-static char_u *find_env_end(char_u **arg)
+static const char_u *find_env_end(const char_u **arg)
 {
-  char_u *p;
+  const char_u *p;
 
   for (p = *arg; vim_isIDc(*p); p++) {
   }
@@ -550,12 +554,12 @@ static char_u *find_env_end(char_u **arg)
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int parse_environment_variable(char_u **arg,
+static int parse_environment_variable(const char_u **arg,
                                       ExpressionNode **node,
                                       ExpressionParserError *error)
 {
-  char_u *s = *arg;
-  char_u *e;
+  const char_u *s = *arg;
+  const char_u *e;
 
   (*arg)++;
   e = find_env_end(arg);
@@ -576,12 +580,12 @@ static int parse_environment_variable(char_u **arg,
 ///
 /// @return FAIL when out of memory, NOTDONE if subscript was found, OK 
 ///         otherwise.
-static int parse_dot_subscript(char_u **arg,
+static int parse_dot_subscript(const char_u **arg,
                                ExpressionNode **node,
                                ExpressionParserError *error)
 {
-  char_u *s = *arg;
-  char_u *e;
+  const char_u *s = *arg;
+  const char_u *e;
   ExpressionNode *top_node = NULL;
 
   for (e = s + 1; ASCII_ISALNUM(*e) || *e == '_'; e++) {
@@ -613,11 +617,11 @@ static int parse_dot_subscript(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_func_call(char_u **arg,
+static int parse_func_call(const char_u **arg,
                            ExpressionNode **node,
                            ExpressionParserError *error)
 {
-  char_u *argp;
+  const char_u *argp;
   int argcount = 0;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
@@ -660,7 +664,7 @@ static int parse_func_call(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_subscript(char_u **arg,
+static int parse_subscript(const char_u **arg,
                            ExpressionNode **node,
                            ExpressionParserError *error)
 {
@@ -705,7 +709,7 @@ static int parse_subscript(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int handle_subscript(char_u **arg,
+static int handle_subscript(const char_u **arg,
                             ExpressionNode **node,
                             ExpressionParserError *error,
                             bool parse_funccall)
@@ -751,10 +755,10 @@ static int handle_subscript(char_u **arg,
 /// @param[in]      dooct  If true allow function to recognize octal numbers.
 /// @param[in]      dohex  If true allow function to recognize hexadecimal 
 ///                        numbers.
-static void find_nr_end(char_u **arg, ExpressionType *type,
+static void find_nr_end(const char_u **arg, ExpressionType *type,
                         bool dooct, bool dohex)
 {
-  char_u          *ptr = *arg;
+  const char_u *ptr = *arg;
   int n;
 
   *type = kExprDecimalNumber;
@@ -845,7 +849,7 @@ static void find_nr_end(char_u **arg, ExpressionType *type,
 ///                                 as "abc" and stop at opening parenthesis.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse7(char_u **arg,
+static int parse7(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
                   bool want_string,
@@ -853,9 +857,11 @@ static int parse7(char_u **arg,
 {
   ExpressionType type = kExprUnknown;
   ExpressionNode *parse1_node = NULL;
-  char_u *parse1_arg;
-  char_u *s, *e;
-  char_u *start_leader, *end_leader;
+  const char_u *parse1_arg;
+  const char_u *s;
+  const char_u *e;
+  const char_u *start_leader;
+  const char_u *end_leader;
   int ret = OK;
 
   // Skip '!' and '-' characters.  They are handled later.
@@ -876,7 +882,7 @@ static int parse7(char_u **arg,
     case '7':
     case '8':
     case '9': {
-      char_u *p;
+      const char_u *p;
 
       s = *arg;
       p = skipdigits(*arg + 1);
@@ -918,7 +924,7 @@ static int parse7(char_u **arg,
     // String constant
     case '"':
     case '\'': {
-      char_u *p;
+      const char_u *p;
 
       s = *arg;
       p = s + 1;
@@ -1086,7 +1092,7 @@ static int parse7(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse6(char_u **arg,
+static int parse6(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error,
                   bool want_string)
@@ -1152,7 +1158,7 @@ static int parse6(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse5(char_u **arg,
+static int parse5(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
 {
@@ -1228,11 +1234,11 @@ static int parse5(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse4(char_u **arg,
+static int parse4(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
 {
-  char_u *p;
+  const char_u *p;
   ExpressionType type = kExprUnknown;
   size_t len = 2;
 
@@ -1330,7 +1336,7 @@ static int parse4(char_u **arg,
 ///                        should be handled.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse23(char_u **arg,
+static int parse23(const char_u **arg,
                    ExpressionNode **node,
                    ExpressionParserError *error,
                    uint8_t level)
@@ -1339,7 +1345,8 @@ static int parse23(char_u **arg,
   ExpressionNode **next_node = node;
   ExpressionType type;
   char_u c;
-  int (*parse_next)(char_u **, ExpressionNode **, ExpressionParserError *);
+  int (*parse_next)(const char_u **, ExpressionNode **,
+                    ExpressionParserError *);
 
   if (level == 2) {
     type = kExprLogicalOr;
@@ -1379,7 +1386,7 @@ static int parse23(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse3(char_u **arg,
+static int parse3(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
 {
@@ -1395,7 +1402,7 @@ static int parse3(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse2(char_u **arg,
+static int parse2(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
 {
@@ -1413,7 +1420,7 @@ static int parse2(char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse1(char_u **arg,
+static int parse1(const char_u **arg,
                   ExpressionNode **node,
                   ExpressionParserError *error)
 {
@@ -1459,7 +1466,7 @@ static int parse1(char_u **arg,
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
+ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error)
 {
   ExpressionNode *result = NULL;
 
@@ -1484,7 +1491,7 @@ ExpressionNode *parse0_err(char_u **arg, ExpressionParserError *error)
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
+ExpressionNode *parse7_nofunc(const char_u **arg, ExpressionParserError *error)
 {
   ExpressionNode *result = NULL;
 
@@ -1514,9 +1521,9 @@ ExpressionNode *parse7_nofunc(char_u **arg, ExpressionParserError *error)
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse_mult(char_u **arg, ExpressionParserError *error,
-                           ExpressionParser parse, bool listends,
-                           char_u *endwith)
+ExpressionNode *parse_mult(const char_u **arg, ExpressionParserError *error,
+                           ExpressionParser parse, const bool listends,
+                           const char_u *endwith)
 {
   ExpressionNode *result = NULL;
   ExpressionNode **next = &result;

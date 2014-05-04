@@ -225,8 +225,9 @@ static WFDEC(translate_number, ExpressionType type, const char_u *s,
              const char_u *const e);
 static WFDEC(translate_string, ExpressionType type, const char_u *const s,
              const char_u *const e);
-static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
-             uint_least8_t flags);
+static WFDEC(translate_scope, const char_u **start,
+                              const ExpressionNode *const expr,
+                              const uint_least8_t flags);
 static WFDEC(translate_expr, const ExpressionNode *const expr,
                              const bool is_funccall);
 static WFDEC(translate_exprs, const ExpressionNode *const expr);
@@ -603,7 +604,7 @@ static WFDEC(translate_range, const Range *const range)
         break;
       }
       case kAddrMark: {
-        char_u mark[2] = {current_range->address.data.mark, NUL};
+        const char_u mark[2] = {current_range->address.data.mark, NUL};
 
         WS("vim.range.mark(state, '")
         CALL(dump_string, mark)
@@ -938,8 +939,9 @@ static WFDEC(translate_string, ExpressionType type, const char_u *const s,
 /// @endparblock
 ///
 /// @return FAIL in case of unrecoverable error, OK otherwise.
-static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
-             uint_least8_t flags)
+static WFDEC(translate_scope, const char_u **start,
+                              const ExpressionNode *const expr,
+                              const uint_least8_t flags)
 {
   assert(expr->type == kExprSimpleVariableName ||
          (expr->type == kExprIdentifier && !(flags&TS_ONLY_SEGMENT)));
@@ -998,7 +1000,7 @@ static WFDEC(translate_scope, char_u **start, const ExpressionNode *const expr,
     *start = expr->position;
     if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position)) {
       isfunc = true;
-      char_u *s;
+      const char_u *s;
       for (s = expr->position + 1; s != expr->end_position; s++) {
         if (!(ASCII_ISLOWER(*s) || VIM_ISDIGIT(*s))) {
           isfunc = false;
@@ -1046,11 +1048,11 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
       break;
     }
     case kExprOption: {
-      char_u *name_start;
+      const char_u *name_start;
       OptionType type;
       uint_least8_t option_properties;
-      char_u *s = expr->position;
-      char_u *e = expr->end_position;
+      const char_u *s = expr->position;
+      const char_u *e = expr->end_position;
 
       if (e - s > 2 && s[1] == ':') {
         assert(*s == 'g' || *s == 'l');
@@ -1135,7 +1137,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
       break;
     }
     case kExprSimpleVariableName: {
-      char_u *start;
+      const char_u *start;
       WS("vim.subscript(state, ")
       CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT | (is_funccall
                                                              ? TS_FUNCCALL
@@ -1293,7 +1295,8 @@ static WFDEC(translate_exprs, const ExpressionNode *const expr)
 static WFDEC(translate_function, const TranslateFuncArgs *const args)
 {
   size_t i;
-  char_u **data = (char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
+  const char_u **data =
+      (const char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
   size_t len = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
   WS("function(state")
   for (i = 0; i < len; i++) {
@@ -1339,7 +1342,7 @@ static WFDEC(translate_varname, const ExpressionNode *const expr,
   assert(current_expr != NULL);
 
   if (current_expr->type == kExprIdentifier) {
-    char_u *start;
+    const char_u *start;
     CALL(translate_scope, &start, current_expr, (is_funccall
                                                  ? TS_FUNCASSIGN
                                                  : 0))
@@ -1420,7 +1423,7 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
   }
   switch (expr->type) {
     case kExprSimpleVariableName: {
-      char_u *start;
+      const char_u *start;
       ADD_ASSIGN("scope")
       CALL(dump, dump_cookie)
       WS(", ")
@@ -1688,7 +1691,7 @@ static WFDEC(translate_assignment, const ExpressionNode *const lval_expr,
 static WFDEC(translate_node, const CommandNode *const node,
                              const size_t indent)
 {
-  char_u *name;
+  const char_u *name;
   size_t start_from_arg = 0;
   bool do_arg_dump = true;
   bool add_comma = false;

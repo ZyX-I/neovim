@@ -79,7 +79,7 @@ char *parse0_repr(const char *arg, const bool dump_as_expr)
 
   memset(&po, 0, sizeof(PrinterOptions));
 
-  if ((expr = parse0_err((char_u **) &e, &error)) == NULL)
+  if ((expr = parse0_err((const char_u **) &e, &error)) == NULL)
     if (error.message == NULL)
       return NULL;
 
