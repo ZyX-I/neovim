@@ -1711,7 +1711,7 @@ static WFDEC(translate_node, const CommandNode *const node,
   WINDENT(indent);
 
   if (node->type == kCmdComment) {
-    WS("--")
+    WS("-- \"")
     W(node->args[ARG_NAME_NAME].arg.str)
     WS("\n")
     return OK;
