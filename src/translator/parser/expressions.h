@@ -127,7 +127,8 @@ typedef ExpressionNode *(*ExpressionParser)(const char_u **,
 
 ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error);
 void free_expr(ExpressionNode *node);
-ExpressionNode *parse7_nofunc(const char_u **arg, ExpressionParserError *error);
+ExpressionNode *parse7_nofunc(const char_u **arg,
+                              ExpressionParserError *error);
 ExpressionNode *parse_mult(const char_u **arg, ExpressionParserError *error,
                            ExpressionParser parse, const bool listends,
                            const char_u *endwith);
