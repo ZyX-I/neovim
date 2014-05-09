@@ -185,16 +185,22 @@
 #define INDENTVARARGS(var) \
     var, var##_len
 
+/// Get translation context
+///
+/// See documentation for TranslationOptions for more details.
+#define TRANSLATION_CONTEXT to
+
 
 #define VIM_ZERO  "vim.zero_"
 #define VIM_FALSE "vim.false_"
 #define VIM_TRUE  "vim.true_"
 #define VIM_EMPTY_STRING "vim.empty_string"
 
+/// Lists possible translation context
 typedef enum {
-  kTransUser = 0,
-  kTransScript,
-  kTransFunc,
+  kTransUser = 0,  ///< Typed Ex command argument
+  kTransScript,    ///< .vim file
+  kTransFunc,      ///< :function definition
 } TranslationOptions;
 
 typedef WFDEC((*AssignmentValueDump), const void *const dump_cookie);
@@ -2102,7 +2108,7 @@ static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
        current_node = current_node->next) {
     switch (current_node->type) {
       case kCmdFinish: {
-        switch (to) {
+        switch (TRANSLATION_CONTEXT) {
           case kTransFunc:
           case kTransUser: {
             WINDENT(indent)
@@ -2121,7 +2127,7 @@ static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
         break;
       }
       case kCmdReturn: {
-        switch (to) {
+        switch (TRANSLATION_CONTEXT) {
           case kTransScript:
           case kTransUser: {
             WINDENT(indent)
@@ -2149,7 +2155,7 @@ static WFDEC(translate_nodes, const CommandNode *const node, size_t indent)
     break;
   }
 
-  if (current_node == NULL && to == kTransFunc) {
+  if (current_node == NULL && TRANSLATION_CONTEXT == kTransFunc) {
     WINDENT(indent)
     WS("return " VIM_ZERO "\n")
   }
