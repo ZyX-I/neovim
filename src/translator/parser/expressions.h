@@ -122,6 +122,11 @@ typedef struct error {
   const char_u *position;
 } ExpressionParserError;
 
+typedef enum {
+  kExprRvalue = 0,
+  kExprLvalue,
+} ExpressionOptions;
+
 typedef ExpressionNode *(*ExpressionParser)(const char_u **,
                                             ExpressionParserError *);
 
