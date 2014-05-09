@@ -62,6 +62,12 @@
 #define EDEC(f, ...) int f(EDEC_ARGS, __VA_ARGS__)
 /// Expands to a parser function definition without additional arguments
 #define EDEC_NOARGS(f) int f(EDEC_ARGS)
+/// Call function with given arguments and propagate FAIL return value
+#define CALL(f, ...) \
+    { \
+      if (f(__VA_ARGS__) == FAIL) \
+        return FAIL; \
+    }
 
 // {{{ Function declarations
 static ExpressionNode *expr_alloc(ExpressionType type);
@@ -258,8 +264,7 @@ static EDEC(parse_name, ExpressionNode *parse1_node, const char_u *parse1_arg)
 
     VALUE_NODE(kExprCurlyName, error, next_node, s, NULL)
 
-    if ((parse1(arg, &((*next_node)->children), error)) == FAIL)
-      return FAIL;
+    CALL(parse1, arg, &((*next_node)->children), error)
 
     if (**arg != '}') {
       // XXX Note: vim does not have special error message for this
@@ -301,8 +306,7 @@ static EDEC_NOARGS(parse_list)
 
   *arg = skipwhite(*arg + 1);
   while (**arg != ']' && **arg != NUL) {
-    if (parse1(arg, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse1, arg, next_node, error)
 
     next_node = &((*next_node)->next);
 
@@ -383,8 +387,8 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
       *next_node = *parse1_node;
       *parse1_node = NULL;
       *arg = *parse1_arg;
-    } else if (parse1(arg, next_node, error) == FAIL) {
-      return FAIL;
+    } else {
+      CALL(parse1, arg, next_node, error)
     }
 
     next_node = &((*next_node)->next);
@@ -396,8 +400,7 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
     }
 
     *arg = skipwhite(*arg + 1);
-    if (parse1(arg, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse1, arg, next_node, error)
 
     next_node = &((*next_node)->next);
 
@@ -586,8 +589,7 @@ static EDEC_NOARGS(parse_func_call)
     argp = skipwhite(argp + 1);  // skip the '(' or ','
     if (*argp == ')' || *argp == ',' || *argp == NUL)
       break;
-    if (parse1(&argp, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse1, &argp, next_node, error)
     next_node = &((*next_node)->next);
     argcount++;
     if (*argp != ',')
@@ -627,8 +629,8 @@ static EDEC_NOARGS(parse_subscript)
   *arg = skipwhite(*arg + 1);  // skip the '['
   if (**arg == ':')
     VALUE_NODE(kExprEmptySubscript, error, next_node, *arg, NULL)
-  else if (parse1(arg, next_node, error) == FAIL)
-    return FAIL;
+  else
+    CALL(parse1, arg, next_node, error)
   next_node = &((*next_node)->next);
 
   // Get the second variable from inside the [:].
@@ -636,8 +638,8 @@ static EDEC_NOARGS(parse_subscript)
     *arg = skipwhite(*arg + 1);
     if (**arg == ']')
       VALUE_NODE(kExprEmptySubscript, error, next_node, *arg, NULL)
-    else if (parse1(arg, next_node, error) == FAIL)
-      return FAIL;
+    else
+      CALL(parse1, arg, next_node, error)
   }
 
   // Check for the ']'.
@@ -681,13 +683,11 @@ static EDEC(handle_subscript, bool parse_funccall)
         break;
       }
       case '(': {
-        if (parse_func_call(arg, node, error) == FAIL)
-          return FAIL;
+        CALL(parse_func_call, arg, node, error)
         break;
       }
       case '[': {
-        if (parse_subscript(arg, node, error) == FAIL)
-          return FAIL;
+        CALL(parse_subscript, arg, node, error)
         break;
       }
     }
@@ -1042,8 +1042,7 @@ static EDEC(parse6, bool want_string)
   ExpressionNode **next_node = node;
 
   // Get the first variable.
-  if (parse7(arg, node, error, want_string, true) == FAIL)
-    return FAIL;
+  CALL(parse7, arg, node, error, want_string, true)
 
   // Repeat computing, until no '*', '/' or '%' is following.
   for (;;) {
@@ -1075,8 +1074,7 @@ static EDEC(parse6, bool want_string)
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
-    if (parse7(arg, next_node, error, want_string, true) == FAIL)
-      return FAIL;
+    CALL(parse7, arg, next_node, error, want_string, true)
   }
   return OK;
 }
@@ -1105,8 +1103,7 @@ static EDEC_NOARGS(parse5)
   ExpressionNode **next_node = node;
 
   // Get the first variable.
-  if (parse6(arg, node, error, false) == FAIL)
-    return FAIL;
+  CALL(parse6, arg, node, error, false)
 
   // Repeat computing, until no '+', '-' or '.' is following.
   for (;;) {
@@ -1138,8 +1135,7 @@ static EDEC_NOARGS(parse5)
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
-    if (parse6(arg, next_node, error, type == kExprStringConcat) == FAIL)
-      return FAIL;
+    CALL(parse6, arg, next_node, error, type == kExprStringConcat)
   }
   return OK;
 }
@@ -1179,8 +1175,7 @@ static EDEC_NOARGS(parse4)
   size_t len = 2;
 
   // Get the first variable.
-  if (parse5(arg, node, error) == FAIL)
-    return FAIL;
+  CALL(parse5, arg, node, error)
 
   p = *arg;
   switch (p[0]) {
@@ -1247,8 +1242,7 @@ static EDEC_NOARGS(parse4)
 
     // Get the second variable.
     *arg = skipwhite(p + len);
-    if (parse5(arg, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse5, arg, next_node, error)
   }
 
   return OK;
@@ -1292,8 +1286,7 @@ static EDEC(parse23, uint8_t level)
   }
 
   // Get the first variable.
-  if (parse_next(arg, node, error) == FAIL)
-    return FAIL;
+  CALL(parse_next, arg, node, error)
 
   // Repeat until there is no following "&&".
   while ((*arg)[0] == c && (*arg)[1] == c) {
@@ -1302,8 +1295,7 @@ static EDEC(parse23, uint8_t level)
 
     // Get the second variable.
     *arg = skipwhite(*arg + 2);
-    if (parse_next(arg, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse_next, arg, next_node, error)
     next_node = &((*next_node)->next);
   }
 
@@ -1352,8 +1344,7 @@ static EDEC_NOARGS(parse2)
 static EDEC_NOARGS(parse1)
 {
   // Get the first variable.
-  if (parse2(arg, node, error) == FAIL)
-    return FAIL;
+  CALL(parse2, arg, node, error)
 
   if ((*arg)[0] == '?') {
     ExpressionNode *top_node;
@@ -1363,8 +1354,7 @@ static EDEC_NOARGS(parse1)
 
     // Get the second variable.
     *arg = skipwhite(*arg + 1);
-    if (parse1(arg, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse1, arg, next_node, error)
 
     // Check for the ":".
     if (**arg != ':') {
@@ -1377,8 +1367,7 @@ static EDEC_NOARGS(parse1)
 
     // Get the third variable.
     *arg = skipwhite(*arg + 1);
-    if (parse1(arg, next_node, error) == FAIL)
-      return FAIL;
+    CALL(parse1, arg, next_node, error)
   }
 
   return OK;
