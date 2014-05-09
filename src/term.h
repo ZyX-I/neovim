@@ -53,9 +53,9 @@ void del_termcode(char_u *name);
 void set_mouse_topline(win_T *wp);
 int check_termcode(int max_offset, char_u *buf, int bufsize,
                            int *buflen);
-char_u *replace_termcodes(char_u *from, char_u **bufp, int from_part,
-                                  int do_lt, int special, int cpo_flags);
-int find_term_bykeys(char_u *src);
+char_u *replace_termcodes(const char_u *from, size_t len, char_u **bufp,
+                          int from_part, int do_lt, int special, int cpo_flags);
+int find_term_bykeys(const char_u *src, int slen);
 void show_termcodes(void);
 int show_one_termcode(char_u *name, char_u *code, int printit);
 char_u *translate_mapping(char_u *str, int expmap, int cpo_flags);

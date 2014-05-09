@@ -54,7 +54,7 @@ char_u *skiptowhite(char_u *p);
 char_u *skiptowhite_esc(char_u *p);
 long getdigits(char_u **pp);
 int vim_isblankline(char_u *lbuf);
-void vim_str2nr(char_u *start, int *hexp, int *len, int dooct,
+void vim_str2nr(const char_u *start, int *hexp, int *len, int dooct,
                 int dohex, long *nptr,
                 unsigned long *unptr);
 int hex2nr(int c);

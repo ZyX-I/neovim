@@ -872,7 +872,7 @@ static WFDEC(translate_string, ExpressionType type, const char_u *const s,
                   char_u buf[MAX_CHAR_LEN * 6];
                   size_t len;
 
-                  len = trans_special((char_u **) &p, buf, false);
+                  len = trans_special(&p, STRLEN(p), buf, false);
 
                   for (size_t i = 0; i < len; i++)
                     CALL(dump_char, buf[i]);

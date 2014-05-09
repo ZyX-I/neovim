@@ -99,12 +99,12 @@
 static int enc_canon_search(char_u *name);
 static int dbcs_char2len(int c);
 static int dbcs_char2bytes(int c, char_u *buf);
-static int dbcs_ptr2len(char_u *p);
-static int dbcs_ptr2len_len(char_u *p, int size);
+static int dbcs_ptr2len(const char_u *p);
+static int dbcs_ptr2len_len(const char_u *p, int size);
 static int utf_ptr2cells_len(char_u *p, int size);
 static int dbcs_char2cells(int c);
 static int dbcs_ptr2cells_len(char_u *p, int size);
-static int dbcs_ptr2char(char_u *p);
+static int dbcs_ptr2char(const char_u *p);
 static int utf_safe_read_char_adv(char_u **s, size_t *n);
 
 /*
@@ -863,12 +863,12 @@ static int dbcs_char2bytes(int c, char_u *buf)
  * For UTF-8 this includes following composing characters.
  * Returns 0 when *p is NUL.
  */
-int latin_ptr2len(char_u *p)
+int latin_ptr2len(const char_u *p)
 {
   return MB_BYTE2LEN(*p);
 }
 
-static int dbcs_ptr2len(char_u *p)
+static int dbcs_ptr2len(const char_u *p)
 {
   int len;
 
@@ -885,14 +885,14 @@ static int dbcs_ptr2len(char_u *p)
  * Returns 0 for an empty string.
  * Returns 1 for an illegal char or an incomplete byte sequence.
  */
-int latin_ptr2len_len(char_u *p, int size)
+int latin_ptr2len_len(const char_u *p, int size)
 {
   if (size < 1 || *p == NUL)
     return 0;
   return 1;
 }
 
-static int dbcs_ptr2len_len(char_u *p, int size)
+static int dbcs_ptr2len_len(const char_u *p, int size)
 {
   int len;
 
@@ -1349,12 +1349,12 @@ int utf_off2cells(unsigned off, unsigned max_off)
  * mb_ptr2char() function pointer.
  * Convert a byte sequence into a character.
  */
-int latin_ptr2char(char_u *p)
+int latin_ptr2char(const char_u *p)
 {
   return *p;
 }
 
-static int dbcs_ptr2char(char_u *p)
+static int dbcs_ptr2char(const char_u *p)
 {
   if (MB_BYTE2LEN(*p) > 1 && p[1] != NUL)
     return (p[0] << 8) + p[1];
@@ -1367,7 +1367,7 @@ static int dbcs_ptr2char(char_u *p)
  * returned.
  * Does not include composing characters, of course.
  */
-int utf_ptr2char(char_u *p)
+int utf_ptr2char(const char_u *p)
 {
   int len;
 
@@ -1491,7 +1491,7 @@ int mb_cptr2char_adv(char_u **pp)
  * comes after "p1".  For Arabic sometimes "ab" is replaced with "c", which
  * behaves like a composing character.
  */
-int utf_composinglike(char_u *p1, char_u *p2)
+int utf_composinglike(const char_u *p1, const char_u *p2)
 {
   int c2;
 
@@ -1609,7 +1609,7 @@ int utfc_char2bytes(int off, char_u *buf)
  * Returns 0 for "".
  * Returns 1 for an illegal byte sequence.
  */
-int utf_ptr2len(char_u *p)
+int utf_ptr2len(const char_u *p)
 {
   int len;
   int i;
@@ -1641,7 +1641,7 @@ int utf_byte2len(int b)
  * Returns number > "size" for an incomplete byte sequence.
  * Never returns zero.
  */
-int utf_ptr2len_len(char_u *p, int size)
+int utf_ptr2len_len(const char_u *p, int size)
 {
   int len;
   int i;
@@ -1664,7 +1664,7 @@ int utf_ptr2len_len(char_u *p, int size)
  * Return the number of bytes the UTF-8 encoding of the character at "p" takes.
  * This includes following composing characters.
  */
-int utfc_ptr2len(char_u *p)
+int utfc_ptr2len(const char_u *p)
 {
   int len;
   int b0 = *p;
@@ -1703,7 +1703,7 @@ int utfc_ptr2len(char_u *p)
  * Returns 0 for an empty string.
  * Returns 1 for an illegal char or an incomplete byte sequence.
  */
-int utfc_ptr2len_len(char_u *p, int size)
+int utfc_ptr2len_len(const char_u *p, int size)
 {
   int len;
   int prevlen;

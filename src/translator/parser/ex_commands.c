@@ -31,8 +31,6 @@
 #define getdigits(arg) getdigits((char_u **) (arg))
 #define skipwhite(arg) skipwhite((char_u *) (arg))
 #define skipdigits(arg) skipdigits((char_u *) (arg))
-#define replace_termcodes(a1, a2, a3, a4, a5, a6) \
-    replace_termcodes((char_u *)a1, a2, a3, a4, a5, a6)
 #define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((char_u *) p) : 1
 #define enc_canonize(p) enc_canonize((char_u *) (p))
 #define check_ff_value(p) check_ff_value((char_u *) (p))
@@ -985,7 +983,7 @@ static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
   char_u *rhs_buf;
   char_u *new_rhs;
 
-  new_rhs = replace_termcodes(rhs, &rhs_buf, false, true, special,
+  new_rhs = replace_termcodes(rhs, STRLEN(rhs), &rhs_buf, false, true, special,
                               FLAG_POC_TO_FLAG_CPO(o.flags));
   if (rhs_buf == NULL)
     return FAIL;
@@ -1155,18 +1153,14 @@ static int do_parse_map(const char_u **pp,
   p += STRLEN(p);
 
   if (*lhs != NUL) {
-    // FIXME Do not remove const qualifier
-    char_u saved = *lhs_end;
     // Note: type of the abbreviation is not checked because it depends on the 
     //       &iskeyword option. Unlike $ENV parsing (which depends on the 
     //       options too) it is not unlikely that both 1. file will be parsed 
-    //       before result is actually used and 2. option value at the 
-    //       execution stage will make results invalid.
-    *((char_u *) lhs_end) = NUL;
-    lhs = replace_termcodes(lhs, &lhs_buf, true, true,
+    //       before result is actually used and 2. option value at the execution 
+    //       stage will make results invalid.
+    lhs = replace_termcodes(lhs, lhs_end - lhs, &lhs_buf, true, true,
                             map_flags&FLAG_MAP_SPECIAL,
                             FLAG_POC_TO_FLAG_CPO(o.flags));
-    *((char_u *) lhs_end) = saved;
     if (lhs_buf == NULL)
       return FAIL;
     node->args[ARG_MAP_LHS].arg.str = (char_u *) lhs;

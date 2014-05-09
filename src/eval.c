@@ -4985,7 +4985,8 @@ static int get_string_tv(char_u **arg, typval_T *rettv, int evaluate)
         break;
 
       /* Special key, e.g.: "\<C-W>" */
-      case '<': extra = trans_special(&p, name, TRUE);
+      case '<': extra = trans_special((const char_u **) &p, STRLEN(p), name,
+                                      TRUE);
         if (extra != 0) {
           name += extra;
           break;
@@ -11334,7 +11335,7 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
 
   mode = get_map_mode(&which, 0);
 
-  keys = replace_termcodes(keys, &keys_buf, TRUE, TRUE, FALSE,
+  keys = replace_termcodes(keys, STRLEN(keys), &keys_buf, TRUE, TRUE, FALSE,
                            CPO_TO_CPO_FLAGS);
   rhs = check_map(keys, mode, exact, FALSE, abbr, &mp, &buffer_local);
   free(keys_buf);
