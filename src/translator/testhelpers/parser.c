@@ -38,7 +38,7 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
     if (parse_one_cmd((const char_u **) &p, &node, o, &position,
                       (LineGetter) fgetline_string, (void *) pp) == FAIL)
       return NULL;
-    vim_free(line);
+    free(line);
   } else {
     if ((node = parse_cmd_sequence(o, position, (LineGetter) fgetline_string,
                                    (void *) pp)) == NULL)

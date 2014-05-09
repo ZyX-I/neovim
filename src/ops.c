@@ -656,7 +656,7 @@ int get_expr_register(void)
   if (new_line == NULL)
     return NUL;
   if (*new_line == NUL)         /* use previous line */
-    vim_free(new_line);
+    free(new_line);
   else
     set_expr_line(new_line);
   return '=';
@@ -668,7 +668,7 @@ int get_expr_register(void)
  */
 void set_expr_line(char_u *new_line)
 {
-  vim_free(expr_line);
+  free(expr_line);
   expr_line = new_line;
 }
 
@@ -699,7 +699,7 @@ char_u *get_expr_line(void)
   ++nested;
   rv = eval_to_string(expr_copy, NULL, TRUE);
   --nested;
-  vim_free(expr_copy);
+  free(expr_copy);
   return rv;
 }
 
@@ -807,7 +807,7 @@ void put_register(int name, void *reg)
   get_yank_register(name, 0);
   free_yank_all();
   *y_current = *(struct yankreg *)reg;
-  vim_free(reg);
+  free(reg);
 
 }
 
@@ -885,26 +885,24 @@ int do_record(int c)
  */
 static int stuff_yank(int regname, char_u *p)
 {
-  char_u      *lp;
-  char_u      **pp;
-
   /* check for read-only register */
   if (regname != 0 && !valid_yank_reg(regname, TRUE)) {
-    vim_free(p);
+    free(p);
     return FAIL;
   }
   if (regname == '_') {             /* black hole: don't do anything */
-    vim_free(p);
+    free(p);
     return OK;
   }
   get_yank_register(regname, TRUE);
   if (y_append && y_current->y_array != NULL) {
-    pp = &(y_current->y_array[y_current->y_size - 1]);
-    lp = lalloc((long_u)(STRLEN(*pp) + STRLEN(p) + 1), TRUE);
+    char_u **pp = &(y_current->y_array[y_current->y_size - 1]);
+    char_u *lp = xmalloc(STRLEN(*pp) + STRLEN(p) + 1);
     STRCPY(lp, *pp);
+    // TODO(philix): use xstpcpy() in stuff_yank()
     STRCAT(lp, p);
-    vim_free(p);
-    vim_free(*pp);
+    free(p);
+    free(*pp);
     *pp = lp;
   } else {
     free_yank_all();
@@ -959,7 +957,7 @@ do_execreg (
       EMSG(_(e_nolastcmd));
       return FAIL;
     }
-    vim_free(new_last_cmdline);     /* don't keep the cmdline containing @: */
+    free(new_last_cmdline);     /* don't keep the cmdline containing @: */
     new_last_cmdline = NULL;
     /* Escape all control characters with a CTRL-V */
     p = vim_strsave_escaped_ext(
@@ -975,13 +973,13 @@ do_execreg (
       else
         retval = put_in_typebuf(p, TRUE, TRUE, silent);
     }
-    vim_free(p);
+    free(p);
   } else if (regname == '=') {
     p = get_expr_line();
     if (p == NULL)
       return FAIL;
     retval = put_in_typebuf(p, TRUE, colon, silent);
-    vim_free(p);
+    free(p);
   } else if (regname == '.') {        /* use last inserted text */
     p = get_last_insert_save();
     if (p == NULL) {
@@ -989,7 +987,7 @@ do_execreg (
       return FAIL;
     }
     retval = put_in_typebuf(p, FALSE, colon, silent);
-    vim_free(p);
+    free(p);
   } else {
     get_yank_register(regname, FALSE);
     if (y_current->y_array == NULL)
@@ -1015,7 +1013,7 @@ do_execreg (
       if (escaped == NULL)
         return FAIL;
       retval = ins_typebuf(escaped, remap, 0, TRUE, silent);
-      vim_free(escaped);
+      free(escaped);
       if (retval == FAIL)
         return FAIL;
       if (colon && ins_typebuf((char_u *)":", remap, 0, TRUE, silent)
@@ -1081,7 +1079,7 @@ put_in_typebuf (
       retval = ins_typebuf(p, esc ? REMAP_NONE : REMAP_YES,
           0, TRUE, silent);
     if (esc)
-      vim_free(p);
+      free(p);
   }
   if (colon && retval == OK)
     retval = ins_typebuf((char_u *)":", REMAP_NONE, 0, TRUE, silent);
@@ -1126,7 +1124,7 @@ insert_reg (
       return FAIL;
     stuffescaped(arg, literally);
     if (allocated)
-      vim_free(arg);
+      free(arg);
   } else {                            /* name or number register */
     get_yank_register(regname, FALSE);
     if (y_current->y_array == NULL)
@@ -1780,7 +1778,7 @@ int op_replace(oparg_T *oap, int c)
         ml_append(curwin->w_cursor.lnum++, after_p, 0, FALSE);
         appended_lines_mark(curwin->w_cursor.lnum, 1L);
         oap->end.lnum++;
-        vim_free(after_p);
+        free(after_p);
       }
     }
   } else {
@@ -2164,7 +2162,7 @@ void op_insert(oparg_T *oap, long count1)
 
         curwin->w_cursor.col = oap->start.col;
         check_cursor();
-        vim_free(ins_text);
+        free(ins_text);
       }
     }
   }
@@ -2278,7 +2276,7 @@ int op_change(oparg_T *oap)
       }
       check_cursor();
       changed_lines(oap->start.lnum + 1, 0, oap->end.lnum + 1, 0L);
-      vim_free(ins_text);
+      free(ins_text);
     }
   }
 
@@ -2320,9 +2318,9 @@ static void free_yank(long n)
     long i;
 
     for (i = n; --i >= 0; ) {
-      vim_free(y_current->y_array[i]);
+      free(y_current->y_array[i]);
     }
-    vim_free(y_current->y_array);
+    free(y_current->y_array);
     y_current->y_array = NULL;
   }
 }
@@ -2486,13 +2484,10 @@ int op_yank(oparg_T *oap, int deleting, int mess)
   }
 
   if (curr != y_current) {      /* append the new block to the old block */
-    new_ptr = (char_u **)lalloc(
-        (long_u)(sizeof(char_u *) *
-                 (curr->y_size + y_current->y_size)),
-        TRUE);
+    new_ptr = xmalloc(sizeof(char_u *) * (curr->y_size + y_current->y_size));
     for (j = 0; j < curr->y_size; ++j)
       new_ptr[j] = curr->y_array[j];
-    vim_free(curr->y_array);
+    free(curr->y_array);
     curr->y_array = new_ptr;
 
     if (yanktype == MLINE)      /* MLINE overrides MCHAR and MBLOCK */
@@ -2501,12 +2496,12 @@ int op_yank(oparg_T *oap, int deleting, int mess)
     /* Concatenate the last line of the old block with the first line of
      * the new block, unless being Vi compatible. */
     if (curr->y_type == MCHAR && vim_strchr(p_cpo, CPO_REGAPPEND) == NULL) {
-      pnew = lalloc((long_u)(STRLEN(curr->y_array[curr->y_size - 1])
-                             + STRLEN(y_current->y_array[0]) + 1), TRUE);
+      pnew = xmalloc(STRLEN(curr->y_array[curr->y_size - 1])
+                     + STRLEN(y_current->y_array[0]) + 1);
       STRCPY(pnew, curr->y_array[--j]);
       STRCAT(pnew, y_current->y_array[0]);
-      vim_free(curr->y_array[j]);
-      vim_free(y_current->y_array[0]);
+      free(curr->y_array[j]);
+      free(y_current->y_array[0]);
       curr->y_array[j++] = pnew;
       y_idx = 1;
     } else
@@ -2514,7 +2509,7 @@ int op_yank(oparg_T *oap, int deleting, int mess)
     while (y_idx < y_current->y_size)
       curr->y_array[j++] = y_current->y_array[y_idx++];
     curr->y_size = j;
-    vim_free(y_current->y_array);
+    free(y_current->y_array);
     y_current = curr;
   }
   if (mess) {                   /* Display message about yank? */
@@ -2706,7 +2701,7 @@ do_put (
       if (ptr == NULL)
         goto end;
       ml_append(curwin->w_cursor.lnum, ptr, (colnr_T)0, FALSE);
-      vim_free(ptr);
+      free(ptr);
 
       ptr = vim_strnsave(ml_get_curline(), curwin->w_cursor.col);
       if (ptr == NULL)
@@ -3020,7 +3015,7 @@ do_put (
           STRCAT(newp, ptr);
           /* insert second line */
           ml_append(lnum, newp, (colnr_T)0, FALSE);
-          vim_free(newp);
+          free(newp);
 
           oldp = ml_get(lnum);
           newp = (char_u *) xmalloc((size_t)(col + yanklen + 1));
@@ -3125,9 +3120,9 @@ error:
 
 end:
   if (allocated)
-    vim_free(insert_string);
+    free(insert_string);
   if (regname == '=')
-    vim_free(y_array);
+    free(y_array);
 
   VIsual_active = FALSE;
 
@@ -3580,9 +3575,9 @@ int do_join(long count, int insert_space, int save_undo, int use_formatoptions)
   curwin->w_set_curswant = TRUE;
 
 theend:
-  vim_free(spaces);
+  free(spaces);
   if (remove_comments)
-    vim_free(comments);
+    free(comments);
   return ret;
 }
 
@@ -3644,7 +3639,7 @@ static int same_leader(linenr_T lnum, int leader1_len, char_u *leader1_flags, in
         while (vim_iswhite(line1[idx1]))
           ++idx1;
     }
-    vim_free(line1);
+    free(line1);
   }
   return idx2 == leader2_len && idx1 == leader1_len;
 }
@@ -4444,7 +4439,7 @@ int do_addsub(int command, linenr_T Prenum1)
     *ptr = NUL;
     STRCAT(buf1, buf2);
     ins_str(buf1);              /* insert the new number */
-    vim_free(buf1);
+    free(buf1);
   }
   --curwin->w_cursor.col;
   curwin->w_set_curswant = TRUE;
@@ -4493,7 +4488,7 @@ int read_viminfo_register(vir_T *virp, int force)
   if (do_it) {
     if (set_prev)
       y_previous = y_current;
-    vim_free(y_current->y_array);
+    free(y_current->y_array);
     array = y_current->y_array =
               (char_u **)alloc((unsigned)(limit * sizeof(char_u *)));
     str = skipwhite(skiptowhite(str));
@@ -4516,7 +4511,7 @@ int read_viminfo_register(vir_T *virp, int force)
                              alloc((unsigned)(limit * 2 * sizeof(char_u *)));
         for (i = 0; i < limit; i++)
           y_current->y_array[i] = array[i];
-        vim_free(array);
+        free(array);
         limit *= 2;
         array = y_current->y_array;
       }
@@ -4529,14 +4524,14 @@ int read_viminfo_register(vir_T *virp, int force)
   }
   if (do_it) {
     if (size == 0) {
-      vim_free(array);
+      free(array);
       y_current->y_array = NULL;
     } else if (size < limit) {
       y_current->y_array =
         (char_u **)alloc((unsigned)(size * sizeof(char_u *)));
       for (i = 0; i < size; i++)
         y_current->y_array[i] = array[i];
-      vim_free(array);
+      free(array);
     }
     y_current->y_size = size;
   }
@@ -4676,7 +4671,6 @@ get_reg_contents (
   long i;
   char_u      *retval;
   int allocated;
-  long len;
 
   /* Don't allow using an expression register inside an expression */
   if (regname == '=') {
@@ -4711,9 +4705,9 @@ get_reg_contents (
   /*
    * Compute length of resulting string.
    */
-  len = 0;
+  size_t len = 0;
   for (i = 0; i < y_current->y_size; ++i) {
-    len += (long)STRLEN(y_current->y_array[i]);
+    len += STRLEN(y_current->y_array[i]);
     /*
      * Insert a newline between lines and after last line if
      * y_type is MLINE.
@@ -4722,26 +4716,24 @@ get_reg_contents (
       ++len;
   }
 
-  retval = lalloc(len + 1, TRUE);
+  retval = xmalloc(len + 1);
 
   /*
    * Copy the lines of the yank register into the string.
    */
-  if (retval != NULL) {
-    len = 0;
-    for (i = 0; i < y_current->y_size; ++i) {
-      STRCPY(retval + len, y_current->y_array[i]);
-      len += (long)STRLEN(retval + len);
+  len = 0;
+  for (i = 0; i < y_current->y_size; ++i) {
+    STRCPY(retval + len, y_current->y_array[i]);
+    len += STRLEN(retval + len);
 
-      /*
-       * Insert a NL between lines and after the last line if y_type is
-       * MLINE.
-       */
-      if (y_current->y_type == MLINE || i < y_current->y_size - 1)
-        retval[len++] = '\n';
-    }
-    retval[len] = NUL;
+    /*
+     * Insert a NL between lines and after the last line if y_type is
+     * MLINE.
+     */
+    if (y_current->y_type == MLINE || i < y_current->y_size - 1)
+      retval[len++] = '\n';
   }
+  retval[len] = NUL;
 
   return retval;
 }
@@ -4784,7 +4776,7 @@ void write_reg_contents_ex(int name, char_u *str, int maxlen, int must_append, i
       return;
     if (must_append) {
       s = concat_str(get_expr_line_src(), p);
-      vim_free(p);
+      free(p);
       p = s;
 
     }
@@ -4873,7 +4865,7 @@ str_to_reg (
   pp = xcalloc((y_ptr->y_size + newlines), sizeof(char_u *));
   for (lnum = 0; lnum < y_ptr->y_size; ++lnum)
     pp[lnum] = y_ptr->y_array[lnum];
-  vim_free(y_ptr->y_array);
+  free(y_ptr->y_array);
   y_ptr->y_array = pp;
   maxlen = 0;
 
@@ -4896,7 +4888,7 @@ str_to_reg (
     if (extra)
       memmove(s, y_ptr->y_array[lnum], (size_t)extra);
     if (append)
-      vim_free(y_ptr->y_array[lnum]);
+      free(y_ptr->y_array[lnum]);
     if (i)
       memmove(s + extra, str + start, (size_t)i);
     extra += i;

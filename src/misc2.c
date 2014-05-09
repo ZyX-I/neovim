@@ -635,18 +635,6 @@ int copy_option_part(char_u **option, char_u *buf, int maxlen, char *sep_chars)
 }
 
 /*
- * Replacement for free() that ignores NULL pointers.
- * Also skip free() when exiting for sure, this helps when we caught a deadly
- * signal that was caused by a crash in free().
- */
-void vim_free(void *x)
-{
-  if (x != NULL && !really_exiting) {
-    free(x);
-  }
-}
-
-/*
  * Return the current end-of-line type: EOL_DOS, EOL_UNIX or EOL_MAC.
  */
 int get_fileformat(buf_T *buf)
@@ -783,10 +771,10 @@ int call_shell(char_u *cmd, ShellOpts opts, char_u *extra_shell_arg)
           : STRCMP(p_sxq, "\"(") == 0 ? (char_u *)")\""
           : p_sxq);
       retval = os_call_shell(ncmd, opts, extra_shell_arg);
-      vim_free(ncmd);
+      free(ncmd);
 
       if (ecmd != cmd)
-        vim_free(ecmd);
+        free(ecmd);
     }
     /*
      * Check the window size, in case it changed while executing the
@@ -870,7 +858,7 @@ int vim_chdir(char_u *new_dir)
   if (dir_name == NULL)
     return -1;
   r = os_chdir((char *)dir_name);
-  vim_free(dir_name);
+  free(dir_name);
   return r;
 }
 
@@ -892,6 +880,17 @@ int emsg3(char_u *s, char_u *a1, char_u *a2)
  * This is not in message.c to avoid a warning for prototypes.
  */
 int emsgn(char_u *s, int64_t n)
+{
+  if (emsg_not_now())
+    return TRUE;                /* no error messages at the moment */
+  vim_snprintf((char *)IObuff, IOSIZE, (char *)s, n);
+  return emsg(IObuff);
+}
+
+/*
+ * Print an error message with one "%" PRIu64 and one (uint64_t) argument.
+ */
+int emsgu(char_u *s, uint64_t n)
 {
   if (emsg_not_now())
     return TRUE;                /* no error messages at the moment */
@@ -967,7 +966,7 @@ char_u *read_string(FILE *fd, int cnt)
   for (i = 0; i < cnt; ++i) {
     c = getc(fd);
     if (c == EOF) {
-      vim_free(str);
+      free(str);
       return NULL;
     }
     str[i] = c;

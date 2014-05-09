@@ -183,11 +183,11 @@ int main(int argc, char **argv) {
   if ((result = parse0_repr(argv[1], true)) == NULL)
     return 1;
   puts(result);
-  vim_free(result);
+  free(result);
   if ((result = parse0_repr(argv[1], false)) == NULL)
     return 1;
   puts(result);
-  vim_free(result);
+  free(result);
   return 0;
 }
 
@@ -252,11 +252,6 @@ char_u *vim_strnsave(char_u *string, int len)
   p = xmallocz((unsigned)(len + 1));
   STRNCPY(p, string, len);
   return p;
-}
-
-void vim_free(void *v)
-{
-  free(v);
 }
 
 int parse_one_cmd(char_u **pp,

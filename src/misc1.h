@@ -3,7 +3,6 @@
 
 #include "vim.h"
 
-/* misc1.c */
 int open_line(int dir, int flags, int second_line_indent);
 int get_leader_len(char_u *line, char_u **flags, int backward,
                    int include_space);

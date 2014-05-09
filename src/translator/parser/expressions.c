@@ -150,7 +150,7 @@ void free_expr(ExpressionNode *node)
 
   free_expr(node->children);
   free_expr(node->next);
-  vim_free(node);
+  free(node);
 }
 
 /// Check whether given character is a valid name character

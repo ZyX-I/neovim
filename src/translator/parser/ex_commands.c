@@ -262,7 +262,7 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
   node = (CommandNode *) xcalloc(1, size);
   char_u *fname;
   if ((fname = vim_strsave(position->fname)) == NULL) {
-    vim_free(node);
+    free(node);
     return NULL;
   }
   node->type = type;
@@ -332,8 +332,8 @@ static void free_menu_item(MenuItem *menu_item)
     return;
 
   free_menu_item(menu_item->subitem);
-  vim_free(menu_item->name);
-  vim_free(menu_item);
+  free(menu_item->name);
+  free(menu_item);
 }
 
 static void free_regex(Regex *regex)
@@ -342,7 +342,7 @@ static void free_regex(Regex *regex)
     return;
 
   vim_regfree(regex->prog);
-  vim_free(regex);
+  free(regex);
 }
 
 static void free_glob(Glob *glob)
@@ -367,7 +367,7 @@ static void free_glob(Glob *glob)
     case kPatEnviron:
     case kPatCollection:
     case kGlobShell: {
-      vim_free(glob->data.str);
+      free(glob->data.str);
       break;
     }
     case kGlobExpression: {
@@ -380,7 +380,7 @@ static void free_glob(Glob *glob)
     }
   }
   free_glob(glob->next);
-  vim_free(glob);
+  free(glob);
 }
 
 static void free_pattern(Pattern *pat)
@@ -419,7 +419,7 @@ static void free_address(Address *address)
     return;
 
   free_address_data(address);
-  vim_free(address);
+  free(address);
 }
 
 static void free_address_followup(AddressFollowup *followup)
@@ -439,7 +439,7 @@ static void free_address_followup(AddressFollowup *followup)
     }
   }
   free_address_followup(followup->next);
-  vim_free(followup);
+  free(followup);
 }
 
 static void free_range_data(Range *range)
@@ -457,7 +457,7 @@ static void free_range(Range *range)
     return;
 
   free_range_data(range);
-  vim_free(range);
+  free(range);
 }
 
 static void free_cmd_arg(CommandArg *arg, CommandArgType type)
@@ -478,11 +478,11 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       break;
     }
     case kArgNumbers: {
-      vim_free(arg->arg.numbers);
+      free(arg->arg.numbers);
       break;
     }
     case kArgString: {
-      vim_free(arg->arg.str);
+      free(arg->arg.str);
       break;
     }
     case kArgPattern: {
@@ -511,7 +511,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       break;
     }
     case kArgAuEvents: {
-      vim_free(arg->arg.events);
+      free(arg->arg.events);
       break;
     }
     case kArgAddress: {
@@ -528,7 +528,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       size_t i;
       for (i = 0; i < numsubargs; i++)
         free_cmd_arg(&(subargs[i]), arg->arg.args.types[i]);
-      vim_free(subargs);
+      free(subargs);
       break;
     }
   }
@@ -552,9 +552,9 @@ void free_cmd(CommandNode *node)
   free_cmd(node->children);
   free_glob(node->glob);
   free_range_data(&(node->range));
-  vim_free(node->expr);
-  vim_free(node->name);
-  vim_free(node);
+  free(node->expr);
+  free(node->name);
+  free(node);
 }
 
 static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
@@ -799,7 +799,7 @@ static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
 
 get_glob_error_return:
   free_glob(*glob);
-  vim_free(*expr);
+  free(*expr);
   return ret;
 }
 
@@ -823,12 +823,12 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
       return FAIL;
     if ((message = (char_u *) vim_strsave((char_u *) error->message))
         == NULL) {
-      vim_free(line);
+      free(line);
       return FAIL;
     }
     if ((*node = cmd_alloc(kCmdSyntaxError, position)) == NULL) {
-      vim_free(line);
-      vim_free(message);
+      free(line);
+      free(message);
       return FAIL;
     }
     (*node)->args[ARG_ERROR_LINESTR].arg.str = line;
@@ -942,7 +942,7 @@ static int parse_append(const char_u **pp,
     }
     if (first_nonblank[0] == '.' && first_nonblank[1] == NUL
         && cur_vcol <= vcol) {
-      vim_free(next_line);
+      free(next_line);
       break;
     }
     ga_grow(strs, 1);
@@ -1004,14 +1004,14 @@ static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
     if ((expr = parse0_err(&rhs_end, &expr_error)) == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
-        vim_free(new_rhs);
+        free(new_rhs);
         return FAIL;
       }
       error.position = expr_error.position;
       error.message = expr_error.message;
       if (create_error_node(&(node->children), &error, position, new_rhs)
           == FAIL) {
-        vim_free(new_rhs);
+        free(new_rhs);
         return FAIL;
       }
     } else if (*rhs_end != NUL) {
@@ -1024,7 +1024,7 @@ static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
 
       if (create_error_node(&(node->children), &error, position, new_rhs)
           == FAIL) {
-        vim_free(new_rhs);
+        free(new_rhs);
         return FAIL;
       }
     } else {
@@ -2007,7 +2007,7 @@ static int parse_function(const char_u **pp,
 #if 0
       if (ga_grow(args, 1) == FAIL) {
         ga_clear_strings(args);
-        vim_free(arg);
+        free(arg);
         return FAIL;
       }
 #endif
@@ -3277,7 +3277,7 @@ int parse_one_cmd(const char_u **pp,
                      cookie))
         == FAIL) {
       if (used_get_cmd_arg)
-        vim_free(cmd_arg_start);
+        free(cmd_arg_start);
       free_cmd(*next_node);
       *next_node = NULL;
       return FAIL;
@@ -3300,7 +3300,7 @@ int parse_one_cmd(const char_u **pp,
           return FAIL;
         return NOTDONE;
       }
-      vim_free(cmd_arg_start);
+      free(cmd_arg_start);
       p += next_cmd_offset;
     } else {
       p = cmd_arg;
@@ -3492,7 +3492,7 @@ const CommandNode nocmd = {
                                 line_start) \
               == FAIL) { \
             free_cmd(result); \
-            vim_free(line_start); \
+            free(line_start); \
             return FAIL; \
           } \
           if (prev_node != NULL) \
@@ -3680,7 +3680,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
             if (create_error_node(next_node, &error, &position, line_start)
                 == FAIL) {
               free_cmd(result);
-              vim_free(line_start);
+              free(line_start);
               return FAIL;
             }
           }
@@ -3701,7 +3701,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         line++;
     }
     position.lnr++;
-    vim_free(line_start);
+    free(line_start);
     if (blockstack_len == 0 && o.early_return)
       break;
   }

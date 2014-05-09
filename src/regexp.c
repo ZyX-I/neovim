@@ -1173,7 +1173,7 @@ static void bt_regfree(regprog_T *prog);
  * This also means that we don't allocate space until we are sure that the
  * thing really will compile successfully, and we never have to move the
  * code and thus invalidate pointers into it.  (Note that it has to be in
- * one piece because vim_free() must be able to free it all.)
+ * one piece because free() must be able to free it all.)
  *
  * Whether upper/lower case is to be ignored is decided when executing the
  * program, it does not matter here.
@@ -1184,7 +1184,6 @@ static void bt_regfree(regprog_T *prog);
  */
 static regprog_T *bt_regcomp(char_u *expr, int re_flags)
 {
-  bt_regprog_T    *r;
   char_u      *scan;
   char_u      *longest;
   int len;
@@ -1211,7 +1210,7 @@ static regprog_T *bt_regcomp(char_u *expr, int re_flags)
 #endif
 
   /* Allocate space. */
-  r = (bt_regprog_T *)lalloc(sizeof(bt_regprog_T) + regsize, TRUE);
+  bt_regprog_T *r = xmalloc(sizeof(bt_regprog_T) + regsize);
 
   /*
    * Second pass: emit code.
@@ -1220,7 +1219,7 @@ static regprog_T *bt_regcomp(char_u *expr, int re_flags)
   regcode = r->program;
   regc(REGMAGIC);
   if (reg(REG_NOPAREN, &flags) == NULL || reg_toolong) {
-    vim_free(r);
+    free(r);
     if (reg_toolong)
       EMSG_RET_NULL(_("E339: Pattern too long"));
     return NULL;
@@ -1302,7 +1301,7 @@ static regprog_T *bt_regcomp(char_u *expr, int re_flags)
  */
 static void bt_regfree(regprog_T *prog)
 {
-  vim_free(prog);
+  free(prog);
 }
 
 /*
@@ -3255,8 +3254,8 @@ void free_regexp_stuff(void)
 {
   ga_clear(&regstack);
   ga_clear(&backpos);
-  vim_free(reg_tofree);
-  vim_free(reg_prev_sub);
+  free(reg_tofree);
+  free(reg_prev_sub);
 }
 
 #endif
@@ -3533,7 +3532,7 @@ theend:
   /* Free "reg_tofree" when it's a bit big.
    * Free regstack and backpos if they are bigger than their initial size. */
   if (reg_tofreelen > 400) {
-    vim_free(reg_tofree);
+    free(reg_tofree);
     reg_tofree = NULL;
   }
   if (regstack.ga_maxlen > REGSTACK_INITIAL)
@@ -3576,8 +3575,8 @@ void unref_extmatch(reg_extmatch_T *em)
 
   if (em != NULL && --em->refcnt <= 0) {
     for (i = 0; i < NSUBEXP; ++i)
-      vim_free(em->matches[i]);
-    vim_free(em);
+      free(em->matches[i]);
+    free(em);
   }
 }
 
@@ -5653,7 +5652,7 @@ static int match_with_backref(linenr_T start_lnum, colnr_T start_col, linenr_T e
       len = (int)STRLEN(regline);
       if (reg_tofree == NULL || len >= (int)reg_tofreelen) {
         len += 50;              /* get some extra */
-        vim_free(reg_tofree);
+        free(reg_tofree);
         reg_tofree = alloc(len);
         reg_tofreelen = len;
       }
@@ -6417,7 +6416,7 @@ char_u *regtilde(char_u *source, int magic)
         STRCPY(tmpsub + len + prevlen, p + 1);
 
         if (newsub != source)                 /* already allocated newsub */
-          vim_free(newsub);
+          free(newsub);
         newsub = tmpsub;
         p = newsub + len + prevlen;
       } else if (magic)
@@ -6433,7 +6432,7 @@ char_u *regtilde(char_u *source, int magic)
     }
   }
 
-  vim_free(reg_prev_sub);
+  free(reg_prev_sub);
   if (newsub != source)         /* newsub was allocated, just keep it */
     reg_prev_sub = newsub;
   else                          /* no ~ found, need to save newsub  */
@@ -6529,14 +6528,14 @@ static int vim_regsub_both(char_u *source, char_u *dest, int copy, int magic, in
       if (eval_result != NULL) {
         STRCPY(dest, eval_result);
         dst += STRLEN(eval_result);
-        vim_free(eval_result);
+        free(eval_result);
         eval_result = NULL;
       }
     } else {
       win_T       *save_reg_win;
       int save_ireg_ic;
 
-      vim_free(eval_result);
+      free(eval_result);
 
       /* The expression may contain substitute(), which calls us
        * recursively.  Make sure submatch() gets the text from the first
@@ -6578,7 +6577,7 @@ static int vim_regsub_both(char_u *source, char_u *dest, int copy, int magic, in
           /* Backslashes will be consumed, need to double them. */
           s = vim_strsave_escaped(eval_result, (char_u *)"\\");
           if (s != NULL) {
-            vim_free(eval_result);
+            free(eval_result);
             eval_result = s;
           }
         }
@@ -6824,7 +6823,6 @@ char_u *reg_submatch(int no)
 {
   char_u      *retval = NULL;
   char_u      *s;
-  int len;
   int round;
   linenr_T lnum;
 
@@ -6832,6 +6830,8 @@ char_u *reg_submatch(int no)
     return NULL;
 
   if (submatch_match == NULL) {
+    ssize_t len;
+
     /*
      * First round: compute the length and allocate memory.
      * Second round: copy the text.
@@ -6854,7 +6854,7 @@ char_u *reg_submatch(int no)
       } else {
         /* Multiple lines: take start line from start col, middle
          * lines completely and end line up to end col. */
-        len = (int)STRLEN(s);
+        len = STRLEN(s);
         if (round == 2) {
           STRCPY(retval, s);
           retval[len] = '\n';
@@ -6865,7 +6865,7 @@ char_u *reg_submatch(int no)
           s = reg_getline_submatch(lnum++);
           if (round == 2)
             STRCPY(retval + len, s);
-          len += (int)STRLEN(s);
+          len += STRLEN(s);
           if (round == 2)
             retval[len] = '\n';
           ++len;
@@ -6880,7 +6880,7 @@ char_u *reg_submatch(int no)
       }
 
       if (retval == NULL) {
-        retval = lalloc((long_u)len, TRUE);
+        retval = xmalloc(len);
       }
     }
   } else {

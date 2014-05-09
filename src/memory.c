@@ -46,11 +46,10 @@ static void try_to_free_memory();
 
 /*
  * Note: if unsigned is 16 bits we can only allocate up to 64K with alloc().
- * Use lalloc for larger blocks.
  */
 char_u *alloc(unsigned size)
 {
-  return lalloc((long_u)size, TRUE);
+  return xmalloc(size);
 }
 
 /// Try to free memory. Used when trying to recover from out of memory errors.
@@ -216,11 +215,6 @@ char *xstrndup(const char *str, size_t len)
 }
 
 
-char_u *lalloc(long_u size, int message)
-{
-  return (char_u *)xmalloc((size_t)size);
-}
-
 /*
  * Avoid repeating the error message many times (they take 1 second each).
  * Did_outofmem_msg is reset when a character is read.
@@ -235,7 +229,7 @@ void do_outofmem_msg(long_u size)
      * message fails, e.g. when setting v:errmsg. */
     did_outofmem_msg = TRUE;
 
-    EMSGN(_("E342: Out of memory!  (allocating %" PRIu64 " bytes)"), size);
+    EMSGU(_("E342: Out of memory!  (allocating %" PRIu64 " bytes)"), size);
   }
 }
 
@@ -312,8 +306,8 @@ void free_all_mem(void)
   clear_sb_text();            /* free any scrollback text */
 
   /* Free some global vars. */
-  vim_free(last_cmdline);
-  vim_free(new_last_cmdline);
+  free(last_cmdline);
+  free(new_last_cmdline);
   set_keep_msg(NULL, 0);
 
   /* Clear cmdline history. */
@@ -383,7 +377,7 @@ void free_all_mem(void)
 
   clear_hl_tables();
 
-  vim_free(NameBuff);
+  free(NameBuff);
 }
 
 #endif

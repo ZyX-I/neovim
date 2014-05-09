@@ -344,7 +344,6 @@ void ex_sort(exarg_T *eap)
   int len;
   linenr_T lnum;
   long maxlen = 0;
-  sorti_T     *nrs;
   size_t count = (size_t)(eap->line2 - eap->line1 + 1);
   size_t i;
   char_u      *p;
@@ -367,9 +366,7 @@ void ex_sort(exarg_T *eap)
   sortbuf1 = NULL;
   sortbuf2 = NULL;
   regmatch.regprog = NULL;
-  nrs = (sorti_T *)lalloc((long_u)(count * sizeof(sorti_T)), TRUE);
-  if (nrs == NULL)
-    goto sortend;
+  sorti_T *nrs = xmalloc(count * sizeof(sorti_T));
 
   sort_abort = sort_ic = sort_rx = sort_nr = sort_oct = sort_hex = 0;
 
@@ -533,9 +530,9 @@ void ex_sort(exarg_T *eap)
   beginline(BL_WHITE | BL_FIX);
 
 sortend:
-  vim_free(nrs);
-  vim_free(sortbuf1);
-  vim_free(sortbuf2);
+  free(nrs);
+  free(sortbuf1);
+  free(sortbuf2);
   vim_regfree(regmatch.regprog);
   if (got_int)
     EMSG(_(e_interr));
@@ -621,10 +618,8 @@ void ex_retab(exarg_T *eap)
             /* len is actual number of white characters used */
             len = num_spaces + num_tabs;
             old_len = (long)STRLEN(ptr);
-            new_line = lalloc(old_len - col + start_col + len + 1,
-                TRUE);
-            if (new_line == NULL)
-              break;
+            new_line = xmalloc(old_len - col + start_col + len + 1);
+
             if (start_col > 0)
               memmove(new_line, ptr, (size_t)start_col);
             memmove(new_line + start_col + len,
@@ -701,7 +696,7 @@ int do_move(linenr_T line1, linenr_T line2, linenr_T dest)
     str = vim_strsave(ml_get(l + extra));
     if (str != NULL) {
       ml_append(dest + l - line1, str, (colnr_T)0, FALSE);
-      vim_free(str);
+      free(str);
       if (dest < line1)
         extra++;
     }
@@ -809,7 +804,7 @@ void ex_copy(linenr_T line1, linenr_T line2, linenr_T n)
     p = vim_strsave(ml_get(line1));
     if (p != NULL) {
       ml_append(curwin->w_cursor.lnum, p, (colnr_T)0, FALSE);
-      vim_free(p);
+      free(p);
     }
     /* situation 2: skip already copied lines */
     if (line1 == n)
@@ -832,7 +827,7 @@ static char_u   *prevcmd = NULL;        /* the previous command */
 #if defined(EXITFREE) || defined(PROTO)
 void free_prev_shellcmd(void)
 {
-  vim_free(prevcmd);
+  free(prevcmd);
 }
 
 #endif
@@ -883,7 +878,7 @@ void do_bang(int addr_count, exarg_T *eap, int forceit, int do_in, int do_out)
     if (ins_prevcmd) {
       if (prevcmd == NULL) {
         EMSG(_(e_noprev));
-        vim_free(newcmd);
+        free(newcmd);
         return;
       }
       len += (int)STRLEN(prevcmd);
@@ -896,7 +891,7 @@ void do_bang(int addr_count, exarg_T *eap, int forceit, int do_in, int do_out)
       STRCAT(t, prevcmd);
     p = t + STRLEN(t);
     STRCAT(t, trailarg);
-    vim_free(newcmd);
+    free(newcmd);
     newcmd = t;
 
     /*
@@ -919,7 +914,7 @@ void do_bang(int addr_count, exarg_T *eap, int forceit, int do_in, int do_out)
     }
   } while (trailarg != NULL);
 
-  vim_free(prevcmd);
+  free(prevcmd);
   prevcmd = newcmd;
 
   if (bangredo) { /* put cmd in redo buffer for ! command */
@@ -929,7 +924,7 @@ void do_bang(int addr_count, exarg_T *eap, int forceit, int do_in, int do_out)
     char_u *cmd = vim_strsave_escaped(prevcmd, (char_u *)"%#");
 
     AppendToRedobuffLit(cmd, -1);
-    vim_free(cmd);
+    free(cmd);
     AppendToRedobuff((char_u *)"\n");
     bangredo = FALSE;
   }
@@ -960,7 +955,7 @@ void do_bang(int addr_count, exarg_T *eap, int forceit, int do_in, int do_out)
     apply_autocmds(EVENT_SHELLFILTERPOST, NULL, NULL, FALSE, curbuf);
   }
   if (free_newcmd)
-    vim_free(newcmd);
+    free(newcmd);
 }
 
 /*
@@ -1067,8 +1062,6 @@ do_filter (
 
   /* Create the shell command in allocated memory. */
   cmd_buf = make_filter_cmd(cmd, itmp, otmp);
-  if (cmd_buf == NULL)
-    goto filterend;
 
   windgoto((int)Rows - 1, 0);
   cursor_on();
@@ -1085,7 +1078,7 @@ do_filter (
 
   if (do_out) {
     if (u_save((linenr_T)(line2), (linenr_T)(line2 + 1)) == FAIL) {
-      vim_free(cmd_buf);
+      free(cmd_buf);
       goto error;
     }
     redraw_curbuf_later(VALID);
@@ -1109,7 +1102,7 @@ do_filter (
     redraw_later_clear();
     wait_return(FALSE);
   }
-  vim_free(cmd_buf);
+  free(cmd_buf);
 
   did_check_timestamps = FALSE;
   need_check_timestamps = TRUE;
@@ -1206,8 +1199,8 @@ filterend:
     os_remove((char *)itmp);
   if (otmp != NULL)
     os_remove((char *)otmp);
-  vim_free(itmp);
-  vim_free(otmp);
+  free(itmp);
+  free(otmp);
 }
 
 /*
@@ -1319,7 +1312,7 @@ do_shell (
 /*
  * Create a shell command from a command string, input redirection file and
  * output redirection file.
- * Returns an allocated string with the shell command, or NULL for failure.
+ * Returns an allocated string with the shell command.
  */
 char_u *
 make_filter_cmd (
@@ -1328,17 +1321,12 @@ make_filter_cmd (
     char_u *otmp              /* NULL or name of output file */
 )
 {
-  char_u      *buf;
-  long_u len;
-
-  len = (long_u)STRLEN(cmd) + 3;                        /* "()" + NUL */
+  size_t len = STRLEN(cmd) + 3;                        /* "()" + NUL */
   if (itmp != NULL)
-    len += (long_u)STRLEN(itmp) + 9;                    /* " { < " + " } " */
+    len += STRLEN(itmp) + 9;                    /* " { < " + " } " */
   if (otmp != NULL)
-    len += (long_u)STRLEN(otmp) + (long_u)STRLEN(p_srr) + 2;     /* "  " */
-  buf = lalloc(len, TRUE);
-  if (buf == NULL)
-    return NULL;
+    len += STRLEN(otmp) + STRLEN(p_srr) + 2;     /* "  " */
+  char_u *buf = xmalloc(len);
 
 #if defined(UNIX)
   /*
@@ -1480,7 +1468,7 @@ read_viminfo (
     verbose_leave();
   }
 
-  vim_free(fname);
+  free(fname);
   if (fp == NULL)
     return FAIL;
 
@@ -1590,7 +1578,7 @@ void write_viminfo(char_u *file, int forceit)
            * write the viminfo file then.
            */
           if (*wp == 'a') {
-            vim_free(tempname);
+            free(tempname);
             tempname = NULL;
             break;
           }
@@ -1626,7 +1614,7 @@ void write_viminfo(char_u *file, int forceit)
        * "normal" temp file.
        */
       if (fp_out == NULL) {
-        vim_free(tempname);
+        free(tempname);
         if ((tempname = vim_tempname('o')) != NULL)
           fp_out = mch_fopen((char *)tempname, WRITEBIN);
       }
@@ -1676,8 +1664,8 @@ void write_viminfo(char_u *file, int forceit)
   }
 
 end:
-  vim_free(fname);
-  vim_free(tempname);
+  free(fname);
+  free(tempname);
 }
 
 /*
@@ -1758,7 +1746,7 @@ static void do_viminfo(FILE *fp_in, FILE *fp_out, int flags)
       && (flags & (VIF_WANT_MARKS | VIF_GET_OLDFILES | VIF_FORCEIT)))
     copy_viminfo_marks(&vir, fp_out, count, eof, flags);
 
-  vim_free(vir.vir_line);
+  free(vir.vir_line);
   if (vir.vir_conv.vc_type != CONV_NONE)
     convert_setup(&vir.vir_conv, NULL, NULL);
 }
@@ -1893,16 +1881,11 @@ viminfo_readstring (
 {
   char_u      *retval;
   char_u      *s, *d;
-  long len;
 
   if (virp->vir_line[off] == Ctrl_V && vim_isdigit(virp->vir_line[off + 1])) {
-    len = atol((char *)virp->vir_line + off + 1);
-    retval = lalloc(len, TRUE);
-    if (retval == NULL) {
-      /* Line too long?  File messed up?  Skip next line. */
-      (void)vim_fgets(virp->vir_line, 10, virp->vir_fd);
-      return NULL;
-    }
+    ssize_t len = atol((char *)virp->vir_line + off + 1);
+    retval = xmalloc(len);
+    // TODO(philix): change type of vim_fgets() size argument to size_t
     (void)vim_fgets(retval, (int)len, virp->vir_fd);
     s = retval + 1;         /* Skip the leading '<' */
   } else {
@@ -1929,7 +1912,7 @@ viminfo_readstring (
   if (convert && virp->vir_conv.vc_type != CONV_NONE && *retval != NUL) {
     d = string_convert(&virp->vir_conv, retval, NULL);
     if (d != NULL) {
-      vim_free(retval);
+      free(retval);
       retval = d;
     }
   }
@@ -2059,8 +2042,8 @@ int rename_buffer(char_u *new_fname)
     if (buf != NULL && !cmdmod.keepalt)
       curwin->w_alt_fnum = buf->b_fnum;
   }
-  vim_free(fname);
-  vim_free(sfname);
+  free(fname);
+  free(sfname);
   apply_autocmds(EVENT_BUFFILEPOST, NULL, NULL, FALSE, curbuf);
   /* Change directories when the 'acd' option is set. */
   do_autochdir();
@@ -2265,7 +2248,7 @@ int do_write(exarg_T *eap)
   }
 
 theend:
-  vim_free(free_fname);
+  free(free_fname);
   return retval;
 }
 
@@ -2338,7 +2321,7 @@ check_overwrite (
         copy_option_part(&p, dir, MAXPATHL, ",");
       }
       swapname = makeswapname(fname, ffname, curbuf, dir);
-      vim_free(dir);
+      free(dir);
       if (os_file_exists(swapname)) {
         if (p_confirm || cmdmod.confirm) {
           char_u buff[DIALOG_MSG_SIZE];
@@ -2348,18 +2331,18 @@ check_overwrite (
               swapname);
           if (vim_dialog_yesno(VIM_QUESTION, NULL, buff, 2)
               != VIM_YES) {
-            vim_free(swapname);
+            free(swapname);
             return FAIL;
           }
           eap->forceit = TRUE;
         } else {
           EMSG2(_("E768: Swap file exists: %s (:silent! overrides)"),
               swapname);
-          vim_free(swapname);
+          free(swapname);
           return FAIL;
         }
       }
-      vim_free(swapname);
+      free(swapname);
     }
   }
   return OK;
@@ -2545,7 +2528,7 @@ int getfile(int fnum, char_u *ffname, char_u *sfname, int setpm, linenr_T lnum, 
     retval = 1;         /* error encountered */
 
 theend:
-  vim_free(free_me);
+  free(free_me);
   return retval;
 }
 
@@ -2682,7 +2665,7 @@ do_ecmd (
     }
     set_vim_var_string(VV_SWAPCOMMAND, p, -1);
     did_set_swapcommand = TRUE;
-    vim_free(p);
+    free(p);
   }
 
   /*
@@ -2771,7 +2754,7 @@ do_ecmd (
         goto theend;
       }
       if (aborting()) {             /* autocmds may abort script processing */
-        vim_free(new_name);
+        free(new_name);
         goto theend;
       }
       if (buf == curbuf)                /* already in new buffer */
@@ -2793,7 +2776,7 @@ do_ecmd (
           win_close(oldwin, FALSE);
 
         if (aborting()) {           /* autocmds may abort script processing */
-          vim_free(new_name);
+          free(new_name);
           goto theend;
         }
         /* Be careful again, like above. */
@@ -2831,7 +2814,7 @@ do_ecmd (
         did_get_winopts = TRUE;
 
       }
-      vim_free(new_name);
+      free(new_name);
       au_new_curbuf = NULL;
     } else
       ++curbuf->b_nwindows;
@@ -2943,7 +2926,7 @@ do_ecmd (
       delbuf_msg(new_name);             /* frees new_name */
       goto theend;
     }
-    vim_free(new_name);
+    free(new_name);
 
     /* If autocommands change buffers under our fingers, forget about
      * re-editing the file.  Should do the buf_clear_file(), but perhaps
@@ -3141,7 +3124,7 @@ do_ecmd (
 theend:
   if (did_set_swapcommand)
     set_vim_var_string(VV_SWAPCOMMAND, NULL, -1);
-  vim_free(free_fname);
+  free(free_fname);
   return retval;
 }
 
@@ -3149,7 +3132,7 @@ static void delbuf_msg(char_u *name)
 {
   EMSG2(_("E143: Autocommands unexpectedly deleted new buffer %s"),
       name == NULL ? (char_u *)"" : name);
-  vim_free(name);
+  free(name);
   au_new_curbuf = NULL;
 }
 
@@ -3235,7 +3218,7 @@ void ex_append(exarg_T *eap)
     if ((p[0] == '.' && p[1] == NUL)
         || (!did_undo && u_save(lnum, lnum + 1 + (empty ? 1 : 0))
             == FAIL)) {
-      vim_free(theline);
+      free(theline);
       break;
     }
 
@@ -3247,7 +3230,7 @@ void ex_append(exarg_T *eap)
     ml_append(lnum, theline, (colnr_T)0, FALSE);
     appended_lines_mark(lnum, 1L);
 
-    vim_free(theline);
+    free(theline);
     ++lnum;
 
     if (empty) {
@@ -3580,7 +3563,7 @@ void do_sub(exarg_T *eap)
         }
         sub = old_sub;
       } else {
-        vim_free(old_sub);
+        free(old_sub);
         old_sub = vim_strsave(sub);
       }
     }
@@ -3834,7 +3817,7 @@ void do_sub(exarg_T *eap)
           lnum += regmatch.startpos[0].lnum;
           sub_firstlnum += regmatch.startpos[0].lnum;
           nmatch -= regmatch.startpos[0].lnum;
-          vim_free(sub_firstline);
+          free(sub_firstline);
           sub_firstline = NULL;
         }
 
@@ -3938,7 +3921,7 @@ void do_sub(exarg_T *eap)
               resp = getexmodeline('?', NULL, 0);
               if (resp != NULL) {
                 typed = *resp;
-                vim_free(resp);
+                free(resp);
               }
             } else {
               char_u *orig_line = NULL;
@@ -4159,7 +4142,7 @@ void do_sub(exarg_T *eap)
          * line and continue in that one. */
         if (nmatch > 1) {
           sub_firstlnum += nmatch - 1;
-          vim_free(sub_firstline);
+          free(sub_firstline);
           sub_firstline = vim_strsave(ml_get(sub_firstlnum));
           /* When going beyond the last line, stop substituting. */
           if (sub_firstlnum <= line2)
@@ -4174,7 +4157,7 @@ void do_sub(exarg_T *eap)
         if (skip_match) {
           /* Already hit end of the buffer, sub_firstlnum is one
            * less than what it ought to be. */
-          vim_free(sub_firstline);
+          free(sub_firstline);
           sub_firstline = vim_strsave((char_u *)"");
           copycol = 0;
         }
@@ -4302,7 +4285,7 @@ skip:
             }
 
             sub_firstlnum = lnum;
-            vim_free(sub_firstline);                /* free the temp buffer */
+            free(sub_firstline);                /* free the temp buffer */
             sub_firstline = new_start;
             new_start = NULL;
             matchcol = (colnr_T)STRLEN(sub_firstline) - matchcol;
@@ -4332,8 +4315,8 @@ skip:
 
       if (did_sub)
         ++sub_nlines;
-      vim_free(new_start);              /* for when substitute was cancelled */
-      vim_free(sub_firstline);          /* free the copy of the original line */
+      free(new_start);              /* for when substitute was cancelled */
+      free(sub_firstline);          /* free the copy of the original line */
       sub_firstline = NULL;
     }
 
@@ -4348,7 +4331,7 @@ skip:
     changed_lines(first_line, 0, last_line - i, i);
   }
 
-  vim_free(sub_firstline);   /* may have to free allocated copy of the line */
+  free(sub_firstline);   /* may have to free allocated copy of the line */
 
   /* ":s/pat//n" doesn't move the cursor */
   if (do_count)
@@ -4608,7 +4591,7 @@ void global_exe(char_u *cmd)
 int read_viminfo_sub_string(vir_T *virp, int force)
 {
   if (force)
-    vim_free(old_sub);
+    free(old_sub);
   if (force || old_sub == NULL)
     old_sub = viminfo_readstring(virp, 1, TRUE);
   return viminfo_readline(virp);
@@ -4625,7 +4608,7 @@ void write_viminfo_sub_string(FILE *fp)
 #if defined(EXITFREE) || defined(PROTO)
 void free_old_sub(void)
 {
-  vim_free(old_sub);
+  free(old_sub);
 }
 
 #endif
@@ -4839,7 +4822,7 @@ void ex_help(exarg_T *eap)
     curwin->w_alt_fnum = alt_fnum;
 
 erret:
-  vim_free(tag);
+  free(tag);
 }
 
 
@@ -5103,7 +5086,7 @@ int find_help_tags(char_u *arg, int *num_matches, char_u ***matches, int keep_la
         sizeof(char_u *), help_compare);
     /* Delete more than TAG_MANY to reduce the size of the listing. */
     while (*num_matches > TAG_MANY)
-      vim_free((*matches)[--*num_matches]);
+      free((*matches)[--*num_matches]);
   }
   return OK;
 }
@@ -5221,7 +5204,7 @@ void fix_help_buffer(void)
                 if (fnamecmp(e1, ".txt") != 0
                     && fnamecmp(e1, fname + 4) != 0) {
                   /* Not .txt and not .abx, remove it. */
-                  vim_free(fnames[i1]);
+                  free(fnames[i1]);
                   fnames[i1] = NULL;
                   continue;
                 }
@@ -5230,7 +5213,7 @@ void fix_help_buffer(void)
                 if (fnamecmp(e1, ".txt") == 0
                     && fnamecmp(e2, fname + 4) == 0) {
                   /* use .abx instead of .txt */
-                  vim_free(fnames[i1]);
+                  free(fnames[i1]);
                   fnames[i1] = NULL;
                 }
               }
@@ -5289,7 +5272,7 @@ void fix_help_buffer(void)
 
                   ml_append(lnum, cp, (colnr_T)0, FALSE);
                   if (cp != IObuff)
-                    vim_free(cp);
+                    free(cp);
                   ++lnum;
                 }
                 fclose(fd);
@@ -5299,7 +5282,7 @@ void fix_help_buffer(void)
           }
         }
         if (mustfree)
-          vim_free(rt);
+          free(rt);
       }
       break;
     }
@@ -5365,7 +5348,7 @@ void ex_helptags(exarg_T *eap)
           EW_FILE|EW_SILENT) == FAIL
       || filecount == 0) {
     EMSG2("E151: No match: %s", NameBuff);
-    vim_free(dirname);
+    free(dirname);
     return;
   }
 
@@ -5425,7 +5408,7 @@ void ex_helptags(exarg_T *eap)
   ga_clear(&ga);
   FreeWild(filecount, files);
 
-  vim_free(dirname);
+  free(dirname);
 }
 
 static void 
@@ -5633,7 +5616,7 @@ helptags_one (
     got_int = FALSE;        /* continue with other languages */
 
   for (i = 0; i < ga.ga_len; ++i)
-    vim_free(((char_u **)ga.ga_data)[i]);
+    free(((char_u **)ga.ga_data)[i]);
   ga_clear(&ga);
   fclose(fd_tags);          /* there is no check for an error... */
 }
@@ -5775,7 +5758,7 @@ void ex_sign(exarg_T *eap)
 				next_sign_typenr = 1;
 			    if (next_sign_typenr == start)
 			    {
-				vim_free(sp);
+				free(sp);
 				EMSG(_("E612: Too many signs defined"));
 				return;
 			    }
@@ -5792,7 +5775,7 @@ void ex_sign(exarg_T *eap)
 		    sp->sn_name = vim_strsave(arg);
 		    if (sp->sn_name == NULL)  /* out of memory */
 		    {
-			vim_free(sp);
+			free(sp);
 			return;
 		    }
 
@@ -5813,7 +5796,7 @@ void ex_sign(exarg_T *eap)
 		    if (STRNCMP(arg, "icon=", 5) == 0)
 		    {
 			arg += 5;
-			vim_free(sp->sn_icon);
+			free(sp->sn_icon);
 			sp->sn_icon = vim_strnsave(arg, (int)(p - arg));
 			backslash_halve(sp->sn_icon);
 		    }
@@ -5852,7 +5835,7 @@ void ex_sign(exarg_T *eap)
 			    return;
 			}
 
-			vim_free(sp->sn_text);
+			free(sp->sn_text);
 			/* Allocate one byte more if we need to pad up
 			 * with a space. */
 			len = (int)(p - arg + ((cells == 1) ? 1 : 0));
@@ -6037,7 +6020,7 @@ void ex_sign(exarg_T *eap)
 		    sprintf((char *)cmd, "e +%" PRId64 " %s",
                     (int64_t)lnum, buf->b_fname);
 		    do_cmdline_cmd(cmd);
-		    vim_free(cmd);
+		    free(cmd);
 		}
 
 		foldOpenCursor();
@@ -6136,14 +6119,14 @@ sign_undefine(sp, sp_prev)
     sign_T	*sp;
     sign_T	*sp_prev;
 {
-    vim_free(sp->sn_name);
-    vim_free(sp->sn_icon);
-    vim_free(sp->sn_text);
+    free(sp->sn_name);
+    free(sp->sn_icon);
+    free(sp->sn_text);
     if (sp_prev == NULL)
 	first_sign = sp->sn_next;
     else
 	sp_prev->sn_next = sp->sn_next;
-    vim_free(sp);
+    free(sp);
 }
 
 /*
