@@ -38,6 +38,11 @@
 ///       minimum required size.
 #define SIZETBUFLEN  (sizeof(STRINGIFY(SIZE_MAX)) - 1)
 
+/// Write string of the given length
+///
+/// @return Number of bytes written.
+#define RAW_WRITE(string, len) write(string, 1, len, cookie)
+
 /// Returns function declaration with additional arguments
 ///
 /// Additional arguments are writer function, its last argument and translation 
@@ -260,7 +265,7 @@ static WFDEC(write_string_len, const char *const s, size_t len)
 {
   size_t written;
   if (len) {
-    written = write(s, 1, len, cookie);
+    written = RAW_WRITE(s, len);
     if (written < len) {
       // TODO: generate error message
       return FAIL;
