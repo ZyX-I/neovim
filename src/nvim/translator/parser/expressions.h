@@ -122,9 +122,10 @@ typedef struct error {
   const char_u *position;
 } ExpressionParserError;
 
+/// Defines scope in which expressions are parsed
 typedef enum {
-  kExprRvalue = 0,
-  kExprLvalue,
+  kExprRvalue = 0,  ///< Rvalue: value that can be accessed
+  kExprLvalue,      ///< Lvalue: left side of an assignment
 } ExpressionOptions;
 
 typedef ExpressionNode *(*ExpressionParser)(const char_u **,
