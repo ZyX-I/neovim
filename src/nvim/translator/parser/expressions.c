@@ -60,6 +60,7 @@
 
 /// Arguments common for parsing functions
 #define EDEC_ARGS \
+    const ExpressionOptions *const eo, \
     const char_u **arg, \
     ExpressionNode **node, \
     ExpressionParserError *error
@@ -68,7 +69,8 @@
 #define EDEC(f, ...) int f(EDEC_ARGS, __VA_ARGS__)
 /// Expands to a parser function definition without additional arguments
 #define EDEC_NOARGS(f) int f(EDEC_ARGS)
-#define RAW_CALL(f, ...) f(__VA_ARGS__)
+/// Call function with additional first eo argument
+#define RAW_CALL(f, ...) f(eo, __VA_ARGS__)
 /// Call function with given arguments and propagate FAIL return value
 #define CALL(f, ...) \
     { \
@@ -1283,8 +1285,7 @@ static EDEC(parse23, uint8_t level)
   ExpressionNode **next_node = node;
   ExpressionType type;
   char_u c;
-  int (*parse_next)(const char_u **, ExpressionNode **,
-                    ExpressionParserError *);
+  EDEC_NOARGS((*parse_next));
 
   if (level == 2) {
     type = kExprLogicalOr;
@@ -1399,6 +1400,7 @@ ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *result = NULL;
+  ExpressionOptions eo[] = {kExprRvalue};
 
   error->message = NULL;
   error->position = NULL;
@@ -1424,6 +1426,7 @@ ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error)
 ExpressionNode *parse7_nofunc(const char_u **arg, ExpressionParserError *error)
 {
   ExpressionNode *result = NULL;
+  ExpressionOptions eo[] = {kExprLvalue};
 
   error->message = NULL;
   error->position = NULL;
