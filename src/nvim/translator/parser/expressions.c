@@ -58,6 +58,17 @@
                           || (c) == 't' || (c) == 'v' || (c) == 'a' \
                           || (c) == 'l' || (c) == 's')
 
+/// Arguments common for parsing functions
+#define EDEC_ARGS \
+    const char_u **arg, \
+    ExpressionNode **node, \
+    ExpressionParserError *error
+
+/// Expands to a parser function definition with given additional arguments
+#define EDEC(f, ...) int f(EDEC_ARGS, __VA_ARGS__)
+/// Expands to a parser function definition without additional arguments
+#define EDEC_NOARGS(f) int f(EDEC_ARGS)
+
 #define skipwhite(arg) skipwhite((char_u *) (arg))
 #define skipdigits(arg) skipdigits((char_u *) (arg))
 #define vim_strchr(hs, n) vim_strchr((char_u *) hs, n)
@@ -154,11 +165,7 @@ static int get_fname_script_len(const char_u *p)
 ///                              parse1_node.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_name(const char_u **arg,
-                      ExpressionNode **node,
-                      ExpressionParserError *error,
-                      ExpressionNode *parse1_node,
-                      const char_u *parse1_arg)
+static EDEC(parse_name, ExpressionNode *parse1_node, const char_u *parse1_arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int len;
@@ -263,9 +270,7 @@ static int parse_name(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_list(const char_u **arg,
-                      ExpressionNode **node,
-                      ExpressionParserError *error)
+static EDEC_NOARGS(parse_list)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *top_node = NULL;
@@ -326,11 +331,8 @@ static int parse_list(const char_u **arg,
 ///
 /// @return FAIL if parsing failed, NOTDONE if curly braces name found, OK 
 ///         otherwise.
-static int parse_dictionary(const char_u **arg,
-                            ExpressionNode **node,
-                            ExpressionParserError *error,
-                            ExpressionNode **parse1_node,
-                            const char_u **parse1_arg)
+static EDEC(parse_dictionary, ExpressionNode **parse1_node,
+                              const char_u **parse1_arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *top_node = NULL;
@@ -448,9 +450,7 @@ static const char_u *find_option_end(const char_u **arg)
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_option(const char_u **arg,
-                        ExpressionNode **node,
-                        ExpressionParserError *error)
+static EDEC_NOARGS(parse_option)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   const char_u *option_end;
@@ -501,9 +501,7 @@ static const char_u *find_env_end(const char_u **arg)
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int parse_environment_variable(const char_u **arg,
-                                      ExpressionNode **node,
-                                      ExpressionParserError *error)
+static EDEC_NOARGS(parse_environment_variable)
   FUNC_ATTR_NONNULL_ALL
 {
   const char_u *s = *arg;
@@ -528,9 +526,7 @@ static int parse_environment_variable(const char_u **arg,
 ///
 /// @return FAIL when out of memory, NOTDONE if subscript was found, OK 
 ///         otherwise.
-static int parse_dot_subscript(const char_u **arg,
-                               ExpressionNode **node,
-                               ExpressionParserError *error)
+static EDEC_NOARGS(parse_dot_subscript)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   const char_u *s = *arg;
@@ -567,9 +563,7 @@ static int parse_dot_subscript(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_func_call(const char_u **arg,
-                           ExpressionNode **node,
-                           ExpressionParserError *error)
+static EDEC_NOARGS(parse_func_call)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   const char_u *argp;
@@ -615,9 +609,7 @@ static int parse_func_call(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse_subscript(const char_u **arg,
-                           ExpressionNode **node,
-                           ExpressionParserError *error)
+static EDEC_NOARGS(parse_subscript)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *top_node = NULL;
@@ -661,10 +653,7 @@ static int parse_subscript(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int handle_subscript(const char_u **arg,
-                            ExpressionNode **node,
-                            ExpressionParserError *error,
-                            bool parse_funccall)
+static EDEC(handle_subscript, bool parse_funccall)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   while ((**arg == '[' || **arg == '.'
@@ -802,11 +791,7 @@ static void find_nr_end(const char_u **arg, ExpressionType *type,
 ///                                 as "abc" and stop at opening parenthesis.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse7(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error,
-                  bool want_string,
-                  bool parse_funccall)
+static EDEC(parse7, bool want_string, bool parse_funccall)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionType type = kExprUnknown;
@@ -1047,10 +1032,7 @@ static int parse7(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse6(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error,
-                  bool want_string)
+static EDEC(parse6, bool want_string)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionType type = kExprUnknown;
@@ -1114,9 +1096,7 @@ static int parse6(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse5(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error)
+static EDEC_NOARGS(parse5)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionType type = kExprUnknown;
@@ -1191,9 +1171,7 @@ static int parse5(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse4(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error)
+static EDEC_NOARGS(parse4)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   const char_u *p;
@@ -1294,10 +1272,7 @@ static int parse4(const char_u **arg,
 ///                        should be handled.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse23(const char_u **arg,
-                   ExpressionNode **node,
-                   ExpressionParserError *error,
-                   uint8_t level)
+static EDEC(parse23, uint8_t level)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *top_node = NULL;
@@ -1345,9 +1320,7 @@ static int parse23(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse3(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error)
+static EDEC_NOARGS(parse3)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return parse23(arg, node, error, 3);
@@ -1362,9 +1335,7 @@ static int parse3(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse2(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error)
+static EDEC_NOARGS(parse2)
 {
   return parse23(arg, node, error, 2);
 }
@@ -1380,9 +1351,7 @@ static int parse2(const char_u **arg,
 /// @param[out]     error  Structure where errors are saved.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
-static int parse1(const char_u **arg,
-                  ExpressionNode **node,
-                  ExpressionParserError *error)
+static EDEC_NOARGS(parse1)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   // Get the first variable.
