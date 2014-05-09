@@ -52,7 +52,7 @@ static FDEC(unumber_repr, const uintmax_t unumber)
     ADD_CHAR(0);
   } while (i);
 #else
-  uintmax_t i = unumber_repr_len(po, unumber);
+  uintmax_t i = CALL_LEN(unumber_repr, unumber);
   do {
     uintmax_t digit;
     uintmax_t d = 1;
@@ -642,32 +642,32 @@ static FDEC(node_repr, const CommandNode *const node,
         if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
           const uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
           const garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
-          SPACES(po->command.function.before_sub)
+          SPACES_BEFORE_SUBSCRIPT2(command, function)
           ADD_CHAR('(');
-          SPACES(po->command.function.call.after_start)
+          SPACES_AFTER_START3(command, function, call)
           for (int i = 0; i < ga->ga_len; i++) {
             ADD_STRING(((char_u **)ga->ga_data)[i]);
             if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
-              SPACES(po->command.function.argument.before)
+              SPACES_BEFORE3(command, function, argument)
               ADD_CHAR(',');
-              SPACES(po->command.function.argument.after)
+              SPACES_AFTER3(command, function, argument)
             }
           }
           if (flags&FLAG_FUNC_VARARGS) {
             ADD_STATIC_STRING("...");
           }
-          SPACES(po->command.function.call.before_end)
+          SPACES_BEFORE_END3(command, function, call)
           ADD_CHAR(')');
           if (flags&FLAG_FUNC_RANGE) {
-            SPACES(po->command.function.attribute)
+            SPACES_BEFORE_ATTRIBUTE2(command, function)
             ADD_STATIC_STRING("range");
           }
           if (flags&FLAG_FUNC_DICT) {
-            SPACES(po->command.function.attribute)
+            SPACES_BEFORE_ATTRIBUTE2(command, function)
             ADD_STATIC_STRING("dict");
           }
           if (flags&FLAG_FUNC_ABORT) {
-            SPACES(po->command.function.attribute)
+            SPACES_BEFORE_ATTRIBUTE2(command, function)
             ADD_STATIC_STRING("abort");
           }
         }
@@ -687,27 +687,27 @@ static FDEC(node_repr, const CommandNode *const node,
           break;
         }
         case VAL_LET_ASSIGN: {
-          SPACES(po->command.let.assign.before)
+          SPACES_BEFORE3(command, let, assign)
           ADD_CHAR('=');
-          SPACES(po->command.let.assign.after)
+          SPACES_AFTER3(command, let, assign)
           break;
         }
         case VAL_LET_ADD: {
-          SPACES(po->command.let.add.before)
+          SPACES_BEFORE3(command, let, add)
           ADD_STATIC_STRING("+=");
-          SPACES(po->command.let.add.after)
+          SPACES_AFTER3(command, let, add)
           break;
         }
         case VAL_LET_SUBTRACT: {
-          SPACES(po->command.let.subtract.before)
+          SPACES_BEFORE3(command, let, subtract)
           ADD_STATIC_STRING("-=");
-          SPACES(po->command.let.subtract.after)
+          SPACES_AFTER3(command, let, subtract)
           break;
         }
         case VAL_LET_APPEND: {
-          SPACES(po->command.let.concat.before)
+          SPACES_BEFORE3(command, let, concat)
           ADD_STATIC_STRING(".=");
-          SPACES(po->command.let.concat.after)
+          SPACES_AFTER3(command, let, concat)
           break;
         }
       }
@@ -736,7 +736,7 @@ static FDEC(node_repr, const CommandNode *const node,
         case kArgString: {
           if (node->args[i].arg.str != NULL) {
             if (node->type == kCmdComment) {
-              SPACES(po->command.comment.before_text)
+              SPACES_BEFORE_TEXT2(command, comment)
             } else if (node->type != kCmdHashbangComment) {
               ADD_CHAR(' ');
             }
