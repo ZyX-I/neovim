@@ -68,11 +68,22 @@
 #define EDEC(f, ...) int f(EDEC_ARGS, __VA_ARGS__)
 /// Expands to a parser function definition without additional arguments
 #define EDEC_NOARGS(f) int f(EDEC_ARGS)
+#define RAW_CALL(f, ...) f(__VA_ARGS__)
 /// Call function with given arguments and propagate FAIL return value
 #define CALL(f, ...) \
     { \
-      if (f(__VA_ARGS__) == FAIL) \
+      if (RAW_CALL(f, __VA_ARGS__) == FAIL) \
         return FAIL; \
+    }
+/// Like CALL, but run err_f with err_args before returning
+///
+/// @note err_args must look like `(arg1, arg2)`
+#define CALL_FAIL_RUN(err_f, err_args, f, ...) \
+    { \
+      if (RAW_CALL(f, __VA_ARGS__) == FAIL) { \
+        err_f err_args;\
+        return FAIL; \
+      } \
     }
 
 #define skipwhite(arg) skipwhite((char_u *) (arg))
@@ -350,10 +361,8 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
   // But {} is an empty Dictionary.
   if (*start != '}') {
     *parse1_arg = start;
-    if (parse1(parse1_arg, parse1_node, error) == FAIL) {
-      free_expr(*parse1_node);
-      return FAIL;
-    }
+    CALL_FAIL_RUN(free_expr, (*parse1_node),
+                  parse1, parse1_arg, parse1_node, error)
     if (**parse1_arg == '}')
       return NOTDONE;
   }
@@ -670,7 +679,7 @@ static EDEC(handle_subscript, bool parse_funccall)
             || (*node)->type == kExprSingleQuotedString
             || (*node)->type == kExprDoubleQuotedString)
           return OK;
-        ret = parse_dot_subscript(arg, node, error);
+        ret = RAW_CALL(parse_dot_subscript, arg, node, error);
         if (ret == FAIL)
           return FAIL;
         if (ret != NOTDONE)
@@ -909,25 +918,26 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
 
     // List: [expr, expr]
     case '[': {
-      ret = parse_list(arg, node, error);
+      ret = RAW_CALL(parse_list, arg, node, error);
       break;
     }
 
     // Dictionary: {key: val, key: val}
     case '{': {
-      ret = parse_dictionary(arg, node, error, &parse1_node, &parse1_arg);
+      ret = RAW_CALL(parse_dictionary, arg, node, error, &parse1_node,
+                                       &parse1_arg);
       break;
     }
 
     // Option value: &name
     case '&': {
-      ret = parse_option(arg, node, error);
+      ret = RAW_CALL(parse_option, arg, node, error);
       break;
     }
 
     // Environment variable: $VAR.
     case '$': {
-      ret = parse_environment_variable(arg, node, error);
+      ret = RAW_CALL(parse_environment_variable, arg, node, error);
       break;
     }
 
@@ -949,7 +959,7 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
     case '(': {
       VALUE_NODE(kExprExpression, error, node, *arg, NULL)
       *arg = skipwhite(*arg + 1);
-      ret = parse1(arg, &((*node)->children), error);
+      ret = RAW_CALL(parse1, arg, &((*node)->children), error);
       if (**arg == ')') {
         (*arg)++;
       } else if (ret == OK) {
@@ -969,14 +979,14 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
   if (ret == NOTDONE) {
     // Must be a variable or function name.
     // Can also be a curly-braces kind of name: {expr}.
-    ret = parse_name(arg, node, error, parse1_node, parse1_arg);
+    ret = RAW_CALL(parse_name, arg, node, error, parse1_node, parse1_arg);
 
     *arg = skipwhite(*arg);
 
     if (**arg == '(' && parse_funccall)
       // Function call. First function call is not handled by handle_subscript 
       // for whatever reasons. Allows expressions like "tr   (1, 2, 3)"
-      ret = parse_func_call(arg, node, error);
+      ret = RAW_CALL(parse_func_call, arg, node, error);
   }
 
   *arg = skipwhite(*arg);
@@ -984,7 +994,7 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
   // Handle following '[', '(' and '.' for expr[expr], expr.name,
   // expr(expr).
   if (ret == OK)
-    ret = handle_subscript(arg, node, error, parse_funccall);
+    ret = RAW_CALL(handle_subscript, arg, node, error, parse_funccall);
 
   // Apply logical NOT and unary '-', from right to left, ignore '+'.
   if (ret == OK && end_leader > start_leader) {
@@ -1315,7 +1325,7 @@ static EDEC(parse23, uint8_t level)
 static EDEC_NOARGS(parse3)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return parse23(arg, node, error, 3);
+  return RAW_CALL(parse23, arg, node, error, 3);
 }
 
 /// Handle second level expression: logical OR
@@ -1329,7 +1339,7 @@ static EDEC_NOARGS(parse3)
 /// @return FAIL if parsing failed, OK otherwise.
 static EDEC_NOARGS(parse2)
 {
-  return parse23(arg, node, error, 2);
+  return RAW_CALL(parse23, arg, node, error, 2);
 }
 
 /// Handle first (top) level expression: ternary conditional operator
@@ -1394,7 +1404,7 @@ ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error)
   error->position = NULL;
 
   *arg = skipwhite(*arg);
-  if (parse1(arg, &result, error) == FAIL) {
+  if (RAW_CALL(parse1, arg, &result, error) == FAIL) {
     free_expr(result);
     return NULL;
   }
@@ -1419,7 +1429,7 @@ ExpressionNode *parse7_nofunc(const char_u **arg, ExpressionParserError *error)
   error->position = NULL;
 
   *arg = skipwhite(*arg);
-  if (parse7(arg, &result, error, false, false) == FAIL) {
+  if (RAW_CALL(parse7, arg, &result, error, false, false) == FAIL) {
     free_expr(result);
     return NULL;
   }
