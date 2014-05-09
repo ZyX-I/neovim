@@ -27,8 +27,15 @@
 #include "translator/parser/ex_commands.h"
 
 #define vim_strsave(arg) vim_strsave((char_u *) (arg))
+#define vim_strnsave(a1, a2) vim_strnsave((char_u *) (a1), a2)
 #define getdigits(arg) getdigits((char_u **) (arg))
 #define skipwhite(arg) skipwhite((char_u *) (arg))
+#define skipdigits(arg) skipdigits((char_u *) (arg))
+#define replace_termcodes(a1, a2, a3, a4, a5, a6) \
+    replace_termcodes((char_u *)a1, a2, a3, a4, a5, a6)
+#define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((char_u *) p) : 1
+#define enc_canonize(p) enc_canonize((char_u *) (p))
+#define check_ff_value(p) check_ff_value((char_u *) (p))
 
 typedef struct {
   CommandType find_in_stack;
@@ -58,20 +65,22 @@ static void free_range(Range *range);
 static void free_cmd_arg(CommandArg *arg, CommandArgType type);
 static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
                     char_u **expr, bool is_branch, bool is_glob);
-static int get_vcol(char_u **pp);
-static int get_regex(char_u **pp, CommandParserError *error, Regex **target,
-                     char_u endch);
-static int parse_append(char_u **pp,
+static int create_error_node(CommandNode **node, CommandParserError *error,
+                             CommandPosition *position, const char_u *s);
+static int get_vcol(const char_u **pp);
+static int get_regex(const char_u **pp, CommandParserError *error,
+                     Regex **regex, const char_u endch);
+static int parse_append(const char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
                         CommandPosition *position,
                         LineGetter fgetline,
                         void *cookie);
-static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
+static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
                         CommandPosition *position);
-static int do_parse_map(char_u **pp,
+static int do_parse_map(const char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
@@ -79,21 +88,21 @@ static int do_parse_map(char_u **pp,
                         LineGetter fgetline,
                         void *cookie,
                         bool unmap);
-static int parse_map(char_u **pp,
+static int parse_map(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
                      LineGetter fgetline,
                      void *cookie);
-static int parse_unmap(char_u **pp,
+static int parse_unmap(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
                        LineGetter fgetline,
                        void *cookie);
-static int parse_mapclear(char_u **pp,
+static int parse_mapclear(const char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
@@ -101,47 +110,48 @@ static int parse_mapclear(char_u **pp,
                           LineGetter fgetline,
                           void *cookie);
 static void menu_unescape(char_u *p);
-static int parse_menu(char_u **pp,
+static int parse_menu(const char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
                       CommandPosition *position,
                       LineGetter fgetline,
                       void *cookie);
-static int do_parse_expr(char_u **pp,
+static int do_parse_expr(const char_u **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
                          bool multi);
-static int parse_expr(char_u **pp,
+static int parse_expr(const char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
                       CommandPosition *position,
                       LineGetter fgetline,
                       void *cookie);
-static int parse_exprs(char_u **pp,
+static int parse_exprs(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
                        LineGetter fgetline,
                        void *cookie);
-static int parse_rest_line(char_u **pp,
+static int parse_rest_line(const char_u **pp,
                            CommandNode *node,
                            CommandParserError *error,
                            CommandParserOptions o,
                            CommandPosition *position,
                            LineGetter fgetline,
                            void *cookie);
-static int parse_rest_allow_empty(char_u **pp,
+static int parse_rest_allow_empty(const char_u **pp,
                                   CommandNode *node,
                                   CommandParserError *error,
                                   CommandParserOptions o,
                                   CommandPosition *position,
                                   LineGetter fgetline,
                                   void *cookie);
-static int parse_do(char_u **pp,
+static const char_u *do_fgetline(int c, const char_u **arg, int indent);
+static int parse_do(const char_u **pp,
                     CommandNode *node,
                     CommandParserError *error,
                     CommandParserOptions o,
@@ -155,72 +165,73 @@ static int parse_lval(const char_u **pp,
                       CommandParserOptions o,
                       ExpressionNode **expr,
                       int flags);
-static int parse_lvals(char_u **pp,
+static int parse_lvals(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
                        CommandPosition *position,
                        LineGetter fgetline,
                        void *cookie);
-static int parse_lockvar(char_u **pp,
+static int parse_lockvar(const char_u **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
                          CommandPosition *position,
                          LineGetter fgetline,
                          void *cookie);
-static int parse_for(char_u **pp,
+static int parse_for(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
                      LineGetter fgetline,
                      void *cookie);
-static int parse_function(char_u **pp,
+static int parse_function(const char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
                           CommandPosition *position,
                           LineGetter fgetline,
                           void *cookie);
-static int parse_let(char_u **pp,
+static int parse_let(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
                      CommandPosition *position,
                      LineGetter fgetline,
                      void *cookie);
-static int parse_scriptencoding(char_u **pp,
+static int parse_scriptencoding(const char_u **pp,
                                 CommandNode *node,
                                 CommandParserError *error,
                                 CommandParserOptions o,
                                 CommandPosition *position,
                                 LineGetter fgetline,
                                 void *cookie);
-static int get_address(char_u **pp, Address *address,
+static int checkforcmd(const char_u **pp, const char_u *cmd, int len);
+static int get_address(const char_u **pp, Address *address,
                        CommandParserError *error);
-static int get_address_followups(char_u **pp, CommandParserError *error,
+static int get_address_followups(const char_u **pp, CommandParserError *error,
                                  AddressFollowup **followup);
-static int create_error_node(CommandNode **node, CommandParserError *error,
-                             CommandPosition *position, char_u *s);
-static char_u *check_nextcmd(char_u *p);
-static int find_command(char_u **pp, CommandType *type, char_u **name,
-                        CommandParserError *error);
-static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
-                       char_u **arg, size_t *next_cmd_offset);
-static char_u *do_fgetline_allocated(int c, char_u **arg, int indent);
-static int parse_argcmd(char_u **pp,
+static const char_u *check_nextcmd(const char_u *p);
+static int find_command(const char_u **pp, CommandType *type,
+                        const char_u **name, CommandParserError *error);
+static int get_cmd_arg(CommandType type, CommandParserOptions o,
+                       const char_u *start, char_u **arg,
+                       size_t *next_cmd_offset);
+static const char_u *do_fgetline_allocated(int c, const char_u **arg,
+                                           int indent);
+static int parse_argcmd(const char_u **pp,
                         CommandNode **next_node,
                         CommandParserOptions o,
                         CommandPosition *position,
-                        char_u *s);
-static int parse_argopt(char_u **pp,
+                        const char_u *s);
+static int parse_argopt(const char_u **pp,
                         uint_least32_t *optflags,
                         char_u **enc,
                         CommandParserOptions o,
                         CommandParserError *error);
-static char *get_missing_message(CommandType type);
 static void get_block_options(CommandType type, CommandBlockOptions *bo);
+static char *get_missing_message(CommandType type);
 // }}}
 
 #include "translator/parser/command_definitions.h"
@@ -802,15 +813,16 @@ get_glob_error_return:
 ///
 /// @return FAIL when out of memory, OK otherwise.
 static int create_error_node(CommandNode **node, CommandParserError *error,
-                             CommandPosition *position, char_u *s)
+                             CommandPosition *position, const char_u *s)
 {
   if (error->message != NULL) {
     char_u *line;
     char_u *message;
 
-    if ((line = vim_strsave(s)) == NULL)
+    if ((line = (char_u *) vim_strsave(s)) == NULL)
       return FAIL;
-    if ((message = vim_strsave((char_u *) error->message)) == NULL) {
+    if ((message = (char_u *) vim_strsave((char_u *) error->message))
+        == NULL) {
       vim_free(line);
       return FAIL;
     }
@@ -835,10 +847,10 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
 ///                     advanced to the first non-white character.
 ///
 /// @return Offset of the first non-white character.
-static int get_vcol(char_u **pp)
+static int get_vcol(const char_u **pp)
 {
   int vcol = 0;
-  char_u *p = *pp;
+  const char_u *p = *pp;
 
   for (;;) {
     switch (*p++) {
@@ -878,11 +890,11 @@ static int get_vcol(char_u **pp)
 ///                        end).
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int get_regex(char_u **pp, CommandParserError *error, Regex **regex,
-                     char_u endch)
+static int get_regex(const char_u **pp, CommandParserError *error,
+                     Regex **regex, const char_u endch)
 {
-  char_u *p = *pp;
-  char_u *s = p;
+  const char_u *p = *pp;
+  const char_u *s = p;
 
   if (endch == NUL) {
     p += STRLEN(p);
@@ -905,7 +917,7 @@ static int get_regex(char_u **pp, CommandParserError *error, Regex **regex,
   return OK;
 }
 
-static int parse_append(char_u **pp,
+static int parse_append(const char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
@@ -915,7 +927,7 @@ static int parse_append(char_u **pp,
 {
   garray_T *strs = &(node->args[ARG_APPEND_LINES].arg.strs);
   char_u *next_line;
-  char_u *first_nonblank;
+  const char_u *first_nonblank;
   int vcol = -1;
   int cur_vcol = -1;
 
@@ -940,7 +952,7 @@ static int parse_append(char_u **pp,
       return FAIL;
     }
 #endif
-    ((char_u **)(strs->ga_data))[strs->ga_len++] = next_line;
+    ((char_u **)(strs->ga_data))[strs->ga_len++] = (char_u *) next_line;
   }
 
   return OK;
@@ -966,24 +978,25 @@ static int parse_append(char_u **pp,
 /// @param[in]      position  Position of input.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
+static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
                         CommandPosition *position)
 {
   char_u *rhs_buf;
+  char_u *new_rhs;
 
-  rhs = replace_termcodes(rhs, &rhs_buf, false, true, special,
-                          FLAG_POC_TO_FLAG_CPO(o.flags));
+  new_rhs = replace_termcodes(rhs, &rhs_buf, false, true, special,
+                              FLAG_POC_TO_FLAG_CPO(o.flags));
   if (rhs_buf == NULL)
     return FAIL;
 
   if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
-    lrswap(rhs);
+    lrswap(new_rhs);
 
   if (expr) {
     ExpressionParserError expr_error;
     ExpressionNode *expr = NULL;
-    const char_u *rhs_end = rhs;
+    const char_u *rhs_end = new_rhs;
 
     expr_error.position = NULL;
     expr_error.message = NULL;
@@ -991,14 +1004,14 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
     if ((expr = parse0_err(&rhs_end, &expr_error)) == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
-        vim_free(rhs);
+        vim_free(new_rhs);
         return FAIL;
       }
       error.position = expr_error.position;
       error.message = expr_error.message;
-      if (create_error_node(&(node->children), &error, position, rhs)
+      if (create_error_node(&(node->children), &error, position, new_rhs)
           == FAIL) {
-        vim_free(rhs);
+        vim_free(new_rhs);
         return FAIL;
       }
     } else if (*rhs_end != NUL) {
@@ -1009,16 +1022,16 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
       error.position = rhs_end;
       error.message = N_("E15: trailing characters");
 
-      if (create_error_node(&(node->children), &error, position, rhs)
+      if (create_error_node(&(node->children), &error, position, new_rhs)
           == FAIL) {
-        vim_free(rhs);
+        vim_free(new_rhs);
         return FAIL;
       }
     } else {
       node->args[rhs_idx + 1].arg.expr = expr;
     }
   }
-  node->args[rhs_idx].arg.str = rhs;
+  node->args[rhs_idx].arg.str = new_rhs;
   return OK;
 }
 
@@ -1037,7 +1050,7 @@ static int set_node_rhs(char_u *rhs, size_t rhs_idx, CommandNode *node,
 ///                           :*unmap/:*unabbrev command is being parsed.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int do_parse_map(char_u **pp,
+static int do_parse_map(const char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
@@ -1047,10 +1060,10 @@ static int do_parse_map(char_u **pp,
                         bool unmap)
 {
   uint_least32_t map_flags = 0;
-  char_u *p = *pp;
-  char_u *lhs;
-  char_u *lhs_end;
-  char_u *rhs;
+  const char_u *p = *pp;
+  const char_u *lhs;
+  const char_u *lhs_end;
+  const char_u *rhs;
   char_u *lhs_buf;
   // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
   bool do_backslash = !(o.flags&FLAG_POC_CPO_BSLASH);
@@ -1142,20 +1155,21 @@ static int do_parse_map(char_u **pp,
   p += STRLEN(p);
 
   if (*lhs != NUL) {
+    // FIXME Do not remove const qualifier
     char_u saved = *lhs_end;
     // Note: type of the abbreviation is not checked because it depends on the 
     //       &iskeyword option. Unlike $ENV parsing (which depends on the 
     //       options too) it is not unlikely that both 1. file will be parsed 
     //       before result is actually used and 2. option value at the 
     //       execution stage will make results invalid.
-    *lhs_end = NUL;
+    *((char_u *) lhs_end) = NUL;
     lhs = replace_termcodes(lhs, &lhs_buf, true, true,
                             map_flags&FLAG_MAP_SPECIAL,
                             FLAG_POC_TO_FLAG_CPO(o.flags));
-    *lhs_end = saved;
+    *((char_u *) lhs_end) = saved;
     if (lhs_buf == NULL)
       return FAIL;
-    node->args[ARG_MAP_LHS].arg.str = lhs;
+    node->args[ARG_MAP_LHS].arg.str = (char_u *) lhs;
   }
 
   if (*rhs != NUL) {
@@ -1175,7 +1189,7 @@ static int do_parse_map(char_u **pp,
   return OK;
 }
 
-static int parse_map(char_u **pp,
+static int parse_map(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
@@ -1186,7 +1200,7 @@ static int parse_map(char_u **pp,
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, false);
 }
 
-static int parse_unmap(char_u **pp,
+static int parse_unmap(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
@@ -1197,7 +1211,7 @@ static int parse_unmap(char_u **pp,
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, true);
 }
 
-static int parse_mapclear(char_u **pp,
+static int parse_mapclear(const char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
@@ -1232,7 +1246,7 @@ static void menu_unescape(char_u *p)
   }
 }
 
-static int parse_menu(char_u **pp,
+static int parse_menu(const char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
@@ -1242,13 +1256,12 @@ static int parse_menu(char_u **pp,
 {
   // FIXME "menu *" parses to something weird
   uint_least32_t menu_flags = 0;
-  char_u *p = *pp;
+  const char_u *p = *pp;
   size_t i;
-  char_u *s;
-  char_u *menu_path;
-  char_u *menu_path_end;
-  char_u *map_to;
-  char_u *text = NULL;
+  const char_u *s;
+  const char_u *menu_path;
+  const char_u *menu_path_end;
+  const char_u *map_to;
   MenuItem *sub = NULL;
   MenuItem *cur = NULL;
 
@@ -1276,15 +1289,15 @@ static int parse_menu(char_u **pp,
     char_u *icon;
 
     p += 5;
-    icon = p;
+    s = p;
 
     while (*p != NUL && *p != ' ') {
       if (*p == '\\')
         p++;
-      mb_ptr_adv(p);
+      mb_ptr_adv_(p);
     }
 
-    if ((icon = vim_strnsave(icon, p - icon)) == NULL)
+    if ((icon = vim_strnsave(s, p - s)) == NULL)
       return FAIL;
 
     menu_unescape(icon);
@@ -1341,25 +1354,26 @@ static int parse_menu(char_u **pp,
   }
 
   menu_path_end = NULL;
+  s = NULL;
   while (*p && !vim_iswhite(*p)) {
     if ((*p == '\\' || *p == Ctrl_V) && p[1] != NUL) {
       p++;
       if (*p == TAB) {
-        text = p + 1;
+        s = p + 1;
         menu_path_end = p - 2;
       }
     } else if (STRNICMP(p, "<TAB>", 5) == 0) {
       menu_path_end = p - 1;
       p += 4;
-      text = p + 1;
-    } else if (*p == '.' && text == NULL) {
+      s = p + 1;
+    } else if (*p == '.' && s == NULL) {
       menu_path_end = p - 1;
       if (menu_path_end == menu_path) {
         error->message = N_("E792: Empty menu name");
         error->position = p;
         return NOTDONE;
       }
-    } else if ((!p[1] || vim_iswhite(p[1])) && p != menu_path && text == NULL) {
+    } else if ((!p[1] || vim_iswhite(p[1])) && p != menu_path && s == NULL) {
       menu_path_end = p;
     }
     if (menu_path_end != NULL) {
@@ -1383,14 +1397,15 @@ static int parse_menu(char_u **pp,
     p++;
   }
 
-  if (text != NULL) {
+  if (s != NULL) {
+    char_u *text;
     if (node->args[ARG_MENU_NAME].arg.menu_item == NULL) {
       error->message = N_("E792: Empty menu name");
-      error->position = text;
+      error->position = s;
       return NOTDONE;
     }
 
-    if ((text = vim_strnsave(text, p - text)) == NULL)
+    if ((text = vim_strnsave(s, p - s)) == NULL)
       return FAIL;
 
     menu_unescape(text);
@@ -1438,7 +1453,7 @@ static int parse_menu(char_u **pp,
 ///                        a sequence of expressions.
 ///
 /// @return FAIL if out of memory, NOTDONE in case of error, OK otherwise.
-static int do_parse_expr(char_u **pp,
+static int do_parse_expr(const char_u **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
@@ -1476,7 +1491,7 @@ static int do_parse_expr(char_u **pp,
   return OK;
 }
 
-static int parse_expr(char_u **pp,
+static int parse_expr(const char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
@@ -1489,7 +1504,7 @@ static int parse_expr(char_u **pp,
   return do_parse_expr(pp, node, error, o, false);
 }
 
-static int parse_exprs(char_u **pp,
+static int parse_exprs(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
@@ -1502,7 +1517,7 @@ static int parse_exprs(char_u **pp,
   return do_parse_expr(pp, node, error, o, true);
 }
 
-static int parse_rest_line(char_u **pp,
+static int parse_rest_line(const char_u **pp,
                            CommandNode *node,
                            CommandParserError *error,
                            CommandParserOptions o,
@@ -1525,7 +1540,7 @@ static int parse_rest_line(char_u **pp,
   return OK;
 }
 
-static int parse_rest_allow_empty(char_u **pp,
+static int parse_rest_allow_empty(const char_u **pp,
                                   CommandNode *node,
                                   CommandParserError *error,
                                   CommandParserOptions o,
@@ -1539,10 +1554,10 @@ static int parse_rest_allow_empty(char_u **pp,
   return parse_rest_line(pp, node, error, o, position, fgetline, cookie);
 }
 
-static char_u *do_fgetline(int c, char_u **arg, int indent)
+static const char_u *do_fgetline(int c, const char_u **arg, int indent)
 {
   if (*arg) {
-    char_u *result;
+    const char_u *result;
     result = vim_strsave(*arg);
     *arg = NULL;
     return result;
@@ -1551,7 +1566,7 @@ static char_u *do_fgetline(int c, char_u **arg, int indent)
   }
 }
 
-static int parse_do(char_u **pp,
+static int parse_do(const char_u **pp,
                     CommandNode *node,
                     CommandParserError *error,
                     CommandParserOptions o,
@@ -1560,11 +1575,11 @@ static int parse_do(char_u **pp,
                     void *cookie)
 {
   CommandNode *cmd;
-  char_u *arg = *pp;
+  const char_u *arg = *pp;
   CommandPosition new_position = {
     1,
     1,
-    (char_u *) "<*do argument>",
+    (const char_u *) "<*do argument>",
   };
 
   if ((cmd = parse_cmd_sequence(o, new_position, (LineGetter) &do_fgetline,
@@ -1773,7 +1788,7 @@ static int parse_lval(const char_u **pp,
   return OK;
 }
 
-static int parse_lvals(char_u **pp,
+static int parse_lvals(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
@@ -1802,7 +1817,8 @@ static int parse_lvals(char_u **pp,
   node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    error->position = *pp + (((const char_u *) error->position)
+                             - expr_str_start);
     return NOTDONE;
   }
 
@@ -1813,7 +1829,7 @@ static int parse_lvals(char_u **pp,
   return OK;
 }
 
-static int parse_lockvar(char_u **pp,
+static int parse_lockvar(const char_u **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
@@ -1827,7 +1843,7 @@ static int parse_lockvar(char_u **pp,
   return parse_lvals(pp, node, error, o, position, fgetline, cookie);
 }
 
-static int parse_for(char_u **pp,
+static int parse_for(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
@@ -1856,7 +1872,8 @@ static int parse_for(char_u **pp,
   node->args[ARG_FOR_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    error->position = *pp + (((const char_u *) error->position)
+                             - expr_str_start);
     return NOTDONE;
   }
 
@@ -1874,7 +1891,8 @@ static int parse_for(char_u **pp,
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
-    error->position = *pp + (((char_u *) expr_error.position) - expr_str_start);
+    error->position = *pp + (((const char_u *) expr_error.position)
+                             - expr_str_start);
     return NOTDONE;
   }
 
@@ -1885,7 +1903,7 @@ static int parse_for(char_u **pp,
   return OK;
 }
 
-static int parse_function(char_u **pp,
+static int parse_function(const char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
@@ -1893,7 +1911,7 @@ static int parse_function(char_u **pp,
                           LineGetter fgetline,
                           void *cookie)
 {
-  char_u *p = *pp;
+  const char_u *p = *pp;
   ExpressionNode *expr;
   int ret;
   const char_u *expr_str;
@@ -1922,7 +1940,8 @@ static int parse_function(char_u **pp,
   node->args[ARG_FUNC_NAME].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    error->position = *pp + (((const char_u *) error->position)
+                             - expr_str_start);
     return NOTDONE;
   }
 
@@ -1949,8 +1968,8 @@ static int parse_function(char_u **pp,
       p += 3;
       mustend = true;
     } else {
-      char_u *arg_start = p;
-      char_u *arg;
+      const char_u *arg_start = p;
+      const char_u *arg;
       int i;
 
       while (ASCII_ISALNUM(*p) || *p == '_')
@@ -1993,7 +2012,7 @@ static int parse_function(char_u **pp,
       }
 #endif
 
-      ((char_u **)(args->ga_data))[args->ga_len++] = arg;
+      ((char_u **)(args->ga_data))[args->ga_len++] = (char_u *) arg;
     }
     if (*p == ',') {
       p++;
@@ -2033,7 +2052,7 @@ static int parse_function(char_u **pp,
   return OK;
 }
 
-static int parse_let(char_u **pp,
+static int parse_let(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
@@ -2068,7 +2087,8 @@ static int parse_let(char_u **pp,
   node->args[ARG_LET_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((char_u *) error->position) - expr_str_start);
+    error->position = *pp + (((const char_u *) error->position)
+                             - expr_str_start);
     return NOTDONE;
   }
 
@@ -2139,7 +2159,8 @@ static int parse_let(char_u **pp,
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
-    error->position = *pp + (((char_u *) expr_error.position) - expr_str_start);
+    error->position = *pp + (((const char_u *) expr_error.position)
+                             - expr_str_start);
     return NOTDONE;
   }
 
@@ -2149,7 +2170,7 @@ static int parse_let(char_u **pp,
   return OK;
 }
 
-static int parse_scriptencoding(char_u **pp,
+static int parse_scriptencoding(const char_u **pp,
                                 CommandNode *node,
                                 CommandParserError *error,
                                 CommandParserOptions o,
@@ -2174,12 +2195,12 @@ static int parse_scriptencoding(char_u **pp,
 /// @param[in]      len  Minimal length required to accept a match.
 ///
 /// @return true if requested command was found, false otherwise.
-static int checkforcmd(char_u **pp, char_u *cmd, int len)
+static int checkforcmd(const char_u **pp, const char_u *cmd, int len)
 {
   int i;
 
   for (i = 0; cmd[i] != NUL; i++)
-    if (((char_u *)cmd)[i] != (*pp)[i])
+    if (((const char_u *)cmd)[i] != (*pp)[i])
       break;
 
   if ((i >= len) && !isalpha((*pp)[i])) {
@@ -2197,10 +2218,10 @@ static int checkforcmd(char_u **pp, char_u *cmd, int len)
 /// @param[out]     error    Structure where errors are saved.
 ///
 /// @return OK when parsing was successfull, FAIL otherwise.
-static int get_address(char_u **pp, Address *address,
+static int get_address(const char_u **pp, Address *address,
                        CommandParserError *error)
 {
-  char_u *p;
+  const char_u *p;
 
   p = skipwhite(*pp);
   switch (*p) {
@@ -2224,7 +2245,7 @@ static int get_address(char_u **pp, Address *address,
     }
     case '/':
     case '?': {
-      char_u c = *p;
+      const char_u c = *p;
       p++;
       if (c == '/')
         address->type = kAddrForwardSearch;
@@ -2281,12 +2302,12 @@ static int get_address(char_u **pp, Address *address,
   return OK;
 }
 
-static int get_address_followups(char_u **pp, CommandParserError *error,
+static int get_address_followups(const char_u **pp, CommandParserError *error,
                                  AddressFollowup **followup)
 {
   AddressFollowup *fw;
   AddressFollowupType type = kAddressFollowupMissing;
-  char_u *p;
+  const char_u *p;
 
   p = skipwhite(*pp);
   switch (*p) {
@@ -2343,7 +2364,7 @@ static int get_address_followups(char_u **pp, CommandParserError *error,
 ///
 /// @return First character of next command (last character after command 
 ///         separator), NULL if no separator was found.
-static char_u *check_nextcmd(char_u *p)
+static const char_u *check_nextcmd(const char_u *p)
 {
   p = skipwhite(p);
   if (*p == '|' || *p == '\n')
@@ -2397,11 +2418,11 @@ static CommandType cmdidxs[27] =
 ///
 /// @return OK if parsing was successfull, FAIL otherwise. Use error->message 
 ///         value to distinguish out-of-memory and failing parsing cases.
-static int find_command(char_u **pp, CommandType *type, char_u **name,
-                        CommandParserError *error)
+static int find_command(const char_u **pp, CommandType *type,
+                        const char_u **name, CommandParserError *error)
 {
   size_t len;
-  char_u *p;
+  const char_u *p;
   size_t i;
   CommandType cmdidx = kCmdUnknown;
 
@@ -2447,7 +2468,7 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
       // Check for ":dl", ":dell", etc. to ":deletel": that's
       // :delete with the 'l' flag.  Same for 'p'.
       for (i = 0; i < len; i++)
-        if ((*pp)[i] != ((char_u *)"delete")[i])
+        if ((*pp)[i] != ((const char_u *)"delete")[i])
           break;
       if (i == len - 1)
         --len;
@@ -2504,8 +2525,9 @@ static int find_command(char_u **pp, CommandType *type, char_u **name,
 /// @param[out]  next_cmd_offset Offset of next command.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
-                       char_u **arg, size_t *next_cmd_offset)
+static int get_cmd_arg(CommandType type, CommandParserOptions o,
+                       const char_u *start, char_u **arg,
+                       size_t *next_cmd_offset)
 {
   char_u *p;
 
@@ -2543,7 +2565,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
         STRMOVE(p - 1, p);              // remove the '\'
         p--;
       } else {
-        char_u *nextcmd = check_nextcmd(p);
+        const char_u *nextcmd = check_nextcmd(p);
         if (nextcmd != NULL)
           *next_cmd_offset += (nextcmd - p);
         *p = NUL;
@@ -2560,10 +2582,11 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o, char_u *start,
   return OK;
 }
 
-static char_u *do_fgetline_allocated(int c, char_u **arg, int indent)
+static const char_u *do_fgetline_allocated(int c, const char_u **arg,
+                                           int indent)
 {
   if (*arg) {
-    char_u *saved_arg = *arg;
+    const char_u *saved_arg = *arg;
     *arg = NULL;
     return saved_arg;
   } else {
@@ -2583,13 +2606,13 @@ static char_u *do_fgetline_allocated(int c, char_u **arg, int indent)
 /// @return OK if everything was parsed correctly, FAIL if out of memory.
 ///
 /// @note Syntax errors in parsed command only happen *after* opening buffer.
-static int parse_argcmd(char_u **pp,
+static int parse_argcmd(const char_u **pp,
                         CommandNode **next_node,
                         CommandParserOptions o,
                         CommandPosition *position,
-                        char_u *s)
+                        const char_u *s)
 {
-  char_u *p = *pp;
+  const char_u *p = *pp;
 
   if (*p == '+') {
     p++;
@@ -2599,7 +2622,7 @@ static int parse_argcmd(char_u **pp,
       (*next_node)->range.address.type = kAddrEnd;
       (*next_node)->end_col = position->col + (p - s);
     } else {
-      char_u *cmd_start = p;
+      const char_u *cmd_start = p;
       char_u *arg;
       char_u *arg_start;
       CommandPosition new_position = {
@@ -2611,7 +2634,7 @@ static int parse_argcmd(char_u **pp,
       while (*p && !vim_isspace(*p)) {
         if (*p == '\\' && p[1] != NUL)
           p++;
-        mb_ptr_adv(p);
+        mb_ptr_adv_(p);
       }
 
       if ((arg = vim_strnsave(cmd_start, p - cmd_start)) == NULL)
@@ -2622,7 +2645,7 @@ static int parse_argcmd(char_u **pp,
       while (*arg) {
         if (*arg == '\\' && arg[1] != NUL)
           STRMOVE(arg, arg + 1);
-        mb_ptr_adv(arg);
+        mb_ptr_adv_(arg);
       }
 
       if ((*next_node = parse_cmd_sequence(o, new_position,
@@ -2648,7 +2671,7 @@ static int parse_argcmd(char_u **pp,
 ///
 /// @return OK if everything was parsed correctly, NOTDONE in case of error, 
 ///         FAIL if out of memory.
-static int parse_argopt(char_u **pp,
+static int parse_argopt(const char_u **pp,
                         uint_least32_t *optflags,
                         char_u **enc,
                         CommandParserOptions o,
@@ -2657,7 +2680,7 @@ static int parse_argopt(char_u **pp,
   bool do_ff = false;
   bool do_enc = false;
   bool do_bad = false;
-  char_u *arg_start;
+  const char_u *arg_start;
 
   *pp += 2;
   if (STRNCMP(*pp, "bin", 3) == 0 || STRNCMP(*pp, "nobin", 5) == 0) {
@@ -2667,7 +2690,7 @@ static int parse_argopt(char_u **pp,
     } else {
       *optflags |= FLAG_OPT_BIN_USE_FLAG|FLAG_OPT_BIN;
     }
-    if (!checkforcmd(pp, (char_u *) "binary", 3)) {
+    if (!checkforcmd(pp, (const char_u *) "binary", 3)) {
       error->message = N_("E474: Expected ++[no]bin or ++[no]binary");
       error->position = *pp + 3;
       return NOTDONE;
@@ -2716,21 +2739,22 @@ static int parse_argopt(char_u **pp,
   while (**pp && !vim_isspace(**pp)) {
     if (**pp == '\\' && (*pp)[1] != NUL)
       (*pp)++;
-    mb_ptr_adv((*pp));
+    mb_ptr_adv_((*pp));
   }
 
   if (do_ff) {
-    char_u saved_char = **pp;
-    **pp = NUL;
+    // FIXME Do not remove const qualifier
+    const char_u saved_char = **pp;
+    **((char_u **)pp) = NUL;
     if (check_ff_value(arg_start) == FAIL) {
       error->message = N_("E474: Invalid ++ff argument");
       error->position = arg_start;
-      **pp = saved_char;
+      **((char_u **)pp) = saved_char;
       return NOTDONE;
     }
     assert(STRCMP(arg_start, "dos") == 0 || STRCMP(arg_start, "unix") == 0
            || STRCMP(arg_start, "mac") == 0);
-    **pp = saved_char;
+    **((char_u **)pp) = saved_char;
     switch (*arg_start) {
       case 'd': {
         *optflags |= VAL_OPT_FF_DOS;
@@ -2799,7 +2823,7 @@ static int parse_argopt(char_u **pp,
 ///
 /// @return OK if everything was parsed correctly, FAIL if out of memory, 
 ///         NOTDONE for parser error.
-int parse_one_cmd(char_u **pp,
+int parse_one_cmd(const char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition *position,
@@ -2812,11 +2836,11 @@ int parse_one_cmd(char_u **pp,
   CommandType type = kCmdUnknown;
   Range range;
   Range current_range;
-  char_u *p;
-  char_u *s = *pp;
-  char_u *nextcmd = NULL;
-  char_u *name = NULL;
-  char_u *range_start = NULL;
+  const char_u *p;
+  const char_u *s = *pp;
+  const char_u *nextcmd = NULL;
+  const char_u *name = NULL;
+  const char_u *range_start = NULL;
   bool bang = false;
   uint_least8_t exflags = 0;
   uint_least32_t optflags = 0;
@@ -2849,7 +2873,7 @@ int parse_one_cmd(char_u **pp,
 
   p = *pp;
   for (;;) {
-    char_u *pstart;
+    const char_u *pstart;
     // 1. skip comment lines and leading white space and colons
     while (*p == ' ' || *p == TAB || *p == ':')
       p++;
@@ -2889,14 +2913,14 @@ int parse_one_cmd(char_u **pp,
 
     // 2. handle command modifiers.
     if (ASCII_ISLOWER(*p)) {
-      char_u *mod_start = p;
+      const char_u *mod_start = p;
 
       for (i = cmdidxs[(int) (*p - 'a')]; *(CMDDEF(i).name) == *p; i++) {
         if (CMDDEF(i).flags & ISMODIFIER) {
           size_t common_len = 0;
           if (i > 0) {
-            char_u *name = CMDDEF(i).name;
-            char_u *prev_name = CMDDEF(i - 1).name;
+            const char_u *name = CMDDEF(i).name;
+            const char_u *prev_name = CMDDEF(i - 1).name;
             common_len++;
             // FIXME: Precompute and record this in cmddefs
             while (name[common_len] == prev_name[common_len])
@@ -2947,7 +2971,7 @@ int parse_one_cmd(char_u **pp,
     }
   }
 
-  char_u *modifiers_end = p;
+  const char_u *modifiers_end = p;
   /*
    * 3. parse a range specifier of the form: addr [,addr] [;addr] ..
    *
@@ -3185,9 +3209,7 @@ int parse_one_cmd(char_u **pp,
 
   if (CMDDEF(type).flags & XFILE) {
     int ret;
-    // FIXME
-    if ((ret = get_glob((const char_u **)&p, &error, &glob, &expr, false, true))
-        == FAIL) {
+    if ((ret = get_glob(&p, &error, &glob, &expr, false, true)) == FAIL) {
       free_range_data(&range);
       return FAIL;
     }
@@ -3220,7 +3242,7 @@ int parse_one_cmd(char_u **pp,
   }
   (*next_node)->bang = bang;
   (*next_node)->range = range;
-  (*next_node)->name = name;
+  (*next_node)->name = (char_u *) name;
   (*next_node)->exflags = exflags;
   (*next_node)->cnt_type = cnt_type;
   (*next_node)->cnt.count = count;
@@ -3235,8 +3257,8 @@ int parse_one_cmd(char_u **pp,
   if (parse != NULL) {
     int ret;
     bool used_get_cmd_arg = false;
-    char_u *cmd_arg = p;
-    char_u *cmd_arg_start = p;
+    const char_u *cmd_arg = p;
+    char_u *cmd_arg_start = (char_u *) p;
     size_t next_cmd_offset = 0;
     // XFILE commands may have bangs inside `=…`
     // ISGREP commands may have bangs inside patterns
@@ -3530,7 +3552,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 LineGetter fgetline,
                                 void *cookie)
 {
-  char_u *line_start, *line;
+  char_u *line_start;
+  char_u *line;
   struct {
     CommandType type;
     CommandNode *node;
@@ -3544,7 +3567,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   while ((line_start = fgetline(':', cookie, 0)) != NULL) {
     line = line_start;
     while (*line) {
-      char_u *parse_start = line;
+      const char_u *parse_start = line;
       CommandBlockOptions bo;
       int ret;
       CommandType block_type = kCmdMissing;
@@ -3552,8 +3575,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
 
       position.col = line - line_start + 1;
       assert(!NODE_IS_ALLOCATED(*next_node));
-      if ((ret = parse_one_cmd(&line, next_node, o, &position, fgetline,
-                               cookie))
+      if ((ret = parse_one_cmd((const char_u **) &line, next_node, o, &position,
+                               fgetline, cookie))
           == FAIL) {
         free_cmd(result);
         return NULL;

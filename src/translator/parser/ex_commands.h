@@ -143,7 +143,7 @@ typedef struct {
 typedef struct {
   linenr_T lnr;
   colnr_T col;
-  char_u *fname;
+  const char_u *fname;
 } CommandPosition;
 
 /// Counter type: type of a simple additional argument
@@ -234,7 +234,7 @@ typedef struct {
 
 typedef char_u *(*LineGetter)(int, void *, int);
 
-typedef int (*CommandArgsParser)(char_u **,
+typedef int (*CommandArgsParser)(const char_u **,
                                  CommandNode *,
                                  CommandParserError *,
                                  CommandParserOptions,
@@ -268,7 +268,7 @@ extern CommandDefinition cmddefs[kCmdREAL_SIZE];
 #define CMDDEF(type) cmddefs[type - 1]
 
 void free_cmd(CommandNode *);
-int parse_one_cmd(char_u **pp,
+int parse_one_cmd(const char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition *position,
