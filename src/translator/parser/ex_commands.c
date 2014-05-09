@@ -2737,33 +2737,39 @@ static int parse_argopt(const char_u **pp,
   }
 
   if (do_ff) {
-    // FIXME Do not remove const qualifier
-    const char_u saved_char = **pp;
-    **((char_u **)pp) = NUL;
-    if (check_ff_value(arg_start) == FAIL) {
-      error->message = N_("E474: Invalid ++ff argument");
-      error->position = arg_start;
-      **((char_u **)pp) = saved_char;
-      return NOTDONE;
-    }
-    assert(STRCMP(arg_start, "dos") == 0 || STRCMP(arg_start, "unix") == 0
-           || STRCMP(arg_start, "mac") == 0);
-    **((char_u **)pp) = saved_char;
+    // XXX check_ff_value requires NUL-terminated string. Thus I duplicate list 
+    //     of accepted strings here
     switch (*arg_start) {
       case 'd': {
-        *optflags |= VAL_OPT_FF_DOS;
+        if (*pp == arg_start + 3
+            && arg_start[1] == 'o'
+            && arg_start[2] == 's')
+          *optflags |= VAL_OPT_FF_DOS;
+        else
+          goto parse_argopt_ff_error;
         break;
       }
       case 'u': {
-        *optflags |= VAL_OPT_FF_UNIX;
+        if (*pp == arg_start + 4
+            && arg_start[1] == 'n'
+            && arg_start[2] == 'i'
+            && arg_start[3] == 'x')
+          *optflags |= VAL_OPT_FF_UNIX;
+        else
+          goto parse_argopt_ff_error;
         break;
       }
       case 'm': {
-        *optflags |= VAL_OPT_FF_MAC;
+        if (*pp == arg_start + 3
+            && arg_start[1] == 'a'
+            && arg_start[2] == 'c')
+          *optflags |= VAL_OPT_FF_MAC;
+        else
+          goto parse_argopt_ff_error;
         break;
       }
       default: {
-        assert(false);
+        goto parse_argopt_ff_error;
       }
     }
   } else if (do_enc) {
@@ -2791,6 +2797,10 @@ static int parse_argopt(const char_u **pp,
   }
   *pp = skipwhite(*pp);
   return OK;
+parse_argopt_ff_error:
+  error->message = N_("E474: Invalid ++ff argument");
+  error->position = arg_start;
+  return NOTDONE;
 }
 
 /// Parses one command

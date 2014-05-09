@@ -161,6 +161,13 @@ describe 'parse_one_cmd errors', ->
     }
       itn '\\ error: E471: Argument required: !!!', cmd
 
+  describe 'invalid ++ff values', ->
+    itn '\\ error: E474: Invalid ++ff argument: e++ff=!!u!!ix', 'e++ff=uix'
+    itn '\\ error: E474: Invalid ++ff argument: e++ff=!!u!!ixtttt', 'e++ff=uixtttt'
+    itn '\\ error: E474: Invalid ++ff argument: e++ff=!!d!!as', 'e++ff=das'
+    itn '\\ error: E474: Invalid ++ff argument: e++ff=!!m!!as', 'e++ff=mas'
+    itn '\\ error: E474: Invalid ++ff argument: e++ff=!!t!!ty', 'e++ff=tty'
+
 describe 'parse_cmd_sequence errors', ->
   describe 'missing block ends', ->
     t '
