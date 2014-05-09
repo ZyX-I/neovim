@@ -86,13 +86,13 @@ static FDEC(node_dump, const ExpressionNode *const node)
       assert(node->children->next->next->next == NULL);
 
       F(node_dump, node->children);
-      SPACES(po->expression.operators.ternary.condition.before)
+      SPACES_BEFORE4(expression, operators, ternary, condition)
       ADD_CHAR('?');
-      SPACES(po->expression.operators.ternary.condition.after)
+      SPACES_AFTER4(expression, operators, ternary, condition)
       F(node_dump, node->children->next);
-      SPACES(po->expression.operators.ternary.values.before)
+      SPACES_BEFORE4(expression, operators, ternary, values)
       ADD_CHAR(':');
-      SPACES(po->expression.operators.ternary.values.after)
+      SPACES_AFTER4(expression, operators, ternary, values)
       F(node_dump, node->children->next->next);
       break;
     }
@@ -148,14 +148,14 @@ static FDEC(node_dump, const ExpressionNode *const node)
 
       ADD_CHAR((node->type == kExprExpression ? '(' : '{'));
       if (node->type == kExprCurlyName)
-      SPACES((node->type == kExprCurlyName
-              ? po->expression.curly_name
-              : po->expression.function_call.call).after_start)
+        SPACES_AFTER_START2(expression, curly_name)
+      else
+        SPACES_AFTER_START3(expression, function_call, call)
       F(node_dump, node->children);
       if (node->type == kExprCurlyName)
-      SPACES((node->type == kExprCurlyName
-              ? po->expression.curly_name
-              : po->expression.function_call.call).before_end)
+        SPACES_BEFORE_END2(expression, curly_name)
+      else
+        SPACES_BEFORE_END3(expression, function_call, call)
       ADD_CHAR((node->type == kExprExpression ? ')' : '}'));
       break;
     }
@@ -163,12 +163,12 @@ static FDEC(node_dump, const ExpressionNode *const node)
       ExpressionNode *child = node->children;
 
       ADD_CHAR('[');
-      SPACES(po->expression.list.braces.after_start)
+      SPACES_AFTER_START3(expression, list, braces)
       while (child != NULL) {
         F(node_dump, child);
         child = child->next;
-        if (child != NULL || po->expression.list.trailing_comma) {
-          SPACES(po->expression.list.item.before)
+        if (child != NULL || ADD_TRAILING_COMMA2(expression, list)) {
+          SPACES_BEFORE3(expression, list, item)
           if (child != NULL && child->type == kExprListRest) {
             assert(child->children != NULL);
             assert(child->next == NULL);
@@ -178,33 +178,33 @@ static FDEC(node_dump, const ExpressionNode *const node)
           } else {
             ADD_CHAR(',');
           }
-          SPACES(po->expression.list.item.after)
+          SPACES_AFTER3(expression, list, item)
         }
       }
-      SPACES(po->expression.list.braces.before_end)
+      SPACES_BEFORE_END3(expression, list, braces)
       ADD_CHAR(']');
       break;
     }
     case kExprDictionary: {
       ExpressionNode *child = node->children;
       ADD_CHAR('{');
-      SPACES(po->expression.dictionary.curly_braces.after_start)
+      SPACES_AFTER_START3(expression, dictionary, curly_braces)
       while (child != NULL) {
         F(node_dump, child);
         child = child->next;
         assert(child != NULL);
-        SPACES(po->expression.dictionary.key.before)
+        SPACES_BEFORE3(expression, dictionary, key)
         ADD_CHAR(':');
-        SPACES(po->expression.dictionary.key.after)
+        SPACES_AFTER3(expression, dictionary, key)
         F(node_dump, child);
         child = child->next;
-        if (child != NULL || po->expression.dictionary.trailing_comma) {
-          SPACES(po->expression.dictionary.item.before)
+        if (child != NULL || ADD_TRAILING_COMMA2(expression, dictionary)) {
+          SPACES_BEFORE3(expression, dictionary, item)
           ADD_CHAR(',');
-          SPACES(po->expression.dictionary.item.after)
+          SPACES_AFTER3(expression, dictionary, item)
         }
       }
-      SPACES(po->expression.dictionary.curly_braces.before_end)
+      SPACES_BEFORE_END3(expression, dictionary, curly_braces)
       ADD_CHAR('}');
       break;
     }
@@ -214,16 +214,16 @@ static FDEC(node_dump, const ExpressionNode *const node)
 
       F(node_dump, node->children);
       ADD_CHAR('[');
-      SPACES(po->expression.subscript.brackets.after_start)
+      SPACES_AFTER_START3(expression, subscript, brackets)
       F(node_dump, node->children->next);
       if (node->children->next->next != NULL) {
         assert(node->children->next->next->next == NULL);
-        SPACES(po->expression.subscript.slice.before)
+        SPACES_BEFORE3(expression, subscript, slice)
         ADD_CHAR(':');
-        SPACES(po->expression.subscript.slice.after)
+        SPACES_AFTER3(expression, subscript, slice)
         F(node_dump, node->children->next->next);
       }
-      SPACES(po->expression.subscript.brackets.before_end)
+      SPACES_BEFORE_END3(expression, subscript, brackets)
       ADD_CHAR(']');
       break;
     }

@@ -61,7 +61,7 @@ typedef struct {
       _StartEndSpaces brackets;
     } subscript;
     struct {
-      size_t before_sub;
+      size_t before_subscript;
       _StartEndSpaces call;
       _BeforeAfterSpaces argument;
     } function_call;
@@ -75,10 +75,10 @@ typedef struct {
       _BeforeAfterSpaces concat;
     } let;
     struct {
-      size_t before_sub;
+      size_t before_subscript;
       _StartEndSpaces call;
       _BeforeAfterSpaces argument;
-      size_t attribute;
+      size_t before_attribute;
     } function;
     struct {
       size_t before_inline;
