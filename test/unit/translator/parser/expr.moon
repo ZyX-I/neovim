@@ -215,13 +215,16 @@ describe 'parse0', ->
   it 'fully parses tr>--(1, 2, 3)', ->
     eqn 'call(var[+tr+], N[+1+], N[+2+], N[+3+])', 'tr\t(1, 2, 3)'
 
-  it 'fails to parse <', ->
-    eqn 'error:E15: expected expr7 (value)', '<', 0
-
   it 'parses s:pls[plid].runtimepath is# pltrp', ->
     eqn 'is#(.[+runtimepath+](index(var[+s:pls+], var[+plid+])), var[+pltrp+])',
       's:pls[plid].runtimepath is# pltrp'
   it 'parses abc[def] is# 123', ->
     eqn 'is#(index(var[+abc+], var[+def+]), N[+123+])', 'abc[def] is# 123'
+
+describe 'parse0, failures', ->
+  it 'fails to parse [1;2]', ->
+    eqn 'error:E696: Missing comma in List', '[1;2]', 2
+  it 'fails to parse <', ->
+    eqn 'error:E15: expected expr7 (value)', '<', 0
 
 -- vim: sw=2 sts=2 et tw=80

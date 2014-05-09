@@ -81,6 +81,8 @@
         return FAIL; \
       } \
     }
+/// True if parsing left side of an assignment
+#define IS_LVALUE (*eo == kExprLvalue)
 
 // {{{ Function declarations
 static ExpressionNode *expr_alloc(ExpressionType type);
@@ -327,8 +329,7 @@ static EDEC_NOARGS(parse_list)
       break;
     if (mustend) {
       return FAIL;
-    } else if (**arg == ';') {
-      // FIXME only allow this under certain circumstances
+    } else if (IS_LVALUE && **arg == ';') {
       mustend = true;
       TOP_NODE(kExprListRest, error, next_node, top_node, next_node)
       top_node->position = *arg;

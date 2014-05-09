@@ -509,6 +509,7 @@ describe 'parse_one_cmd', ->
     itn 'let', 'let'
     itn 'let g:', 'let g:'
     itn 'let [a, b, C] = [1, 2, 3]', 'let[a,b,C]=[1,2,3]'
+    itn 'let [a, b; C] = [1, 2, 3]'
     itn 'let a = 1', 'let a\t=1'
     itn 'let a .= 1', 'let a .= 1'
     itn 'let a -= 1', 'let a -= 1'
