@@ -1,5 +1,5 @@
 {:cimport, :internalize, :eq, :ffi, :lib, :cstr, :to_cstr} = require 'test.unit.helpers'
-libnvim = cimport('./src/translator/testhelpers/parser.h')
+libnvim = cimport('./src/nvim/translator/testhelpers/parser.h')
 p1ct = (str, one, flags=0) ->
   s = to_cstr(str)
   result = libnvim.parse_cmd_test(s, flags, one)

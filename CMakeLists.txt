@@ -33,6 +33,12 @@ else()
   set(DEBUG 0)
 endif()
 
+if(CMAKE_COMPILER_IS_GNUCXX AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-undefined")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -Wl,--no-undefined")
+  set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -Wl,--no-undefined")
+endif()
+
 option(USE_GCOV "Enable gcov support" OFF)
 
 if(USE_GCOV)
@@ -49,17 +55,17 @@ include_directories("${PROJECT_SOURCE_DIR}/src")
 include(CheckLibraryExists)
 
 find_package(LibUV REQUIRED)
-include_directories(${LIBUV_INCLUDE_DIRS})
+include_directories(SYSTEM ${LIBUV_INCLUDE_DIRS})
 
 find_package(Msgpack REQUIRED)
-include_directories(${MSGPACK_INCLUDE_DIRS})
+include_directories(SYSTEM ${MSGPACK_INCLUDE_DIRS})
 
 find_package(LuaJit REQUIRED)
-include_directories(${LUAJIT_INCLUDE_DIRS})
+include_directories(SYSTEM ${LUAJIT_INCLUDE_DIRS})
 
 find_package(LibIntl)
 if(LibIntl_FOUND)
-  include_directories(${LibIntl_INCLUDE_DIR})
+  include_directories(SYSTEM ${LibIntl_INCLUDE_DIR})
 endif()
 
 # Determine platform's threading library. Set CMAKE_THREAD_PREFER_PTHREAD
@@ -105,7 +111,7 @@ if(${LUA_MSGPACK_MISSING})
 endif()
 
 add_subdirectory(config)
-add_subdirectory(src)
+add_subdirectory(src/nvim)
 add_subdirectory(test/includes)
 
 find_program(BUSTED_PRG busted)
@@ -162,5 +168,5 @@ endif()
 # well with the legacy tests.  I have a branch that converts them to run under
 # CTest, but it needs a little more work.
 # add_custom_target(test
-#   COMMAND ${MAKE_PRG} -C ${CMAKE_CURRENT_SOURCE_DIR}/src/testdir
+#   COMMAND ${MAKE_PRG} -C ${CMAKE_CURRENT_SOURCE_DIR}/src/nvim/testdir
 #     VIMPROG=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/nvim)
