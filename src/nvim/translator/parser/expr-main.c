@@ -11,6 +11,10 @@
 #include "nvim/translator/printer/printer.h"
 #include "nvim/translator/testhelpers/parser.h"
 #include <stdio.h>
+
+#ifdef COMPILE_KLEE
+#include "klee/klee.h"
+#endif
 static void print_node(int indent, ExpressionNode *node)
 {
   char *name = NULL;
@@ -180,6 +184,14 @@ int main(int argc, char **argv) {
    * if (node != NULL)
    *   print_node(0, node);
    */
+#ifdef COMPILE_KLEE
+  char input[12];
+  klee_make_symbolic(input, sizeof(input), "input");
+  klee_assume(input[11] == '\0');
+  if ((result = parse0_repr(input, true)) == NULL)
+    return 1;
+  return 0;
+#else
   if ((result = parse0_repr(argv[1], true)) == NULL)
     return 1;
   puts(result);
@@ -188,6 +200,7 @@ int main(int argc, char **argv) {
     return 1;
   puts(result);
   free(result);
+#endif
   return 0;
 }
 
@@ -254,7 +267,7 @@ char_u *vim_strnsave(char_u *string, int len)
   return p;
 }
 
-int parse_one_cmd(char_u **pp,
+int parse_one_cmd(const char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition *position,
