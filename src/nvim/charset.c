@@ -20,12 +20,11 @@
 #include "nvim/os_unix.h"
 #include "nvim/strings.h"
 
-static int win_chartabsize(win_T *wp, char_u *p, colnr_T col);
 
-static int win_nolbr_chartabsize(win_T *wp, char_u *s, colnr_T col,
-                                 int *headp);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "charset.c.generated.h"
+#endif
 
-static unsigned nr2hex(unsigned c);
 
 static int chartab_initialized = FALSE;
 
@@ -321,11 +320,6 @@ void trans_characters(char_u *buf, int bufsize)
   }
 }
 
-#if defined(FEAT_EVAL) \
-  || defined(FEAT_TITLE) \
-  || defined(FEAT_INS_EXPAND) \
-  || defined(PROTO)
-
 /// Translate a string into allocated memory, replacing special chars with
 /// printable chars.  Returns NULL when out of memory.
 ///
@@ -393,9 +387,6 @@ char_u *transstr(char_u *s)
 
   return res;
 }
-
-#endif // if defined(FEAT_EVAL) || defined(FEAT_TITLE)
-       //    || defined(FEAT_INS_EXPAND) || defined(PROTO)
 
 /// Convert the string "str[orglen]" to do ignore-case comparing.  Uses the
 /// current locale.
@@ -756,18 +747,10 @@ int vim_strnsize(char_u *s, int len)
     return ptr2cells(p); \
   }
 
-#if defined(FEAT_VREPLACE) \
-  || defined(FEAT_EX_EXTRA) \
-  || defined(FEAT_GUI) \
-  || defined(FEAT_VIRTUALEDIT) \
-  || defined(PROTO)
 int chartabsize(char_u *p, colnr_T col)
 {
   RET_WIN_BUF_CHARTABSIZE(curwin, curbuf, p, col)
 }
-
-#endif /* if defined(FEAT_VREPLACE) || defined(FEAT_EX_EXTRA) ||
-         defined(FEAT_GUI) || defined(FEAT_VIRTUALEDIT) || defined(PROTO) */
 
 static int win_chartabsize(win_T *wp, char_u *p, colnr_T col)
 {
@@ -1838,9 +1821,7 @@ int hex2nr(int c)
   return c - '0';
 }
 
-#if defined(FEAT_TERMRESPONSE) \
-  || (defined(FEAT_GUI_GTK) && defined(FEAT_WINDOWS)) \
-  || defined(PROTO)
+#if defined(FEAT_TERMRESPONSE) || defined(FEAT_GUI_GTK) || defined(PROTO)
 
 /// Convert two hex characters to a byte.
 /// Return -1 if one of the characters is not hex.
@@ -1857,8 +1838,8 @@ int hexhex2nr(char_u *p)
   return (hex2nr(p[0]) << 4) + hex2nr(p[1]);
 }
 
-#endif // if defined(FEAT_TERMRESPONSE) || (defined(FEAT_GUI_GTK)
-       //    && defined(FEAT_WINDOWS)) || defined(PROTO)
+#endif // if defined(FEAT_TERMRESPONSE) || defined(FEAT_GUI_GTK)
+       // || defined(PROTO)
 
 /// Return TRUE if "str" starts with a backslash that should be removed.
 /// For WIN32 this is only done when the character after the
@@ -1910,10 +1891,8 @@ void backslash_halve(char_u *p)
 /// @return String with the number of backslashes halved.
 char_u* backslash_halve_save(char_u *p)
 {
+  // TODO(philix): simplify and improve backslash_halve_save algorithm
   char_u *res = vim_strsave(p);
-  if (res == NULL) {
-    return p;
-  }
   backslash_halve(res);
   return res;
 }

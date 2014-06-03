@@ -7,6 +7,7 @@
 typedef size_t (*Writer)(const void *ptr, size_t len, size_t nmemb,
                          void *cookie);
 
-int translate_script(const CommandNode *const node, Writer write, void *cookie);
-
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/translator/translator.h.generated.h"
+#endif
 #endif  // NEOVIM_TRANSLATOR_TRANSLATOR_TRANSLATOR_H

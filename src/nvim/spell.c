@@ -291,6 +291,7 @@
 #include "nvim/spell.h"
 #include "nvim/buffer.h"
 #include "nvim/charset.h"
+#include "nvim/cursor.h"
 #include "nvim/edit.h"
 #include "nvim/eval.h"
 #include "nvim/ex_cmds.h"
@@ -715,20 +716,6 @@ typedef struct spelltab_S {
   char_u st_upper[256];       // chars: upper case
 } spelltab_T;
 
-static spelltab_T spelltab;
-static int did_set_spelltab;
-
-#define CF_WORD         0x01
-#define CF_UPPER        0x02
-
-static void clear_spell_chartab(spelltab_T *sp);
-static int set_spell_finish(spelltab_T  *new_st);
-static int spell_iswordp(char_u *p, win_T *wp);
-static int spell_iswordp_nmw(char_u *p, win_T *wp);
-static int spell_mb_isword_class(int cl, win_T *wp);
-static int spell_iswordp_w(int *p, win_T *wp);
-static int write_spell_prefcond(FILE *fd, garray_T *gap);
-
 // For finding suggestions: At each node in the tree these states are tried:
 typedef enum {
   STATE_START = 0,      // At start of node check for NUL bytes (goodword
@@ -779,6 +766,230 @@ typedef struct trystate_S {
                                 // valid when "ts_flags" has TSF_DIDDEL
 } trystate_T;
 
+// Structure used for the cookie argument of do_in_runtimepath().
+typedef struct spelload_S {
+  char_u sl_lang[MAXWLEN + 1];          // language name
+  slang_T *sl_slang;                    // resulting slang_T struct
+  int sl_nobreak;                       // NOBREAK language found
+} spelload_T;
+
+#define SY_MAXLEN   30
+typedef struct syl_item_S {
+  char_u sy_chars[SY_MAXLEN];               // the sequence of chars
+  int sy_len;
+} syl_item_T;
+
+#define MAXLINELEN  500         // Maximum length in bytes of a line in a .aff
+                                // and .dic file.
+// Main structure to store the contents of a ".aff" file.
+typedef struct afffile_S {
+  char_u      *af_enc;          // "SET", normalized, alloc'ed string or NULL
+  int af_flagtype;              // AFT_CHAR, AFT_LONG, AFT_NUM or AFT_CAPLONG
+  unsigned af_rare;             // RARE ID for rare word
+  unsigned af_keepcase;         // KEEPCASE ID for keep-case word
+  unsigned af_bad;              // BAD ID for banned word
+  unsigned af_needaffix;        // NEEDAFFIX ID
+  unsigned af_circumfix;        // CIRCUMFIX ID
+  unsigned af_needcomp;         // NEEDCOMPOUND ID
+  unsigned af_comproot;         // COMPOUNDROOT ID
+  unsigned af_compforbid;       // COMPOUNDFORBIDFLAG ID
+  unsigned af_comppermit;       // COMPOUNDPERMITFLAG ID
+  unsigned af_nosuggest;        // NOSUGGEST ID
+  int af_pfxpostpone;           // postpone prefixes without chop string and
+                                // without flags
+  hashtab_T af_pref;            // hashtable for prefixes, affheader_T
+  hashtab_T af_suff;            // hashtable for suffixes, affheader_T
+  hashtab_T af_comp;            // hashtable for compound flags, compitem_T
+} afffile_T;
+
+#define AFT_CHAR        0       // flags are one character
+#define AFT_LONG        1       // flags are two characters
+#define AFT_CAPLONG     2       // flags are one or two characters
+#define AFT_NUM         3       // flags are numbers, comma separated
+
+typedef struct affentry_S affentry_T;
+// Affix entry from ".aff" file.  Used for prefixes and suffixes.
+struct affentry_S {
+  affentry_T  *ae_next;         // next affix with same name/number
+  char_u      *ae_chop;         // text to chop off basic word (can be NULL)
+  char_u      *ae_add;          // text to add to basic word (can be NULL)
+  char_u      *ae_flags;        // flags on the affix (can be NULL)
+  char_u      *ae_cond;         // condition (NULL for ".")
+  regprog_T   *ae_prog;         // regexp program for ae_cond or NULL
+  char ae_compforbid;           // COMPOUNDFORBIDFLAG found
+  char ae_comppermit;           // COMPOUNDPERMITFLAG found
+};
+
+# define AH_KEY_LEN 17          // 2 x 8 bytes + NUL
+
+// Affix header from ".aff" file.  Used for af_pref and af_suff.
+typedef struct affheader_S {
+  char_u ah_key[AH_KEY_LEN];    // key for hashtab == name of affix
+  unsigned ah_flag;             // affix name as number, uses "af_flagtype"
+  int ah_newID;                 // prefix ID after renumbering; 0 if not used
+  int ah_combine;               // suffix may combine with prefix
+  int ah_follows;               // another affix block should be following
+  affentry_T  *ah_first;        // first affix entry
+} affheader_T;
+
+#define HI2AH(hi)   ((affheader_T *)(hi)->hi_key)
+
+// Flag used in compound items.
+typedef struct compitem_S {
+  char_u ci_key[AH_KEY_LEN];    // key for hashtab == name of compound
+  unsigned ci_flag;             // affix name as number, uses "af_flagtype"
+  int ci_newID;                 // affix ID after renumbering.
+} compitem_T;
+
+#define HI2CI(hi)   ((compitem_T *)(hi)->hi_key)
+
+// Structure that is used to store the items in the word tree.  This avoids
+// the need to keep track of each allocated thing, everything is freed all at
+// once after ":mkspell" is done.
+// Note: "sb_next" must be just before "sb_data" to make sure the alignment of
+// "sb_data" is correct for systems where pointers must be aligned on
+// pointer-size boundaries and sizeof(pointer) > sizeof(int) (e.g., Sparc).
+#define  SBLOCKSIZE 16000       // size of sb_data
+typedef struct sblock_S sblock_T;
+struct sblock_S {
+  int sb_used;                  // nr of bytes already in use
+  sblock_T    *sb_next;         // next block in list
+  char_u sb_data[1];            // data, actually longer
+};
+
+// A node in the tree.
+typedef struct wordnode_S wordnode_T;
+struct wordnode_S {
+  union     // shared to save space
+  {
+    char_u hashkey[6];          // the hash key, only used while compressing
+    int index;                  // index in written nodes (valid after first
+                                // round)
+  } wn_u1;
+  union     // shared to save space
+  {
+    wordnode_T *next;           // next node with same hash key
+    wordnode_T *wnode;          // parent node that will write this node
+  } wn_u2;
+  wordnode_T  *wn_child;        // child (next byte in word)
+  wordnode_T  *wn_sibling;      // next sibling (alternate byte in word,
+                                //   always sorted)
+  int wn_refs;                  // Nr. of references to this node.  Only
+                                //   relevant for first node in a list of
+                                //   siblings, in following siblings it is
+                                //   always one.
+  char_u wn_byte;               // Byte for this node. NUL for word end
+
+  // Info for when "wn_byte" is NUL.
+  // In PREFIXTREE "wn_region" is used for the prefcondnr.
+  // In the soundfolded word tree "wn_flags" has the MSW of the wordnr and
+  // "wn_region" the LSW of the wordnr.
+  char_u wn_affixID;            // supported/required prefix ID or 0
+  uint16_t wn_flags;            // WF_ flags
+  short wn_region;              // region mask
+
+#ifdef SPELL_PRINTTREE
+  int wn_nr;                    // sequence nr for printing
+#endif
+};
+
+#define WN_MASK  0xffff         // mask relevant bits of "wn_flags"
+
+#define HI2WN(hi)    (wordnode_T *)((hi)->hi_key)
+
+// Info used while reading the spell files.
+typedef struct spellinfo_S {
+  wordnode_T  *si_foldroot;     // tree with case-folded words
+  long si_foldwcount;           // nr of words in si_foldroot
+
+  wordnode_T  *si_keeproot;     // tree with keep-case words
+  long si_keepwcount;           // nr of words in si_keeproot
+
+  wordnode_T  *si_prefroot;     // tree with postponed prefixes
+
+  long si_sugtree;              // creating the soundfolding trie
+
+  sblock_T    *si_blocks;       // memory blocks used
+  long si_blocks_cnt;           // memory blocks allocated
+  int si_did_emsg;              // TRUE when ran out of memory
+
+  long si_compress_cnt;         // words to add before lowering
+                                // compression limit
+  wordnode_T  *si_first_free;   // List of nodes that have been freed during
+                                // compression, linked by "wn_child" field.
+  long si_free_count;           // number of nodes in si_first_free
+#ifdef SPELL_PRINTTREE
+  int si_wordnode_nr;           // sequence nr for nodes
+#endif
+  buf_T       *si_spellbuf;     // buffer used to store soundfold word table
+
+  int si_ascii;                 // handling only ASCII words
+  int si_add;                   // addition file
+  int si_clear_chartab;             // when TRUE clear char tables
+  int si_region;                // region mask
+  vimconv_T si_conv;            // for conversion to 'encoding'
+  int si_memtot;                // runtime memory used
+  int si_verbose;               // verbose messages
+  int si_msg_count;             // number of words added since last message
+  char_u      *si_info;         // info text chars or NULL
+  int si_region_count;          // number of regions supported (1 when there
+                                // are no regions)
+  char_u si_region_name[17];    // region names; used only if
+                                // si_region_count > 1)
+
+  garray_T si_rep;              // list of fromto_T entries from REP lines
+  garray_T si_repsal;           // list of fromto_T entries from REPSAL lines
+  garray_T si_sal;              // list of fromto_T entries from SAL lines
+  char_u      *si_sofofr;       // SOFOFROM text
+  char_u      *si_sofoto;       // SOFOTO text
+  int si_nosugfile;             // NOSUGFILE item found
+  int si_nosplitsugs;           // NOSPLITSUGS item found
+  int si_followup;              // soundsalike: ?
+  int si_collapse;              // soundsalike: ?
+  hashtab_T si_commonwords;     // hashtable for common words
+  time_t si_sugtime;            // timestamp for .sug file
+  int si_rem_accents;           // soundsalike: remove accents
+  garray_T si_map;              // MAP info concatenated
+  char_u      *si_midword;      // MIDWORD chars or NULL
+  int si_compmax;               // max nr of words for compounding
+  int si_compminlen;            // minimal length for compounding
+  int si_compsylmax;            // max nr of syllables for compounding
+  int si_compoptions;           // COMP_ flags
+  garray_T si_comppat;          // CHECKCOMPOUNDPATTERN items, each stored as
+                                // a string
+  char_u      *si_compflags;    // flags used for compounding
+  char_u si_nobreak;            // NOBREAK
+  char_u      *si_syllable;     // syllable string
+  garray_T si_prefcond;         // table with conditions for postponed
+                                // prefixes, each stored as a string
+  int si_newprefID;             // current value for ah_newID
+  int si_newcompID;             // current value for compound ID
+} spellinfo_T;
+
+static spelltab_T spelltab;
+static int did_set_spelltab;
+
+#define CF_WORD         0x01
+#define CF_UPPER        0x02
+
+// structure used to store soundfolded words that add_sound_suggest() has
+// handled already.
+typedef struct {
+  short sft_score;              // lowest score used
+  char_u sft_word[1];           // soundfolded word, actually longer
+} sftword_T;
+
+typedef struct {
+  int badi;
+  int goodi;
+  int score;
+} limitscore_T;
+
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "spell.c.generated.h"
+#endif
+
 // values for ts_isdiff
 #define DIFF_NONE       0       // no different byte (yet)
 #define DIFF_YES        1       // different byte found
@@ -801,133 +1012,6 @@ typedef struct trystate_S {
 #define FIND_COMPOUND       3   // find case-folded compound word
 #define FIND_KEEPCOMPOUND   4   // find keep-case compound word
 
-static slang_T *slang_alloc(char_u *lang);
-static void slang_free(slang_T *lp);
-static void slang_clear(slang_T *lp);
-static void slang_clear_sug(slang_T *lp);
-static void find_word(matchinf_T *mip, int mode);
-static int match_checkcompoundpattern(char_u *ptr, int wlen,
-                                      garray_T *gap);
-static int can_compound(slang_T *slang, char_u *word, char_u *flags);
-static int can_be_compound(trystate_T *sp, slang_T *slang, char_u *compflags,
-                           int flag);
-static int match_compoundrule(slang_T *slang, char_u *compflags);
-static int valid_word_prefix(int totprefcnt, int arridx, int flags,
-                             char_u *word, slang_T *slang,
-                             int cond_req);
-static void find_prefix(matchinf_T *mip, int mode);
-static int fold_more(matchinf_T *mip);
-static int spell_valid_case(int wordflags, int treeflags);
-static int no_spell_checking(win_T *wp);
-static void spell_load_lang(char_u *lang);
-static char_u *spell_enc(void);
-static void int_wordlist_spl(char_u *fname);
-static void spell_load_cb(char_u *fname, void *cookie);
-static slang_T *spell_load_file(char_u *fname, char_u *lang, slang_T *old_lp,
-                                int silent);
-static char_u *read_cnt_string(FILE *fd, int cnt_bytes, int *lenp);
-static int read_region_section(FILE *fd, slang_T *slang, int len);
-static int read_charflags_section(FILE *fd);
-static int read_prefcond_section(FILE *fd, slang_T *lp);
-static int read_rep_section(FILE *fd, garray_T *gap, short *first);
-static int read_sal_section(FILE *fd, slang_T *slang);
-static int read_words_section(FILE *fd, slang_T *lp, int len);
-static void count_common_word(slang_T *lp, char_u *word, int len,
-                              int count);
-static int score_wordcount_adj(slang_T *slang, int score, char_u *word,
-                               int split);
-static int read_sofo_section(FILE *fd, slang_T *slang);
-static int read_compound(FILE *fd, slang_T *slang, int len);
-static int byte_in_str(char_u *str, int byte);
-static int init_syl_tab(slang_T *slang);
-static int count_syllables(slang_T *slang, char_u *word);
-static int set_sofo(slang_T *lp, char_u *from, char_u *to);
-static void set_sal_first(slang_T *lp);
-static int *mb_str2wide(char_u *s);
-static int spell_read_tree(FILE *fd, char_u **bytsp, idx_T **idxsp,
-                           int prefixtree,
-                           int prefixcnt);
-static idx_T read_tree_node(FILE *fd, char_u *byts, idx_T *idxs,
-                            int maxidx, idx_T startidx, int prefixtree,
-                            int maxprefcondnr);
-static void clear_midword(win_T *buf);
-static void use_midword(slang_T *lp, win_T *buf);
-static int find_region(char_u *rp, char_u *region);
-static int captype(char_u *word, char_u *end);
-static int badword_captype(char_u *word, char_u *end);
-static void spell_reload_one(char_u *fname, int added_word);
-static void set_spell_charflags(char_u *flags, int cnt, char_u *upp);
-static int set_spell_chartab(char_u *fol, char_u *low, char_u *upp);
-static int spell_casefold(char_u *p, int len, char_u *buf, int buflen);
-static int check_need_cap(linenr_T lnum, colnr_T col);
-static void spell_find_suggest(char_u *badptr, int badlen, suginfo_T *su,
-                               int maxcount, int banbadword,
-                               int need_cap,
-                               int interactive);
-static void spell_suggest_expr(suginfo_T *su, char_u *expr);
-static void spell_suggest_file(suginfo_T *su, char_u *fname);
-static void spell_suggest_intern(suginfo_T *su, int interactive);
-static void suggest_load_files(void);
-static void tree_count_words(char_u *byts, idx_T *idxs);
-static void spell_find_cleanup(suginfo_T *su);
-static void onecap_copy(char_u *word, char_u *wcopy, int upper);
-static void allcap_copy(char_u *word, char_u *wcopy);
-static void suggest_try_special(suginfo_T *su);
-static void suggest_try_change(suginfo_T *su);
-static void suggest_trie_walk(suginfo_T *su, langp_T *lp, char_u *fword,
-                              int soundfold);
-static void go_deeper(trystate_T *stack, int depth, int score_add);
-static int nofold_len(char_u *fword, int flen, char_u *word);
-static void find_keepcap_word(slang_T *slang, char_u *fword,
-                              char_u *kword);
-static void score_comp_sal(suginfo_T *su);
-static void score_combine(suginfo_T *su);
-static int stp_sal_score(suggest_T *stp, suginfo_T *su, slang_T *slang,
-                         char_u *badsound);
-static void suggest_try_soundalike_prep(void);
-static void suggest_try_soundalike(suginfo_T *su);
-static void suggest_try_soundalike_finish(void);
-static void add_sound_suggest(suginfo_T *su, char_u *goodword,
-                              int score,
-                              langp_T *lp);
-static int soundfold_find(slang_T *slang, char_u *word);
-static void make_case_word(char_u *fword, char_u *cword, int flags);
-static void set_map_str(slang_T *lp, char_u *map);
-static int similar_chars(slang_T *slang, int c1, int c2);
-static void add_suggestion(suginfo_T *su, garray_T *gap, char_u *goodword,
-                           int badlen, int score,
-                           int altscore, int had_bonus, slang_T *slang,
-                           int maxsf);
-static void check_suggestions(suginfo_T *su, garray_T *gap);
-static void add_banned(suginfo_T *su, char_u *word);
-static void rescore_suggestions(suginfo_T *su);
-static void rescore_one(suginfo_T *su, suggest_T *stp);
-static int cleanup_suggestions(garray_T *gap, int maxscore, int keep);
-static void spell_soundfold(slang_T *slang, char_u *inword, int folded,
-                            char_u *res);
-static void spell_soundfold_sofo(slang_T *slang, char_u *inword,
-                                 char_u *res);
-static void spell_soundfold_sal(slang_T *slang, char_u *inword,
-                                char_u *res);
-static void spell_soundfold_wsal(slang_T *slang, char_u *inword,
-                                 char_u *res);
-static int soundalike_score(char_u *goodsound, char_u *badsound);
-static int spell_edit_score(slang_T *slang, char_u *badword,
-                            char_u *goodword);
-static int spell_edit_score_limit(slang_T *slang, char_u *badword,
-                                  char_u *goodword,
-                                  int limit);
-static int spell_edit_score_limit_w(slang_T *slang, char_u *badword,
-                                    char_u *goodword,
-                                    int limit);
-static void dump_word(slang_T *slang, char_u *word, char_u *pat,
-                      int *dir, int round, int flags,
-                      linenr_T lnum);
-static linenr_T dump_prefixes(slang_T *slang, char_u *word, char_u *pat,
-                              int *dir, int round, int flags,
-                              linenr_T startlnum);
-static buf_T *open_spellbuf(void);
-static void close_spellbuf(buf_T *buf);
 
 // Use our own character-case definitions, because the current locale may
 // differ from what the .spl file uses.
@@ -2010,7 +2094,7 @@ spell_move_to (
     if (buflen < len + MAXWLEN + 2) {
       free(buf);
       buflen = len + MAXWLEN + 2;
-      buf = alloc(buflen);
+      buf = xmalloc(buflen);
     }
 
     // In first line check first word for Capital.
@@ -2196,13 +2280,6 @@ void spell_cat_line(char_u *buf, char_u *line, int maxlen)
     }
   }
 }
-
-// Structure used for the cookie argument of do_in_runtimepath().
-typedef struct spelload_S {
-  char_u sl_lang[MAXWLEN + 1];          // language name
-  slang_T *sl_slang;                    // resulting slang_T struct
-  int sl_nobreak;                       // NOBREAK language found
-} spelload_T;
 
 // Load word list(s) for "lang" from Vim spell file(s).
 // "lang" must be the language without the region: e.g., "en".
@@ -2479,8 +2556,6 @@ spell_load_file (
 
     // Remember the file name, used to reload the file when it's updated.
     lp->sl_fname = vim_strsave(fname);
-    if (lp->sl_fname == NULL)
-      goto endFAIL;
 
     // Check for .add.spl.
     lp->sl_add = strstr((char *)path_tail(fname), SPL_FNAME_ADD) != NULL;
@@ -2856,7 +2931,7 @@ static int read_sal_section(FILE *fd, slang_T *slang)
     ccnt = getc(fd);                            // <salfromlen>
     if (ccnt < 0)
       return SP_TRUNCERROR;
-    p = alloc(ccnt + 2);
+    p = xmalloc(ccnt + 2);
     smp->sm_lead = p;
 
     // Read up to the first special char into sm_lead.
@@ -2919,7 +2994,7 @@ static int read_sal_section(FILE *fd, slang_T *slang)
     // Add one extra entry to mark the end with an empty sm_lead.  Avoids
     // that we need to check the index every time.
     smp = &((salitem_T *)gap->ga_data)[gap->ga_len];
-    p = alloc(1);
+    p = xmalloc(1);
     p[0] = NUL;
     smp->sm_lead = p;
     smp->sm_leadlen = 0;
@@ -2996,7 +3071,7 @@ count_common_word (
   hash = hash_hash(p);
   hi = hash_lookup(&lp->sl_wordcount, p, hash);
   if (HASHITEM_EMPTY(hi)) {
-    wc = (wordcount_T *)alloc((unsigned)(sizeof(wordcount_T) + STRLEN(p)));
+    wc = xmalloc(sizeof(wordcount_T) + STRLEN(p));
     STRCPY(wc->wc_word, p);
     wc->wc_count = count;
     hash_add_item(&lp->sl_wordcount, hi, wc->wc_word, hash);
@@ -3146,22 +3221,22 @@ static int read_compound(FILE *fd, slang_T *slang, int len)
   c = todo * 2 + 7;
   if (enc_utf8)
     c += todo * 2;
-  pat = alloc((unsigned)c);
+  pat = xmalloc(c);
 
   // We also need a list of all flags that can appear at the start and one
   // for all flags.
-  cp = alloc(todo + 1);
+  cp = xmalloc(todo + 1);
   slang->sl_compstartflags = cp;
   *cp = NUL;
 
-  ap = alloc(todo + 1);
+  ap = xmalloc(todo + 1);
   slang->sl_compallflags = ap;
   *ap = NUL;
 
   // And a list of all patterns in their original form, for checking whether
   // compounding may work in match_compoundrule().  This is freed when we
   // encounter a wildcard, the check doesn't work then.
-  crp = alloc(todo + 1);
+  crp = xmalloc(todo + 1);
   slang->sl_comprules = crp;
 
   pp = pat;
@@ -3252,12 +3327,6 @@ static int byte_in_str(char_u *str, int n)
       return TRUE;
   return FALSE;
 }
-
-#define SY_MAXLEN   30
-typedef struct syl_item_S {
-  char_u sy_chars[SY_MAXLEN];               // the sequence of chars
-  int sy_len;
-} syl_item_T;
 
 // Truncate "slang->sl_syllable" at the first slash and put the following items
 // in "slang->sl_syl_items".
@@ -3378,7 +3447,7 @@ static int set_sofo(slang_T *lp, char_u *from, char_u *to)
     // Allocate the lists.
     for (i = 0; i < 256; ++i)
       if (lp->sl_sal_first[i] > 0) {
-        p = alloc(sizeof(int) * (lp->sl_sal_first[i] * 2 + 1));
+        p = xmalloc(sizeof(int) * (lp->sl_sal_first[i] * 2 + 1));
         ((int **)gap->ga_data)[i] = (int *)p;
         *(int *)p = 0;
       }
@@ -3669,8 +3738,6 @@ char_u *did_set_spelllang(win_T *wp)
   // Make a copy of 'spelllang', the SpellFileMissing autocommands may change
   // it under our fingers.
   spl_copy = vim_strsave(wp->w_s->b_p_spl);
-  if (spl_copy == NULL)
-    goto theend;
 
   wp->w_s->b_cjk = 0;
 
@@ -3936,11 +4003,9 @@ static void use_midword(slang_T *lp, win_T *wp)
         // Append multi-byte chars to "b_spell_ismw_mb".
         n = (int)STRLEN(wp->w_s->b_spell_ismw_mb);
         bp = vim_strnsave(wp->w_s->b_spell_ismw_mb, n + l);
-        if (bp != NULL) {
-          free(wp->w_s->b_spell_ismw_mb);
-          wp->w_s->b_spell_ismw_mb = bp;
-          vim_strncpy(bp + n, p, l);
-        }
+        free(wp->w_s->b_spell_ismw_mb);
+        wp->w_s->b_spell_ismw_mb = bp;
+        vim_strncpy(bp + n, p, l);
       }
       p += l;
     } else
@@ -4146,262 +4211,6 @@ spell_reload_one (
 
 // Functions for ":mkspell".
 
-#define MAXLINELEN  500         // Maximum length in bytes of a line in a .aff
-                                // and .dic file.
-// Main structure to store the contents of a ".aff" file.
-typedef struct afffile_S {
-  char_u      *af_enc;          // "SET", normalized, alloc'ed string or NULL
-  int af_flagtype;              // AFT_CHAR, AFT_LONG, AFT_NUM or AFT_CAPLONG
-  unsigned af_rare;             // RARE ID for rare word
-  unsigned af_keepcase;         // KEEPCASE ID for keep-case word
-  unsigned af_bad;              // BAD ID for banned word
-  unsigned af_needaffix;        // NEEDAFFIX ID
-  unsigned af_circumfix;        // CIRCUMFIX ID
-  unsigned af_needcomp;         // NEEDCOMPOUND ID
-  unsigned af_comproot;         // COMPOUNDROOT ID
-  unsigned af_compforbid;       // COMPOUNDFORBIDFLAG ID
-  unsigned af_comppermit;       // COMPOUNDPERMITFLAG ID
-  unsigned af_nosuggest;        // NOSUGGEST ID
-  int af_pfxpostpone;           // postpone prefixes without chop string and
-                                // without flags
-  hashtab_T af_pref;            // hashtable for prefixes, affheader_T
-  hashtab_T af_suff;            // hashtable for suffixes, affheader_T
-  hashtab_T af_comp;            // hashtable for compound flags, compitem_T
-} afffile_T;
-
-#define AFT_CHAR        0       // flags are one character
-#define AFT_LONG        1       // flags are two characters
-#define AFT_CAPLONG     2       // flags are one or two characters
-#define AFT_NUM         3       // flags are numbers, comma separated
-
-typedef struct affentry_S affentry_T;
-// Affix entry from ".aff" file.  Used for prefixes and suffixes.
-struct affentry_S {
-  affentry_T  *ae_next;         // next affix with same name/number
-  char_u      *ae_chop;         // text to chop off basic word (can be NULL)
-  char_u      *ae_add;          // text to add to basic word (can be NULL)
-  char_u      *ae_flags;        // flags on the affix (can be NULL)
-  char_u      *ae_cond;         // condition (NULL for ".")
-  regprog_T   *ae_prog;         // regexp program for ae_cond or NULL
-  char ae_compforbid;           // COMPOUNDFORBIDFLAG found
-  char ae_comppermit;           // COMPOUNDPERMITFLAG found
-};
-
-# define AH_KEY_LEN 17          // 2 x 8 bytes + NUL
-
-// Affix header from ".aff" file.  Used for af_pref and af_suff.
-typedef struct affheader_S {
-  char_u ah_key[AH_KEY_LEN];    // key for hashtab == name of affix
-  unsigned ah_flag;             // affix name as number, uses "af_flagtype"
-  int ah_newID;                 // prefix ID after renumbering; 0 if not used
-  int ah_combine;               // suffix may combine with prefix
-  int ah_follows;               // another affix block should be following
-  affentry_T  *ah_first;        // first affix entry
-} affheader_T;
-
-#define HI2AH(hi)   ((affheader_T *)(hi)->hi_key)
-
-// Flag used in compound items.
-typedef struct compitem_S {
-  char_u ci_key[AH_KEY_LEN];    // key for hashtab == name of compound
-  unsigned ci_flag;             // affix name as number, uses "af_flagtype"
-  int ci_newID;                 // affix ID after renumbering.
-} compitem_T;
-
-#define HI2CI(hi)   ((compitem_T *)(hi)->hi_key)
-
-// Structure that is used to store the items in the word tree.  This avoids
-// the need to keep track of each allocated thing, everything is freed all at
-// once after ":mkspell" is done.
-// Note: "sb_next" must be just before "sb_data" to make sure the alignment of
-// "sb_data" is correct for systems where pointers must be aligned on
-// pointer-size boundaries and sizeof(pointer) > sizeof(int) (e.g., Sparc).
-#define  SBLOCKSIZE 16000       // size of sb_data
-typedef struct sblock_S sblock_T;
-struct sblock_S {
-  int sb_used;                  // nr of bytes already in use
-  sblock_T    *sb_next;         // next block in list
-  char_u sb_data[1];            // data, actually longer
-};
-
-// A node in the tree.
-typedef struct wordnode_S wordnode_T;
-struct wordnode_S {
-  union     // shared to save space
-  {
-    char_u hashkey[6];          // the hash key, only used while compressing
-    int index;                  // index in written nodes (valid after first
-                                // round)
-  } wn_u1;
-  union     // shared to save space
-  {
-    wordnode_T *next;           // next node with same hash key
-    wordnode_T *wnode;          // parent node that will write this node
-  } wn_u2;
-  wordnode_T  *wn_child;        // child (next byte in word)
-  wordnode_T  *wn_sibling;      // next sibling (alternate byte in word,
-                                //   always sorted)
-  int wn_refs;                  // Nr. of references to this node.  Only
-                                //   relevant for first node in a list of
-                                //   siblings, in following siblings it is
-                                //   always one.
-  char_u wn_byte;               // Byte for this node. NUL for word end
-
-  // Info for when "wn_byte" is NUL.
-  // In PREFIXTREE "wn_region" is used for the prefcondnr.
-  // In the soundfolded word tree "wn_flags" has the MSW of the wordnr and
-  // "wn_region" the LSW of the wordnr.
-  char_u wn_affixID;            // supported/required prefix ID or 0
-  uint16_t wn_flags;            // WF_ flags
-  short wn_region;              // region mask
-
-#ifdef SPELL_PRINTTREE
-  int wn_nr;                    // sequence nr for printing
-#endif
-};
-
-#define WN_MASK  0xffff         // mask relevant bits of "wn_flags"
-
-#define HI2WN(hi)    (wordnode_T *)((hi)->hi_key)
-
-// Info used while reading the spell files.
-typedef struct spellinfo_S {
-  wordnode_T  *si_foldroot;     // tree with case-folded words
-  long si_foldwcount;           // nr of words in si_foldroot
-
-  wordnode_T  *si_keeproot;     // tree with keep-case words
-  long si_keepwcount;           // nr of words in si_keeproot
-
-  wordnode_T  *si_prefroot;     // tree with postponed prefixes
-
-  long si_sugtree;              // creating the soundfolding trie
-
-  sblock_T    *si_blocks;       // memory blocks used
-  long si_blocks_cnt;           // memory blocks allocated
-  int si_did_emsg;              // TRUE when ran out of memory
-
-  long si_compress_cnt;         // words to add before lowering
-                                // compression limit
-  wordnode_T  *si_first_free;   // List of nodes that have been freed during
-                                // compression, linked by "wn_child" field.
-  long si_free_count;           // number of nodes in si_first_free
-#ifdef SPELL_PRINTTREE
-  int si_wordnode_nr;           // sequence nr for nodes
-#endif
-  buf_T       *si_spellbuf;     // buffer used to store soundfold word table
-
-  int si_ascii;                 // handling only ASCII words
-  int si_add;                   // addition file
-  int si_clear_chartab;             // when TRUE clear char tables
-  int si_region;                // region mask
-  vimconv_T si_conv;            // for conversion to 'encoding'
-  int si_memtot;                // runtime memory used
-  int si_verbose;               // verbose messages
-  int si_msg_count;             // number of words added since last message
-  char_u      *si_info;         // info text chars or NULL
-  int si_region_count;          // number of regions supported (1 when there
-                                // are no regions)
-  char_u si_region_name[17];    // region names; used only if
-                                // si_region_count > 1)
-
-  garray_T si_rep;              // list of fromto_T entries from REP lines
-  garray_T si_repsal;           // list of fromto_T entries from REPSAL lines
-  garray_T si_sal;              // list of fromto_T entries from SAL lines
-  char_u      *si_sofofr;       // SOFOFROM text
-  char_u      *si_sofoto;       // SOFOTO text
-  int si_nosugfile;             // NOSUGFILE item found
-  int si_nosplitsugs;           // NOSPLITSUGS item found
-  int si_followup;              // soundsalike: ?
-  int si_collapse;              // soundsalike: ?
-  hashtab_T si_commonwords;     // hashtable for common words
-  time_t si_sugtime;            // timestamp for .sug file
-  int si_rem_accents;           // soundsalike: remove accents
-  garray_T si_map;              // MAP info concatenated
-  char_u      *si_midword;      // MIDWORD chars or NULL
-  int si_compmax;               // max nr of words for compounding
-  int si_compminlen;            // minimal length for compounding
-  int si_compsylmax;            // max nr of syllables for compounding
-  int si_compoptions;           // COMP_ flags
-  garray_T si_comppat;          // CHECKCOMPOUNDPATTERN items, each stored as
-                                // a string
-  char_u      *si_compflags;    // flags used for compounding
-  char_u si_nobreak;            // NOBREAK
-  char_u      *si_syllable;     // syllable string
-  garray_T si_prefcond;         // table with conditions for postponed
-                                // prefixes, each stored as a string
-  int si_newprefID;             // current value for ah_newID
-  int si_newcompID;             // current value for compound ID
-} spellinfo_T;
-
-static afffile_T *spell_read_aff(spellinfo_T *spin, char_u *fname);
-static int is_aff_rule(char_u **items, int itemcnt, char *rulename,
-                       int mincount);
-static void aff_process_flags(afffile_T *affile, affentry_T *entry);
-static int spell_info_item(char_u *s);
-static unsigned affitem2flag(int flagtype, char_u *item, char_u *fname,
-                             int lnum);
-static unsigned get_affitem(int flagtype, char_u **pp);
-static void process_compflags(spellinfo_T *spin, afffile_T *aff,
-                              char_u *compflags);
-static void check_renumber(spellinfo_T *spin);
-static int flag_in_afflist(int flagtype, char_u *afflist, unsigned flag);
-static void aff_check_number(int spinval, int affval, char *name);
-static void aff_check_string(char_u *spinval, char_u *affval,
-                             char *name);
-static int str_equal(char_u *s1, char_u *s2);
-static void add_fromto(spellinfo_T *spin, garray_T *gap, char_u *from,
-                       char_u *to);
-static int sal_to_bool(char_u *s);
-static void spell_free_aff(afffile_T *aff);
-static int spell_read_dic(spellinfo_T *spin, char_u *fname,
-                          afffile_T *affile);
-static int get_affix_flags(afffile_T *affile, char_u *afflist);
-static int get_pfxlist(afffile_T *affile, char_u *afflist,
-                       char_u *store_afflist);
-static void get_compflags(afffile_T *affile, char_u *afflist,
-                          char_u *store_afflist);
-static int store_aff_word(spellinfo_T *spin, char_u *word, char_u *afflist,
-                          afffile_T *affile, hashtab_T *ht,
-                          hashtab_T *xht, int condit, int flags,
-                          char_u *pfxlist,
-                          int pfxlen);
-static int spell_read_wordfile(spellinfo_T *spin, char_u *fname);
-static void *getroom(spellinfo_T *spin, size_t len, int align);
-static char_u *getroom_save(spellinfo_T *spin, char_u *s);
-static void free_blocks(sblock_T *bl);
-static wordnode_T *wordtree_alloc(spellinfo_T *spin);
-static int store_word(spellinfo_T *spin, char_u *word, int flags,
-                      int region, char_u *pfxlist,
-                      int need_affix);
-static int tree_add_word(spellinfo_T *spin, char_u *word,
-                         wordnode_T *tree, int flags, int region,
-                         int affixID);
-static wordnode_T *get_wordnode(spellinfo_T *spin);
-static int deref_wordnode(spellinfo_T *spin, wordnode_T *node);
-static void free_wordnode(spellinfo_T *spin, wordnode_T *n);
-static void wordtree_compress(spellinfo_T *spin, wordnode_T *root);
-static int node_compress(spellinfo_T *spin, wordnode_T *node,
-                         hashtab_T *ht,
-                         int *tot);
-static int node_equal(wordnode_T *n1, wordnode_T *n2);
-static int write_vim_spell(spellinfo_T *spin, char_u *fname);
-static void clear_node(wordnode_T *node);
-static int put_node(FILE *fd, wordnode_T *node, int idx, int regionmask,
-                    int prefixtree);
-static void spell_make_sugfile(spellinfo_T *spin, char_u *wfname);
-static int sug_filltree(spellinfo_T *spin, slang_T *slang);
-static int sug_maketable(spellinfo_T *spin);
-static int sug_filltable(spellinfo_T *spin, wordnode_T *node,
-                         int startwordnr,
-                         garray_T *gap);
-static int offset2bytes(int nr, char_u *buf);
-static int bytes2offset(char_u **pp);
-static void sug_write(spellinfo_T *spin, char_u *fname);
-static void mkspell(int fcount, char_u **fnames, int ascii,
-                    int over_write,
-                    int added_word);
-static void spell_message(spellinfo_T *spin, char_u *str);
-static void init_spellfile(void);
 
 // In the postponed prefixes tree wn_flags is used to store the WFP_ flags,
 // but it must be negative to indicate the prefix tree to tree_add_word().
@@ -5175,8 +4984,6 @@ static afffile_T *spell_read_aff(spellinfo_T *spin, char_u *fname)
           if (HASHITEM_EMPTY(hash_find(&spin->si_commonwords,
                       items[i]))) {
             p = vim_strsave(items[i]);
-            if (p == NULL)
-              break;
             hash_add(&spin->si_commonwords, p);
           }
         }
@@ -6786,8 +6593,6 @@ static int node_equal(wordnode_T *n1, wordnode_T *n2)
   return p1 == NULL && p2 == NULL;
 }
 
-static int
-rep_compare(const void *s1, const void *s2);
 
 // Function given to qsort() to sort the REP items on "from" string.
 static int rep_compare(const void *s1, const void *s2)
@@ -7382,7 +7187,7 @@ static void spell_make_sugfile(spellinfo_T *spin, char_u *wfname)
 
   // Write the .sug file.
   // Make the file name by changing ".spl" to ".sug".
-  fname = alloc(MAXPATHL);
+  fname = xmalloc(MAXPATHL);
   vim_strncpy(fname, wfname, MAXPATHL - 1);
   len = (int)STRLEN(fname);
   fname[len - 2] = 'u';
@@ -7731,7 +7536,6 @@ static buf_T *open_spellbuf(void)
 
   buf->b_spell = TRUE;
   buf->b_p_swf = TRUE;        // may create a swap file
-  buf->b_p_key = empty_option;
   ml_open(buf);
   ml_open_file(buf);          // create swap file now
 
@@ -7790,7 +7594,7 @@ mkspell (
   innames = &fnames[1];
   incount = fcount - 1;
 
-  wfname = alloc(MAXPATHL);
+  wfname = xmalloc(MAXPATHL);
 
   if (fcount >= 1) {
     len = (int)STRLEN(fnames[0]);
@@ -7841,7 +7645,7 @@ mkspell (
       goto theend;
     }
 
-    fname = alloc(MAXPATHL);
+    fname = xmalloc(MAXPATHL);
 
     // Init the aff and dic pointers.
     // Get the region names if there are more than 2 arguments.
@@ -8033,7 +7837,7 @@ spell_add_word (
       EMSG2(_(e_notset), "spellfile");
       return;
     }
-    fnamebuf = alloc(MAXPATHL);
+    fnamebuf = xmalloc(MAXPATHL);
 
     for (spf = curwin->w_s->b_p_spf, i = 1; *spf != NUL; ++i) {
       copy_option_part(&spf, fnamebuf, MAXPATHL, ",");
@@ -8152,7 +7956,7 @@ static void init_spellfile(void)
   char_u      *lstart = curbuf->b_s.b_p_spl;
 
   if (*curwin->w_s->b_p_spl != NUL && !GA_EMPTY(&curwin->w_s->b_langp)) {
-    buf = alloc(MAXPATHL);
+    buf = xmalloc(MAXPATHL);
 
     // Find the end of the language name.  Exclude the region.  If there
     // is a path separator remember the start of the tail.
@@ -8656,7 +8460,7 @@ void spell_suggest(int count)
     // No bad word or it starts after the cursor: use the word under the
     // cursor.
     curwin->w_cursor = prev_cursor;
-    line = ml_get_curline();
+    line = get_cursor_line_ptr();
     p = line + curwin->w_cursor.col;
     // Backup to before start of word.
     while (p > line && spell_iswordp_nmw(p, curwin))
@@ -8678,9 +8482,7 @@ void spell_suggest(int count)
   need_cap = check_need_cap(curwin->w_cursor.lnum, curwin->w_cursor.col);
 
   // Make a copy of current line since autocommands may free the line.
-  line = vim_strsave(ml_get_curline());
-  if (line == NULL)
-    goto skip;
+  line = vim_strsave(get_cursor_line_ptr());
 
   // Get the list of suggestions.  Limit to 'lines' - 2 or the number in
   // 'spellsuggest', whatever is smaller.
@@ -8797,8 +8599,7 @@ void spell_suggest(int count)
     }
 
     // Replace the word.
-    p = alloc((unsigned)STRLEN(line) - stp->st_orglen
-        + stp->st_wordlen + 1);
+    p = xmalloc(STRLEN(line) - stp->st_orglen + stp->st_wordlen + 1);
     c = (int)(sug.su_badptr - line);
     memmove(p, line, c);
     STRCPY(p + c, stp->st_word);
@@ -8819,8 +8620,6 @@ void spell_suggest(int count)
     curwin->w_cursor = prev_cursor;
 
   spell_find_cleanup(&sug);
-skip:
-  free(line);
 }
 
 // Check if the word at line "lnum" column "col" is required to start with a
@@ -8837,7 +8636,7 @@ static int check_need_cap(linenr_T lnum, colnr_T col)
   if (curwin->w_s->b_cap_prog == NULL)
     return FALSE;
 
-  line = ml_get_curline();
+  line = get_cursor_line_ptr();
   endcol = 0;
   if ((int)(skipwhite(line) - line) >= (int)col) {
     // At start of line, check if previous line is empty or sentence
@@ -8898,7 +8697,7 @@ void ex_spellrepall(exarg_T *eap)
   }
   addlen = (int)(STRLEN(repl_to) - STRLEN(repl_from));
 
-  frompat = alloc((unsigned)STRLEN(repl_from) + 7);
+  frompat = xmalloc(STRLEN(repl_from) + 7);
   sprintf((char *)frompat, "\\V\\<%s\\>", repl_from);
   p_ws = FALSE;
 
@@ -8912,10 +8711,10 @@ void ex_spellrepall(exarg_T *eap)
 
     // Only replace when the right word isn't there yet.  This happens
     // when changing "etc" to "etc.".
-    line = ml_get_curline();
+    line = get_cursor_line_ptr();
     if (addlen <= 0 || STRNCMP(line + curwin->w_cursor.col,
             repl_to, STRLEN(repl_to)) != 0) {
-      p = alloc((unsigned)STRLEN(line) + addlen + 1);
+      p = xmalloc(STRLEN(line) + addlen + 1);
       memmove(p, line, curwin->w_cursor.col);
       STRCPY(p + curwin->w_cursor.col, repl_to);
       STRCAT(p, line + curwin->w_cursor.col + STRLEN(repl_from));
@@ -8967,8 +8766,8 @@ spell_suggest_list (
 
     // The suggested word may replace only part of "word", add the not
     // replaced part.
-    wcopy = alloc(stp->st_wordlen
-        + (unsigned)STRLEN(sug.su_badptr + stp->st_orglen) + 1);
+    wcopy = xmalloc(stp->st_wordlen
+                    + STRLEN(sug.su_badptr + stp->st_orglen) + 1);
     STRCPY(wcopy, stp->st_word);
     STRCPY(wcopy + stp->st_wordlen, sug.su_badptr + stp->st_orglen);
     ((char_u **)gap->ga_data)[gap->ga_len++] = wcopy;
@@ -9064,8 +8863,6 @@ spell_find_suggest (
 
   // Make a copy of 'spellsuggest', because the expression may change it.
   sps_copy = vim_strsave(p_sps);
-  if (sps_copy == NULL)
-    return;
 
   // Loop over the items in 'spellsuggest'.
   for (p = sps_copy; *p != NUL; ) {
@@ -11025,13 +10822,11 @@ static void score_comp_sal(suginfo_T *su)
           // Add the suggestion.
           sstp = &SUG(su->su_sga, su->su_sga.ga_len);
           sstp->st_word = vim_strsave(stp->st_word);
-          if (sstp->st_word != NULL) {
-            sstp->st_wordlen = stp->st_wordlen;
-            sstp->st_score = score;
-            sstp->st_altscore = 0;
-            sstp->st_orglen = stp->st_orglen;
-            ++su->su_sga.ga_len;
-          }
+          sstp->st_wordlen = stp->st_wordlen;
+          sstp->st_score = score;
+          sstp->st_altscore = 0;
+          sstp->st_orglen = stp->st_orglen;
+          ++su->su_sga.ga_len;
         }
       }
       break;
@@ -11193,13 +10988,6 @@ stp_sal_score (
   return soundalike_score(goodsound, pbad);
 }
 
-// structure used to store soundfolded words that add_sound_suggest() has
-// handled already.
-typedef struct {
-  short sft_score;              // lowest score used
-  char_u sft_word[1];           // soundfolded word, actually longer
-} sftword_T;
-
 static sftword_T dumsft;
 #define HIKEY2SFT(p)  ((sftword_T *)(p - (dumsft.sft_word - (char_u *)&dumsft)))
 #define HI2SFT(hi)     HIKEY2SFT((hi)->hi_key)
@@ -11314,8 +11102,7 @@ add_sound_suggest (
   hash = hash_hash(goodword);
   hi = hash_lookup(&slang->sl_sounddone, goodword, hash);
   if (HASHITEM_EMPTY(hi)) {
-    sft = (sftword_T *)alloc((unsigned)(sizeof(sftword_T)
-                                        + STRLEN(goodword)));
+    sft = xmalloc(sizeof(sftword_T) + STRLEN(goodword));
     sft->sft_score = score;
     STRCPY(sft->sft_word, goodword);
     hash_add_item(&slang->sl_sounddone, hi, sft->sft_word, hash);
@@ -11579,7 +11366,7 @@ static void set_map_str(slang_T *lp, char_u *map)
         hash_T hash;
         hashitem_T  *hi;
 
-        b = alloc((unsigned)(cl + headcl + 2));
+        b = xmalloc(cl + headcl + 2);
         mb_char2bytes(c, b);
         b[cl] = NUL;
         mb_char2bytes(headc, b + cl + 1);
@@ -11731,25 +11518,23 @@ add_suggestion (
     // Add a suggestion.
     stp = &SUG(*gap, gap->ga_len);
     stp->st_word = vim_strnsave(goodword, goodlen);
-    if (stp->st_word != NULL) {
-      stp->st_wordlen = goodlen;
-      stp->st_score = score;
-      stp->st_altscore = altscore;
-      stp->st_had_bonus = had_bonus;
-      stp->st_orglen = badlen;
-      stp->st_slang = slang;
-      ++gap->ga_len;
+    stp->st_wordlen = goodlen;
+    stp->st_score = score;
+    stp->st_altscore = altscore;
+    stp->st_had_bonus = had_bonus;
+    stp->st_orglen = badlen;
+    stp->st_slang = slang;
+    ++gap->ga_len;
 
-      // If we have too many suggestions now, sort the list and keep
-      // the best suggestions.
-      if (gap->ga_len > SUG_MAX_COUNT(su)) {
-        if (maxsf)
-          su->su_sfmaxscore = cleanup_suggestions(gap,
-              su->su_sfmaxscore, SUG_CLEAN_COUNT(su));
-        else
-          su->su_maxscore = cleanup_suggestions(gap,
-              su->su_maxscore, SUG_CLEAN_COUNT(su));
-      }
+    // If we have too many suggestions now, sort the list and keep
+    // the best suggestions.
+    if (gap->ga_len > SUG_MAX_COUNT(su)) {
+      if (maxsf)
+        su->su_sfmaxscore = cleanup_suggestions(gap,
+            su->su_sfmaxscore, SUG_CLEAN_COUNT(su));
+      else
+        su->su_maxscore = cleanup_suggestions(gap,
+            su->su_maxscore, SUG_CLEAN_COUNT(su));
     }
   }
 }
@@ -11800,8 +11585,7 @@ static void add_banned(suginfo_T *su, char_u *word)
   hi = hash_lookup(&su->su_banned, word, hash);
   if (HASHITEM_EMPTY(hi)) {
     s = vim_strsave(word);
-    if (s != NULL)
-      hash_add_item(&su->su_banned, hi, s, hash);
+    hash_add_item(&su->su_banned, hi, s, hash);
   }
 }
 
@@ -11841,8 +11625,6 @@ static void rescore_one(suginfo_T *su, suggest_T *stp)
   }
 }
 
-static int
-sug_compare(const void *s1, const void *s2);
 
 // Function given to qsort() to sort the suggestions on st_score.
 // First on "st_score", then "st_altscore" then alphabetically.
@@ -12822,12 +12604,6 @@ static int spell_edit_score(slang_T *slang, char_u *badword, char_u *goodword)
   return i;
 }
 
-typedef struct {
-  int badi;
-  int goodi;
-  int score;
-} limitscore_T;
-
 // Like spell_edit_score(), but with a limit on the score to make it faster.
 // May return SCORE_MAXMAX when the score is higher than "limit".
 //
@@ -13569,7 +13345,7 @@ int spell_word_start(int startcol)
     return startcol;
 
   // Find a word character before "startcol".
-  line = ml_get_curline();
+  line = get_cursor_line_ptr();
   for (p = line + startcol; p > line; ) {
     mb_ptr_back(line, p);
     if (spell_iswordp_nmw(p, curwin))

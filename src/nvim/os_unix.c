@@ -27,6 +27,7 @@
 
 #include <string.h>
 
+#include "nvim/api/private/handle.h"
 #include "nvim/vim.h"
 #include "nvim/os_unix.h"
 #include "nvim/buffer.h"
@@ -79,19 +80,16 @@
 static int selinux_enabled = -1;
 #endif
 
-static int get_x11_title(int);
-static int get_x11_icon(int);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "os_unix.c.generated.h"
+#endif
 static char_u   *oldtitle = NULL;
 static int did_set_title = FALSE;
 static char_u   *oldicon = NULL;
 static int did_set_icon = FALSE;
 
-static int have_wildcard(int, char_u **);
-static int have_dollars(int, char_u **);
 
-static void save_patterns(int num_pat, char_u **pat, int *num_file,
-                          char_u ***file);
 
 /*
  * Write s[len] to the screen.
@@ -380,7 +378,7 @@ int vim_is_fastterm(char_u *name)
  */
 void fname_case(
 char_u      *name,
-int len;              /* buffer size, only used when name gets longer */
+int len               /* buffer size, only used when name gets longer */
 )
 {
   struct stat st;
@@ -542,6 +540,7 @@ int mch_nodetype(char_u *name)
 
 void mch_early_init()
 {
+  handle_init();
   time_init();
 }
 
@@ -553,7 +552,6 @@ void mch_free_mem()          {
 
 #endif
 
-static void exit_scroll(void);
 
 /*
  * Output a newline when exiting.
@@ -771,8 +769,7 @@ void get_stty()
 /*
  * Set mouse clicks on or off.
  */
-void mch_setmouse(on)
-int on;
+void mch_setmouse(int on)
 {
   static int ison = FALSE;
   int xterm_mouse_vers;
@@ -1008,12 +1005,10 @@ void mch_set_shellsize()
 
 #define SHELL_SPECIAL (char_u *)"\t \"&'$;<>()\\|"
 
-int mch_expand_wildcards(num_pat, pat, num_file, file, flags)
-int num_pat;
-char_u       **pat;
-int           *num_file;
-char_u      ***file;
-int flags;                      /* EW_* flags */
+int mch_expand_wildcards(int num_pat, char_u **pat, int *num_file,
+                         char_u ***file,
+                         int flags /* EW_* flags */
+                         )
 {
   int i;
   size_t len;
@@ -1120,7 +1115,7 @@ int flags;                      /* EW_* flags */
       ++len;
     }
   }
-  command = alloc(len);
+  command = xmalloc(len);
 
   /*
    * Build the shell command:
@@ -1269,7 +1264,7 @@ int flags;                      /* EW_* flags */
   fseek(fd, 0L, SEEK_END);
   len = ftell(fd);                      /* get size of temp file */
   fseek(fd, 0L, SEEK_SET);
-  buffer = alloc(len + 1);
+  buffer = xmalloc(len + 1);
   i = fread((char *)buffer, 1, len, fd);
   fclose(fd);
   os_remove((char *)tempname);
@@ -1353,7 +1348,7 @@ int flags;                      /* EW_* flags */
     goto notfound;
   }
   *num_file = i;
-  *file = (char_u **)alloc(sizeof(char_u *) * i);
+  *file = (char_u **)xmalloc(sizeof(char_u *) * i);
 
   /*
    * Isolate the individual file names.
@@ -1397,7 +1392,7 @@ int flags;                      /* EW_* flags */
     if (!dir && (flags & EW_EXEC) && !os_can_exe((*file)[i]))
       continue;
 
-    p = alloc((unsigned)(STRLEN((*file)[i]) + 1 + dir));
+    p = xmalloc(STRLEN((*file)[i]) + 1 + dir);
     STRCPY(p, (*file)[i]);
     if (dir)
       add_pathsep(p);             /* add '/' to a directory name */
@@ -1424,11 +1419,8 @@ notfound:
 }
 
 
-static void save_patterns(num_pat, pat, num_file, file)
-int num_pat;
-char_u      **pat;
-int         *num_file;
-char_u      ***file;
+static void save_patterns(int num_pat, char_u **pat, int *num_file,
+                          char_u ***file)
 {
   int i;
   char_u      *s;
@@ -1437,10 +1429,9 @@ char_u      ***file;
 
   for (i = 0; i < num_pat; i++) {
     s = vim_strsave(pat[i]);
-    if (s != NULL)
-      /* Be compatible with expand_filename(): halve the number of
-       * backslashes. */
-      backslash_halve(s);
+    /* Be compatible with expand_filename(): halve the number of
+     * backslashes. */
+    backslash_halve(s);
     (*file)[i] = s;
   }
   *num_file = num_pat;
@@ -1450,8 +1441,7 @@ char_u      ***file;
  * Return TRUE if the string "p" contains a wildcard that mch_expandpath() can
  * expand.
  */
-int mch_has_exp_wildcard(p)
-char_u  *p;
+int mch_has_exp_wildcard(char_u *p)
 {
   for (; *p; mb_ptr_adv(p)) {
     if (*p == '\\' && p[1] != NUL)
@@ -1468,8 +1458,7 @@ char_u  *p;
  * Return TRUE if the string "p" contains a wildcard.
  * Don't recognize '~' at the end as a wildcard.
  */
-int mch_has_wildcard(p)
-char_u  *p;
+int mch_has_wildcard(char_u *p)
 {
   for (; *p; mb_ptr_adv(p)) {
     if (*p == '\\' && p[1] != NUL)
@@ -1483,9 +1472,7 @@ char_u  *p;
   return FALSE;
 }
 
-static int have_wildcard(num, file)
-int num;
-char_u  **file;
+static int have_wildcard(int num, char_u **file)
 {
   int i;
 
@@ -1495,9 +1482,7 @@ char_u  **file;
   return 0;
 }
 
-static int have_dollars(num, file)
-int num;
-char_u  **file;
+static int have_dollars(int num, char_u **file)
 {
   int i;
 
@@ -1517,14 +1502,12 @@ typedef int (*INTPROCINT)(int);
  * Call a DLL routine which takes either a string or int param
  * and returns an allocated string.
  */
-int mch_libcall(libname, funcname, argstring, argint, string_result,
-    number_result)
-char_u      *libname;
-char_u      *funcname;
-char_u      *argstring;         /* NULL when using a argint */
-int argint;
-char_u      **string_result;    /* NULL when using number_result */
-int         *number_result;
+int mch_libcall(char_u *libname,
+                char_u *funcname,
+                char_u *argstring,         /* NULL when using a argint */
+                int argint,
+                char_u **string_result,    /* NULL when using number_result */
+                int *number_result)
 {
 # if defined(USE_DLOPEN)
   void        *hinstLib;

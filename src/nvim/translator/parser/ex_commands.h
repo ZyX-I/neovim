@@ -267,18 +267,6 @@ typedef struct {
 extern CommandDefinition cmddefs[kCmdREAL_SIZE];
 #define CMDDEF(type) cmddefs[type - 1]
 
-void free_cmd(CommandNode *);
-int parse_one_cmd(const char_u **pp,
-                  CommandNode **node,
-                  CommandParserOptions o,
-                  CommandPosition *position,
-                  LineGetter fgetline,
-                  void *cookie);
-CommandNode *parse_cmd_sequence(CommandParserOptions o,
-                                CommandPosition position,
-                                LineGetter fgetline,
-                                void *cookie);
-
 const CommandNode nocmd;
 
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
@@ -286,4 +274,7 @@ const CommandNode nocmd;
 #define ENDS_EXCMD_NOCOMMENT(ch) ((ch) == NUL || (ch) == '|' || (ch) == '\n')
 #define ENDS_EXCMD(ch) ((ch) == '"' || ENDS_EXCMD_NOCOMMENT(ch))
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/parser/ex_commands.h.generated.h"
+#endif
 #endif  // NEOVIM_TRANSLATOR_PARSER_EX_COMMANDS_H

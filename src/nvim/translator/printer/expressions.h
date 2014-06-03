@@ -8,16 +8,7 @@
 #include "nvim/translator/parser/expressions.h"
 #include "nvim/translator/printer/printer.h"
 
-size_t expr_node_dump_len(const PrinterOptions *const po,
-                          const ExpressionNode *const node);
-void expr_node_dump(const PrinterOptions *const po,
-                    const ExpressionNode *const node,
-                    char **pp);
-
-size_t expr_node_repr_len(const PrinterOptions *const po,
-                          const ExpressionNode *const node);
-void expr_node_repr(const PrinterOptions *const po,
-                    const ExpressionNode *const node,
-                    char **pp);
-
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/printer/expressions.h.generated.h"
+#endif
 #endif  // NEOVIM_TRANSLATOR_PRINTER_EXPRESSIONS_H

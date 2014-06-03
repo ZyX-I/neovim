@@ -27,9 +27,10 @@ typedef struct digraph {
   result_T result;
 } digr_T;
 
-static int getexactdigraph(int char1, int char2, int meta_char);
-static void printdigraph(digr_T *dp);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "digraph.c.generated.h"
+#endif
 // digraphs added by the user
 static garray_T user_digraphs = {0, 0, (int)sizeof(digr_T), 10, NULL};
 
@@ -1721,7 +1722,6 @@ typedef struct {
 
 #define KMAP_MAXLEN 20  // maximum length of "from" or "to"
 
-static void keymap_unload(void);
 
 /// Set up key mapping tables for the 'keymap' option.
 ///
@@ -1738,28 +1738,24 @@ char_u* keymap_init(void)
     keymap_unload();
     do_cmdline_cmd((char_u *)"unlet! b:keymap_name");
   } else {
-    char_u  *buf;
+    char *buf;
     size_t buflen;
 
     // Source the keymap file.  It will contain a ":loadkeymap" command
     // which will call ex_loadkeymap() below.
     buflen = STRLEN(curbuf->b_p_keymap) + STRLEN(p_enc) + 14;
-    buf = alloc((unsigned)buflen);
-
-    if (buf == NULL) {
-      return e_outofmem;
-    }
+    buf = xmalloc(buflen);
 
     // try finding "keymap/'keymap'_'encoding'.vim"  in 'runtimepath'
-    vim_snprintf((char *)buf, buflen, "keymap/%s_%s.vim",
+    vim_snprintf(buf, buflen, "keymap/%s_%s.vim",
                  curbuf->b_p_keymap, p_enc);
 
-    if (source_runtime(buf, FALSE) == FAIL) {
+    if (source_runtime((char_u *)buf, FALSE) == FAIL) {
       // try finding "keymap/'keymap'.vim" in 'runtimepath'
-      vim_snprintf((char *)buf, buflen, "keymap/%s.vim",
+      vim_snprintf(buf, buflen, "keymap/%s.vim",
                    curbuf->b_p_keymap);
 
-      if (source_runtime(buf, FALSE) == FAIL) {
+      if (source_runtime((char_u *)buf, FALSE) == FAIL) {
         free(buf);
         return (char_u *)N_("E544: Keymap file not found");
       }
@@ -1818,12 +1814,10 @@ void ex_loadkeymap(exarg_T *eap)
       s = skiptowhite(p);
       kp->to = vim_strnsave(p, (int)(s - p));
 
-      if ((kp->from == NULL)
-          || (kp->to == NULL)
-          || (STRLEN(kp->from) + STRLEN(kp->to) >= KMAP_LLEN)
+      if ((STRLEN(kp->from) + STRLEN(kp->to) >= KMAP_LLEN)
           || (*kp->from == NUL)
           || (*kp->to == NUL)) {
-        if ((kp->to != NULL) && (*kp->to == NUL)) {
+        if (*kp->to == NUL) {
           EMSG(_("E791: Empty keymap entry"));
         }
         free(kp->from);

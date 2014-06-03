@@ -2,56 +2,34 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nvim/api/helpers.h"
-#include "nvim/api/defs.h"
+#include "nvim/api/private/helpers.h"
+#include "nvim/api/private/defs.h"
+#include "nvim/api/private/handle.h"
 #include "nvim/vim.h"
 #include "nvim/buffer.h"
 #include "nvim/window.h"
 #include "nvim/memory.h"
 #include "nvim/eval.h"
+#include "nvim/map_defs.h"
+#include "nvim/map.h"
 #include "nvim/option.h"
 #include "nvim/option_defs.h"
 
-#include "nvim/lib/khash.h"
-
-
-#if defined(ARCH_64)
-#define ptr_hash_func(key) kh_int64_hash_func(key)
-#elif defined(ARCH_32)
-#define ptr_hash_func(key) kh_int_hash_func(key)
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "api/private/helpers.c.generated.h"
 #endif
 
-KHASH_INIT(Lookup, uintptr_t, char, 0, ptr_hash_func, kh_int_hash_equal)
-
-/// Recursion helper for the `vim_to_object`. This uses a pointer table
-/// to avoid infinite recursion due to cyclic references
-///
-/// @param obj The source object
-/// @param lookup Lookup table containing pointers to all processed objects
-/// @return The converted value
-static Object vim_to_object_rec(typval_T *obj, khash_t(Lookup) *lookup);
-
-static bool object_to_vim(Object obj, typval_T *tv, Error *err);
-
-static void set_option_value_for(char *key,
-                                 int numval,
-                                 char *stringval,
-                                 int opt_flags,
-                                 int opt_type,
-                                 void *from,
-                                 Error *err);
-
-static void set_option_value_err(char *key,
-                                 int numval,
-                                 char *stringval,
-                                 int opt_flags,
-                                 Error *err);
-
+/// Start block that may cause vimscript exceptions
 void try_start()
 {
   ++trylevel;
 }
 
+/// End try block, set the error message if any and return true if an error
+/// occurred.
+///
+/// @param err Pointer to the stack-allocated error object
+/// @return true if an error occurred
 bool try_end(Error *err)
 {
   --trylevel;
@@ -75,7 +53,7 @@ bool try_end(Error *err)
                                              ET_ERROR,
                                              NULL,
                                              &should_free);
-    strncpy(err->msg, msg, sizeof(err->msg));
+    xstrlcpy(err->msg, msg, sizeof(err->msg));
     err->set = true;
     free_global_msglist();
 
@@ -89,9 +67,14 @@ bool try_end(Error *err)
   return err->set;
 }
 
+/// Recursively expands a vimscript value in a dict
+///
+/// @param dict The vimscript dict
+/// @param key The key
+/// @param[out] err Details of an error that may have occurred
 Object dict_get_value(dict_T *dict, String key, Error *err)
 {
-  Object rv;
+  Object rv = OBJECT_INIT;
   hashitem_T *hi;
   dictitem_T *di;
   char *k = xstrndup(key.data, key.size);
@@ -109,9 +92,17 @@ Object dict_get_value(dict_T *dict, String key, Error *err)
   return rv;
 }
 
+/// Set a value in a dict. Objects are recursively expanded into their
+/// vimscript equivalents. Passing 'nil' as value deletes the key.
+///
+/// @param dict The vimscript dict
+/// @param key The key
+/// @param value The new value
+/// @param[out] err Details of an error that may have occurred
+/// @return the old value, if any
 Object dict_set_value(dict_T *dict, String key, Object value, Error *err)
 {
-  Object rv = {.type = kObjectTypeNil};
+  Object rv = OBJECT_INIT;
 
   if (dict->dv_lock) {
     set_api_error("Dictionary is locked", err);
@@ -172,9 +163,17 @@ Object dict_set_value(dict_T *dict, String key, Object value, Error *err)
   return rv;
 }
 
+/// Gets the value of a global or local(buffer, window) option.
+///
+/// @param from If `type` is `SREQ_WIN` or `SREQ_BUF`, this must be a pointer
+///        to the window or buffer.
+/// @param type One of `SREQ_GLOBAL`, `SREQ_WIN` or `SREQ_BUF`
+/// @param name The option name
+/// @param[out] err Details of an error that may have occurred
+/// @return the option value
 Object get_option_from(void *from, int type, String name, Error *err)
 {
-  Object rv = {.type = kObjectTypeNil};
+  Object rv = OBJECT_INIT;
 
   if (name.size == 0) {
     set_api_error("Empty option name", err);
@@ -215,6 +214,13 @@ Object get_option_from(void *from, int type, String name, Error *err)
   return rv;
 }
 
+/// Sets the value of a global or local(buffer, window) option.
+///
+/// @param to If `type` is `SREQ_WIN` or `SREQ_BUF`, this must be a pointer
+///        to the window or buffer.
+/// @param type One of `SREQ_GLOBAL`, `SREQ_WIN` or `SREQ_BUF`
+/// @param name The option name
+/// @param[out] err Details of an error that may have occurred
 void set_option_to(void *to, int type, String name, Object value, Error *err)
 {
   if (name.size == 0) {
@@ -275,62 +281,69 @@ void set_option_to(void *to, int type, String name, Object value, Error *err)
 
     char *val = xstrndup(value.data.string.data, value.data.string.size);
     set_option_value_for(key, 0, val, opt_flags, type, to, err);
+    free(val);
   }
 
 cleanup:
   free(key);
 }
 
+/// Convert a vim object to an `Object` instance, recursively expanding
+/// Arrays/Dictionaries.
+///
+/// @param obj The source object
+/// @return The converted value
 Object vim_to_object(typval_T *obj)
 {
   Object rv;
   // We use a lookup table to break out of cyclic references
-  khash_t(Lookup) *lookup = kh_init(Lookup);
+  PMap(ptr_t) *lookup = pmap_new(ptr_t)();
   rv = vim_to_object_rec(obj, lookup);
   // Free the table
-  kh_destroy(Lookup, lookup);
+  pmap_free(ptr_t)(lookup);
   return rv;
 }
 
+/// Finds the pointer for a window number
+///
+/// @param window the window number
+/// @param[out] err Details of an error that may have occurred
+/// @return the window pointer
 buf_T *find_buffer(Buffer buffer, Error *err)
 {
-  if (buffer > INT_MAX || buffer < INT_MIN) {
-    set_api_error("Invalid buffer id", err);
-    return NULL;
-  }
+  buf_T *rv = handle_get_buffer(buffer);
 
-  buf_T *buf = buflist_findnr((int)buffer);
-
-  if (buf == NULL) {
+  if (!rv) {
     set_api_error("Invalid buffer id", err);
   }
 
-  return buf;
+  return rv;
 }
 
+/// Finds the pointer for a window number
+///
+/// @param window the window number
+/// @param[out] err Details of an error that may have occurred
+/// @return the window pointer
 win_T * find_window(Window window, Error *err)
 {
-  tabpage_T *tp;
-  win_T *wp;
+  win_T *rv = handle_get_window(window);
 
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (!--window) {
-      return wp;
-    }
+  if (!rv) {
+    set_api_error("Invalid window id", err);
   }
 
-  set_api_error("Invalid window id", err);
-  return NULL;
+  return rv;
 }
 
+/// Finds the pointer for a tabpage number
+///
+/// @param tabpage the tabpage number
+/// @param[out] err Details of an error that may have occurred
+/// @return the tabpage pointer
 tabpage_T * find_tab(Tabpage tabpage, Error *err)
 {
-  if (tabpage > INT_MAX || tabpage < INT_MIN) {
-    set_api_error("Invalid tabpage id", err);
-    return NULL;
-  }
-
-  tabpage_T *rv = find_tabpage((int)tabpage);
+  tabpage_T *rv = handle_get_tabpage(tabpage);
 
   if (!rv) {
     set_api_error("Invalid tabpage id", err);
@@ -339,9 +352,14 @@ tabpage_T * find_tab(Tabpage tabpage, Error *err)
   return rv;
 }
 
+/// Copies a C string into a String (binary safe string, characters + length)
+///
+/// @param str the C string to copy
+/// @return the resulting String, if the input string was NULL, then an
+///         empty String is returned
 String cstr_to_string(const char *str) {
     if (str == NULL) {
-        return (String) { .data = NULL, .size = 0 };
+        return (String) STRING_INIT;
     }
 
     size_t len = strlen(str);
@@ -443,19 +461,24 @@ static bool object_to_vim(Object obj, typval_T *tv, Error *err)
   return true;
 }
 
-static Object vim_to_object_rec(typval_T *obj, khash_t(Lookup) *lookup)
+/// Recursion helper for the `vim_to_object`. This uses a pointer table
+/// to avoid infinite recursion due to cyclic references
+///
+/// @param obj The source object
+/// @param lookup Lookup table containing pointers to all processed objects
+/// @return The converted value
+static Object vim_to_object_rec(typval_T *obj, PMap(ptr_t) *lookup)
 {
-  Object rv = {.type = kObjectTypeNil};
+  Object rv = OBJECT_INIT;
 
   if (obj->v_type == VAR_LIST || obj->v_type == VAR_DICT) {
-    int ret;
     // Container object, add it to the lookup table
-    kh_put(Lookup, lookup, (uintptr_t)obj, &ret);
-    if (!ret) {
+    if (pmap_has(ptr_t)(lookup, obj)) {
       // It's already present, meaning we alredy processed it so just return
       // nil instead.
       return rv;
     }
+    pmap_put(ptr_t)(lookup, obj, NULL);
   }
 
   switch (obj->v_type) {

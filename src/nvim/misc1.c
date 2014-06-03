@@ -16,6 +16,7 @@
 #include "nvim/version_defs.h"
 #include "nvim/misc1.h"
 #include "nvim/charset.h"
+#include "nvim/cursor.h"
 #include "nvim/diff.h"
 #include "nvim/edit.h"
 #include "nvim/eval.h"
@@ -51,10 +52,10 @@
 #include "nvim/window.h"
 #include "nvim/os/os.h"
 #include "nvim/os/shell.h"
-static char_u *vim_version_dir(char_u *vimdir);
-static char_u *remove_tail(char_u *p, char_u *pend, char_u *name);
-static void init_users(void);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "misc1.c.generated.h"
+#endif
 /* All user names (for ~user completion as done by shell). */
 static garray_T ga_users;
 
@@ -101,10 +102,7 @@ open_line (
   char_u      *lead_flags;      /* position in 'comments' for comment leader */
   char_u      *leader = NULL;           /* copy of comment leader */
   char_u      *allocated = NULL;        /* allocated memory */
-#if defined(FEAT_SMARTINDENT) || defined(FEAT_VREPLACE) || defined(FEAT_LISP) \
-  || defined(FEAT_CINDENT) || defined(FEAT_COMMENTS)
   char_u      *p;
-#endif
   int saved_char = NUL;                 /* init for GCC */
   pos_T       *pos;
   int do_si = (!p_paste && curbuf->b_p_si
@@ -119,9 +117,7 @@ open_line (
   /*
    * make a copy of the current line so we can mess with it
    */
-  saved_line = vim_strsave(ml_get_curline());
-  if (saved_line == NULL)           /* out of memory! */
-    return FALSE;
+  saved_line = vim_strsave(get_cursor_line_ptr());
 
   if (State & VREPLACE_FLAG) {
     /*
@@ -137,8 +133,6 @@ open_line (
       next_line = vim_strsave(ml_get(curwin->w_cursor.lnum + 1));
     else
       next_line = vim_strsave((char_u *)"");
-    if (next_line == NULL)          /* out of memory! */
-      goto theend;
 
     /*
      * In VREPLACE mode, a NL replaces the rest of the line, and starts
@@ -289,7 +283,7 @@ open_line (
             if ((pos = findmatch(NULL, '(')) != NULL) {
               curwin->w_cursor.lnum = pos->lnum;
               newindent = get_indent();
-              ptr = ml_get_curline();
+              ptr = get_cursor_line_ptr();
             }
           }
           /*
@@ -505,7 +499,7 @@ open_line (
     }
     if (lead_len) {
       /* allocate buffer (may concatenate p_extra later) */
-      leader = alloc(lead_len + lead_repl_len + extra_space + extra_len
+      leader = xmalloc(lead_len + lead_repl_len + extra_space + extra_len
           + (second_line_indent > 0 ? second_line_indent : 0) + 1);
       allocated = leader;                   /* remember to free it later */
 
@@ -890,7 +884,7 @@ open_line (
       && curbuf->b_p_lisp
       && curbuf->b_p_ai) {
     fixthisline(get_lisp_indent);
-    p = ml_get_curline();
+    p = get_cursor_line_ptr();
     ai_col = (colnr_T)(skipwhite(p) - p);
   }
   /*
@@ -904,7 +898,7 @@ open_line (
           ? KEY_OPEN_FORW
           : KEY_OPEN_BACK, ' ', linewhite(curwin->w_cursor.lnum))) {
     do_c_expr_indent();
-    p = ml_get_curline();
+    p = get_cursor_line_ptr();
     ai_col = (colnr_T)(skipwhite(p) - p);
   }
   if (vreplace_mode != 0)
@@ -917,9 +911,7 @@ open_line (
    */
   if (State & VREPLACE_FLAG) {
     /* Put new line in p_extra */
-    p_extra = vim_strsave(ml_get_curline());
-    if (p_extra == NULL)
-      goto theend;
+    p_extra = vim_strsave(get_cursor_line_ptr());
 
     /* Put back original line */
     ml_replace(curwin->w_cursor.lnum, next_line, FALSE);
@@ -1383,8 +1375,6 @@ void ins_bytes(char_u *p)
   ins_bytes_len(p, (int)STRLEN(p));
 }
 
-#if defined(FEAT_VREPLACE) || defined(FEAT_INS_EXPAND) \
-  || defined(FEAT_COMMENTS) || defined(FEAT_MBYTE) || defined(PROTO)
 /*
  * Insert string "p" with length "len" at the cursor position.
  * Handles Replace mode and multi-byte characters.
@@ -1407,7 +1397,6 @@ void ins_bytes_len(char_u *p, int len)
     for (i = 0; i < len; ++i)
       ins_char(p[i]);
 }
-#endif
 
 /*
  * Insert or replace a single character at the cursor position.
@@ -1600,7 +1589,7 @@ int del_char(int fixpos)
   if (has_mbyte) {
     /* Make sure the cursor is at the start of a character. */
     mb_adjust_cursor();
-    if (*ml_get_cursor() == NUL)
+    if (*get_cursor_pos_ptr() == NUL)
       return FAIL;
     return del_chars(1L, fixpos);
   }
@@ -1617,7 +1606,7 @@ int del_chars(long count, int fixpos)
   char_u      *p;
   int l;
 
-  p = ml_get_cursor();
+  p = get_cursor_pos_ptr();
   for (i = 0; i < count && *p != NUL; ++i) {
     l = (*mb_ptr2len)(p);
     bytes += l;
@@ -1708,9 +1697,7 @@ del_bytes (
   if (was_alloced)
     newp = oldp;                            /* use same allocated memory */
   else {                                    /* need to allocate a new line */
-    newp = alloc((unsigned)(oldlen + 1 - count));
-    if (newp == NULL)
-      return FAIL;
+    newp = xmalloc(oldlen + 1 - count);
     memmove(newp, oldp, (size_t)col);
   }
   memmove(newp + col, oldp + col + count, (size_t)movelen);
@@ -1726,10 +1713,8 @@ del_bytes (
 /*
  * Delete from cursor to end of line.
  * Caller must have prepared for undo.
- *
- * return FAIL for failure, OK otherwise
  */
-int 
+void
 truncate_line (
     int fixpos                 /* if TRUE fix the cursor position when done */
 )
@@ -1743,9 +1728,6 @@ truncate_line (
   else
     newp = vim_strnsave(ml_get(lnum), col);
 
-  if (newp == NULL)
-    return FAIL;
-
   ml_replace(lnum, newp, FALSE);
 
   /* mark the buffer as changed and prepare for displaying */
@@ -1756,8 +1738,6 @@ truncate_line (
    */
   if (fixpos && curwin->w_cursor.col > 0)
     --curwin->w_cursor.col;
-
-  return OK;
 }
 
 /*
@@ -1808,23 +1788,6 @@ int gchar_pos(pos_T *pos)
   if (has_mbyte)
     return (*mb_ptr2char)(ptr);
   return (int)*ptr;
-}
-
-int gchar_cursor(void)
-{
-  if (has_mbyte)
-    return (*mb_ptr2char)(ml_get_cursor());
-  return (int)*ml_get_cursor();
-}
-
-/*
- * Write a character at the current cursor position.
- * It is directly written into the block.
- */
-void pchar_cursor(int c)
-{
-  *(ml_get_buf(curbuf, curwin->w_cursor.lnum, TRUE)
-    + curwin->w_cursor.col) = c;
 }
 
 /*
@@ -1892,11 +1855,6 @@ void changed_int(void)
   need_maketitle = TRUE;            /* set window title later */
 }
 
-static void changedOneline(buf_T *buf, linenr_T lnum);
-static void changed_lines_buf(buf_T *buf, linenr_T lnum, linenr_T lnume,
-                              long xtra);
-static void changed_common(linenr_T lnum, colnr_T col, linenr_T lnume,
-                           long xtra);
 
 /*
  * Changed bytes within a single line for the current buffer.
@@ -2203,6 +2161,11 @@ static void changed_common(linenr_T lnum, colnr_T col, linenr_T lnume, long xtra
       * changed.  Esp. when the buffer was changed in another window. */
       if (hasAnyFolding(wp))
         set_topline(wp, wp->w_topline);
+
+      // relative numbering may require updating more
+      if (wp->w_p_rnu) {
+        redraw_win_later(wp, SOME_VALID);
+      }
     }
   }
 
@@ -2404,7 +2367,7 @@ int get_keystroke(void)
      * bytes. */
     maxlen = (buflen - 6 - len) / 3;
     if (buf == NULL)
-      buf = alloc(buflen);
+      buf = xmalloc(buflen);
     else if (maxlen < 10) {
       /* Need some more space. This might happen when receiving a long
        * escape sequence. */
@@ -2724,9 +2687,7 @@ char_u *expand_env_save(char_u *src)
  */
 char_u *expand_env_save_opt(char_u *src, int one)
 {
-  char_u      *p;
-
-  p = alloc(MAXPATHL);
+  char_u *p = xmalloc(MAXPATHL);
   expand_env_esc(src, p, MAXPATHL, FALSE, one, NULL);
   return p;
 }
@@ -2874,13 +2835,12 @@ expand_env_esc (
       if (p_ssl && var != NULL && vim_strchr(var, '\\') != NULL) {
         char_u  *p = vim_strsave(var);
 
-        if (p != NULL) {
-          if (mustfree)
-            free(var);
-          var = p;
-          mustfree = TRUE;
-          forward_slash(var);
+        if (mustfree) {
+          free(var);
         }
+        var = p;
+        mustfree = TRUE;
+        forward_slash(var);
       }
 #endif
 
@@ -3033,7 +2993,7 @@ char_u *vim_getenv(char_u *name, int *mustfree)
       /* check that the result is a directory name */
       p = vim_strnsave(p, (int)(pend - p));
 
-      if (p != NULL && !os_isdir(p)) {
+      if (!os_isdir(p)) {
         free(p);
         p = NULL;
       } else {
@@ -3332,13 +3292,12 @@ home_replace_save (
 )
 {
   char_u      *dst;
-  unsigned len;
 
-  len = 3;                      /* space for "~/" and trailing NUL */
+  size_t len = 3;                      /* space for "~/" and trailing NUL */
   if (src != NULL)              /* just in case */
-    len += (unsigned)STRLEN(src);
-  dst = alloc(len);
-  home_replace(buf, src, dst, len, TRUE);
+    len += STRLEN(src);
+  dst = xmalloc(len);
+  home_replace(buf, src, dst, (int)len, TRUE);
   return dst;
 }
 
@@ -3499,7 +3458,7 @@ get_cmd_output (
   len = ftell(fd);                  /* get size of temp file */
   fseek(fd, 0L, SEEK_SET);
 
-  buffer = alloc(len + 1);
+  buffer = xmalloc(len + 1);
   i = (int)fread((char *)buffer, (size_t)1, (size_t)len, fd);
   fclose(fd);
   os_remove((char *)tempname);

@@ -308,7 +308,6 @@ static char *(p_bkc_values[]) =
 EXTERN char_u   *p_bdir;        /* 'backupdir' */
 EXTERN char_u   *p_bex;         /* 'backupext' */
 EXTERN char_u   *p_bsk;         /* 'backupskip' */
-EXTERN char_u   *p_cm;          /* 'cryptmethod' */
 EXTERN char_u   *p_breakat;     /* 'breakat' */
 EXTERN char_u   *p_cmp;         /* 'casemap' */
 EXTERN unsigned cmp_flags;
@@ -617,12 +616,7 @@ extern char_u   *p_vfile;       /* 'verbosefile' */
 EXTERN int p_warn;              /* 'warn' */
 EXTERN char_u   *p_wop;         /* 'wildoptions' */
 EXTERN long p_window;           /* 'window' */
-#if defined(FEAT_GUI_MSWIN) || defined(FEAT_GUI_MOTIF) || defined(LINT) \
-  || defined (FEAT_GUI_GTK) || defined(FEAT_GUI_PHOTON)
-#define FEAT_WAK
 EXTERN char_u   *p_wak;         /* 'winaltkeys' */
-#endif
-EXTERN char_u *p_wak;
 EXTERN char_u   *p_wig;         /* 'wildignore' */
 EXTERN int p_wiv;               /* 'weirdinvert' */
 EXTERN char_u   *p_ww;          /* 'whichwrap' */
@@ -688,7 +682,6 @@ enum {
   , BV_INEX
   , BV_INF
   , BV_ISK
-  , BV_KEY
   , BV_KMAP
   , BV_KP
   , BV_LISP

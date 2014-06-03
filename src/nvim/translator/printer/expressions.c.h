@@ -7,12 +7,10 @@
 #include "nvim/memory.h"
 
 #include "nvim/translator/parser/expressions.h"
-#include "nvim/translator/printer/ch_macros.h"
 
-// {{{ Function declarations
-static FDEC(node_dump, const ExpressionNode *const node);
-static FDEC(node_repr, const ExpressionNode *const node);
-// }}}
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/printer/expressions.c.h.generated.h"
+#endif
 
 #ifndef DEFINE_LENGTH
 # define DEFINE_LENGTH

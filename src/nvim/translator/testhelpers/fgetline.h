@@ -1,7 +1,7 @@
 #ifndef NEOVIM_TRANSLATOR_TESTHELPERS_FGETLINE_H
 #define NEOVIM_TRANSLATOR_TESTHELPERS_FGETLINE_H
 
-char *fgetline_file(int _, FILE *file, int indent);
-char *fgetline_string(int c, char **arg, int indent);
-
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/testhelpers/fgetline.h.generated.h"
+#endif
 #endif  // NEOVIM_TRANSLATOR_TESTHELPERS_FGETLINE_H

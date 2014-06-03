@@ -26,9 +26,11 @@
 
 #include <string.h>
 
+#include "nvim/api/private/handle.h"
 #include "nvim/vim.h"
 #include "nvim/buffer.h"
 #include "nvim/charset.h"
+#include "nvim/cursor.h"
 #include "nvim/diff.h"
 #include "nvim/digraph.h"
 #include "nvim/eval.h"
@@ -71,22 +73,17 @@
 // Todo(stefan991): remove this macro
 #define INVALID_DEVICE_ID UINT64_MAX
 
-static char_u   *buflist_match(regprog_T *prog, buf_T *buf);
-# define HAVE_BUFLIST_MATCH
-static char_u   *fname_match(regprog_T *prog, char_u *name);
-static void buflist_setfpos(buf_T *buf, win_T *win, linenr_T lnum,
-                            colnr_T col, int copy_options);
-static wininfo_T *find_wininfo(buf_T *buf, int skip_diff_buffer);
-static buf_T *buflist_findname_file_info(char_u *ffname, FileInfo *file_info);
-static int otherfile_buf(buf_T *buf, char_u *ffname, FileInfo *file_info);
-static int buf_same_ino(buf_T *buf, FileInfo *file_info);
-static int ti_change(char_u *str, char_u **last);
-static int append_arg_number(win_T *wp, char_u *buf, int buflen, int add_file);
-static void free_buffer(buf_T *);
-static void free_buffer_stuff(buf_T *buf, int free_options);
-static void clear_wininfo(buf_T *buf);
+#define HAVE_BUFLIST_MATCH
 
-static void insert_sign(buf_T *buf, signlist_T *prev, signlist_T *next, int id, linenr_T lnum, int typenr);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "buffer.c.generated.h"
+#endif
+
+#ifdef UNIX
+# define dev_T dev_t
+#else
+# define dev_T unsigned
+#endif
 
 static char *msg_loclist = N_("[Location List]");
 static char *msg_qflist = N_("[Quickfix List]");
@@ -538,6 +535,7 @@ void buf_freeall(buf_T *buf, int flags)
  */
 static void free_buffer(buf_T *buf)
 {
+  handle_unregister_buffer(buf);
   free_buffer_stuff(buf, TRUE);
   unref_var_dict(buf->b_vars);
   aubuflocal_remove(buf);
@@ -598,14 +596,12 @@ static void clear_wininfo(buf_T *buf)
  */
 void goto_buffer(exarg_T *eap, int start, int dir, int count)
 {
-# if defined(FEAT_WINDOWS) && defined(HAS_SWAP_EXISTS_ACTION)
-  buf_T       *old_curbuf = curbuf;
-
-  swap_exists_action = SEA_DIALOG;
-# endif
   (void)do_buffer(*eap->cmd == 's' ? DOBUF_SPLIT : DOBUF_GOTO,
       start, dir, count, eap->forceit);
-# if defined(FEAT_WINDOWS) && defined(HAS_SWAP_EXISTS_ACTION)
+#ifdef HAS_SWAP_EXISTS_ACTION
+  buf_T *old_curbuf = curbuf;
+  swap_exists_action = SEA_DIALOG;
+
   if (swap_exists_action == SEA_QUIT && *eap->cmd == 's') {
     cleanup_T cs;
 
@@ -621,9 +617,10 @@ void goto_buffer(exarg_T *eap, int start, int dir, int count)
     /* Restore the error/interrupt/exception state if not discarded by a
      * new aborting error, interrupt, or uncaught exception. */
     leave_cleanup(&cs);
-  } else
+  } else {
     handle_swap_exists(old_curbuf);
-# endif
+  }
+#endif
 }
 
 #if defined(HAS_SWAP_EXISTS_ACTION) || defined(PROTO)
@@ -789,7 +786,6 @@ do_bufdel (
 }
 
 
-static int empty_curbuf(int close_others, int forceit, int action);
 
 /*
  * Make the current buffer empty.
@@ -1109,12 +1105,9 @@ do_buffer (
   /* Go to the other buffer. */
   set_curbuf(buf, action);
 
-#if defined(FEAT_LISTCMDS) \
-  && (defined(FEAT_SCROLLBIND) || defined(FEAT_CURSORBIND))
   if (action == DOBUF_SPLIT) {
     RESET_BINDING(curwin);      /* reset 'scrollbind' and 'cursorbind' */
   }
-#endif
 
   if (aborting())           /* autocmds may abort script processing */
     return FAIL;
@@ -1362,6 +1355,7 @@ buflist_new (
   }
   if (buf != curbuf || curbuf == NULL) {
     buf = xcalloc(1, sizeof(buf_T));
+    handle_register_buffer(buf);
     /* init b: variables */
     buf->b_vars = dict_alloc();
     init_var_dict(buf->b_vars, &buf->b_bufvar, VAR_SCOPE);
@@ -1489,9 +1483,7 @@ void free_buf_options(buf_T *buf, int free_p_ff)
   clear_string_option(&buf->b_p_inex);
   clear_string_option(&buf->b_p_inde);
   clear_string_option(&buf->b_p_indk);
-  clear_string_option(&buf->b_p_cm);
   clear_string_option(&buf->b_p_fex);
-  clear_string_option(&buf->b_p_key);
   clear_string_option(&buf->b_p_kp);
   clear_string_option(&buf->b_p_mps);
   clear_string_option(&buf->b_p_fo);
@@ -2016,7 +2008,6 @@ static void buflist_setfpos(buf_T *buf, win_T *win, linenr_T lnum, colnr_T col, 
   return;
 }
 
-static int wininfo_other_tab_diff(wininfo_T *wip);
 
 /*
  * Return TRUE when "wip" has 'diff' set and the diff is only for another tab
@@ -2237,9 +2228,8 @@ setfname (
       close_buffer(NULL, obuf, DOBUF_WIPE, FALSE);
     }
     sfname = vim_strsave(sfname);
-    if (ffname == NULL || sfname == NULL) {
+    if (ffname == NULL) {
       free(sfname);
-      free(ffname);
       return FAIL;
     }
 #ifdef USE_FNAME_CASE
@@ -3510,8 +3500,6 @@ build_stl_str_hl (
   return width;
 }
 
-#if defined(FEAT_STL_OPT) || defined(FEAT_CMDL_INFO) \
-  || defined(FEAT_GUI_TABLINE) || defined(PROTO)
 /*
  * Get relative cursor position in window into "buf[buflen]", in the form 99%,
  * using "Top", "Bot" or "All" when appropriate.
@@ -3534,7 +3522,6 @@ void get_rel_pos(win_T *wp, char_u *buf, int buflen)
         ? (int)(above / ((above + below) / 100L))
         : (int)(above * 100L / (above + below)));
 }
-#endif
 
 /*
  * Append (file 2 of 8) to "buf[buflen]", if editing more than one file.
@@ -4022,7 +4009,6 @@ void ex_buffer_all(exarg_T *eap)
 }
 
 
-static int chk_modeline(linenr_T, int);
 
 /*
  * do_modelines() - process mode lines for the current file
@@ -4116,8 +4102,6 @@ chk_modeline (
     while (s[-1] != ':');
 
     s = linecopy = vim_strsave(s);      /* copy the line, it will change */
-    if (linecopy == NULL)
-      return FAIL;
 
     save_sourcing_lnum = sourcing_lnum;
     save_sourcing_name = sourcing_name;

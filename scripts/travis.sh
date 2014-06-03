@@ -1,8 +1,45 @@
 #!/bin/sh -e
 
-check_and_report() {
+tmpdir="$(pwd)/tmp"
+rm -rf "$tmpdir"
+mkdir -p "$tmpdir"
+suppressions="$(pwd)/.valgrind.supp"
+
+valgrind_check() {
 	(
-	cd $tmpdir
+	cd $1
+	set -- valgrind-[*] valgrind-*
+	case $1$2 in
+		'valgrind-[*]valgrind-*')
+			;;
+		*)
+			shift
+			local err=''
+			for valgrind_log in "$@"; do
+				# Remove useless warning
+				sed -i "$valgrind_log" \
+					-e '/Warning: noted but unhandled ioctl/d' \
+					-e '/could cause spurious value errors to appear/d' \
+					-e '/See README_MISSING_SYSCALL_OR_IOCTL for guidance/d'
+				if [ "$(stat -c %s $valgrind_log)" != "0" ]; then
+					# if after removing the warning, the log still has errors, show its
+					# contents and set the flag so we exit with non-zero status
+					cat "$valgrind_log"
+					err=1
+				fi
+			done
+			if [ -n "$err" ]; then
+				echo "Runtime errors detected"
+				exit 1
+			fi
+			;;
+	esac
+	)
+}
+
+asan_check() {
+	(
+	cd $1
 	set -- [*]san.[*] *san.*
 	case $1$2 in
 		'[*]san.[*]*san.*')
@@ -22,7 +59,7 @@ set_environment() {
 	eval $($prefix/bin/luarocks path)
 	export PATH="$prefix/bin:$PATH"
 	export PKG_CONFIG_PATH="$prefix/lib/pkgconfig"
-	export DEPS_CMAKE_FLAGS="-DUSE_BUNDLED_LIBUV=OFF -DUSE_BUNDLED_LUAJIT=OFF -DUSE_BUNDLED_MSGPACK=OFF -DUSE_BUNDLED_LUAROCKS=OFF"
+	export DEPS_CMAKE_FLAGS="-DUSE_BUNDLED=OFF"
 }
 
 # install prebuilt dependencies
@@ -40,7 +77,21 @@ fi
 # for more information.
 MAKE_CMD="make -j2"
 
-if [ "$TRAVIS_BUILD_TYPE" = "clang/asan" ]; then
+if [ "$TRAVIS_BUILD_TYPE" = "coverity" ]; then
+    # temporarily disable error checking, the coverity script exits with
+    # status code 1 whenever it (1) fails OR (2) is not on the correct
+    # branch.
+    set +e
+    curl -s https://scan.coverity.com/scripts/travisci_build_coverity_scan.sh |
+        COVERITY_SCAN_PROJECT_NAME="neovim/neovim" \
+        COVERITY_SCAN_NOTIFICATION_EMAIL="coverity@aktau.be" \
+        COVERITY_SCAN_BRANCH_PATTERN="coverity-scan" \
+        COVERITY_SCAN_BUILD_COMMAND_PREPEND="$MAKE_CMD deps" \
+        COVERITY_SCAN_BUILD_COMMAND="$MAKE_CMD nvim" \
+        bash
+    set -e
+    exit 0
+elif [ "$TRAVIS_BUILD_TYPE" = "clang/asan" ]; then
 	if [ ! -d /usr/local/clang-3.4 ]; then
 		echo "Downloading clang 3.4..."
 		sudo sh <<- "EOF"
@@ -68,9 +119,6 @@ if [ "$TRAVIS_BUILD_TYPE" = "clang/asan" ]; then
 
 	install_dir="$(pwd)/dist"
 	# temporary directory for writing sanitizer logs
-	tmpdir="$(pwd)/tmp"
-	rm -rf "$tmpdir"
-	mkdir -p "$tmpdir"
 
 	# need the symbolizer path for stack traces with source information
 	if [ -n "$USE_CLANG_34" ]; then
@@ -87,14 +135,14 @@ if [ "$TRAVIS_BUILD_TYPE" = "clang/asan" ]; then
 	export SKIP_UNITTEST=1
 	export UBSAN_OPTIONS="log_path=$tmpdir/ubsan" # not sure if this works
 
-	$MAKE_CMD cmake CMAKE_EXTRA_FLAGS="-DCMAKE_INSTALL_PREFIX=$install_dir -DUSE_GCOV=ON"
+	$MAKE_CMD cmake CMAKE_EXTRA_FLAGS="-DTRAVIS_CI_BUILD=ON -DCMAKE_INSTALL_PREFIX=$install_dir -DUSE_GCOV=ON"
 	$MAKE_CMD
 	if ! $MAKE_CMD test; then
 		reset
-		check_and_report
+		asan_check "$tmpdir"
 		exit 1
 	fi
-	check_and_report
+	asan_check "$tmpdir"
 	coveralls --encoding iso-8859-1 || echo 'coveralls upload failed.'
 	$MAKE_CMD install
 elif [ "$TRAVIS_BUILD_TYPE" = "gcc/unittest" ]; then
@@ -102,7 +150,7 @@ elif [ "$TRAVIS_BUILD_TYPE" = "gcc/unittest" ]; then
 	export CC=gcc
 	set_environment /opt/neovim-deps
 	export SKIP_EXEC=1
-	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DBUSTED_OUTPUT_TYPE=TAP -DUSE_GCOV=ON" unittest
+	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DTRAVIS_CI_BUILD=ON -DBUSTED_OUTPUT_TYPE=TAP -DUSE_GCOV=ON" unittest
 	coveralls --encoding iso-8859-1 || echo 'coveralls upload failed.'
 elif [ "$TRAVIS_BUILD_TYPE" = "gcc/ia32" ]; then
 	set_environment /opt/neovim-deps/32
@@ -125,8 +173,23 @@ elif [ "$TRAVIS_BUILD_TYPE" = "gcc/ia32" ]; then
 	# correctly.
 	sudo apt-get install libncurses5-dev:i386
 
-	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DBUSTED_OUTPUT_TYPE=TAP -DCMAKE_TOOLCHAIN_FILE=cmake/i386-linux-gnu.toolchain.cmake" unittest
+	$MAKE_CMD CMAKE_EXTRA_FLAGS="-DTRAVIS_CI_BUILD=ON -DBUSTED_OUTPUT_TYPE=TAP -DCMAKE_TOOLCHAIN_FILE=cmake/i386-linux-gnu.toolchain.cmake" unittest
 	$MAKE_CMD test
 elif [ "$TRAVIS_BUILD_TYPE" = "clint" ]; then
 	./scripts/clint.sh
+elif [ "$TRAVIS_BUILD_TYPE" = "api/python" ]; then
+	set_environment /opt/neovim-deps
+	$MAKE_CMD
+	sudo apt-get install expect valgrind
+	git clone --depth=1 -b master git://github.com/neovim/python-client
+	cd python-client
+  sudo pip install .
+  sudo pip install nose
+	test_cmd="nosetests --verbosity=2"
+	nvim_cmd="valgrind -q --track-origins=yes --leak-check=yes --suppressions=$suppressions --log-file=$tmpdir/valgrind-%p.log ../build/bin/nvim -u NONE"
+	if ! ../scripts/run-api-tests.exp "$test_cmd" "$nvim_cmd"; then
+		valgrind_check "$tmpdir"
+		exit 1
+	fi
+	valgrind_check "$tmpdir"
 fi

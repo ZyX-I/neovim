@@ -5,8 +5,7 @@
 
 #include "nvim/translator/printer/printer.h"
 
-void cmd_repr(const PrinterOptions *const po, const CommandNode *node,
-              char **pp);
-size_t cmd_repr_len(const PrinterOptions *const po, const CommandNode *node);
-
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/printer/ex_commands.h.generated.h"
+#endif
 #endif  // NEOVIM_TRANSLATOR_PRINTER_EX_COMMANDS_H

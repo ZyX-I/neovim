@@ -4,7 +4,6 @@
 #include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/file_search.h"
-#include "nvim/blowfish.h"
 #include "nvim/buffer.h"
 #include "nvim/charset.h"
 #include "nvim/diff.h"
@@ -44,16 +43,9 @@
 /*
  * Copy "string" into newly allocated memory.
  */
-char_u *vim_strsave(char_u *string)
+char_u *vim_strsave(char_u *string) FUNC_ATTR_NONNULL_RET
 {
-  char_u      *p;
-  unsigned len;
-
-  len = (unsigned)STRLEN(string) + 1;
-  p = alloc(len);
-  if (p != NULL)
-    memmove(p, string, (size_t)len);
-  return p;
+  return (char_u *)xstrdup((char *)string);
 }
 
 /*
@@ -62,14 +54,9 @@ char_u *vim_strsave(char_u *string)
  * The allocated memory always has size "len + 1", also when "string" is
  * shorter.
  */
-char_u *vim_strnsave(char_u *string, int len)
+char_u *vim_strnsave(char_u *string, int len) FUNC_ATTR_NONNULL_RET
 {
-  char_u      *p;
-
-  p = alloc((unsigned)(len + 1));
-  STRNCPY(p, string, len);
-  p[len] = NUL;
-  return p;
+  return (char_u *)strncpy(xmallocz(len), (char *)string, len);
 }
 
 /*
@@ -109,7 +96,7 @@ char_u *vim_strsave_escaped_ext(char_u *string, char_u *esc_chars, int cc, int b
       ++length;                         /* count a backslash */
     ++length;                           /* count an ordinary char */
   }
-  escaped_string = alloc(length);
+  escaped_string = xmalloc(length);
   p2 = escaped_string;
   for (p = string; *p; p++) {
     if (has_mbyte && (l = (*mb_ptr2len)(p)) > 1) {
@@ -170,7 +157,7 @@ char_u *vim_strsave_shellescape(char_u *string, bool do_special, bool do_newline
   }
 
   /* Allocate memory for the result and fill it. */
-  escaped_string = alloc(length);
+  escaped_string = xmalloc(length);
   d = escaped_string;
 
   /* add opening quote */
@@ -254,49 +241,45 @@ void vim_strup(char_u *p)
 /*
  * Make string "s" all upper-case and return it in allocated memory.
  * Handles multi-byte characters as well as possible.
- * Returns NULL when out of memory.
  */
 char_u *strup_save(char_u *orig)
 {
-  char_u      *p;
-  char_u      *res;
+  char_u *res = vim_strsave(orig);
 
-  res = p = vim_strsave(orig);
+  char_u *p = res;
+  while (*p != NUL) {
+    int l;
 
-  if (res != NULL)
-    while (*p != NUL) {
-      int l;
+    if (enc_utf8) {
+      int c, uc;
+      int newl;
+      char_u  *s;
 
-      if (enc_utf8) {
-        int c, uc;
-        int newl;
-        char_u  *s;
+      c = utf_ptr2char(p);
+      uc = utf_toupper(c);
 
-        c = utf_ptr2char(p);
-        uc = utf_toupper(c);
-
-        /* Reallocate string when byte count changes.  This is rare,
-         * thus it's OK to do another malloc()/free(). */
-        l = utf_ptr2len(p);
-        newl = utf_char2len(uc);
-        if (newl != l) {
-          s = alloc((unsigned)STRLEN(res) + 1 + newl - l);
-          memmove(s, res, p - res);
-          STRCPY(s + (p - res) + newl, p + l);
-          p = s + (p - res);
-          free(res);
-          res = s;
-        }
-
-        utf_char2bytes(uc, p);
-        p += newl;
-      } else if (has_mbyte && (l = (*mb_ptr2len)(p)) > 1)
-        p += l;                 /* skip multi-byte character */
-      else {
-        *p = TOUPPER_LOC(*p);         /* note that toupper() can be a macro */
-        p++;
+      /* Reallocate string when byte count changes.  This is rare,
+       * thus it's OK to do another malloc()/free(). */
+      l = utf_ptr2len(p);
+      newl = utf_char2len(uc);
+      if (newl != l) {
+        s = xmalloc(STRLEN(res) + 1 + newl - l);
+        memmove(s, res, p - res);
+        STRCPY(s + (p - res) + newl, p + l);
+        p = s + (p - res);
+        free(res);
+        res = s;
       }
+
+      utf_char2bytes(uc, p);
+      p += newl;
+    } else if (has_mbyte && (l = (*mb_ptr2len)(p)) > 1)
+      p += l;                 /* skip multi-byte character */
+    else {
+      *p = TOUPPER_LOC(*p);         /* note that toupper() can be a macro */
+      p++;
     }
+  }
 
   return res;
 }
@@ -504,9 +487,10 @@ int vim_isspace(int x)
 /*
  * Sort an array of strings.
  */
-static int
-sort_compare(const void *s1, const void *s2);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "strings.c.generated.h"
+#endif
 static int sort_compare(const void *s1, const void *s2)
 {
   return STRCMP(*(char **)s1, *(char **)s2);
@@ -517,8 +501,6 @@ void sort_strings(char_u **files, int count)
   qsort((void *)files, (size_t)count, sizeof(char_u *), sort_compare);
 }
 
-#if (defined(FEAT_MBYTE) && defined(FEAT_QUICKFIX)) \
-  || defined(FEAT_SPELL) || defined(PROTO)
 /*
  * Return TRUE if string "s" contains a non-ASCII character (128 or higher).
  * When "s" is NULL FALSE is returned.
@@ -533,13 +515,12 @@ int has_non_ascii(char_u *s)
         return TRUE;
   return FALSE;
 }
-#endif
 
 /*
  * Concatenate two strings and return the result in allocated memory.
  * Returns NULL when out of memory.
  */
-char_u *concat_str(char_u *str1, char_u *str2)
+char_u *concat_str(char_u *str1, char_u *str2) FUNC_ATTR_NONNULL_RET
 {
   size_t l = STRLEN(str1);
   char_u *dest = xmalloc(l + STRLEN(str2) + 1);

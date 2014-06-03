@@ -12,7 +12,6 @@
 
 #include "nvim/vim.h"
 #include "nvim/main.h"
-#include "nvim/blowfish.h"
 #include "nvim/buffer.h"
 #include "nvim/charset.h"
 #include "nvim/diff.h"
@@ -31,7 +30,6 @@
 #include "nvim/message.h"
 #include "nvim/misc1.h"
 #include "nvim/misc2.h"
-#include "nvim/crypt.h"
 #include "nvim/garray.h"
 #include "nvim/log.h"
 #include "nvim/memory.h"
@@ -82,7 +80,6 @@ typedef struct {
   int want_full_screen;
   bool stdout_isatty;                   /* is stdout a terminal? */
   char_u      *term;                    /* specified terminal name */
-  int ask_for_key;                      /* -x argument */
   int no_swap_file;                     /* "-n" argument used */
   int use_debug_break_level;
   int window_count;                     /* number of windows to use */
@@ -101,42 +98,19 @@ typedef struct {
 #define EDIT_TAG    3       /* tag name argument given, use tagname */
 #define EDIT_QF     4       /* start in quickfix mode */
 
-#if defined(UNIX) && !defined(NO_VIM_MAIN)
-static int file_owned(char *fname);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "main.c.generated.h"
 #endif
-static void mainerr(int, char_u *);
 #ifndef NO_VIM_MAIN
-static void main_msg(char *s);
-static void usage(void);
-static int get_number_arg(char_u *p, int *idx, int def);
 # if defined(HAVE_LOCALE_H) || defined(X_LOCALE)
 static void init_locale(void);
 # endif
-static void parse_command_name(mparm_T *parmp);
-static bool parse_char_i(char_u **input, char val);
-static bool parse_string(char_u **input, char* val, int len);
-static void command_line_scan(mparm_T *parmp);
-static void init_params(mparm_T *parmp, int argc, char **argv);
-static void init_startuptime(mparm_T *parmp);
-static void check_and_set_isatty(mparm_T *parmp);
-static char_u* get_fname(mparm_T *parmp);
-static void set_window_layout(mparm_T *parmp);
-static void load_plugins(void);
-static void handle_quickfix(mparm_T *parmp);
-static void handle_tag(char_u *tagname);
-static void check_tty(mparm_T *parmp);
-static void read_stdin(void);
-static void create_windows(mparm_T *parmp);
-static void edit_buffers(mparm_T *parmp);
-static void exe_pre_commands(mparm_T *parmp);
-static void exe_commands(mparm_T *parmp);
-static void source_startup_scripts(mparm_T *parmp);
-static void main_start_gui(void);
 # if defined(HAS_SWAP_EXISTS_ACTION)
-static void check_swap_exists_action(void);
 # endif
 #endif /* NO_VIM_MAIN */
 
+extern const uint8_t msgpack_metadata[];
+extern const unsigned int msgpack_metadata_size;
 
 /*
  * Different types of error messages.
@@ -158,7 +132,7 @@ static char *(main_errors[]) =
 };
 
 #ifndef NO_VIM_MAIN     /* skip this for unittests */
-  int main(int argc, char **argv)
+int main(int argc, char **argv)
 {
   char_u      *fname = NULL;            /* file name from command line */
   mparm_T params;                       /* various parameters passed between
@@ -451,12 +425,6 @@ static char *(main_errors[]) =
   else {
     screenclear();                        /* clear screen */
     TIME_MSG("clearing screen");
-  }
-
-  if (params.ask_for_key) {
-    (void)blowfish_self_test();
-    (void)get_crypt_key(TRUE, TRUE);
-    TIME_MSG("getting crypt key");
   }
 
   no_wait_return = TRUE;
@@ -888,7 +856,7 @@ static void init_locale(void)
 {
   setlocale(LC_ALL, "");
 
-# if defined(FEAT_FLOAT) && defined(LC_NUMERIC)
+# ifdef LC_NUMERIC
   /* Make sure strtod() uses a decimal point, not a comma. */
   setlocale(LC_NUMERIC, "C");
 # endif
@@ -977,10 +945,7 @@ static bool parse_char_i(char_u **input, char val)
   return false;
 }
 
-static bool parse_string(input, val, len)
-  char_u      **input;
-  char        *val;
-  int len;
+static bool parse_string(char_u **input, char *val, int len)
 {
   if (STRNICMP(*input, val, len) == 0) {
     *input += len;
@@ -1054,6 +1019,11 @@ static void command_line_scan(mparm_T *parmp)
             list_version();
             msg_putchar('\n');
             msg_didout = FALSE;
+            mch_exit(0);
+	  } else if (STRICMP(argv[0] + argv_idx, "api-msgpack-metadata") == 0) {
+            for (unsigned int i = 0; i<msgpack_metadata_size; i++) {
+              putchar(msgpack_metadata[i]);
+            }
             mch_exit(0);
           } else if (STRNICMP(argv[0] + argv_idx, "literal", 7) == 0) {
 #if !defined(UNIX)
@@ -1249,10 +1219,6 @@ static void command_line_scan(mparm_T *parmp)
           want_argument = TRUE;
           break;
 
-        case 'x':                 /* "-x"  encrypted reading/writing of files */
-          parmp->ask_for_key = TRUE;
-          break;
-
         case 'X':                 /* "-X"  don't connect to X server */
           break;
 
@@ -1320,7 +1286,7 @@ static void command_line_scan(mparm_T *parmp)
                 --argv;
               } else
                 a = argv[0];
-              p = alloc((unsigned)(STRLEN(a) + 4));
+              p = xmalloc(STRLEN(a) + 4);
               sprintf((char *)p, "so %s", a);
               parmp->cmds_tofree[parmp->n_commands] = TRUE;
               parmp->commands[parmp->n_commands++] = p;
@@ -1364,8 +1330,7 @@ scripterror:
               mch_errmsg("\"\n");
               mch_exit(2);
             }
-            if (save_typebuf() == FAIL)
-              mch_exit(2);                /* out of memory */
+            save_typebuf();
             break;
 
           case 't':               /* "-t {tag}" */
@@ -1427,8 +1392,8 @@ scripterror:
 
       /* Add the file to the global argument list. */
       ga_grow(&global_alist.al_ga, 1);
-      if ((p = vim_strsave((char_u *)argv[0])) == NULL)
-        mch_exit(2);
+      p = vim_strsave((char_u *)argv[0]);
+
       if (parmp->diff_mode && os_isdir(p) && GARGCOUNT > 0
           && !os_isdir(alist_name(&GARGLIST[0]))) {
         char_u      *r;
@@ -1468,7 +1433,7 @@ scripterror:
   /* If there is a "+123" or "-c" command, set v:swapcommand to the first
    * one. */
   if (parmp->n_commands > 0) {
-    p = alloc((unsigned)STRLEN(parmp->commands[0]) + 3);
+    p = xmalloc(STRLEN(parmp->commands[0]) + 3);
     sprintf((char *)p, ":%s\r", parmp->commands[0]);
     set_vim_var_string(VV_SWAPCOMMAND, p, -1);
     free(p);
@@ -1514,7 +1479,7 @@ static void init_startuptime(mparm_T *paramp)
  */
 void allocate_generic_buffers(void)
 {
-  NameBuff = alloc(MAXPATHL);
+  NameBuff = xmalloc(MAXPATHL);
   TIME_MSG("Allocated generic buffers");
 }
 
@@ -2249,11 +2214,11 @@ static void usage(void)
   main_msg(_("-s <scriptin>\tRead Normal mode commands from file <scriptin>"));
   main_msg(_("-w <scriptout>\tAppend all typed commands to file <scriptout>"));
   main_msg(_("-W <scriptout>\tWrite all typed commands to file <scriptout>"));
-  main_msg(_("-x\t\t\tEdit encrypted files"));
 #ifdef STARTUPTIME
   main_msg(_("--startuptime <file>\tWrite startup timing messages to <file>"));
 #endif
   main_msg(_("-i <viminfo>\t\tUse <viminfo> instead of .viminfo"));
+  main_msg(_("--api-msgpack-metadata\tDump API metadata information and exit"));
   main_msg(_("-h  or  --help\tPrint Help (this message) and exit"));
   main_msg(_("--version\t\tPrint version information and exit"));
 
@@ -2279,7 +2244,6 @@ static void check_swap_exists_action(void)
 #endif
 
 #if defined(STARTUPTIME) || defined(PROTO)
-static void time_diff(struct timeval *then, struct timeval *now);
 
 static struct timeval prev_timeval;
 

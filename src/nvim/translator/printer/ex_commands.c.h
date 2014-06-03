@@ -13,25 +13,9 @@
 #include "nvim/translator/parser/expressions.h"
 #include "nvim/translator/parser/ex_commands.h"
 
-// {{{ Function declarations
-static FDEC(unumber_repr, const uintmax_t unumber);
-static FDEC(number_repr, const intmax_t number);
-static FDEC(glob_repr, const Glob *const glob);
-static FDEC(regex_repr, const Regex *const regex);
-static FDEC(address_followup_repr, const AddressFollowup *const followup);
-static FDEC(address_repr, const Address *const address);
-static FDEC(range_repr, const Range *const range);
-static FDEC(node_name_repr, const CommandType node_type,
-                            const char_u *const node_name,
-                            const bool node_bang);
-static FDEC(optflags_repr, const uint_least32_t optflags,
-                           const char_u *const enc);
-static FDEC(count_repr, const CommandNode *const node);
-static FDEC(exflags_repr, const uint_least8_t exflags);
-static FDEC(node_repr, const CommandNode *const node,
-                       const size_t indent,
-                       const bool barnext);
-// }}}
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/printer/ex_commands.c.h.generated.h"
+#endif
 
 #ifndef DEFINE_LENGTH
 # define DEFINE_LENGTH

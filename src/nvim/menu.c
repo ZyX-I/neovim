@@ -16,6 +16,7 @@
 #include "nvim/vim.h"
 #include "nvim/menu.h"
 #include "nvim/charset.h"
+#include "nvim/cursor.h"
 #include "nvim/eval.h"
 #include "nvim/ex_docmd.h"
 #include "nvim/getchar.h"
@@ -28,29 +29,12 @@
 #include "nvim/strings.h"
 #include "nvim/term.h"
 
-static int add_menu_path(char_u *, vimmenu_T *, int *, char_u *);
-static int menu_nable_recurse(vimmenu_T *menu, char_u *name, int modes,
-                              int enable);
-static int remove_menu(vimmenu_T **, char_u *, int, int silent);
-static void free_menu(vimmenu_T **menup);
-static void free_menu_string(vimmenu_T *, int);
-static int show_menus(char_u *, int);
-static void show_menus_recursive(vimmenu_T *, int, int);
-static int menu_name_equal(char_u *name, vimmenu_T *menu);
-static int menu_namecmp(char_u *name, char_u *mname);
-static int get_menu_cmd_modes(char_u *, int, int *, int *);
-static char_u *popup_mode_name(char_u *name, int idx);
-static char_u *menu_text(char_u *text, int *mnemonic, char_u **actext);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "menu.c.generated.h"
+#endif
 
 
-static int menu_is_hidden(char_u *name);
-static int menu_is_tearoff(char_u *name);
 
-static char_u *menu_skip_part(char_u *p);
-static char_u *menutrans_lookup(char_u *name, int len);
-static void menu_unescape_name(char_u  *p);
-
-static char_u *menu_translate_tab_and_shift(char_u *arg_start);
 
 /* The character for each menu mode */
 static char_u menu_mode_chars[] = {'n', 'v', 's', 'o', 'i', 'c', 't'};
@@ -306,8 +290,6 @@ add_menu_path (
 
   /* Make a copy so we can stuff around with it, since it could be const */
   path_name = vim_strsave(menu_path);
-  if (path_name == NULL)
-    return FAIL;
   menup = &root_menu;
   parent = NULL;
   name = path_name;
@@ -462,7 +444,7 @@ add_menu_path (
         }
 
         if (c != 0) {
-          menu->strings[i] = alloc((unsigned)(STRLEN(call_data) + 5 ));
+          menu->strings[i] = xmalloc(STRLEN(call_data) + 5 );
           menu->strings[i][0] = c;
           if (d == 0)
             STRCPY(menu->strings[i] + 1, call_data);
@@ -726,8 +708,6 @@ static int show_menus(char_u *path_name, int modes)
 
   menu = root_menu;
   name = path_name = vim_strsave(path_name);
-  if (path_name == NULL)
-    return FAIL;
 
   /* First, find the (sub)menu with the given name */
   while (*name) {
@@ -1166,7 +1146,7 @@ get_menu_cmd_modes (
 
 /*
  * Modify a menu name starting with "PopUp" to include the mode character.
- * Returns the name in allocated memory (NULL for failure).
+ * Returns the name in allocated memory.
  */
 static char_u *popup_mode_name(char_u *name, int idx)
 {
@@ -1174,10 +1154,9 @@ static char_u *popup_mode_name(char_u *name, int idx)
   int len = (int)STRLEN(name);
 
   p = vim_strnsave(name, len + 1);
-  if (p != NULL) {
-    memmove(p + 6, p + 5, (size_t)(len - 4));
-    p[5] = menu_mode_chars[idx];
-  }
+  memmove(p + 6, p + 5, (size_t)(len - 4));
+  p[5] = menu_mode_chars[idx];
+
   return p;
 }
 
@@ -1276,8 +1255,6 @@ static int menu_is_hidden(char_u *name)
   return (name[0] == ']') || (menu_is_popup(name) && name[5] != NUL);
 }
 
-#if defined(FEAT_CMDL_COMPL) \
-  || (defined(FEAT_GUI_W32) && defined(FEAT_TEAROFF))
 /*
  * Return TRUE if the menu is the tearoff menu.
  */
@@ -1285,7 +1262,6 @@ static int menu_is_tearoff(char_u *name)
 {
   return FALSE;
 }
-#endif
 
 
 
@@ -1303,8 +1279,6 @@ void ex_emenu(exarg_T *eap)
   char_u      *mode;
 
   saved_name = vim_strsave(eap->arg);
-  if (saved_name == NULL)
-    return;
 
   menu = root_menu;
   name = saved_name;
@@ -1402,7 +1376,7 @@ void ex_emenu(exarg_T *eap)
 }
 
 #if defined(FEAT_GUI_MSWIN) \
-  || (defined(FEAT_GUI_GTK) && defined(FEAT_MENU)) \
+  || defined(FEAT_GUI_GTK) \
   || defined(FEAT_BEVAL_TIP) || defined(PROTO)
 /*
  * Given a menu descriptor, e.g. "File.New", find it in the menu hierarchy.
@@ -1417,8 +1391,6 @@ vimmenu_T *gui_find_menu(char_u *path_name)
   menu = root_menu;
 
   saved_name = vim_strsave(path_name);
-  if (saved_name == NULL)
-    return NULL;
 
   name = saved_name;
   while (*name) {
@@ -1511,23 +1483,21 @@ void ex_menutranslate(exarg_T *eap)
       ga_grow(&menutrans_ga, 1);
       tp = (menutrans_T *)menutrans_ga.ga_data;
       from = vim_strsave(from);
-      if (from != NULL) {
-        from_noamp = menu_text(from, NULL, NULL);
-        to = vim_strnsave(to, (int)(arg - to));
-        if (from_noamp != NULL && to != NULL) {
-          menu_translate_tab_and_shift(from);
-          menu_translate_tab_and_shift(to);
-          menu_unescape_name(from);
-          menu_unescape_name(to);
-          tp[menutrans_ga.ga_len].from = from;
-          tp[menutrans_ga.ga_len].from_noamp = from_noamp;
-          tp[menutrans_ga.ga_len].to = to;
-          ++menutrans_ga.ga_len;
-        } else {
-          free(from);
-          free(from_noamp);
-          free(to);
-        }
+      from_noamp = menu_text(from, NULL, NULL);
+      to = vim_strnsave(to, (int)(arg - to));
+      if (from_noamp != NULL) {
+        menu_translate_tab_and_shift(from);
+        menu_translate_tab_and_shift(to);
+        menu_unescape_name(from);
+        menu_unescape_name(to);
+        tp[menutrans_ga.ga_len].from = from;
+        tp[menutrans_ga.ga_len].from_noamp = from_noamp;
+        tp[menutrans_ga.ga_len].to = to;
+        ++menutrans_ga.ga_len;
+      } else {
+        free(from);
+        free(from_noamp);
+        free(to);
       }
     }
   }

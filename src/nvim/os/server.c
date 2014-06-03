@@ -5,7 +5,6 @@
 
 #include <uv.h>
 
-#include "nvim/os/channel_defs.h"
 #include "nvim/os/channel.h"
 #include "nvim/os/server.h"
 #include "nvim/os/os.h"
@@ -25,8 +24,6 @@ typedef enum {
 } ServerType;
 
 typedef struct {
-  // Protocol for channels established through this server
-  ChannelProtocol protocol;
   // Type of the union below
   ServerType type;
 
@@ -43,16 +40,16 @@ typedef struct {
   } socket;
 } Server;
 
-static Map *servers = NULL;
+static PMap(cstr_t) *servers = NULL;
 
-static void close_server(Map *map, const char *endpoint, void *server);
-static void connection_cb(uv_stream_t *server, int status);
-static void free_client(uv_handle_t *handle);
-static void free_server(uv_handle_t *handle);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "os/server.c.generated.h"
+#endif
 
+/// Initializes the module
 void server_init()
 {
-  servers = map_new();
+  servers = pmap_new(cstr_t)();
 
   if (!os_getenv("NEOVIM_LISTEN_ADDRESS")) {
     char *listen_address = (char *)vim_tempname('s');
@@ -60,28 +57,49 @@ void server_init()
     free(listen_address);
   }
 
-  server_start((char *)os_getenv("NEOVIM_LISTEN_ADDRESS"),
-               kChannelProtocolMsgpack);
+  server_start((char *)os_getenv("NEOVIM_LISTEN_ADDRESS"));
 }
 
+/// Teardown the server module
 void server_teardown()
 {
   if (!servers) {
     return;
   }
 
-  map_foreach(servers, close_server);
+  Server *server;
+
+  map_foreach_value(servers, server, {
+    if (server->type == kServerTypeTcp) {
+      uv_close((uv_handle_t *)&server->socket.tcp.handle, free_server);
+    } else {
+      uv_close((uv_handle_t *)&server->socket.pipe.handle, free_server);
+    }
+  });
 }
 
-void server_start(char *endpoint, ChannelProtocol prot)
+/// Starts listening on arbitrary tcp/unix addresses specified by
+/// `endpoint` for API calls. The type of socket used(tcp or unix/pipe) will
+/// be determined by parsing `endpoint`: If it's a valid tcp address in the
+/// 'ip:port' format, then it will be tcp socket, else it will be a unix
+/// socket or named pipe.
+///
+/// @param endpoint Address of the server. Either a 'ip:port' string or an
+///        arbitrary identifier(trimmed to 256 bytes) for the unix socket or
+///        named pipe.
+void server_start(char *endpoint)
 {
   char addr[ADDRESS_MAX_SIZE];
 
   // Trim to `ADDRESS_MAX_SIZE`
-  strncpy(addr, endpoint, sizeof(addr));
+  if (xstrlcpy(addr, endpoint, sizeof(addr)) >= sizeof(addr)) {
+      // TODO(aktau): since this is not what the user wanted, perhaps we
+      // should return an error here
+      EMSG2("Address was too long, truncated to %s", addr);
+  }
 
   // Check if the server already exists
-  if (map_has(servers, addr)) {
+  if (pmap_has(cstr_t)(servers, addr)) {
     EMSG2("Already listening on %s", addr);
     return;
   }
@@ -89,8 +107,6 @@ void server_start(char *endpoint, ChannelProtocol prot)
   ServerType server_type = kServerTypeTcp;
   Server *server = xmalloc(sizeof(Server));
   char ip[16], *ip_end = strrchr(addr, ':');
-
-  server->protocol = prot;
 
   if (!ip_end) {
     ip_end = strchr(addr, NUL);
@@ -104,7 +120,7 @@ void server_start(char *endpoint, ChannelProtocol prot)
   }
 
   // Extract the address part
-  strncpy(ip, addr, addr_len);
+  xstrlcpy(ip, addr, addr_len);
 
   int port = NEOVIM_DEFAULT_TCP_PORT;
 
@@ -112,8 +128,8 @@ void server_start(char *endpoint, ChannelProtocol prot)
     char *port_end;
     // Extract the port
     port = strtol(ip_end + 1, &port_end, 10);
-  
     errno = 0;
+
     if (errno != 0 || port == 0 || port > 0xffff) {
       // Invalid port, treat as named pipe or unix socket
       server_type = kServerTypePipe;
@@ -145,7 +161,7 @@ void server_start(char *endpoint, ChannelProtocol prot)
     }
   } else {
     // Listen on named pipe or unix socket
-    strcpy(server->socket.pipe.addr, addr);
+    xstrlcpy(server->socket.pipe.addr, addr, sizeof(server->socket.pipe.addr));
     uv_pipe_init(uv_default_loop(), &server->socket.pipe.handle, 0);
     server->socket.pipe.handle.data = server;
     uv_pipe_bind(&server->socket.pipe.handle, server->socket.pipe.addr);
@@ -167,18 +183,21 @@ void server_start(char *endpoint, ChannelProtocol prot)
   server->type = server_type;
 
   // Add the server to the hash table
-  map_put(servers, addr, server);
+  pmap_put(cstr_t)(servers, addr, server);
 }
 
+/// Stops listening on the address specified by `endpoint`.
+///
+/// @param endpoint Address of the server.
 void server_stop(char *endpoint)
 {
   Server *server;
   char addr[ADDRESS_MAX_SIZE];
 
   // Trim to `ADDRESS_MAX_SIZE`
-  strncpy(addr, endpoint, sizeof(addr));
+  xstrlcpy(addr, endpoint, sizeof(addr));
 
-  if ((server = map_get(servers, addr)) == NULL) {
+  if ((server = pmap_get(cstr_t)(servers, addr)) == NULL) {
     EMSG2("Not listening on %s", addr);
     return;
   }
@@ -189,7 +208,7 @@ void server_stop(char *endpoint)
     uv_close((uv_handle_t *)&server->socket.pipe.handle, free_server);
   }
 
-  map_del(servers, addr);
+  pmap_del(cstr_t)(servers, addr);
 }
 
 static void connection_cb(uv_stream_t *server, int status)
@@ -218,18 +237,7 @@ static void connection_cb(uv_stream_t *server, int status)
     return;
   }
 
-  channel_from_stream(client, srv->protocol);
-}
-
-static void close_server(Map *map, const char *endpoint, void *srv)
-{
-  Server *server = srv;
-
-  if (server->type == kServerTypeTcp) {
-    uv_close((uv_handle_t *)&server->socket.tcp.handle, free_server);
-  } else {
-    uv_close((uv_handle_t *)&server->socket.pipe.handle, free_server);
-  }
+  channel_from_stream(client);
 }
 
 static void free_client(uv_handle_t *handle)

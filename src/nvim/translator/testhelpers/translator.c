@@ -9,9 +9,9 @@
 
 static Writer write_file = (Writer) &fwrite;
 
-// {{{ Function declarations
-static int translate_script_stdout(const CommandNode *const node);
-// }}}
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/testhelpers/translator.c.generated.h"
+#endif
 
 /// Translate given sequence of nodes as a .vim script and dump result to stdout
 ///

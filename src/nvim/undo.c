@@ -84,6 +84,7 @@
 
 #include "nvim/vim.h"
 #include "nvim/undo.h"
+#include "nvim/cursor.h"
 #include "nvim/edit.h"
 #include "nvim/eval.h"
 #include "nvim/fileio.h"
@@ -94,7 +95,6 @@
 #include "nvim/misc1.h"
 #include "nvim/misc2.h"
 #include "nvim/memory.h"
-#include "nvim/crypt.h"
 #include "nvim/garray.h"
 #include "nvim/option.h"
 #include "nvim/os_unix.h"
@@ -106,37 +106,9 @@
 #include "nvim/os/os.h"
 #include "nvim/os/time.h"
 
-static long get_undolevel(void);
-static void u_unch_branch(u_header_T *uhp);
-static u_entry_T *u_get_headentry(void);
-static void u_getbot(void);
-static void u_doit(int count);
-static void u_undoredo(int undo);
-static void u_undo_end(int did_undo, int absolute);
-static void u_add_time(char_u *buf, size_t buflen, time_t tt);
-static void u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
-static void u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
-static void u_freeentries(buf_T *buf, u_header_T *uhp,
-                          u_header_T **uhpp);
-static void u_freeentry(u_entry_T *, long);
-static void corruption_error(char *mesg, char_u *file_name);
-static void u_free_uhp(u_header_T *uhp);
-static size_t fwrite_crypt(buf_T *buf, char_u *ptr, size_t len,
-                           FILE *fp);
-static char_u *read_string_decrypt(buf_T *buf, FILE *fd, int len);
-static int serialize_header(FILE *fp, buf_T *buf, char_u *hash);
-static int serialize_uhp(FILE *fp, buf_T *buf, u_header_T *uhp);
-static u_header_T *unserialize_uhp(FILE *fp, char_u *file_name);
-static int serialize_uep(FILE *fp, buf_T *buf, u_entry_T *uep);
-static u_entry_T *unserialize_uep(FILE *fp, int *error,
-                                  char_u *file_name);
-static void serialize_pos(pos_T pos, FILE *fp);
-static void unserialize_pos(pos_T *pos, FILE *fp);
-static void serialize_visualinfo(visualinfo_T *info, FILE *fp);
-static void unserialize_visualinfo(visualinfo_T *info, FILE *fp);
-static void put_header_ptr(FILE *fp, u_header_T *uhp);
-
-static char_u *u_save_line(linenr_T);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "undo.c.generated.h"
+#endif
 
 /* used in undo_end() to report number of added and deleted lines */
 static long u_newcount, u_oldcount;
@@ -598,10 +570,7 @@ int u_savecommon(linenr_T top, linenr_T bot, linenr_T newbot, int reload)
         u_freeentry(uep, i);
         return FAIL;
       }
-      if ((uep->ue_array[i] = u_save_line(lnum++)) == NULL) {
-        u_freeentry(uep, i);
-        goto nomem;
-      }
+      uep->ue_array[i] = u_save_line(lnum++);
     }
   } else
     uep->ue_array = NULL;
@@ -614,16 +583,6 @@ int u_savecommon(linenr_T top, linenr_T bot, linenr_T newbot, int reload)
   u_check(FALSE);
 #endif
   return OK;
-
-nomem:
-  msg_silent = 0;       /* must display the prompt */
-  if (ask_yesno((char_u *)_("No undo possible; continue anyway"), TRUE)
-      == 'y') {
-    undo_off = TRUE;                /* will be reset when character typed */
-    return OK;
-  }
-  do_outofmem_msg((long_u)0);
-  return FAIL;
 }
 
 
@@ -634,7 +593,6 @@ nomem:
 # define UF_ENTRY_MAGIC         0xf518  /* magic at start of entry */
 # define UF_ENTRY_END_MAGIC     0x3581  /* magic after last entry */
 # define UF_VERSION             2       /* 2-byte undofile version number */
-# define UF_VERSION_CRYPT       0x8002  /* idem, encrypted */
 
 /* extra fields for header */
 # define UF_LAST_SAVE_NR        1
@@ -700,8 +658,6 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
       /* Use same directory as the ffname,
        * "dir/name" -> "dir/.name.un~" */
       undo_file_name = vim_strnsave(ffname, (int)(STRLEN(ffname) + 5));
-      if (undo_file_name == NULL)
-        break;
       p = path_tail(undo_file_name);
       memmove(p + 1, p, STRLEN(p) + 1);
       *p = '.';
@@ -711,8 +667,6 @@ char_u *u_get_undo_file_name(char_u *buf_ffname, int reading)
       if (os_isdir(dir_name)) {
         if (munged_name == NULL) {
           munged_name = vim_strsave(ffname);
-          if (munged_name == NULL)
-            return NULL;
           for (p = munged_name; *p != NUL; mb_ptr_adv(p))
             if (vim_ispathsep(*p))
               *p = '%';
@@ -753,44 +707,6 @@ static void u_free_uhp(u_header_T *uhp)
   free(uhp);
 }
 
-/*
- * Like fwrite() but crypt the bytes when 'key' is set.
- * Returns 1 if successful.
- */
-static size_t fwrite_crypt(buf_T *buf, char_u *ptr, size_t len, FILE *fp)
-{
-  char_u  *copy;
-  char_u small_buf[100];
-  size_t i;
-
-  if (*buf->b_p_key == NUL)
-    return fwrite(ptr, len, (size_t)1, fp);
-  if (len < 100)
-    copy = small_buf;      /* no malloc()/free() for short strings */
-  else {
-    copy = xmalloc(len);
-  }
-  crypt_encode(ptr, len, copy);
-  i = fwrite(copy, len, (size_t)1, fp);
-  if (copy != small_buf)
-    free(copy);
-  return i;
-}
-
-/*
- * Read a string of length "len" from "fd".
- * When 'key' is set decrypt the bytes.
- */
-static char_u *read_string_decrypt(buf_T *buf, FILE *fd, int len)
-{
-  char_u  *ptr;
-
-  ptr = read_string(fd, len);
-  if (ptr != NULL && *buf->b_p_key != NUL)
-    crypt_decode(ptr, len);
-  return ptr;
-}
-
 static int serialize_header(FILE *fp, buf_T *buf, char_u *hash)
 {
   int len;
@@ -799,25 +715,7 @@ static int serialize_header(FILE *fp, buf_T *buf, char_u *hash)
   if (fwrite(UF_START_MAGIC, (size_t)UF_START_MAGIC_LEN, (size_t)1, fp) != 1)
     return FAIL;
 
-  /* If the buffer is encrypted then all text bytes following will be
-   * encrypted.  Numbers and other info is not crypted. */
-  if (*buf->b_p_key != NUL) {
-    char_u *header;
-    int header_len;
-
-    put_bytes(fp, (long_u)UF_VERSION_CRYPT, 2);
-    header = prepare_crypt_write(buf, &header_len);
-    if (header == NULL)
-      return FAIL;
-    len = (int)fwrite(header, (size_t)header_len, (size_t)1, fp);
-    free(header);
-    if (len != 1) {
-      crypt_pop_state();
-      return FAIL;
-    }
-  } else
-    put_bytes(fp, (long_u)UF_VERSION, 2);
-
+  put_bytes(fp, (long_u)UF_VERSION, 2);
 
   /* Write a hash of the buffer text, so that we can verify it is still the
    * same when reading the buffer text. */
@@ -828,7 +726,7 @@ static int serialize_header(FILE *fp, buf_T *buf, char_u *hash)
   put_bytes(fp, (long_u)buf->b_ml.ml_line_count, 4);
   len = buf->b_u_line_ptr != NULL ? (int)STRLEN(buf->b_u_line_ptr) : 0;
   put_bytes(fp, (long_u)len, 4);
-  if (len > 0 && fwrite_crypt(buf, buf->b_u_line_ptr, (size_t)len, fp) != 1)
+  if (len > 0 && fwrite(buf->b_u_line_ptr, len, 1, fp) != 1)
     return FAIL;
   put_bytes(fp, (long_u)buf->b_u_line_lnum, 4);
   put_bytes(fp, (long_u)buf->b_u_line_colnr, 4);
@@ -982,7 +880,7 @@ static int serialize_uep(FILE *fp, buf_T *buf, u_entry_T *uep)
     len = STRLEN(uep->ue_array[i]);
     if (put_bytes(fp, (long_u)len, 4) == FAIL)
       return FAIL;
-    if (len > 0 && fwrite_crypt(buf, uep->ue_array[i], len, fp) != 1)
+    if (len > 0 && fwrite(uep->ue_array[i], len, 1, fp) != 1)
       return FAIL;
   }
   return OK;
@@ -1015,7 +913,7 @@ static u_entry_T *unserialize_uep(FILE *fp, int *error, char_u *file_name)
   for (i = 0; i < uep->ue_size; ++i) {
     line_len = get4c(fp);
     if (line_len >= 0)
-      line = read_string_decrypt(curbuf, fp, line_len);
+      line = read_string(fp, line_len);
     else {
       line = NULL;
       corruption_error("line length", file_name);
@@ -1107,7 +1005,6 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
   FILE        *fp = NULL;
   int perm;
   int write_ok = FALSE;
-  int do_crypt = FALSE;
 
   if (name == NULL) {
     file_name = u_get_undo_file_name(buf->b_ffname, FALSE);
@@ -1245,8 +1142,6 @@ void u_write_undo(char_u *name, int forceit, buf_T *buf, char_u *hash)
    */
   if (serialize_header(fp, buf, hash) == FAIL)
     goto write_error;
-  if (*buf->b_p_key != NUL)
-    do_crypt = TRUE;
 
   /*
    * Iteratively serialize UHPs and their UEPs from the top down.
@@ -1305,8 +1200,6 @@ write_error:
 #endif
 
 theend:
-  if (do_crypt)
-    crypt_pop_state();
   if (file_name != name)
     free(file_name);
 }
@@ -1343,7 +1236,6 @@ void u_read_undo(char_u *name, char_u *hash, char_u *orig_name)
 #ifdef U_DEBUG
   int         *uhp_table_used;
 #endif
-  int do_decrypt = FALSE;
 
   if (name == NULL) {
     file_name = u_get_undo_file_name(curbuf->b_ffname, TRUE);
@@ -1393,18 +1285,7 @@ void u_read_undo(char_u *name, char_u *hash, char_u *orig_name)
     goto error;
   }
   version = get2c(fp);
-  if (version == UF_VERSION_CRYPT) {
-    if (*curbuf->b_p_key == NUL) {
-      EMSG2(_("E832: Non-encrypted file has encrypted undo file: %s"),
-          file_name);
-      goto error;
-    }
-    if (prepare_crypt_read(fp) == FAIL) {
-      EMSG2(_("E826: Undo file decryption failed: %s"), file_name);
-      goto error;
-    }
-    do_decrypt = TRUE;
-  } else if (version != UF_VERSION)   {
+  if (version != UF_VERSION) {
     EMSG2(_("E824: Incompatible undo file: %s"), file_name);
     goto error;
   }
@@ -1432,7 +1313,7 @@ void u_read_undo(char_u *name, char_u *hash, char_u *orig_name)
   if (str_len < 0)
     goto error;
   if (str_len > 0)
-    line_ptr = read_string_decrypt(curbuf, fp, str_len);
+    line_ptr = read_string(fp, str_len);
   line_lnum = (linenr_T)get4c(fp);
   line_colnr = (colnr_T)get4c(fp);
   if (line_lnum < 0 || line_colnr < 0) {
@@ -1602,8 +1483,6 @@ error:
   }
 
 theend:
-  if (do_decrypt)
-    crypt_pop_state();
   if (fp != NULL)
     fclose(fp);
   if (file_name != name)
@@ -2114,8 +1993,7 @@ static void u_undoredo(int undo)
       /* delete backwards, it goes faster in most cases */
       for (lnum = bot - 1, i = oldsize; --i >= 0; --lnum) {
         /* what can we do when we run out of memory? */
-        if ((newarray[i] = u_save_line(lnum)) == NULL)
-          do_outofmem_msg((long_u)0);
+        newarray[i] = u_save_line(lnum);
         /* remember we deleted the last line in the buffer, and a
          * dummy empty line will be inserted */
         if (curbuf->b_ml.ml_line_count == 1)
@@ -2746,8 +2624,7 @@ void u_saveline(linenr_T lnum)
     curbuf->b_u_line_colnr = curwin->w_cursor.col;
   else
     curbuf->b_u_line_colnr = 0;
-  if ((curbuf->b_u_line_ptr = u_save_line(lnum)) == NULL)
-    do_outofmem_msg((long_u)0);
+  curbuf->b_u_line_ptr = u_save_line(lnum);
 }
 
 /*
@@ -2788,10 +2665,6 @@ void u_undoline(void)
           curbuf->b_u_line_lnum + 1, (linenr_T)0, FALSE) == FAIL)
     return;
   oldp = u_save_line(curbuf->b_u_line_lnum);
-  if (oldp == NULL) {
-    do_outofmem_msg((long_u)0);
-    return;
-  }
   ml_replace(curbuf->b_u_line_lnum, curbuf->b_u_line_ptr, TRUE);
   changed_bytes(curbuf->b_u_line_lnum, 0);
   free(curbuf->b_u_line_ptr);
@@ -2817,7 +2690,6 @@ void u_blockfree(buf_T *buf)
 
 /*
  * u_save_line(): allocate memory and copy line 'lnum' into it.
- * Returns NULL when out of memory.
  */
 static char_u *u_save_line(linenr_T lnum)
 {

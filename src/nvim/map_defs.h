@@ -1,14 +1,12 @@
 #ifndef NVIM_MAP_DEFS_H
 #define NVIM_MAP_DEFS_H
 
-typedef struct map Map;
+#include "nvim/lib/khash.h"
 
-/// Callback for iterating through each key/value pair in a map
-///
-/// @param map The `Map` instance
-/// @param key A key string
-/// @param value A value
-typedef void (*key_value_cb)(Map *map, const char *key, void *value);
+typedef const char * cstr_t;
+typedef void * ptr_t;
 
-#endif /* NVIM_MAP_DEFS_H */
+#define Map(T, U) Map_##T##_##U
+#define PMap(T) Map(T, ptr_t)
 
+#endif  // NVIM_MAP_DEFS_H

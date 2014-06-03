@@ -1,9 +1,21 @@
-#ifndef NVIM_API_DEFS_H
-#define NVIM_API_DEFS_H
+#ifndef NVIM_API_PRIVATE_DEFS_H
+#define NVIM_API_PRIVATE_DEFS_H
 
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+
+#define ARRAY_DICT_INIT {.size = 0, .items = NULL}
+#define STRING_INIT {.data = NULL, .size = 0}
+#define OBJECT_INIT { .type = kObjectTypeNil }
+#define POSITION_INIT { .row = 0, .col = 0 }
+#define REMOTE_TYPE(type) typedef uint64_t type
+
+#define TYPED_ARRAY_OF(type)                                                  \
+  typedef struct {                                                            \
+    type *items;                                                              \
+    size_t size;                                                              \
+  } type##Array
 
 // Basic types
 typedef struct {
@@ -20,16 +32,16 @@ typedef struct {
   size_t size;
 } String;
 
-typedef Integer Buffer;
-typedef Integer Window;
-typedef Integer Tabpage;
+REMOTE_TYPE(Buffer);
+REMOTE_TYPE(Window);
+REMOTE_TYPE(Tabpage);
 
 typedef struct object Object;
 
-typedef struct {
-  String *items;
-  size_t size;
-} StringArray;
+TYPED_ARRAY_OF(Buffer);
+TYPED_ARRAY_OF(Window);
+TYPED_ARRAY_OF(Tabpage);
+TYPED_ARRAY_OF(String);
 
 typedef struct {
   Integer row, col;
@@ -75,5 +87,5 @@ struct key_value_pair {
 };
 
 
-#endif  // NVIM_API_DEFS_H
+#endif  // NVIM_API_PRIVATE_DEFS_H
 

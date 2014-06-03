@@ -5,6 +5,15 @@
  * Do ":help credits" in Vim to see a list of people who contributed.
  */
 
+#if (!defined(DO_DECLARE_EXCMD) && !defined(NVIM_EX_CMDS_DEFS_H)) \
+    || (defined(DO_DECLARE_EXCMD) && \
+        !defined(NVIM_EX_CMDS_DEFS_H_DO_DECLARE_EXCMD))
+#ifdef DO_DECLARE_EXCMD
+# define NVIM_EX_CMDS_DEFS_H_DO_DECLARE_EXCMD
+#else
+# define NVIM_EX_CMDS_DEFS_H
+#endif
+
 #include "nvim/normal.h"
 
 /*
@@ -1084,8 +1093,6 @@ enum CMD_index
       EXTRA|RANGE|NOTADR|COUNT|BANG|EDITCMD|ARGOPT|TRLBAR),
   EX(CMD_Print,           "Print",        ex_print,
       RANGE|WHOLEFOLD|COUNT|EXFLAGS|TRLBAR|CMDWIN),
-  EX(CMD_X,               "X",            ex_X,
-      TRLBAR),
   EX(CMD_tilde,           "~",            do_sub,
       RANGE|WHOLEFOLD|EXTRA|CMDWIN|MODIFY),
 
@@ -1188,4 +1195,5 @@ typedef struct {
   char_u      *save_ei;                 /* saved value of 'eventignore' */
 } cmdmod_T;
 
+#endif
 #endif

@@ -221,47 +221,9 @@ typedef enum {
   kOptGlobal,
 } OptionType;
 
-// {{{ Function declarations
-static WFDEC(write_string_len, const char *const s, size_t len);
-static WFDEC(dump_number, intmax_t number);
-static WFDEC(dump_char, char_u c);
-static WFDEC(dump_string_len, const char_u *const s, size_t len);
-static WFDEC(dump_string, const char_u *const s);
-static WFDEC(dump_bool, bool b);
-static WFDEC(translate_regex, const Regex *const regex);
-static WFDEC(translate_address_followup, const AddressFollowup *const followup);
-static WFDEC(translate_range, const Range *const range);
-static WFDEC(translate_ex_flags, uint_least8_t exflags);
-static WFDEC(translate_number, ExpressionType type, const char_u *s,
-             const char_u *const e);
-static WFDEC(translate_string, ExpressionType type, const char_u *const s,
-             const char_u *const e);
-static WFDEC(translate_scope, const char_u **start,
-                              const ExpressionNode *const expr,
-                              const uint_least8_t flags);
-static WFDEC(translate_expr, const ExpressionNode *const expr,
-                             const bool is_funccall);
-static WFDEC(translate_exprs, const ExpressionNode *const expr);
-static WFDEC(translate_function, const TranslateFuncArgs *const args);
-static WFDEC(translate_varname, const ExpressionNode *const expr,
-                                const bool is_funccall);
-static WFDEC(translate_lval, const ExpressionNode *const expr,
-                             const bool is_funccall, const bool unique,
-                             const AssignmentValueDump dump,
-                             const void *const dump_cookie);
-static WFDEC(translate_let_list_item, const LetListItemAssArgs *const args);
-static WFDEC(translate_let_list_rest, const LetListItemAssArgs *const args);
-static WFDEC(translate_rval_expr, const ExpressionNode *const expr);
-static WFDEC(dump_indentvar, const IndentVarAssArgs *const args);
-static WFDEC(translate_assignment, const ExpressionNode *const lval_expr,
-                                   const size_t indent,
-                                   const char *const err_line,
-                                   AssignmentValueDump dump,
-                                   const void *const dump_cookie);
-static WFDEC(translate_node, const CommandNode *const node,
-                             const size_t indent);
-static WFDEC(translate_nodes, const CommandNode *const node, size_t indent);
-// }}}
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/translator/translator.c.generated.h"
+#endif
 
 /// Write string with the given length
 ///

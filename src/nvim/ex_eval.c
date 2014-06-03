@@ -23,10 +23,10 @@
 #include "nvim/strings.h"
 
 
-static void free_msglist(struct msglist *l);
-static int throw_exception(void *, int, char_u *);
-static char_u   *get_end_emsg(struct condstack *cstack);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "ex_eval.c.generated.h"
+#endif
 /*
  * Exception handling terms:
  *
@@ -66,10 +66,6 @@ static char_u   *get_end_emsg(struct condstack *cstack);
 # define THROW_ON_INTERRUPT     TRUE
 # define THROW_ON_INTERRUPT_TRUE
 
-static void catch_exception(except_T *excp);
-static void finish_exception(except_T *excp);
-static void discard_exception(except_T *excp, int was_finished);
-static void report_pending(int action, int pending, void *value);
 
 /*
  * When several errors appear in a row, setting "force_abort" is delayed until
@@ -244,17 +240,10 @@ int cause_errthrow(char_u *mesg, int severe, int *ignore)
       while (*plist != NULL)
         plist = &(*plist)->next;
 
-      elem = (struct msglist *)alloc((unsigned)sizeof(struct msglist));
-      if (elem == NULL) {
-        suppress_errthrow = TRUE;
-        EMSG(_(e_outofmem));
-      } else {
+      elem = xmalloc(sizeof(struct msglist));
+      {
         elem->msg = vim_strsave(mesg);
-        if (elem->msg == NULL) {
-          free(elem);
-          suppress_errthrow = TRUE;
-          EMSG(_(e_outofmem));
-        } else {
+        {
           elem->next = NULL;
           elem->throw_msg = NULL;
           *plist = elem;
@@ -402,15 +391,11 @@ char_u *get_exception_string(void *value, int type, char_u *cmdname, int *should
       cmdlen = (int)STRLEN(cmdname);
       ret = vim_strnsave((char_u *)"Vim(",
           4 + cmdlen + 2 + (int)STRLEN(mesg));
-      if (ret == NULL)
-        return ret;
       STRCPY(&ret[4], cmdname);
       STRCPY(&ret[4 + cmdlen], "):");
       val = ret + 4 + cmdlen + 2;
     } else {
       ret = vim_strnsave((char_u *)"Vim:", 4 + (int)STRLEN(mesg));
-      if (ret == NULL)
-        return ret;
       val = ret + 4;
     }
 
@@ -477,9 +462,7 @@ static int throw_exception(void *value, int type, char_u *cmdname)
     }
   }
 
-  excp = (except_T *)alloc((unsigned)sizeof(except_T));
-  if (excp == NULL)
-    goto nomem;
+  excp = xmalloc(sizeof(except_T));
 
   if (type == ET_ERROR)
     /* Store the original message and prefix the exception value with
@@ -493,11 +476,6 @@ static int throw_exception(void *value, int type, char_u *cmdname)
   excp->type = type;
   excp->throw_name = vim_strsave(sourcing_name == NULL
       ? (char_u *)"" : sourcing_name);
-  if (excp->throw_name == NULL) {
-    if (should_free)
-      free(excp->value);
-    goto nomem;
-  }
   excp->throw_lnum = sourcing_lnum;
 
   if (p_verbose >= 13 || debug_break_level > 0) {
@@ -1302,18 +1280,12 @@ void ex_try(exarg_T *eap)
        * to save the value.
        */
       if (emsg_silent) {
-        eslist_T        *elem;
-
-        elem = (eslist_T *)alloc((unsigned)sizeof(struct eslist_elem));
-        if (elem == NULL)
-          EMSG(_(e_outofmem));
-        else {
-          elem->saved_emsg_silent = emsg_silent;
-          elem->next = cstack->cs_emsg_silent_list;
-          cstack->cs_emsg_silent_list = elem;
-          cstack->cs_flags[cstack->cs_idx] |= CSF_SILENT;
-          emsg_silent = 0;
-        }
+        eslist_T *elem = xmalloc(sizeof(struct eslist_elem));
+        elem->saved_emsg_silent = emsg_silent;
+        elem->next = cstack->cs_emsg_silent_list;
+        cstack->cs_emsg_silent_list = elem;
+        cstack->cs_flags[cstack->cs_idx] |= CSF_SILENT;
+        emsg_silent = 0;
       }
     }
 

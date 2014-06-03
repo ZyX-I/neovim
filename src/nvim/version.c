@@ -25,9 +25,10 @@ static char *mediumVersion = VIM_VERSION_MEDIUM;
 
 char *longVersion = VIM_VERSION_LONG_DATE __DATE__ " " __TIME__ ")";
 
-static void list_features(void);
-static void version_msg(char *s);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "version.c.generated.h"
+#endif
 static char *(features[]) = {
 #ifdef HAVE_ACL
   "+acl",
@@ -54,7 +55,6 @@ static char *(features[]) = {
   "+cmdline_info",
   "+comments",
   "+conceal",
-  "+cryptv",
   "+cscope",
   "+cursorbind",
 #ifdef CURSOR_SHAPE
@@ -202,6 +202,17 @@ static char *(features[]) = {
 
 static int included_patches[] = {
   // Add new patch number below this line
+  285,
+  //284,
+  //283,
+  //282,
+  //281,
+  //280,
+  //279,
+  //278,
+  //277,
+  //276,
+  //275,
   274,
   //273,
   272,
@@ -209,7 +220,7 @@ static int included_patches[] = {
   //270,
   269,
   268,
-  //267,
+  267,
   266,
   265,
   264,
@@ -739,7 +750,6 @@ static void version_msg(char *s)
   }
 }
 
-static void do_intro_line(int row, char_u *mesg, int add_version, int attr);
 
 /// Show the intro message when not editing a file.
 void maybe_intro_message(void)

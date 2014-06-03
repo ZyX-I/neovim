@@ -4,12 +4,18 @@
 
 #include "nvim/api/tabpage.h"
 #include "nvim/api/vim.h"
-#include "nvim/api/defs.h"
-#include "nvim/api/helpers.h"
+#include "nvim/api/private/defs.h"
+#include "nvim/api/private/helpers.h"
+#include "nvim/memory.h"
 
-Integer tabpage_get_window_count(Tabpage tabpage, Error *err)
+/// Gets the number of windows in a tabpage
+///
+/// @param tabpage The tabpage
+/// @param[out] err Details of an error that may have occurred
+/// @return The number of windows in `tabpage`
+WindowArray tabpage_get_windows(Tabpage tabpage, Error *err)
 {
-  Integer rv = 0;
+  WindowArray rv = ARRAY_DICT_INIT;
   tabpage_T *tab = find_tab(tabpage, err);
 
   if (!tab) {
@@ -23,36 +29,62 @@ Integer tabpage_get_window_count(Tabpage tabpage, Error *err)
     if (tp != tab) {
       break;
     }
-    rv++;
+    rv.size++;
+  }
+
+  rv.items = xmalloc(sizeof(Window) * rv.size);
+  size_t i = 0;
+
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    if (tp != tab) {
+      break;
+    }
+    rv.items[i++] = wp->handle;
   }
 
   return rv;
 }
 
+/// Gets a tabpage variable
+///
+/// @param tabpage The tab page handle
+/// @param name The variable name
+/// @param[out] err Details of an error that may have occurred
+/// @return The variable value
 Object tabpage_get_var(Tabpage tabpage, String name, Error *err)
 {
-  Object rv;
   tabpage_T *tab = find_tab(tabpage, err);
 
   if (!tab) {
-    return rv;
+    return (Object) OBJECT_INIT;
   }
 
   return dict_get_value(tab->tp_vars, name, err);
 }
 
+/// Sets a tabpage variable. Passing 'nil' as value deletes the variable.
+///
+/// @param tabpage handle
+/// @param name The variable name
+/// @param value The variable value
+/// @param[out] err Details of an error that may have occurred
+/// @return The tab page handle
 Object tabpage_set_var(Tabpage tabpage, String name, Object value, Error *err)
 {
-  Object rv;
   tabpage_T *tab = find_tab(tabpage, err);
 
   if (!tab) {
-    return rv;
+    return (Object) OBJECT_INIT;
   }
 
   return dict_set_value(tab->tp_vars, name, value, err);
 }
 
+/// Gets the current window in a tab page
+///
+/// @param tabpage The tab page handle
+/// @param[out] err Details of an error that may have occurred
+/// @return The Window handle
 Window tabpage_get_window(Tabpage tabpage, Error *err)
 {
   Window rv = 0;
@@ -67,19 +99,21 @@ Window tabpage_get_window(Tabpage tabpage, Error *err)
   } else {
     tabpage_T *tp;
     win_T *wp;
-    rv = 1;
 
     FOR_ALL_TAB_WINDOWS(tp, wp) {
       if (tp == tab && wp == tab->tp_curwin) {
-        return rv;
+        return wp->handle;
       }
-      rv++;
     }
     // There should always be a current window for a tabpage
     abort();
   }
 }
 
+/// Checks if a tab page is valid
+///
+/// @param tabpage The tab page handle
+/// @return true if the tab page is valid, false otherwise
 Boolean tabpage_is_valid(Tabpage tabpage)
 {
   Error stub = {.set = false};

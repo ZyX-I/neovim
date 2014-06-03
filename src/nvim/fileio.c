@@ -14,9 +14,9 @@
 
 #include "nvim/vim.h"
 #include "nvim/fileio.h"
-#include "nvim/blowfish.h"
 #include "nvim/buffer.h"
 #include "nvim/charset.h"
+#include "nvim/cursor.h"
 #include "nvim/diff.h"
 #include "nvim/edit.h"
 #include "nvim/eval.h"
@@ -33,7 +33,6 @@
 #include "nvim/message.h"
 #include "nvim/misc1.h"
 #include "nvim/misc2.h"
-#include "nvim/crypt.h"
 #include "nvim/garray.h"
 #include "nvim/move.h"
 #include "nvim/normal.h"
@@ -52,7 +51,6 @@
 #include "nvim/window.h"
 #include "nvim/os/os.h"
 
-
 #if defined(HAVE_UTIME) && defined(HAVE_UTIME_H)
 # include <utime.h>             /* for struct utimbuf */
 #endif
@@ -60,55 +58,89 @@
 #define BUFSIZE         8192    /* size of normal write buffer */
 #define SMBUFSIZE       256     /* size of emergency write buffer */
 
-/* crypt_magic[0] is pkzip crypt, crypt_magic[1] is sha2+blowfish */
-static char     *crypt_magic[] = {"VimCrypt~01!", "VimCrypt~02!"};
-static char crypt_magic_head[] = "VimCrypt~";
-# define CRYPT_MAGIC_LEN        12              /* must be multiple of 4! */
+/*
+ * The autocommands are stored in a list for each event.
+ * Autocommands for the same pattern, that are consecutive, are joined
+ * together, to avoid having to match the pattern too often.
+ * The result is an array of Autopat lists, which point to AutoCmd lists:
+ *
+ * first_autopat[0] --> Autopat.next  -->  Autopat.next -->  NULL
+ *			Autopat.cmds	   Autopat.cmds
+ *			    |			 |
+ *			    V			 V
+ *			AutoCmd.next	   AutoCmd.next
+ *			    |			 |
+ *			    V			 V
+ *			AutoCmd.next		NULL
+ *			    |
+ *			    V
+ *			   NULL
+ *
+ * first_autopat[1] --> Autopat.next  -->  NULL
+ *			Autopat.cmds
+ *			    |
+ *			    V
+ *			AutoCmd.next
+ *			    |
+ *			    V
+ *			   NULL
+ *   etc.
+ *
+ *   The order of AutoCmds is important, this is the order in which they were
+ *   defined and will have to be executed.
+ */
+typedef struct AutoCmd {
+  char_u          *cmd;                 /* The command to be executed (NULL
+                                           when command has been removed) */
+  char nested;                          /* If autocommands nest here */
+  char last;                            /* last command in list */
+  scid_T scriptID;                      /* script ID where defined */
+  struct AutoCmd  *next;                /* Next AutoCmd in list */
+} AutoCmd;
 
-/* For blowfish, after the magic header, we store 8 bytes of salt and then 8
- * bytes of seed (initialisation vector). */
-static int crypt_salt_len[] = {0, 8};
-static int crypt_seed_len[] = {0, 8};
-#define CRYPT_SALT_LEN_MAX 8
-#define CRYPT_SEED_LEN_MAX 8
+typedef struct AutoPat {
+  char_u          *pat;                 /* pattern as typed (NULL when pattern
+                                           has been removed) */
+  regprog_T       *reg_prog;            /* compiled regprog for pattern */
+  AutoCmd         *cmds;                /* list of commands to do */
+  struct AutoPat  *next;                /* next AutoPat in AutoPat list */
+  int group;                            /* group ID */
+  int patlen;                           /* strlen() of pat */
+  int buflocal_nr;                      /* !=0 for buffer-local AutoPat */
+  char allow_dirs;                      /* Pattern may match whole path */
+  char last;                            /* last pattern for apply_autocmds() */
+} AutoPat;
 
-static char_u *next_fenc(char_u **pp);
-static char_u *readfile_charconvert(char_u *fname, char_u *fenc,
-                                            int *fdp);
-static void check_marks_read(void);
-static int crypt_method_from_magic(char *ptr, int len);
-static char_u *check_for_cryptkey(char_u *cryptkey, char_u *ptr,
-                                  long *sizep, off_t *filesizep,
-                                  int newfile, char_u *fname,
-                                  int *did_ask);
-#ifdef UNIX
-static void set_file_time(char_u *fname, time_t atime, time_t mtime);
-#endif
-static int set_rw_fname(char_u *fname, char_u *sfname);
-static int msg_add_fileformat(int eol_type);
-static void msg_add_eol(void);
-static int check_mtime(buf_T *buf, FileInfo *file_info);
-static int time_differs(long t1, long t2);
-static int apply_autocmds_exarg(event_T event, char_u *fname, char_u *fname_io,
-                                int force, buf_T *buf,
-                                exarg_T *eap);
-static int au_find_group(char_u *name);
+/*
+ * struct used to keep status while executing autocommands for an event.
+ */
+typedef struct AutoPatCmd {
+  AutoPat     *curpat;          /* next AutoPat to examine */
+  AutoCmd     *nextcmd;         /* next AutoCmd to execute */
+  int group;                    /* group being used */
+  char_u      *fname;           /* fname to match with */
+  char_u      *sfname;          /* sfname to match with */
+  char_u      *tail;            /* tail of fname */
+  event_T event;                /* current event */
+  int arg_bufnr;                /* initially equal to <abuf>, set to zero when
+                                   buf is deleted */
+  struct AutoPatCmd   *next;    /* chain of active apc-s for auto-invalidation*/
+} AutoPatCmd;
 
-# define AUGROUP_DEFAULT    -1      /* default autocmd group */
-# define AUGROUP_ERROR      -2      /* erroneous autocmd group */
-# define AUGROUP_ALL        -3      /* all autocmd groups */
+#define AUGROUP_DEFAULT    -1      /* default autocmd group */
+#define AUGROUP_ERROR      -2      /* erroneous autocmd group */
+#define AUGROUP_ALL        -3      /* all autocmd groups */
 
-# define HAS_BW_FLAGS
-# define FIO_LATIN1     0x01    /* convert Latin1 */
-# define FIO_UTF8       0x02    /* convert UTF-8 */
-# define FIO_UCS2       0x04    /* convert UCS-2 */
-# define FIO_UCS4       0x08    /* convert UCS-4 */
-# define FIO_UTF16      0x10    /* convert UTF-16 */
-# define FIO_ENDIAN_L   0x80    /* little endian */
-# define FIO_ENCRYPTED  0x1000  /* encrypt written bytes */
-# define FIO_NOCONVERT  0x2000  /* skip encoding conversion */
-# define FIO_UCSBOM     0x4000  /* check for BOM at start of file */
-# define FIO_ALL        -1      /* allow all formats */
+#define HAS_BW_FLAGS
+#define FIO_LATIN1     0x01    /* convert Latin1 */
+#define FIO_UTF8       0x02    /* convert UTF-8 */
+#define FIO_UCS2       0x04    /* convert UCS-2 */
+#define FIO_UCS4       0x08    /* convert UCS-4 */
+#define FIO_UTF16      0x10    /* convert UTF-16 */
+#define FIO_ENDIAN_L   0x80    /* little endian */
+#define FIO_NOCONVERT  0x2000  /* skip encoding conversion */
+#define FIO_UCSBOM     0x4000  /* check for BOM at start of file */
+#define FIO_ALL        -1      /* allow all formats */
 
 /* When converting, a read() or write() may leave some bytes to be converted
  * for the next call.  The value is guessed... */
@@ -141,19 +173,14 @@ struct bw_info {
 # endif
 };
 
-static int buf_write_bytes(struct bw_info *ip);
-
-static linenr_T readfile_linenr(linenr_T linecnt, char_u *p,
-                                char_u *endp);
-static int ucs2bytes(unsigned c, char_u **pp, int flags);
-static int need_conversion(char_u *fenc);
-static int get_fio_flags(char_u *ptr);
-static char_u *check_for_bom(char_u *p, long size, int *lenp, int flags);
-static int make_bom(char_u *buf, char_u *name);
-static int move_lines(buf_T *frombuf, buf_T *tobuf);
-#ifdef TEMPDIRNAMES
-static void vim_settempdir(char_u *tempdir);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "fileio.c.generated.h"
 #endif
+
+#ifdef UNIX
+#endif
+
+
 static char *e_auchangedbuf = N_(
     "E812: Autocommands changed buffer or buffer name");
 
@@ -245,9 +272,6 @@ readfile (
   char_u      *p;
   off_t filesize = 0;
   int skip_read = FALSE;
-  char_u      *cryptkey = NULL;
-  int did_ask_for_key = FALSE;
-  int crypt_method_used;
   context_sha256_T sha_ctx;
   int read_undo_file = FALSE;
   int split = 0;                        /* number of split lines */
@@ -812,11 +836,6 @@ retry:
     conv_error = 0;
   }
 
-  if (cryptkey != NULL)
-    /* Need to reset the state, but keep the key, don't want to ask for it
-     * again. */
-    crypt_pop_state();
-
   /*
    * When retrying with another "fenc" and the first time "fileformat"
    * will be reset.
@@ -1147,34 +1166,17 @@ retry:
             }
           }
         }
-
-        /*
-         * At start of file: Check for magic number of encryption.
-         */
-        if (filesize == 0)
-          cryptkey = check_for_cryptkey(cryptkey, ptr, &size,
-              &filesize, newfile, sfname,
-              &did_ask_for_key);
-        /*
-         * Decrypt the read bytes.
-         */
-        if (cryptkey != NULL && size > 0)
-          crypt_decode(ptr, size);
       }
+
       skip_read = FALSE;
 
       /*
-       * At start of file (or after crypt magic number): Check for BOM.
+       * At start of file: Check for BOM.
        * Also check for a BOM for other Unicode encodings, but not after
        * converting with 'charconvert' or when a BOM has already been
        * found.
        */
-      if ((filesize == 0
-           || (filesize == (CRYPT_MAGIC_LEN
-                            + crypt_salt_len[use_crypt_method]
-                            + crypt_seed_len[use_crypt_method])
-               && cryptkey != NULL)
-           )
+      if ((filesize == 0)
           && (fio_flags == FIO_UCSBOM
               || (!curbuf->b_p_bomb
                   && tmpname == NULL
@@ -1538,7 +1540,7 @@ retry:
           /* Detected a UTF-8 error. */
 rewind_retry:
           /* Retry reading with another conversion. */
-# if defined(FEAT_EVAL) && defined(USE_ICONV)
+# ifdef USE_ICONV
           if (*p_ccv != NUL && iconv_fd != (iconv_t)-1)
             /* iconv() failed, try 'charconvert' */
             did_iconv = TRUE;
@@ -1734,15 +1736,6 @@ failed:
   if (set_options)
     save_file_ff(curbuf);               /* remember the current file format */
 
-  crypt_method_used = use_crypt_method;
-  if (cryptkey != NULL) {
-    crypt_pop_state();
-    if (cryptkey != curbuf->b_p_key)
-      free_crypt_key(cryptkey);
-    /* don't set cryptkey to NULL, it's used below as a flag that
-     * encryption was used */
-  }
-
   /* If editing a new file: set 'fenc' for the current buffer.
    * Also for ":read ++edit file". */
   if (set_options)
@@ -1881,13 +1874,6 @@ failed:
         STRCAT(IObuff, _("[converted]"));
         c = TRUE;
       }
-      if (cryptkey != NULL) {
-        if (crypt_method_used == 1)
-          STRCAT(IObuff, _("[blowfish]"));
-        else
-          STRCAT(IObuff, _("[crypted]"));
-        c = TRUE;
-      }
       if (conv_error != 0) {
         sprintf((char *)IObuff + STRLEN(IObuff),
             _("[CONVERSION ERROR in line %" PRId64 "]"), (int64_t)conv_error);
@@ -1902,12 +1888,6 @@ failed:
       }
       if (msg_add_fileformat(fileformat))
         c = TRUE;
-      if (cryptkey != NULL)
-        msg_add_lines(c, (long)linecnt, filesize
-            - CRYPT_MAGIC_LEN
-            - crypt_salt_len[use_crypt_method]
-            - crypt_seed_len[use_crypt_method]);
-      else
         msg_add_lines(c, (long)linecnt, filesize);
 
       free(keep_msg);
@@ -2138,11 +2118,9 @@ static char_u *next_fenc(char_u **pp)
   } else {
     r = vim_strnsave(*pp, (int)(p - *pp));
     *pp = p + 1;
-    if (r != NULL) {
-      p = enc_canonize(r);
-      free(r);
-      r = p;
-    }
+    p = enc_canonize(r);
+    free(r);
+    r = p;
   }
   if (r == NULL) {      /* out of memory */
     r = (char_u *)"";
@@ -2216,178 +2194,6 @@ static void check_marks_read(void)
    * the ' parameter after opening a buffer. */
   curbuf->b_marks_read = TRUE;
 }
-
-/*
- * Get the crypt method used for a file from "ptr[len]", the magic text at the
- * start of the file.
- * Returns -1 when no encryption used.
- */
-static int crypt_method_from_magic(char *ptr, int len)
-{
-  int i;
-
-  for (i = 0; i < (int)(sizeof(crypt_magic) / sizeof(crypt_magic[0])); i++) {
-    if (len < (CRYPT_MAGIC_LEN + crypt_salt_len[i] + crypt_seed_len[i]))
-      continue;
-    if (memcmp(ptr, crypt_magic[i], CRYPT_MAGIC_LEN) == 0)
-      return i;
-  }
-
-  i = (int)STRLEN(crypt_magic_head);
-  if (len >= i && memcmp(ptr, crypt_magic_head, i) == 0)
-    EMSG(_("E821: File is encrypted with unknown method"));
-
-  return -1;
-}
-
-/*
- * Check for magic number used for encryption.  Applies to the current buffer.
- * If found, the magic number is removed from ptr[*sizep] and *sizep and
- * *filesizep are updated.
- * Return the (new) encryption key, NULL for no encryption.
- */
-static char_u *
-check_for_cryptkey (
-    char_u *cryptkey,          /* previous encryption key or NULL */
-    char_u *ptr,               /* pointer to read bytes */
-    long *sizep,             /* length of read bytes */
-    off_t *filesizep,         /* nr of bytes used from file */
-    int newfile,                    /* editing a new buffer */
-    char_u *fname,             /* file name to display */
-    int *did_ask           /* flag: whether already asked for key */
-)
-{
-  int method = crypt_method_from_magic((char *)ptr, *sizep);
-  int b_p_ro = curbuf->b_p_ro;
-
-  if (method >= 0) {
-    /* Mark the buffer as read-only until the decryption has taken place.
-     * Avoids accidentally overwriting the file with garbage. */
-    curbuf->b_p_ro = TRUE;
-
-    set_crypt_method(curbuf, method);
-    if (method > 0)
-      (void)blowfish_self_test();
-    if (cryptkey == NULL && !*did_ask) {
-      if (*curbuf->b_p_key)
-        cryptkey = curbuf->b_p_key;
-      else {
-        /* When newfile is TRUE, store the typed key in the 'key'
-         * option and don't free it.  bf needs hash of the key saved.
-         * Don't ask for the key again when first time Enter was hit.
-         * Happens when retrying to detect encoding. */
-        smsg((char_u *)_(need_key_msg), fname);
-        msg_scroll = TRUE;
-        cryptkey = get_crypt_key(newfile, FALSE);
-        *did_ask = TRUE;
-
-        /* check if empty key entered */
-        if (cryptkey != NULL && *cryptkey == NUL) {
-          if (cryptkey != curbuf->b_p_key)
-            free(cryptkey);
-          cryptkey = NULL;
-        }
-      }
-    }
-
-    if (cryptkey != NULL) {
-      int seed_len = crypt_seed_len[method];
-      int salt_len = crypt_salt_len[method];
-
-      crypt_push_state();
-      use_crypt_method = method;
-      if (method == 0)
-        crypt_init_keys(cryptkey);
-      else {
-        bf_key_init(cryptkey, ptr + CRYPT_MAGIC_LEN, salt_len);
-        bf_cfb_init(ptr + CRYPT_MAGIC_LEN + salt_len, seed_len);
-      }
-
-      /* Remove magic number from the text */
-      *filesizep += CRYPT_MAGIC_LEN + salt_len + seed_len;
-      *sizep -= CRYPT_MAGIC_LEN + salt_len + seed_len;
-      memmove(ptr, ptr + CRYPT_MAGIC_LEN + salt_len + seed_len,
-          (size_t)*sizep);
-      /* Restore the read-only flag. */
-      curbuf->b_p_ro = b_p_ro;
-    }
-  }
-  /* When starting to edit a new file which does not have encryption, clear
-   * the 'key' option, except when starting up (called with -x argument) */
-  else if (newfile && *curbuf->b_p_key != NUL && !starting)
-    set_option_value((char_u *)"key", 0L, (char_u *)"", OPT_LOCAL);
-
-  return cryptkey;
-}
-
-/*
- * Check for magic number used for encryption.  Applies to the current buffer.
- * If found and decryption is possible returns OK;
- */
-int prepare_crypt_read(FILE *fp)
-{
-  int method;
-  char_u buffer[CRYPT_MAGIC_LEN + CRYPT_SALT_LEN_MAX
-                + CRYPT_SEED_LEN_MAX + 2];
-
-  if (fread(buffer, CRYPT_MAGIC_LEN, 1, fp) != 1)
-    return FAIL;
-  method = crypt_method_from_magic((char *)buffer,
-      CRYPT_MAGIC_LEN +
-      CRYPT_SEED_LEN_MAX +
-      CRYPT_SALT_LEN_MAX);
-  if (method < 0 || method != get_crypt_method(curbuf))
-    return FAIL;
-
-  crypt_push_state();
-  if (method == 0)
-    crypt_init_keys(curbuf->b_p_key);
-  else {
-    int salt_len = crypt_salt_len[method];
-    int seed_len = crypt_seed_len[method];
-
-    if (fread(buffer, salt_len + seed_len, 1, fp) != 1)
-      return FAIL;
-    bf_key_init(curbuf->b_p_key, buffer, salt_len);
-    bf_cfb_init(buffer + salt_len, seed_len);
-  }
-  return OK;
-}
-
-/*
- * Prepare for writing encrypted bytes for buffer "buf".
- * Returns a pointer to an allocated header of length "*lenp".
- * When out of memory returns NULL.
- * Otherwise calls crypt_push_state(), call crypt_pop_state() later.
- */
-char_u *prepare_crypt_write(buf_T *buf, int *lenp)
-{
-  char_u  *header = xcalloc(1, CRYPT_MAGIC_LEN + CRYPT_SALT_LEN_MAX
-                   + CRYPT_SEED_LEN_MAX + 2);
-  int seed_len = crypt_seed_len[get_crypt_method(buf)];
-  int salt_len = crypt_salt_len[get_crypt_method(buf)];
-  char_u  *salt;
-  char_u  *seed;
-
-  crypt_push_state();
-  use_crypt_method = get_crypt_method(buf);      /* select zip or blowfish */
-  vim_strncpy(header, (char_u *)crypt_magic[use_crypt_method],
-      CRYPT_MAGIC_LEN);
-  if (use_crypt_method == 0)
-    crypt_init_keys(buf->b_p_key);
-  else {
-    /* Using blowfish, add salt and seed. */
-    salt = header + CRYPT_MAGIC_LEN;
-    seed = salt + salt_len;
-    sha2_seed(salt, salt_len, seed, seed_len);
-    bf_key_init(buf->b_p_key, salt, salt_len);
-    bf_cfb_init(seed, seed_len);
-  }
-
-  *lenp = CRYPT_MAGIC_LEN + salt_len + seed_len;
-  return header;
-}
-
 
 #ifdef UNIX
 static void 
@@ -2501,7 +2307,6 @@ buf_write (
 #endif
   int write_undo_file = FALSE;
   context_sha256_T sha_ctx;
-  int crypt_method_used;
 
   if (fname == NULL || *fname == NUL)   /* safety check */
     return FAIL;
@@ -3477,28 +3282,6 @@ restore_backup:
 
 
   write_info.bw_fd = fd;
-
-  if (*buf->b_p_key != NUL && !filtering) {
-    char_u *header;
-    int header_len;
-
-    header = prepare_crypt_write(buf, &header_len);
-    if (header == NULL)
-      end = 0;
-    else {
-      /* Write magic number, so that Vim knows that this file is
-       * encrypted when reading it again.  This also undergoes utf-8 to
-       * ucs-2/4 conversion when needed. */
-      write_info.bw_buf = header;
-      write_info.bw_len = header_len;
-      write_info.bw_flags = FIO_NOCONVERT;
-      if (buf_write_bytes(&write_info) == FAIL)
-        end = 0;
-      wb_flags |= FIO_ENCRYPTED;
-      free(header);
-    }
-  }
-
   write_info.bw_buf = buffer;
   nchars = 0;
 
@@ -3509,14 +3292,13 @@ restore_backup:
     write_bin = buf->b_p_bin;
 
   /*
-   * The BOM is written just after the encryption magic number.
-   * Skip it when appending and the file already existed, the BOM only makes
-   * sense at the start of the file.
+   * Skip the BOM when appending and the file already existed, the BOM 
+   * only makes sense at the start of the file.
    */
   if (buf->b_p_bomb && !write_bin && (!append || perm < 0)) {
     write_info.bw_len = make_bom(buffer, fenc);
     if (write_info.bw_len > 0) {
-      /* don't convert, do encryption */
+      /* don't convert */
       write_info.bw_flags = FIO_NOCONVERT | wb_flags;
       if (buf_write_bytes(&write_info) == FAIL)
         end = 0;
@@ -3677,10 +3459,6 @@ restore_backup:
   if (!backup_copy)
     mch_set_acl(wfname, acl);
 #endif
-  crypt_method_used = use_crypt_method;
-  if (wb_flags & FIO_ENCRYPTED)
-    crypt_pop_state();
-
 
   if (wfname != fname) {
     /*
@@ -3706,7 +3484,7 @@ restore_backup:
               "E513: write error, conversion failed (make 'fenc' empty to override)");
         else {
           errmsg_allocated = TRUE;
-          errmsg = alloc(300);
+          errmsg = xmalloc(300);
           vim_snprintf((char *)errmsg, 300,
               _("E513: write error, conversion failed in line %" PRId64
                 " (make 'fenc' empty to override)"),
@@ -3799,13 +3577,6 @@ restore_backup:
     /* may add [unix/dos/mac] */
     if (msg_add_fileformat(fileformat))
       c = TRUE;
-    if (wb_flags & FIO_ENCRYPTED) {
-      if (crypt_method_used == 1)
-        STRCAT(IObuff, _("[blowfish]"));
-      else
-        STRCAT(IObuff, _("[crypted]"));
-      c = TRUE;
-    }
     msg_add_lines(c, (long)lnum, nchars);       /* add line/char count */
     if (!shortmess(SHM_WRITE)) {
       if (append)
@@ -4163,7 +3934,7 @@ static int time_differs(long t1, long t2)
 
 /*
  * Call write() to write a number of bytes to the file.
- * Handles encryption and 'encoding' conversion.
+ * Handles 'encoding' conversion.
  *
  * Return FAIL for failure, OK otherwise.
  */
@@ -4177,7 +3948,7 @@ static int buf_write_bytes(struct bw_info *ip)
 #endif
 
   /*
-   * Skip conversion when writing the crypt magic number or the BOM.
+   * Skip conversion when writing the BOM.
    */
   if (!(flags & FIO_NOCONVERT)) {
     char_u          *p;
@@ -4365,9 +4136,6 @@ static int buf_write_bytes(struct bw_info *ip)
     }
 # endif
   }
-
-  if (flags & FIO_ENCRYPTED)            /* encrypt the data */
-    crypt_encode(buf, len, buf);
 
   wlen = write_eintr(ip->bw_fd, buf, len);
   return (wlen < len) ? FAIL : OK;
@@ -4651,7 +4419,7 @@ modname (
    * (we need the full path in case :cd is used).
    */
   if (fname == NULL || *fname == NUL) {
-    retval = alloc((unsigned)(MAXPATHL + extlen + 3));
+    retval = xmalloc(MAXPATHL + extlen + 3);
     if (os_dirname(retval, MAXPATHL) == FAIL ||
         (fnamelen = (int)STRLEN(retval)) == 0) {
       free(retval);
@@ -4664,7 +4432,7 @@ modname (
     prepend_dot = FALSE;            /* nothing to prepend a dot to */
   } else {
     fnamelen = (int)STRLEN(fname);
-    retval = alloc((unsigned)(fnamelen + extlen + 3));
+    retval = xmalloc(fnamelen + extlen + 3);
     STRCPY(retval, fname);
   }
 
@@ -5037,7 +4805,7 @@ static int move_lines(buf_T *frombuf, buf_T *tobuf)
   curbuf = tobuf;
   for (lnum = 1; lnum <= frombuf->b_ml.ml_line_count; ++lnum) {
     p = vim_strsave(ml_get_buf(frombuf, lnum, FALSE));
-    if (p == NULL || ml_append(lnum - 1, p, 0, FALSE) == FAIL) {
+    if (ml_append(lnum - 1, p, 0, FALSE) == FAIL) {
       free(p);
       retval = FAIL;
       break;
@@ -5214,8 +4982,7 @@ buf_check_timestamp (
     if (path != NULL) {
       if (!helpmesg)
         mesg2 = "";
-      tbuf = alloc((unsigned)(STRLEN(path) + STRLEN(mesg)
-                              + STRLEN(mesg2) + 2));
+      tbuf = xmalloc(STRLEN(path) + STRLEN(mesg) + STRLEN(mesg2) + 2);
       sprintf((char *)tbuf, mesg, path);
       /* Set warningmsg here, before the unimportant and output-specific
        * mesg2 has been appended. */
@@ -5641,63 +5408,8 @@ void forward_slash(char_u *fname)
 
 /*
  * Code for automatic commands.
- *
- * Only included when "FEAT_AUTOCMD" has been defined.
  */
 
-
-/*
- * The autocommands are stored in a list for each event.
- * Autocommands for the same pattern, that are consecutive, are joined
- * together, to avoid having to match the pattern too often.
- * The result is an array of Autopat lists, which point to AutoCmd lists:
- *
- * first_autopat[0] --> Autopat.next  -->  Autopat.next -->  NULL
- *			Autopat.cmds	   Autopat.cmds
- *			    |			 |
- *			    V			 V
- *			AutoCmd.next	   AutoCmd.next
- *			    |			 |
- *			    V			 V
- *			AutoCmd.next		NULL
- *			    |
- *			    V
- *			   NULL
- *
- * first_autopat[1] --> Autopat.next  -->  NULL
- *			Autopat.cmds
- *			    |
- *			    V
- *			AutoCmd.next
- *			    |
- *			    V
- *			   NULL
- *   etc.
- *
- *   The order of AutoCmds is important, this is the order in which they were
- *   defined and will have to be executed.
- */
-typedef struct AutoCmd {
-  char_u          *cmd;                 /* The command to be executed (NULL
-                                           when command has been removed) */
-  char nested;                          /* If autocommands nest here */
-  char last;                            /* last command in list */
-  scid_T scriptID;                      /* script ID where defined */
-  struct AutoCmd  *next;                /* Next AutoCmd in list */
-} AutoCmd;
-
-typedef struct AutoPat {
-  char_u          *pat;                 /* pattern as typed (NULL when pattern
-                                           has been removed) */
-  regprog_T       *reg_prog;            /* compiled regprog for pattern */
-  AutoCmd         *cmds;                /* list of commands to do */
-  struct AutoPat  *next;                /* next AutoPat in AutoPat list */
-  int group;                            /* group ID */
-  int patlen;                           /* strlen() of pat */
-  int buflocal_nr;                      /* !=0 for buffer-local AutoPat */
-  char allow_dirs;                      /* Pattern may match whole path */
-  char last;                            /* last pattern for apply_autocmds() */
-} AutoPat;
 
 static struct event_name {
   char        *name;    /* event name */
@@ -5804,22 +5516,6 @@ static AutoPat *first_autopat[NUM_EVENTS] =
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
-/*
- * struct used to keep status while executing autocommands for an event.
- */
-typedef struct AutoPatCmd {
-  AutoPat     *curpat;          /* next AutoPat to examine */
-  AutoCmd     *nextcmd;         /* next AutoCmd to execute */
-  int group;                    /* group being used */
-  char_u      *fname;           /* fname to match with */
-  char_u      *sfname;          /* sfname to match with */
-  char_u      *tail;            /* tail of fname */
-  event_T event;                /* current event */
-  int arg_bufnr;                /* initially equal to <abuf>, set to zero when
-                                   buf is deleted */
-  struct AutoPatCmd   *next;    /* chain of active apc-s for auto-invalidation*/
-} AutoPatCmd;
-
 static AutoPatCmd *active_apc_list = NULL; /* stack of active autocommands */
 
 /*
@@ -5835,24 +5531,6 @@ static int current_augroup = AUGROUP_DEFAULT;
 
 static int au_need_clean = FALSE;   /* need to delete marked patterns */
 
-static void show_autocmd(AutoPat *ap, event_T event);
-static void au_remove_pat(AutoPat *ap);
-static void au_remove_cmds(AutoPat *ap);
-static void au_cleanup(void);
-static int au_new_group(char_u *name);
-static void au_del_group(char_u *name);
-static event_T event_name2nr(char_u *start, char_u **end);
-static char_u *event_nr2name(event_T event);
-static char_u *find_end_event(char_u *arg, int have_group);
-static int event_ignored(event_T event);
-static int au_get_grouparg(char_u **argp);
-static int do_autocmd_event(event_T event, char_u *pat, int nested,
-                            char_u *cmd, int forceit,
-                            int group);
-static int apply_autocmds_group(event_T event, char_u *fname, char_u *fname_io,
-                                int force, int group, buf_T *buf,
-                                exarg_T *eap);
-static void auto_next_pat(AutoPatCmd *apc, int stop_at_last);
 
 
 static event_T last_event;
@@ -6037,8 +5715,6 @@ static int au_new_group(char_u *name)
     }
 
     AUGROUP_NAME(i) = vim_strsave(name);
-    if (AUGROUP_NAME(i) == NULL)
-      return AUGROUP_ERROR;
     if (i == augroups.ga_len)
       ++augroups.ga_len;
   }
@@ -6242,18 +5918,14 @@ char_u *au_event_disable(char *what)
   char_u      *save_ei;
 
   save_ei = vim_strsave(p_ei);
-  if (save_ei != NULL) {
-    new_ei = vim_strnsave(p_ei, (int)(STRLEN(p_ei) + STRLEN(what)));
-    if (new_ei != NULL) {
-      if (*what == ',' && *p_ei == NUL)
-        STRCPY(new_ei, what + 1);
-      else
-        STRCAT(new_ei, what);
-      set_string_option_direct((char_u *)"ei", -1, new_ei,
-          OPT_FREE, SID_NONE);
-      free(new_ei);
-    }
-  }
+  new_ei = vim_strnsave(p_ei, (int)(STRLEN(p_ei) + STRLEN(what)));
+  if (*what == ',' && *p_ei == NUL)
+    STRCPY(new_ei, what + 1);
+  else
+    STRCAT(new_ei, what);
+  set_string_option_direct((char_u *)"ei", -1, new_ei, OPT_FREE, SID_NONE);
+  free(new_ei);
+
   return save_ei;
 }
 
@@ -6404,7 +6076,7 @@ void do_autocmd(char_u *arg, int forceit)
  * Find the group ID in a ":autocmd" or ":doautocmd" argument.
  * The "argp" argument is advanced to the following argument.
  *
- * Returns the group ID, AUGROUP_ERROR for error (out of memory).
+ * Returns the group ID or AUGROUP_ALL.
  */
 static int au_get_grouparg(char_u **argp)
 {
@@ -6416,8 +6088,6 @@ static int au_get_grouparg(char_u **argp)
   p = skiptowhite(arg);
   if (p > arg) {
     group_name = vim_strnsave(arg, (int)(p - arg));
-    if (group_name == NULL)             /* out of memory */
-      return AUGROUP_ERROR;
     group = au_find_group(group_name);
     if (group == AUGROUP_ERROR)
       group = AUGROUP_ALL;              /* no match, use all groups */
@@ -6584,13 +6254,9 @@ static int do_autocmd_event(event_T event, char_u *pat, int nested, char_u *cmd,
           return FAIL;
         }
 
-        ap = (AutoPat *)alloc((unsigned)sizeof(AutoPat));
+        ap = xmalloc(sizeof(AutoPat));
         ap->pat = vim_strnsave(pat, patlen);
         ap->patlen = patlen;
-        if (ap->pat == NULL) {
-          free(ap);
-          return FAIL;
-        }
 
         if (is_buflocal) {
           ap->buflocal_nr = buflocal_nr;
@@ -6625,13 +6291,9 @@ static int do_autocmd_event(event_T event, char_u *pat, int nested, char_u *cmd,
       prev_ac = &(ap->cmds);
       while ((ac = *prev_ac) != NULL)
         prev_ac = &ac->next;
-      ac = (AutoCmd *)alloc((unsigned)sizeof(AutoCmd));
+      ac = xmalloc(sizeof(AutoCmd));
       ac->cmd = vim_strsave(cmd);
       ac->scriptID = current_SID;
-      if (ac->cmd == NULL) {
-        free(ac);
-        return FAIL;
-      }
       ac->next = NULL;
       *prev_ac = ac;
       ac->nested = nested;
@@ -6756,7 +6418,6 @@ int check_nomodeline(char_u **argp)
  * Search for a visible window containing the current buffer.  If there isn't
  * one then use "aucmd_win".
  * Set "curbuf" and "curwin" to match "buf".
- * When FEAT_AUTOCMD is not defined another version is used, see below.
  */
 void 
 aucmd_prepbuf (
@@ -6842,7 +6503,6 @@ aucmd_prepbuf (
 /*
  * Cleanup after executing autocommands for a (hidden) buffer.
  * Restore the window as it was (if possible).
- * When FEAT_AUTOCMD is not defined another version is used, see below.
  */
 void 
 aucmd_restbuf (
@@ -7438,8 +7098,7 @@ auto_next_pat (
           : ap->buflocal_nr == apc->arg_bufnr) {
         name = event_nr2name(apc->event);
         s = _("%s Auto commands for \"%s\"");
-        sourcing_name = alloc((unsigned)(STRLEN(s)
-                                         + STRLEN(name) + ap->patlen + 1));
+        sourcing_name = xmalloc(STRLEN(s) + STRLEN(name) + ap->patlen + 1);
         sprintf((char *)sourcing_name, s,
             (char *)name, (char *)ap->pat);
         if (p_verbose >= 8) {
@@ -7542,8 +7201,7 @@ int has_autocmd(event_T event, char_u *sfname, buf_T *buf)
    * autocommand patterns portable between Unix and MS-DOS.
    */
   sfname = vim_strsave(sfname);
-  if (sfname != NULL)
-    forward_slash(sfname);
+  forward_slash(sfname);
   forward_slash(fname);
 #endif
 
@@ -7681,8 +7339,6 @@ int au_exists(char_u *arg)
 
   /* Make a copy so that we can change the '#' chars to a NUL. */
   arg_save = vim_strsave(arg);
-  if (arg_save == NULL)
-    return FALSE;
   p = vim_strchr(arg_save, '#');
   if (p != NULL)
     *p++ = NUL;
@@ -8107,10 +7763,7 @@ file_pat_to_reg_pat (
  * Version of read() that retries when interrupted by EINTR (possibly
  * by a SIGWINCH).
  */
-long read_eintr(fd, buf, bufsize)
-int fd;
-void    *buf;
-size_t bufsize;
+long read_eintr(int fd, void *buf, size_t bufsize)
 {
   long ret;
 
@@ -8126,10 +7779,7 @@ size_t bufsize;
  * Version of write() that retries when interrupted by EINTR (possibly
  * by a SIGWINCH).
  */
-long write_eintr(fd, buf, bufsize)
-int fd;
-void    *buf;
-size_t bufsize;
+long write_eintr(int fd, void *buf, size_t bufsize)
 {
   long ret = 0;
   long wlen;

@@ -9,7 +9,6 @@
 ///
 /// Vim specific notes:
 /// Functions exported by this file:
-///  1. sha256_key() hashes the password to 64 bytes char string.
 ///  2. sha2_seed() generates a random header.
 /// sha256_self_test() is implicitly called once.
 
@@ -18,8 +17,10 @@
 #include "nvim/vim.h"
 #include "nvim/sha256.h"
 
-static void sha256_process(context_sha256_T *ctx, char_u data[64]);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "sha256.c.generated.h"
+#endif
 #define GET_UINT32(n, b, i) { \
   (n) = ((uint32_t)(b)[(i)] << 24) \
         | ((uint32_t)(b)[(i) + 1] << 16) \
@@ -249,7 +250,6 @@ void sha256_finish(context_sha256_T *ctx, char_u digest[32])
   PUT_UINT32(ctx->state[7], digest, 28);
 }
 
-static unsigned int get_some_time(void);
 
 /// Gets the hex digest of the buffer.
 ///
@@ -282,23 +282,6 @@ char_u *sha256_bytes(char_u *buf, int buf_len, char_u *salt, int salt_len)
   }
   hexit[sizeof(hexit) - 1] = '\0';
   return hexit;
-}
-
-/// Gets sha256(buf) as 64 hex characters in a static array.
-///
-/// @param buf
-/// @param salt
-/// @param salt_len
-///
-/// @returns sha256(buf) as 64 hex chars in static array.
-char_u* sha256_key(char_u *buf, char_u *salt, int salt_len)
-{
-  // No passwd means don't encrypt
-  if ((buf == NULL) || (*buf == NUL)) {
-    return (char_u *)"";
-  }
-
-  return sha256_bytes(buf, (int)STRLEN(buf), salt, salt_len);
 }
 
 // These are the standard FIPS-180-2 test vectors

@@ -103,8 +103,6 @@ EXTERN int exec_from_reg INIT(= FALSE);         /* executing register */
 
 EXTERN int screen_cleared INIT(= FALSE);        /* screen has been cleared */
 
-EXTERN int use_crypt_method INIT(= 0);
-
 /*
  * When '$' is included in 'cpoptions' option set:
  * When a change command is given that deletes only part of a line, a dollar
@@ -397,7 +395,6 @@ EXTERN int updating_screen INIT(= FALSE);
  * All windows are linked in a list. firstwin points to the first entry,
  * lastwin to the last entry (can be the same as firstwin) and curwin to the
  * currently active window.
- * Without the FEAT_WINDOWS they are all equal.
  */
 EXTERN win_T    *firstwin;              /* first window */
 EXTERN win_T    *lastwin;               /* last window */
@@ -1116,8 +1113,6 @@ EXTERN char_u e_invalidreg[] INIT(= N_("E850: Invalid register name"));
 
 EXTERN char top_bot_msg[] INIT(= N_("search hit TOP, continuing at BOTTOM"));
 EXTERN char bot_top_msg[] INIT(= N_("search hit BOTTOM, continuing at TOP"));
-
-EXTERN char need_key_msg[] INIT(= N_("Need encryption key for \"%s\""));
 
 /* For undo we need to know the lowest time possible. */
 EXTERN time_t starttime;

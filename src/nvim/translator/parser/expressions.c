@@ -84,34 +84,9 @@
 /// True if parsing left side of an assignment
 #define IS_LVALUE (*eo == kExprLvalue)
 
-// {{{ Function declarations
-static ExpressionNode *expr_alloc(ExpressionType type);
-static bool isnamechar(int c);
-static const char_u *find_id_end(const char_u **arg);
-static int get_fname_script_len(const char_u *p);
-static EDEC(parse_name, ExpressionNode *parse1_node, const char_u *parse1_arg);
-static EDEC_NOARGS(parse_list);
-static EDEC(parse_dictionary, ExpressionNode **parse1_node,
-                              const char_u **parse1_arg);
-static const char_u *find_option_end(const char_u **arg);
-static EDEC_NOARGS(parse_option);
-static const char_u *find_env_end(const char_u **arg);
-static EDEC_NOARGS(parse_environment_variable);
-static EDEC_NOARGS(parse_dot_subscript);
-static EDEC_NOARGS(parse_func_call);
-static EDEC_NOARGS(parse_subscript);
-static EDEC(handle_subscript, bool parse_funccall);
-static void find_nr_end(const char_u **arg, ExpressionType *type,
-                        bool dooct, bool dohex);
-static EDEC(parse7, bool want_string, bool parse_funccall);
-static EDEC(parse6, bool want_string);
-static EDEC_NOARGS(parse5);
-static EDEC_NOARGS(parse4);
-static EDEC(parse23, uint8_t level);
-static EDEC_NOARGS(parse3);
-static EDEC_NOARGS(parse2);
-static EDEC_NOARGS(parse1);
-// }}}
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/parser/expressions.c.generated.h"
+#endif
 
 #define skipwhite(arg) skipwhite((char_u *) (arg))
 #define skipdigits(arg) skipdigits((char_u *) (arg))

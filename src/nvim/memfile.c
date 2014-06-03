@@ -50,30 +50,10 @@
 
 static long_u total_mem_used = 0;       /* total memory used for memfiles */
 
-static void mf_ins_hash(memfile_T *, bhdr_T *);
-static void mf_rem_hash(memfile_T *, bhdr_T *);
-static bhdr_T *mf_find_hash(memfile_T *, blocknr_T);
-static void mf_ins_used(memfile_T *, bhdr_T *);
-static void mf_rem_used(memfile_T *, bhdr_T *);
-static bhdr_T *mf_release(memfile_T *, int);
-static bhdr_T *mf_alloc_bhdr(memfile_T *, int);
-static void mf_free_bhdr(bhdr_T *);
-static void mf_ins_free(memfile_T *, bhdr_T *);
-static bhdr_T *mf_rem_free(memfile_T *);
-static int mf_read(memfile_T *, bhdr_T *);
-static int mf_write(memfile_T *, bhdr_T *);
-static int mf_write_block(memfile_T *mfp, bhdr_T *hp, off_t offset,
-                          unsigned size);
-static int mf_trans_add(memfile_T *, bhdr_T *);
-static void mf_do_open(memfile_T *, char_u *, int);
-static void mf_hash_init(mf_hashtab_T *);
-static void mf_hash_free(mf_hashtab_T *);
-static void mf_hash_free_all(mf_hashtab_T *);
-static mf_hashitem_T *mf_hash_find(mf_hashtab_T *, blocknr_T);
-static void mf_hash_add_item(mf_hashtab_T *, mf_hashitem_T *);
-static void mf_hash_rem_item(mf_hashtab_T *, mf_hashitem_T *);
-static void mf_hash_grow(mf_hashtab_T *);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "memfile.c.generated.h"
+#endif
 /*
  * The functions for using a memfile:
  *
@@ -104,11 +84,9 @@ static void mf_hash_grow(mf_hashtab_T *);
  */
 memfile_T *mf_open(char_u *fname, int flags)
 {
-  memfile_T           *mfp;
   off_t size;
 
-  if ((mfp = (memfile_T *)alloc((unsigned)sizeof(memfile_T))) == NULL)
-    return NULL;
+  memfile_T *mfp = xmalloc(sizeof(memfile_T));
 
   if (fname == NULL) {      /* no file for this memfile, use memory only */
     mfp->mf_fname = NULL;
@@ -132,7 +110,6 @@ memfile_T *mf_open(char_u *fname, int flags)
   mf_hash_init(&mfp->mf_hash);
   mf_hash_init(&mfp->mf_trans);
   mfp->mf_page_size = MEMFILE_PAGE_SIZE;
-  mfp->mf_old_key = NULL;
 
   /*
    * Try to set the page size equal to the block size of the device.
@@ -317,14 +294,14 @@ bhdr_T *mf_new(memfile_T *mfp, int negative, int page_count)
      * just use the number and free the bhdr_T from the free list
      */
     if (freep->bh_page_count > page_count) {
-      if (hp == NULL && (hp = mf_alloc_bhdr(mfp, page_count)) == NULL)
-        return NULL;
+      if (hp == NULL) {
+        hp = mf_alloc_bhdr(mfp, page_count);
+      }
       hp->bh_bnum = freep->bh_bnum;
       freep->bh_bnum += page_count;
       freep->bh_page_count -= page_count;
     } else if (hp == NULL) {      /* need to allocate memory for this block */
-      if ((p = (char_u *)alloc(mfp->mf_page_size * page_count)) == NULL)
-        return NULL;
+      p = xmalloc(mfp->mf_page_size * page_count);
       hp = mf_rem_free(mfp);
       hp->bh_data = p;
     } else {              /* use the number, remove entry from free list */
@@ -333,8 +310,9 @@ bhdr_T *mf_new(memfile_T *mfp, int negative, int page_count)
       free(freep);
     }
   } else {    /* get a new number */
-    if (hp == NULL && (hp = mf_alloc_bhdr(mfp, page_count)) == NULL)
-      return NULL;
+    if (hp == NULL) {
+      hp = mf_alloc_bhdr(mfp, page_count);
+    }
     if (negative) {
       hp->bh_bnum = mfp->mf_blocknr_min--;
       mfp->mf_neg_count++;
@@ -387,8 +365,9 @@ bhdr_T *mf_get(memfile_T *mfp, blocknr_T nr, int page_count)
      * If not, allocate a new block.
      */
     hp = mf_release(mfp, page_count);
-    if (hp == NULL && (hp = mf_alloc_bhdr(mfp, page_count)) == NULL)
-      return NULL;
+    if (hp == NULL) {
+      hp = mf_alloc_bhdr(mfp, page_count);
+    }
 
     hp->bh_bnum = nr;
     hp->bh_flags = 0;
@@ -690,10 +669,7 @@ static bhdr_T *mf_release(memfile_T *mfp, int page_count)
    */
   if (hp->bh_page_count != page_count) {
     free(hp->bh_data);
-    if ((hp->bh_data = alloc(mfp->mf_page_size * page_count)) == NULL) {
-      free(hp);
-      return NULL;
-    }
+    hp->bh_data = xmalloc(mfp->mf_page_size * page_count);
     hp->bh_page_count = page_count;
   }
   return hp;
@@ -744,16 +720,10 @@ int mf_release_all(void)
  */
 static bhdr_T *mf_alloc_bhdr(memfile_T *mfp, int page_count)
 {
-  bhdr_T      *hp;
+  bhdr_T *hp = xmalloc(sizeof(bhdr_T));
+  hp->bh_data = xmalloc(mfp->mf_page_size * page_count);
+  hp->bh_page_count = page_count;
 
-  if ((hp = (bhdr_T *)alloc((unsigned)sizeof(bhdr_T))) != NULL) {
-    if ((hp->bh_data = (char_u *)alloc(mfp->mf_page_size * page_count))
-        == NULL) {
-      free(hp);                 /* not enough memory */
-      return NULL;
-    }
-    hp->bh_page_count = page_count;
-  }
   return hp;
 }
 
@@ -813,10 +783,6 @@ static int mf_read(memfile_T *mfp, bhdr_T *hp)
     PERROR(_("E295: Read error in swap file"));
     return FAIL;
   }
-
-  /* Decrypt if 'key' is set and this is a data block. */
-  if (*mfp->mf_buffer->b_p_key != NUL)
-    ml_decrypt_data(mfp, hp->bh_data, offset, size);
 
   return OK;
 }
@@ -894,7 +860,6 @@ static int mf_write(memfile_T *mfp, bhdr_T *hp)
 
 /*
  * Write block "hp" with data size "size" to file "mfp->mf_fd".
- * Takes care of encryption.
  * Return FAIL or OK.
  */
 static int mf_write_block(memfile_T *mfp, bhdr_T *hp, off_t offset, unsigned size)
@@ -902,16 +867,8 @@ static int mf_write_block(memfile_T *mfp, bhdr_T *hp, off_t offset, unsigned siz
   char_u      *data = hp->bh_data;
   int result = OK;
 
-  /* Encrypt if 'key' is set and this is a data block. */
-  if (*mfp->mf_buffer->b_p_key != NUL) {
-    data = ml_encrypt_data(mfp, data, offset, size);
-  }
-
   if ((unsigned)write_eintr(mfp->mf_fd, data, size) != size)
     result = FAIL;
-
-  if (data != hp->bh_data)
-    free(data);
 
   return result;
 }
@@ -925,14 +882,12 @@ static int mf_trans_add(memfile_T *mfp, bhdr_T *hp)
 {
   bhdr_T      *freep;
   blocknr_T new_bnum;
-  NR_TRANS    *np;
   int page_count;
 
   if (hp->bh_bnum >= 0)                     /* it's already positive */
     return OK;
 
-  if ((np = (NR_TRANS *)alloc((unsigned)sizeof(NR_TRANS))) == NULL)
-    return FAIL;
+  NR_TRANS *np = xmalloc(sizeof(NR_TRANS));
 
   /*
    * Get a new number for the block.

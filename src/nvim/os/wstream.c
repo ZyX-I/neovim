@@ -12,27 +12,35 @@
 struct wstream {
   uv_stream_t *stream;
   // Memory currently used by pending buffers
-  uint32_t curmem;
+  size_t curmem;
   // Maximum memory used by this instance
-  uint32_t maxmem;
+  size_t maxmem;
   // Number of pending requests
-  uint32_t pending_reqs;
+  size_t pending_reqs;
   bool freed;
+};
+
+struct wbuffer {
+  size_t refcount, size;
+  char *data;
 };
 
 typedef struct {
   WStream *wstream;
-  // Buffer containing data to be written
-  char *buffer;
-  // Size of the buffer
-  uint32_t length;
-  // If it's our responsibility to free the buffer
-  bool free;
+  WBuffer *buffer;
 } WriteData;
 
-static void write_cb(uv_write_t *req, int status);
 
-WStream * wstream_new(uint32_t maxmem)
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "os/wstream.c.generated.h"
+#endif
+
+/// Creates a new WStream instance. A WStream encapsulates all the boilerplate
+/// necessary for writing to a libuv stream.
+///
+/// @param maxmem Maximum amount memory used by this `WStream` instance.
+/// @return The newly-allocated `WStream` instance
+WStream * wstream_new(size_t maxmem)
 {
   WStream *rv = xmalloc(sizeof(WStream));
   rv->maxmem = maxmem;
@@ -44,6 +52,9 @@ WStream * wstream_new(uint32_t maxmem)
   return rv;
 }
 
+/// Frees all memory allocated for a WStream instance
+///
+/// @param wstream The `WStream` instance
 void wstream_free(WStream *wstream)
 {
   if (!wstream->pending_reqs) {
@@ -53,45 +64,73 @@ void wstream_free(WStream *wstream)
   }
 }
 
+/// Sets the underlying `uv_stream_t` instance
+///
+/// @param wstream The `WStream` instance
+/// @param stream The new `uv_stream_t` instance
 void wstream_set_stream(WStream *wstream, uv_stream_t *stream)
 {
   handle_set_wstream((uv_handle_t *)stream, wstream);
   wstream->stream = stream;
 }
 
-bool wstream_write(WStream *wstream, char *buffer, uint32_t length, bool free)
+/// Queues data for writing to the backing file descriptor of a `WStream`
+/// instance. This will fail if the write would cause the WStream use more
+/// memory than specified by `maxmem`.
+///
+/// @param wstream The `WStream` instance
+/// @param buffer The buffer which contains data to be written
+/// @return false if the write failed
+bool wstream_write(WStream *wstream, WBuffer *buffer)
 {
   WriteData *data;
   uv_buf_t uvbuf;
   uv_write_t *req;
 
-  if (wstream->freed) {
-    // Don't accept write requests after the WStream instance was freed
+  // This should not be called after a wstream was freed
+  assert(!wstream->freed);
+
+  if (wstream->curmem + buffer->size > wstream->maxmem) {
     return false;
   }
 
-  if (wstream->curmem + length > wstream->maxmem) {
-    return false;
-  }
-
-  if (free) {
-    // We should only account for buffers that are ours to free
-    wstream->curmem += length;
-  }
-
+  buffer->refcount++;
+  wstream->curmem += buffer->size;
   data = xmalloc(sizeof(WriteData));
   data->wstream = wstream;
   data->buffer = buffer;
-  data->length = length;
-  data->free = free;
   req = xmalloc(sizeof(uv_write_t));
   req->data = data;
-  uvbuf.base = buffer;
-  uvbuf.len = length;
+  uvbuf.base = buffer->data;
+  uvbuf.len = buffer->size;
   wstream->pending_reqs++;
   uv_write(req, wstream->stream, &uvbuf, 1, write_cb);
 
   return true;
+}
+
+/// Creates a WBuffer object for holding output data. Instances of this
+/// object can be reused across WStream instances, and the memory is freed
+/// automatically when no longer needed(it tracks the number of references
+/// internally)
+///
+/// @param data Data stored by the WBuffer
+/// @param size The size of the data array
+/// @param copy If true, the data will be copied into the WBuffer
+/// @return The allocated WBuffer instance
+WBuffer *wstream_new_buffer(char *data, size_t size, bool copy)
+{
+  WBuffer *rv = xmalloc(sizeof(WBuffer));
+  rv->size = size;
+  rv->refcount = 0;
+
+  if (copy) {
+    rv->data = xmemdup(data, size);
+  } else {
+    rv->data = data;
+  }
+
+  return rv;
 }
 
 static void write_cb(uv_write_t *req, int status)
@@ -99,11 +138,12 @@ static void write_cb(uv_write_t *req, int status)
   WriteData *data = req->data;
 
   free(req);
+  data->wstream->curmem -= data->buffer->size;
 
-  if (data->free) {
+  if (!--data->buffer->refcount) {
     // Free the data written to the stream
+    free(data->buffer->data);
     free(data->buffer);
-    data->wstream->curmem -= data->length;
   }
 
   data->wstream->pending_reqs--;

@@ -131,12 +131,7 @@ typedef enum {
 typedef ExpressionNode *(*ExpressionParser)(const char_u **,
                                             ExpressionParserError *);
 
-ExpressionNode *parse0_err(const char_u **arg, ExpressionParserError *error);
-void free_expr(ExpressionNode *node);
-ExpressionNode *parse7_nofunc(const char_u **arg,
-                              ExpressionParserError *error);
-ExpressionNode *parse_mult(const char_u **arg, ExpressionParserError *error,
-                           ExpressionParser parse, const bool listends,
-                           const char_u *endwith);
-
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/parser/expressions.h.generated.h"
+#endif
 #endif  // NEOVIM_TRANSLATOR_PARSER_EXPRESSIONS_H

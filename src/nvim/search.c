@@ -14,6 +14,7 @@
 #include "nvim/vim.h"
 #include "nvim/search.h"
 #include "nvim/charset.h"
+#include "nvim/cursor.h"
 #include "nvim/edit.h"
 #include "nvim/eval.h"
 #include "nvim/ex_cmds.h"
@@ -43,21 +44,10 @@
 #include "nvim/ui.h"
 #include "nvim/window.h"
 
-static void save_re_pat(int idx, char_u *pat, int magic);
-static void set_vv_searchforward(void);
-static int first_submatch(regmmatch_T *rp);
-static int check_prevcol(char_u *linep, int col, int ch, int *prevcol);
-static int inmacro(char_u *, char_u *);
-static int check_linecomment(char_u *line);
-static int cls(void);
-static int skip_chars(int, int);
-static void back_in_line(void);
-static void find_first_blank(pos_T *);
-static void findsent_forward(long count, int at_start_sent);
-static void show_pat_in_path(char_u *, int,
-                             int, int, FILE *, linenr_T *, long);
-static void wvsp_one(FILE *fp, int idx, char *s, int sc);
 
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "search.c.generated.h"
+#endif
 /*
  * This file contains various searching-related routines. These fall into
  * three groups:
@@ -230,35 +220,29 @@ char_u *get_search_pat(void)
 
 /*
  * Reverse text into allocated memory.
- * Returns the allocated string, NULL when out of memory.
+ * Returns the allocated string.
+ *
+ * TODO(philix): move reverse_text() to strings.c
  */
 char_u *reverse_text(char_u *s)
 {
-  unsigned len;
-  unsigned s_i, rev_i;
-  char_u      *rev;
-
   /*
    * Reverse the pattern.
    */
-  len = (unsigned)STRLEN(s);
-  rev = alloc(len + 1);
-  if (rev != NULL) {
-    rev_i = len;
-    for (s_i = 0; s_i < len; ++s_i) {
-      if (has_mbyte) {
-        int mb_len;
-
-        mb_len = (*mb_ptr2len)(s + s_i);
-        rev_i -= mb_len;
-        memmove(rev + rev_i, s + s_i, mb_len);
-        s_i += mb_len - 1;
-      } else
-        rev[--rev_i] = s[s_i];
-
-    }
-    rev[len] = NUL;
+  size_t len = STRLEN(s);
+  char_u *rev = xmalloc(len + 1);
+  size_t rev_i = len;
+  for (size_t s_i = 0; s_i < len; ++s_i) {
+    if (has_mbyte) {
+      int mb_len = (*mb_ptr2len)(s + s_i);
+      rev_i -= mb_len;
+      memmove(rev + rev_i, s + s_i, mb_len);
+      s_i += mb_len - 1;
+    } else
+      rev[--rev_i] = s[s_i];
   }
+  rev[len] = NUL;
+
   return rev;
 }
 
@@ -454,21 +438,22 @@ void last_pat_prog(regmmatch_T *regmatch)
  * if (options & SEARCH_PEEK) check for typed char, cancel search
  *
  * Return FAIL (zero) for failure, non-zero for success.
- * When FEAT_EVAL is defined, returns the index of the first matching
+ * Returns the index of the first matching
  * subpattern plus one; one if there was none.
  */
-int searchit(win, buf, pos, dir, pat, count, options, pat_use, stop_lnum, tm)
-win_T       *win;               /* window to search in; can be NULL for a
-                                   buffer without a window! */
-buf_T       *buf;
-pos_T       *pos;
-int dir;
-char_u      *pat;
-long count;
-int options;
-int pat_use;                    /* which pattern to use when "pat" is empty */
-linenr_T stop_lnum;             /* stop after this line number when != 0 */
-proftime_T  *tm;         /* timeout limit or NULL */
+int searchit(
+    win_T       *win,               /* window to search in, can be NULL for a
+                                       buffer without a window! */
+    buf_T       *buf,
+    pos_T       *pos,
+    int dir,
+    char_u      *pat,
+    long count,
+    int options,
+    int pat_use,                    /* which pattern to use when "pat" is empty */
+    linenr_T stop_lnum,             /* stop after this line number when != 0 */
+    proftime_T  *tm          /* timeout limit or NULL */
+)
 {
   int found;
   linenr_T lnum;                /* no init to shut up Apollo cc */
@@ -904,13 +889,14 @@ static int first_submatch(regmmatch_T *rp)
  *
  * return 0 for failure, 1 for found, 2 for found and line offset added
  */
-int do_search(oap, dirc, pat, count, options, tm)
-oparg_T         *oap;           /* can be NULL */
-int dirc;                       /* '/' or '?' */
-char_u          *pat;
-long count;
-int options;
-proftime_T      *tm;            /* timeout limit or NULL */
+int do_search(
+    oparg_T         *oap,           /* can be NULL */
+    int dirc,                       /* '/' or '?' */
+    char_u          *pat,
+    long count,
+    int options,
+    proftime_T      *tm             /* timeout limit or NULL */
+)
 {
   pos_T pos;                    /* position of the last match */
   char_u          *searchstr;
@@ -1056,8 +1042,8 @@ proftime_T      *tm;            /* timeout limit or NULL */
         p = spats[last_idx].pat;
       else
         p = searchstr;
-      msgbuf = alloc((unsigned)(STRLEN(p) + 40));
-      if (msgbuf != NULL) {
+      msgbuf = xmalloc(STRLEN(p) + 40);
+      {
         msgbuf[0] = dirc;
         if (enc_utf8 && utf_iscomposing(utf_ptr2char(p))) {
           /* Use a space to draw the composing char on. */
@@ -1088,13 +1074,9 @@ proftime_T      *tm;            /* timeout limit or NULL */
          * it would be blanked out again very soon.  Show it on the
          * left, but do reverse the text. */
         if (curwin->w_p_rl && *curwin->w_p_rlc == 's') {
-          char_u *r;
-
-          r = reverse_text(trunc != NULL ? trunc : msgbuf);
-          if (r != NULL) {
-            free(trunc);
-            trunc = r;
-          }
+          char_u *r = reverse_text(trunc != NULL ? trunc : msgbuf);
+          free(trunc);
+          trunc = r;
         }
         if (trunc != NULL) {
           msg_outtrans(trunc);
@@ -1348,7 +1330,7 @@ int searchc(cmdarg_T *cap, int t_cmd)
   else
     cap->oap->inclusive = TRUE;
 
-  p = ml_get_curline();
+  p = get_cursor_line_ptr();
   col = curwin->w_cursor.col;
   len = (int)STRLEN(p);
 
@@ -2425,7 +2407,7 @@ fwd_word (
       /*
        * We'll stop if we land on a blank line
        */
-      if (curwin->w_cursor.col == 0 && *ml_get_curline() == NUL)
+      if (curwin->w_cursor.col == 0 && *get_cursor_line_ptr() == NUL)
         break;
 
       i = inc_cursor();
@@ -3100,7 +3082,6 @@ current_block (
   return OK;
 }
 
-static int in_html_tag(int);
 
 /*
  * Return TRUE if the cursor is on a "<aaa>" tag.  Ignore "<aaa/>".
@@ -3108,7 +3089,7 @@ static int in_html_tag(int);
  */
 static int in_html_tag(int end_tag)
 {
-  char_u      *line = ml_get_curline();
+  char_u      *line = get_cursor_line_ptr();
   char_u      *p;
   int c;
   int lc = NUL;
@@ -3211,12 +3192,12 @@ current_tagblock (
 
     if (in_html_tag(FALSE)) {
       /* cursor on start tag, move to its '>' */
-      while (*ml_get_cursor() != '>')
+      while (*get_cursor_pos_ptr() != '>')
         if (inc_cursor() < 0)
           break;
     } else if (in_html_tag(TRUE)) {
       /* cursor on end tag, move to just before it */
-      while (*ml_get_cursor() != '<')
+      while (*get_cursor_pos_ptr() != '<')
         if (dec_cursor() < 0)
           break;
       dec_cursor();
@@ -3249,7 +3230,7 @@ again:
    * Search for matching "</aaa>".  First isolate the "aaa".
    */
   inc_cursor();
-  p = ml_get_cursor();
+  p = get_cursor_pos_ptr();
   for (cp = p; *cp != NUL && *cp != '>' && !vim_iswhite(*cp); mb_ptr_adv(cp))
     ;
   len = (int)(cp - p);
@@ -3257,14 +3238,8 @@ again:
     curwin->w_cursor = old_pos;
     goto theend;
   }
-  spat = alloc(len + 31);
-  epat = alloc(len + 9);
-  if (spat == NULL || epat == NULL) {
-    free(spat);
-    free(epat);
-    curwin->w_cursor = old_pos;
-    goto theend;
-  }
+  spat = xmalloc(len + 31);
+  epat = xmalloc(len + 9);
   sprintf((char *)spat, "<%.*s\\>\\%%(\\s\\_[^>]\\{-}[^/]>\\|>\\)\\c", len, p);
   sprintf((char *)epat, "</%.*s>\\c", len, p);
 
@@ -3285,12 +3260,12 @@ again:
 
   if (do_include || r < 1) {
     /* Include up to the '>'. */
-    while (*ml_get_cursor() != '>')
+    while (*get_cursor_pos_ptr() != '>')
       if (inc_cursor() < 0)
         break;
   } else {
     /* Exclude the '<' of the end tag. */
-    if (*ml_get_cursor() == '<')
+    if (*get_cursor_pos_ptr() == '<')
       dec_cursor();
   }
   end_pos = curwin->w_cursor;
@@ -3299,7 +3274,7 @@ again:
     /* Exclude the start tag. */
     curwin->w_cursor = start_pos;
     while (inc_cursor() >= 0)
-      if (*ml_get_cursor() == '>') {
+      if (*get_cursor_pos_ptr() == '>') {
         inc_cursor();
         start_pos = curwin->w_cursor;
         break;
@@ -3501,10 +3476,6 @@ extend:
   return OK;
 }
 
-static int find_next_quote(char_u *top_ptr, int col, int quotechar,
-                           char_u *escape);
-static int find_prev_quote(char_u *line, int col_start, int quotechar,
-                           char_u *escape);
 
 /*
  * Search quote char from string line[col].
@@ -3582,7 +3553,7 @@ current_quote (
     int quotechar                  /* Quote character */
 )
 {
-  char_u      *line = ml_get_curline();
+  char_u      *line = get_cursor_line_ptr();
   int col_end;
   int col_start = curwin->w_cursor.col;
   int inclusive = FALSE;
@@ -3781,7 +3752,6 @@ current_quote (
 }
 
 
-static int is_one_char(char_u *pattern);
 
 /*
  * Find next search match under cursor, cursor at end.
@@ -3956,8 +3926,6 @@ static int is_one_char(char_u *pattern)
   return result;
 }
 
-#if defined(FEAT_LISP) || defined(FEAT_CINDENT) || defined(FEAT_TEXTOBJ) \
-  || defined(PROTO)
 /*
  * return TRUE if line 'lnum' is empty or has white chars only.
  */
@@ -3968,7 +3936,6 @@ int linewhite(linenr_T lnum)
   p = skipwhite(ml_get(lnum));
   return *p == NUL;
 }
-#endif
 
 /*
  * Find identifiers or defines in included files.
@@ -4024,18 +3991,14 @@ find_pattern_in_path (
   incl_regmatch.regprog = NULL;
   def_regmatch.regprog = NULL;
 
-  file_line = alloc(LSIZE);
-  if (file_line == NULL)
-    return;
+  file_line = xmalloc(LSIZE);
 
   if (type != CHECK_PATH && type != FIND_DEFINE
       /* when CONT_SOL is set compare "ptr" with the beginning of the line
        * is faster than quote_meta/regcomp/regexec "ptr" -- Acevedo */
       && !(compl_cont_status & CONT_SOL)
       ) {
-    pat = alloc(len + 5);
-    if (pat == NULL)
-      goto fpip_end;
+    pat = xmalloc(len + 5);
     sprintf((char *)pat, whole ? "\\<%.*s\\>" : "%.*s", len, ptr);
     /* ignore case according to p_ic, p_scs and pat */
     regmatch.rm_ic = ignorecase(pat);

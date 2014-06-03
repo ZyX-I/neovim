@@ -91,23 +91,14 @@ struct builtin_term {
 /* start of keys that are not directly used by Vim but can be mapped */
 #define BT_EXTRA_KEYS   0x101
 
-static struct builtin_term *find_builtin_term(char_u *name);
-static void parse_builtin_tcap(char_u *s);
-static void term_color(char_u *s, int n);
-static void gather_termleader(void);
-static void req_codes_from_term(void);
-static void req_more_codes_from_term(void);
-static void got_code_from_term(char_u *code, int len);
-static void check_for_codes_from_term(void);
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "term.c.generated.h"
+#endif
 #if defined(FEAT_GUI) \
   || (defined(FEAT_MOUSE) && (!defined(UNIX) || defined(FEAT_MOUSE_XTERM) \
   || defined(FEAT_MOUSE_GPM) || defined(FEAT_SYSMOUSE)))
 static int get_bytes_from_buf(char_u *, char_u *, int);
 #endif
-static void del_termcode_idx(int idx);
-static int term_is_builtin(char_u *name);
-static int term_7to8bit(char_u *p);
-static void switch_to_8bit(void);
 
 #ifdef HAVE_TGETENT
 static char_u *tgetent_error(char_u *, char_u *);
@@ -155,7 +146,6 @@ char *UP, *BC, PC;
 
 # define TGETSTR(s, p)  vim_tgetstr((s), (p))
 # define TGETENT(b, t)  tgetent((char *)(b), (char *)(t))
-static char_u *vim_tgetstr(char *s, char_u **pp);
 #endif /* HAVE_TGETENT */
 
 static int detected_8bit = FALSE;       /* detected 8-bit terminal */
@@ -1198,15 +1188,13 @@ static void parse_builtin_tcap(char_u *term)
           char_u  *s, *t;
 
           s = vim_strsave((char_u *)p->bt_string);
-          if (s != NULL) {
-            for (t = s; *t; ++t)
-              if (term_7to8bit(t)) {
-                *t = term_7to8bit(t);
-                STRCPY(t + 1, t + 2);
-              }
-            term_strings[p->bt_entry] = s;
-            set_term_option_alloced(&term_strings[p->bt_entry]);
-          }
+          for (t = s; *t; ++t)
+            if (term_7to8bit(t)) {
+              *t = term_7to8bit(t);
+              STRCPY(t + 1, t + 2);
+            }
+          term_strings[p->bt_entry] = s;
+          set_term_option_alloced(&term_strings[p->bt_entry]);
         } else
           term_strings[p->bt_entry] = (char_u *)p->bt_string;
       }
@@ -1218,7 +1206,6 @@ static void parse_builtin_tcap(char_u *term)
     }
   }
 }
-static void set_color_count(int nr);
 
 /*
  * Set number of colors.
@@ -1941,7 +1928,6 @@ char_u *tltoa(unsigned long i)
  * minimal tgoto() implementation.
  * no padding and we only parse for %i %d and %+char
  */
-static char *tgoto(char *, int, int);
 
 static char *tgoto(char *cm, int x, int y)
 {
@@ -2066,7 +2052,6 @@ void out_char(unsigned c)
     out_flush();
 }
 
-static void out_char_nf(unsigned);
 
 /*
  * out_char_nf(c): like out_char(), but don't flush when p_wd is set
@@ -2084,8 +2069,6 @@ static void out_char_nf(unsigned c)
     out_flush();
 }
 
-#if defined(FEAT_TITLE) || defined(FEAT_MOUSE_TTY) || defined(FEAT_GUI) \
-  || defined(FEAT_TERMRESPONSE) || defined(PROTO)
 /*
  * A never-padding out_str.
  * use this whenever you don't want to run the string through tputs.
@@ -2106,7 +2089,6 @@ void out_str_nf(char_u *s)
   if (p_wd)
     out_flush();
 }
-#endif
 
 /*
  * out_str(s): Put a character string a byte at a time into the output buffer.
@@ -2221,8 +2203,7 @@ static void term_color(char_u *s, int n)
     OUT_STR(tgoto((char *)s, 0, n));
 }
 
-#if (defined(FEAT_TITLE) && (defined(UNIX) || \
-  defined(MACOS_X))) || defined(PROTO)
+#if defined(UNIX) || defined(MACOS_X) || defined(PROTO)
 /*
  * Generic function to set window title, using t_ts and t_fs.
  */
@@ -2326,10 +2307,7 @@ void ttest(int pairs)
   t_colors = atoi((char *)T_CCO);
 }
 
-#if (defined(FEAT_GUI) && (defined(FEAT_MENU) || !defined(USE_ON_FLY_SCROLL))) \
-  || defined(PROTO)
-static int get_long_from_buf(char_u *buf, long_u *val);
-
+#if defined(FEAT_GUI) || defined(PROTO)
 /*
  * Interpret the next string of bytes in buf as a long integer, with the most
  * significant byte first.  Note that it is assumed that buf has been through
@@ -2929,7 +2907,6 @@ static struct termcode {
 static int tc_max_len = 0;  /* number of entries that termcodes[] can hold */
 static int tc_len = 0;      /* current number of entries in termcodes[] */
 
-static int termcode_star(char_u *code, int len);
 
 void clear_termcodes(void)
 {
@@ -2970,8 +2947,6 @@ void add_termcode(char_u *name, char_u *string, int flags)
   }
 
   s = vim_strsave(string);
-  if (s == NULL)
-    return;
 
   /* Change leading <Esc>[ to CSI, change <Esc>O to <M-O>. */
   if (flags != 0 && flags != ATC_FROM_TERM && term_7to8bit(string) != 0) {
@@ -2987,8 +2962,7 @@ void add_termcode(char_u *name, char_u *string, int flags)
    */
   if (tc_len == tc_max_len) {
     tc_max_len += 20;
-    new_tc = (struct termcode *)alloc(
-        (unsigned)(tc_max_len * sizeof(struct termcode)));
+    new_tc = xmalloc(tc_max_len * sizeof(struct termcode));
     for (i = 0; i < tc_len; ++i)
       new_tc[i] = termcodes[i];
     free(termcodes);
@@ -3142,7 +3116,7 @@ static void switch_to_8bit(void)
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
 #endif
-#if (defined(FEAT_WINDOWS) && defined(CHECK_DOUBLE_CLICK)) || defined(PROTO)
+#if defined(CHECK_DOUBLE_CLICK) || defined(PROTO)
 /*
  * Checking for double clicks ourselves.
  * "orig_topline" is used to avoid detecting a double-click when the window
@@ -4177,7 +4151,7 @@ replace_termcodes (
    * Allocate space for the translation.  Worst case a single character is
    * replaced by 6 bytes (shifted special key), plus a NUL at the end.
    */
-  result = alloc(from_len * 6 + 1);
+  result = xmalloc(from_len * 6 + 1);
 
   src = from;
 
@@ -4314,14 +4288,9 @@ replace_termcodes (
   }
   result[dlen] = NUL;
 
-  /*
-   * Copy the new string to allocated memory.
-   * If this fails, just return from.
-   */
-  if ((*bufp = vim_strsave(result)) != NULL)
-    from = *bufp;
-  free(result);
-  return (char_u *) from;
+  *bufp = xrealloc(result, dlen + 1);
+
+  return *bufp;
 }
 
 /*
@@ -4384,7 +4353,7 @@ void show_termcodes(void)
 
   if (tc_len == 0)          /* no terminal codes (must be GUI) */
     return;
-  items = (int *)alloc((unsigned)(sizeof(int) * tc_len));
+  items = xmalloc(sizeof(int) * tc_len);
 
   /* Highlight title */
   MSG_PUTS_TITLE(_("\n--- Terminal keys ---"));
