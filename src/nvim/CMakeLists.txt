@@ -12,17 +12,19 @@ include_directories(${GENERATED_DIR})
 include_directories(${GENERATED_INCLUDES_DIR})
 
 file(MAKE_DIRECTORY ${GENERATED_DIR})
-file(MAKE_DIRECTORY ${GENERATED_DIR}/os)
-file(MAKE_DIRECTORY ${GENERATED_DIR}/api)
-file(MAKE_DIRECTORY ${GENERATED_DIR}/api/private)
-file(MAKE_DIRECTORY ${GENERATED_DIR}/translator)
-file(MAKE_DIRECTORY ${GENERATED_DIR}/translator/parser)
 file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR})
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/os)
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/api)
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/api/private)
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/translator)
-file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/translator/parser)
+foreach(subdir os
+               api
+               api/private
+               translator
+               translator/parser
+               translator/printer
+               translator/testhelpers
+               translator/translator
+               translator/executor)
+  file(MAKE_DIRECTORY ${GENERATED_DIR}/${subdir})
+  file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/${subdir})
+endforeach()
 
 file( GLOB NEOVIM_SOURCES *.c )
 
