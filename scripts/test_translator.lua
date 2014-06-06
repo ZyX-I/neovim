@@ -51,7 +51,7 @@ else
 end
 libnvim.translate_script_str_to_file(to_cstr(s), to_cstr('test.lua'))
 
-package.path = './src/translator/translator/?.lua;' .. package.path
+package.path = './src/translator/executor/?.lua;' .. package.path
 
 vim = require 'vim'
 test = require 'test'
