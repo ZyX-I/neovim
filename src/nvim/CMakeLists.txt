@@ -20,7 +20,8 @@ foreach(subdir os
                translator/parser
                translator/printer
                translator/testhelpers
-               translator/translator)
+               translator/translator
+               translator/executor)
   file(MAKE_DIRECTORY ${GENERATED_DIR}/${subdir})
   file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/${subdir})
 endforeach()
