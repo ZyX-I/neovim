@@ -64,6 +64,6 @@ int main(int argc, char **argv, char **env)
   return 0;
 }
 #endif  // COMPILE_TEST_VERSION
-int abc2() {
+int abc3() {
   return 0;
 }
