@@ -86,6 +86,7 @@ end
 write_shifted_output = function(output, str)
   str = str:gsub('\n  ', '\n')
   str = str:gsub('^  ', '')
+  str = str:gsub(' +$', '')
   output:write(str)
 end
 
@@ -273,6 +274,8 @@ generate_lua_c_bindings_header = function(output, headers)
   ]])
   include_headers(output, headers)
   output:write('\n')
+  -- FIXME Replace channel_id with something more sensible
+  output:write('\n#define channel_id 0\n')
 end
 
 lua_c_functions = {}
@@ -283,8 +286,47 @@ generate_lua_c_bindings_fn = function(output, fn)
 
   static int %s(lua_State *lstate)
   {
+    Error err = {.set = false};
   ]], lua_c_function_name))
   lua_c_functions[#lua_c_functions + 1] = lua_c_function_name
+  cparams = ''
+  for j, param in ipairs(fn.parameters) do
+    cparam = string.format('arg%u', j)
+    write_shifted_output(output, string.format([[
+    %s %s = nlua_pop_%s(lstate, &err);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    ]], param[1], cparam, param[1]))
+    cparams = cparams .. cparam .. ', '
+  end
+  if fn.receives_channel_id then
+    cparams = 'channel_id, ' .. cparams
+  end
+  if fn.can_fail then
+    cparams = cparams .. '&err'
+  else
+    cparams = cparams:gsub(', $', '')
+  end
+  if fn.return_type ~= 'void' then
+    write_shifted_output(output, string.format([[
+    %s ret = %s(%s);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    nlua_push_%s(lstate, ret);
+    ]], fn.return_type, fn.name, cparams, fn.return_type))
+  else
+    write_shifted_output(output, string.format([[
+    %s(%s);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    ]], fn.name, cparams))
+  end
   write_shifted_output(output, [[
     return 0;
   }
