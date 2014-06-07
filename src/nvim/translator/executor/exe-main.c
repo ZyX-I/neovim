@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <inttypes.h>
 
 #include "nvim/api/private/defs.h"
 
@@ -60,7 +61,34 @@ int main(int argc, char **argv, char **env)
   };
   Object result = eval_lua(arg, &err);
 
-  printf(":%i\n", result.type);
+  switch (result.type) {
+    case kObjectTypeNil: {puts("kObjectTypeNil"); break;}
+    case kObjectTypeBoolean: {
+      puts("kObjectTypeBoolean");
+      if (result.data.boolean)
+        puts("true");
+      else
+        puts("false");
+      break;
+    }
+    case kObjectTypeInteger: {
+      puts("kObjectTypeInteger");
+      printf("%" PRIi64 "\n", result.data.integer);
+      break;
+    }
+    case kObjectTypeFloat: {
+      puts("kObjectTypeFloat");
+      printf("%lf\n", result.data.floating);
+      break;
+    }
+    case kObjectTypeString: {
+      puts("kObjectTypeString");
+      fwrite(result.data.string.data, 1, result.data.string.size, stdout);
+      break;
+    }
+    case kObjectTypeArray: {puts("kObjectTypeArray"); break;}
+    case kObjectTypeDictionary: {puts("kObjectTypeDictionary"); break;}
+  }
   return 0;
 }
 #endif  // COMPILE_TEST_VERSION
