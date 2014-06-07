@@ -318,8 +318,10 @@ Dictionary nlua_pop_Dictionary_unchecked(lua_State *lstate, Error *err)
     lua_pop(lstate, 1);
   }
 
-  if (ret.size == 0)
+  if (ret.size == 0) {
+    lua_pop(lstate, 1);
     return ret;
+  }
   ret.items = xcalloc(ret.size, sizeof(*ret.items));
 
   lua_pushnil(lstate);
