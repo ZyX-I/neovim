@@ -328,7 +328,7 @@ Dictionary nlua_pop_Dictionary_unchecked(lua_State *lstate, Error *err)
   ret.items = xcalloc(ret.size, sizeof(*ret.items));
 
   lua_pushnil(lstate);
-  for (size_t i = 0; lua_next(lstate, -2); i++) {
+  for (size_t i = 0; lua_next(lstate, -2);) {
     // stack: dict, key, value
 
     if (lua_type(lstate, -2) == LUA_TSTRING) {
@@ -352,6 +352,7 @@ Dictionary nlua_pop_Dictionary_unchecked(lua_State *lstate, Error *err)
         // stack:
         return (Dictionary) {.size = 0, .items = NULL};
       }
+      i++;
     } else {
       lua_pop(lstate, 1);
       // stack: dict, key
