@@ -12,6 +12,55 @@
 static void (*init_func)(void);
 static Object (*eval_lua)(String str, Error *err);
 
+void print_object(Object obj)
+{
+  switch (obj.type) {
+    case kObjectTypeNil: {puts("kObjectTypeNil"); break;}
+    case kObjectTypeBoolean: {
+      puts("kObjectTypeBoolean");
+      if (obj.data.boolean)
+        puts("true");
+      else
+        puts("false");
+      break;
+    }
+    case kObjectTypeInteger: {
+      puts("kObjectTypeInteger");
+      printf("%" PRIi64 "\n", obj.data.integer);
+      break;
+    }
+    case kObjectTypeFloat: {
+      puts("kObjectTypeFloat");
+      printf("%lf\n", obj.data.floating);
+      break;
+    }
+    case kObjectTypeString: {
+      puts("kObjectTypeString");
+      fwrite(obj.data.string.data, 1, obj.data.string.size, stdout);
+      putchar('\n');
+      break;
+    }
+    case kObjectTypeArray: {
+      puts("kObjectTypeArray [");
+      for (size_t i = 0; i < obj.data.array.size; i++)
+        print_object(obj.data.array.items[i]);
+      puts("]");
+      break;
+    }
+    case kObjectTypeDictionary: {
+      puts("kObjectTypeDictionary {");
+      for (size_t i = 0; i < obj.data.dictionary.size; i++) {
+        Object new_obj = {.type = kObjectTypeString};
+        new_obj.data.string = obj.data.dictionary.items[i].key;
+        print_object(new_obj);
+        print_object(obj.data.dictionary.items[i].value);
+      }
+      puts("}");
+      break;
+    }
+  }
+}
+
 int main(int argc, char **argv, char **env)
 {
   if (argc <= 1)
@@ -61,34 +110,8 @@ int main(int argc, char **argv, char **env)
   };
   Object result = eval_lua(arg, &err);
 
-  switch (result.type) {
-    case kObjectTypeNil: {puts("kObjectTypeNil"); break;}
-    case kObjectTypeBoolean: {
-      puts("kObjectTypeBoolean");
-      if (result.data.boolean)
-        puts("true");
-      else
-        puts("false");
-      break;
-    }
-    case kObjectTypeInteger: {
-      puts("kObjectTypeInteger");
-      printf("%" PRIi64 "\n", result.data.integer);
-      break;
-    }
-    case kObjectTypeFloat: {
-      puts("kObjectTypeFloat");
-      printf("%lf\n", result.data.floating);
-      break;
-    }
-    case kObjectTypeString: {
-      puts("kObjectTypeString");
-      fwrite(result.data.string.data, 1, result.data.string.size, stdout);
-      break;
-    }
-    case kObjectTypeArray: {puts("kObjectTypeArray"); break;}
-    case kObjectTypeDictionary: {puts("kObjectTypeDictionary"); break;}
-  }
+  print_object(result);
+
   return 0;
 }
 #endif  // COMPILE_TEST_VERSION
