@@ -438,6 +438,8 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
       break;
     }
   }
+  if (err->set)
+    ret.type = kObjectTypeNil;
 
   return ret;
 }
