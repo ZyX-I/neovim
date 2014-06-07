@@ -433,6 +433,7 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
       break;
     }
     default: {
+      lua_pop(lstate, 1);
       break;
     }
   }
