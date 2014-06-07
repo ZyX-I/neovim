@@ -167,6 +167,7 @@ String nlua_pop_String(lua_State *lstate, Error *err)
   ret.data = (char *) lua_tolstring(lstate, -1, &(ret.size));
 
   if (ret.data == NULL) {
+    lua_pop(lstate, 1);
     set_api_error("Expected lua string", err);
     return (String) {.size = 0, .data = NULL};
   }
@@ -186,6 +187,7 @@ Integer nlua_pop_Integer(lua_State *lstate, Error *err)
   Integer ret = 0;
 
   if (!lua_isnumber(lstate, -1)) {
+    lua_pop(lstate, 1);
     set_api_error("Expected lua number", err);
     return ret;
   }
@@ -246,6 +248,7 @@ Float nlua_pop_Float(lua_State *lstate, Error *err)
   lua_rawget(lstate, -2);
 
   if (!lua_isnumber(lstate, -1)) {
+    lua_pop(lstate, 2);
     set_api_error("Value field should be lua number", err);
     return ret;
   }
