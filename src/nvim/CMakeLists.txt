@@ -1,12 +1,16 @@
 include(CheckLibraryExists)
 
 set(GENERATED_DIR ${PROJECT_BINARY_DIR}/src/nvim/auto)
-set(DISPATCH_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/msgpack-gen.lua)
+set(MSGPACK_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/msgpack-gen.lua)
 file(GLOB API_HEADERS api/*.h)
 set(MSGPACK_RPC_HEADER ${PROJECT_SOURCE_DIR}/src/nvim/os/msgpack_rpc.h)
 set(MSGPACK_DISPATCH ${GENERATED_DIR}/msgpack_dispatch.c)
+set(MSGPACK_LUA_C_BINDINGS ${GENERATED_DIR}/msgpack_lua_c_bindings.c)
 set(HEADER_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/gendeclarations.lua)
 set(GENERATED_INCLUDES_DIR ${PROJECT_BINARY_DIR}/include)
+set(VIM_MODULE_FILE ${GENERATED_DIR}/translator/executor/vim_module.generated.c)
+set(VIM_MODULE_SOURCE ${PROJECT_SOURCE_DIR}/src/nvim/translator/executor/vim.lua)
+set(VIM_MODULE_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/generate_vim_module.lua)
 
 include_directories(${GENERATED_DIR})
 include_directories(${GENERATED_INCLUDES_DIR})
@@ -128,16 +132,27 @@ foreach(sfile ${NEOVIM_SOURCES}
   endif()
 endforeach()
 
-add_custom_command(OUTPUT ${MSGPACK_DISPATCH}
-  COMMAND ${LUA_PRG} ${DISPATCH_GENERATOR} ${API_HEADERS} ${MSGPACK_DISPATCH}
+add_custom_command(OUTPUT ${VIM_MODULE_FILE}
+  COMMAND ${LUA_PRG} ${VIM_MODULE_GENERATOR}
+                                        ${VIM_MODULE_SOURCE} ${VIM_MODULE_FILE}
+  DEPENDS
+    ${VIM_MODULE_GENERATOR}
+    ${VIM_MODULE_SOURCE}
+)
+
+add_custom_command(OUTPUT ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
+  COMMAND ${LUA_PRG} ${MSGPACK_GENERATOR} ${API_HEADERS}
+                     ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
   DEPENDS
     ${API_HEADERS}
     ${MSGPACK_RPC_HEADER}
-    ${DISPATCH_GENERATOR}
-    )
+    ${MSGPACK_GENERATOR}
+)
 
 list(APPEND NEOVIM_SOURCES "${PROJECT_BINARY_DIR}/config/auto/pathdef.c")
 list(APPEND NEOVIM_SOURCES "${MSGPACK_DISPATCH}")
+list(APPEND TRANSLATOR_SOURCES "${MSGPACK_LUA_C_BINDINGS}")
+list(APPEND TRANSLATOR_SOURCES "${VIM_MODULE_FILE}")
 
 # Our dependencies come first.
 

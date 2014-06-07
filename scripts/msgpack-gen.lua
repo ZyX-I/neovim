@@ -33,8 +33,8 @@ c_proto = Ct(
   )
 grammar = Ct((c_proto + c_comment + c_preproc + ws) ^ 1)
 
--- we need at least 2 arguments since the last one is the output file
-assert(#arg >= 1)
+-- we need at least 3 arguments since two last ones are for output files
+assert(#arg >= 2)
 -- api metadata
 api = {
   functions = {},
@@ -45,10 +45,11 @@ api = {
 -- generated file)
 headers = {}
 -- output file(dispatch function + metadata serialized with msgpack)
-outputf = arg[#arg]
+dispatch_outputf = arg[#arg - 1]
+lua_c_bindings_outputf = arg[#arg]
 
 -- read each input file, parse and append to the api metadata
-for i = 1, #arg - 1 do
+for i = 1, #arg - 2 do
   local full_path = arg[i]
   local parts = {}
   for part in string.gmatch(full_path, '[^/]+') do
@@ -82,61 +83,90 @@ for i = 1, #arg - 1 do
 end
 
 
+write_shifted_output = function(output, str)
+  str = str:gsub('\n  ', '\n')
+  str = str:gsub('^  ', '')
+  str = str:gsub(' +$', '')
+  output:write(str)
+end
+
+
 -- start building the output
-output = io.open(outputf, 'wb')
+dispatch_output = io.open(dispatch_outputf, 'wb')
+lua_c_bindings_output = io.open(lua_c_bindings_outputf, 'wb')
 
-output:write([[
-#include <stdbool.h>
-#include <stdint.h>
-#include <msgpack.h>
-
-#include "nvim/os/msgpack_rpc.h"
-#include "nvim/os/msgpack_rpc_helpers.h"
-#include "nvim/api/private/helpers.h"
-]])
-
-for i = 1, #headers do
-  if headers[i]:sub(-12) ~= '.generated.h' then
-    output:write('\n#include "nvim/'..headers[i]..'"')
+include_headers = function(output, headers)
+  for i = 1, #headers do
+    if headers[i]:sub(-12) ~= '.generated.h' then
+      output:write('\n#include "nvim/'..headers[i]..'"')
+    end
   end
 end
 
-output:write([[
+generate_dispatch_includes = function(output, headers)
+  write_shifted_output(output, [[
+  #include <stdbool.h>
+  #include <stdint.h>
+  #include <msgpack.h>
 
+  #include "nvim/os/msgpack_rpc.h"
+  #include "nvim/os/msgpack_rpc_helpers.h"
+  #include "nvim/api/private/helpers.h"
+  ]])
 
-const uint8_t msgpack_metadata[] = {
-
-]])
--- serialize the API metadata using msgpack and embed into the resulting
--- binary for easy querying by clients 
-packed = msgpack.pack(api)
-for i = 1, #packed do
-  output:write(string.byte(packed, i)..', ')
-  if i % 10 == 0 then
-    output:write('\n  ')
-  end
+  include_headers(output, headers)
 end
--- start the dispatch function. number 0 is reserved for querying the metadata,
--- usually it is the first function called by clients.
-output:write([[
-};
-const unsigned int msgpack_metadata_size = sizeof(msgpack_metadata);
 
-Object msgpack_rpc_dispatch(uint64_t channel_id,
-                            uint64_t method_id,
-                            msgpack_object *req,
-                            Error *error)
-{
-  Object ret = NIL;
-  switch (method_id) {
-]])
+generate_dispatch_msgpack_metadata = function(output)
+  write_shifted_output(output, [[
+
+
+  const uint8_t msgpack_metadata[] = {
+
+  ]])
+  -- serialize the API metadata using msgpack and embed into the resulting
+  -- binary for easy querying by clients 
+  packed = msgpack.pack(api)
+  for i = 1, #packed do
+    output:write(string.byte(packed, i)..', ')
+    if i % 10 == 0 then
+      output:write('\n  ')
+    end
+  end
+  -- start the dispatch function. number 0 is reserved for querying the metadata,
+  -- usually it is the first function called by clients.
+  write_shifted_output(output, [[
+  };
+  const unsigned int msgpack_metadata_size = sizeof(msgpack_metadata);
+
+  Object msgpack_rpc_dispatch(uint64_t channel_id,
+                              uint64_t method_id,
+                              msgpack_object *req,
+                              Error *error)
+  {
+    Object ret = NIL;
+    switch (method_id) {
+      case 0:
+        msgpack_pack_nil(res);
+        // The result is the [channel_id, metadata] array
+        msgpack_pack_array(res, 2);
+        msgpack_pack_uint64(res, channel_id);
+        msgpack_pack_raw(res, sizeof(msgpack_metadata));
+        msgpack_pack_raw_body(res, msgpack_metadata, sizeof(msgpack_metadata));
+        return;
+  ]])
+end
+
+generate_dispatch_header = function(output, headers)
+  generate_dispatch_includes(output, headers)
+  generate_dispatch_msgpack_metadata(output)
+end
 
 -- Visit each function metadata to build the case label with code generated
 -- for validating arguments and calling to the real API
-for i = 1, #api.functions do
-  local fn = api.functions[i]
+generate_dispatch_fn = function(output, fn)
   local args = {}
-  local cleanup_label = 'cleanup_'..i
+  local cleanup_label = 'cleanup_' .. fn.name
   output:write('\n    case '..fn.id..': {')
 
   output:write('\n      if (req->via.array.ptr[3].via.array.size != '..#fn.parameters..') {')
@@ -165,7 +195,7 @@ for i = 1, #api.functions do
     output:write('\n      }\n')
     args[#args + 1] = converted
   end
-  
+
   -- function call
   local call_args = table.concat(args, ', ')
   output:write('\n      ')
@@ -216,17 +246,123 @@ for i = 1, #api.functions do
   end
   output:write('\n      break;');
   output:write('\n    };\n');
-
 end
 
-output:write([[
-
-
-    default:
-      snprintf(error->msg, sizeof(error->msg), "Invalid function id");
-      error->set = true;
+generate_dispatch_footer = function(output)
+  write_shifted_output(output, [[
+      default:
+        snprintf(error->msg, sizeof(error->msg), "Invalid function id");
+        error->set = true;
+    }
+    return ret;
   }
-  return ret;
-}
-]])
-output:close()
+  ]])
+end
+
+generate_lua_c_bindings_header = function(output, headers)
+  write_shifted_output(output, [[
+  #include <lua.h>
+  #include <lualib.h>
+  #include <lauxlib.h>
+
+  #include "nvim/func_attr.h"
+  #include "nvim/api/private/defs.h"
+  #include "nvim/viml/executor/converter.h"
+  ]])
+  include_headers(output, headers)
+  output:write('\n')
+  -- FIXME Replace channel_id with something more sensible
+  output:write('\n#define channel_id 0\n')
+end
+
+lua_c_functions = {}
+
+generate_lua_c_bindings_fn = function(output, fn)
+  lua_c_function_name = ('nlua_msgpack_%s'):format(fn.name)
+  write_shifted_output(output, string.format([[
+
+  static int %s(lua_State *lstate)
+  {
+    Error err = {.set = false};
+  ]], lua_c_function_name))
+  lua_c_functions[#lua_c_functions + 1] = {
+    binding=lua_c_function_name,
+    api=fn.name
+  }
+  cparams = ''
+  for j, param in ipairs(fn.parameters) do
+    cparam = string.format('arg%u', j)
+    write_shifted_output(output, string.format([[
+    %s %s = nlua_pop_%s(lstate, &err);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    ]], param[1], cparam, param[1]))
+    cparams = cparams .. cparam .. ', '
+  end
+  if fn.receives_channel_id then
+    cparams = 'channel_id, ' .. cparams
+  end
+  if fn.can_fail then
+    cparams = cparams .. '&err'
+  else
+    cparams = cparams:gsub(', $', '')
+  end
+  if fn.return_type ~= 'void' then
+    write_shifted_output(output, string.format([[
+    %s ret = %s(%s);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    nlua_push_%s(lstate, ret);
+    return 1;
+    ]], fn.return_type, fn.name, cparams, fn.return_type))
+  else
+    write_shifted_output(output, string.format([[
+    %s(%s);
+    if (err.set) {
+      lua_pushstring(lstate, err.msg);
+      return lua_error(lstate);
+    }
+    return 0;
+    ]], fn.name, cparams))
+  end
+  write_shifted_output(output, [[
+  }
+  ]])
+end
+
+generate_lua_c_bindings_footer = function(output)
+  write_shifted_output(output, string.format([[
+  void nlua_add_api_functions(lua_State *lstate)
+    FUNC_ATTR_NONNULL_ALL
+  {
+    lua_createtable(lstate, 0, %u);
+  ]], #lua_c_functions))
+  for _, func in ipairs(lua_c_functions) do
+    write_shifted_output(output, string.format([[
+    lua_pushcfunction(lstate, &%s);
+    lua_setfield(lstate, -2, "%s");
+    ]], func.binding, func.api))
+  end
+  write_shifted_output(output, [[
+    lua_setfield(lstate, -2, "api");
+  }
+  ]])
+end
+
+generate_dispatch_header(dispatch_output, headers)
+generate_lua_c_bindings_header(lua_c_bindings_output, headers)
+for i = 1, #api.functions do
+  local fn = api.functions[i]
+
+  generate_dispatch_fn(dispatch_output, fn)
+  generate_lua_c_bindings_fn(lua_c_bindings_output, fn)
+end
+generate_dispatch_footer(dispatch_output)
+generate_lua_c_bindings_footer(lua_c_bindings_output)
+
+dispatch_output:close()
+lua_c_bindings_output:close()

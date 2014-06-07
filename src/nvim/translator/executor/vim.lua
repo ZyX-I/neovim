@@ -9,7 +9,7 @@ end
 
 new_scope = function(is_default_scope)
   ret = dict.new(state, ':is_default_scope', is_default_scope)
-  ret[type_idx] = 'scope'
+  ret[type_idx] = VIM_SCOPE
   return ret
 end
 
@@ -18,9 +18,9 @@ new_state = function()
     is_trying=false,
     is_silent=false,
     functions={
-      [type_idx]='func_dict',
+      [type_idx]=VIM_FUNCTIONS,
       type=function(state, self, ...)
-        return vim_type(state, ...)
+        return vim_type(state, ...)[1]
       end,
     },
     options={},
@@ -42,7 +42,7 @@ new_state = function()
     v=new_scope(false),
     a=nil,
     l=nil,
-    user_functions={[type_idx]='func_dict'},
+    user_functions={[type_idx]=VIM_FUNCTIONS},
     user_commands={},
     call_stack={},
     set_script_locals=function(self, s)
@@ -77,6 +77,7 @@ end
 -- Special values that cannot be assigned from VimL
 type_idx = true
 locks_idx = false
+val_idx = 0
 
 number = {
   new=function(state, n)
@@ -99,7 +100,7 @@ string = {
 list = {
   new=function(state, ...)
     local ret = {...}
-    ret[type_idx] = 'list'
+    ret[type_idx] = VIM_LIST
     ret.iterators = {}
     ret.locked = false
     ret.fixed = false
@@ -201,7 +202,7 @@ dict = {
     local max
     t = {...}
     ret = {}
-    ret[type_idx] = 'dict'
+    ret[type_idx] = VIM_DICTIONARY
     max = table.maxn(t)
     if max % 2 == 1 then
       err.err(state, position, true,
@@ -223,11 +224,11 @@ dict = {
     ret = dct[key]
     if (ret == nil) then
       local message
-      if dct[type_idx] == 'dict' then
+      if dct[type_idx] == VIM_DICTIONARY then
         message = 'E716: Key not present in Dictionary'
-      elseif dct[type_idx] == 'scope' then
+      elseif dct[type_idx] == VIM_SCOPE then
         message = 'E121: Undefined variable'
-      elseif dct[type_idx] == 'func_dict' then
+      elseif dct[type_idx] == VIM_FUNCTIONS then
         message = 'E117: Unknown function'
       end
       err.err(state, value_position, true, message .. ': %s', key)
@@ -244,21 +245,22 @@ dict = {
 
 float = {
   new=function(state, f)
-    -- TODO
-    return f
+    return {[type_idx]=VIM_LIST, [val_idx]=f}
   end,
   to_string_echo=function(state, n, _)
-    -- TODO
-    return tostring(n)
+    return tostring(n[f])
   end,
 }
 
-VIM_NUMBER     = 0
-VIM_STRING     = 1
-VIM_FUNCREF    = 2
-VIM_LIST       = 3
-VIM_DICTIONARY = 4
-VIM_FLOAT      = 5
+VIM_NUMBER     = {0}
+VIM_STRING     = {1}
+VIM_FUNCREF    = {2}
+VIM_LIST       = {3}
+VIM_DICTIONARY = {4}
+VIM_FLOAT      = {5}
+
+VIM_SCOPE      = {4}
+VIM_FUNCTIONS  = {4}
 
 types = {
   [VIM_NUMBER]=number,
@@ -267,6 +269,11 @@ types = {
   [VIM_LIST]=list,
   [VIM_DICTIONARY]=dict,
   [VIM_FLOAT]=float,
+}
+
+pseudo_types = {
+  [VIM_SCOPE]=VIM_DICTIONARY,
+  [VIM_FUNCTIONS]=VIM_DICTIONARY,
 }
 
 -- {{{1 Error manipulation
@@ -475,17 +482,12 @@ vim_type = function(state, value, position)
   elseif (t == 'number') then
     return VIM_NUMBER
   elseif (t == 'table') then
-    if (value[type_idx] == 'func') then
-      return VIM_FUNCREF
-    elseif (value[type_idx] == 'list') then
-      return VIM_LIST
-    elseif (value[type_idx] == 'dict' or value[type_idx] == 'scope'
-            or value[type_idx] == 'func_dict') then
-      return VIM_DICTIONARY
-    elseif (value[type_idx] == 'float') then
-      return VIM_FLOAT
-    else
+    local typ = value[type_idx]
+    local ret = pseudo_types[typ] or (types[typ] and typ)
+    if ret == nil then
       err.err(state, position, true, 'Internal error: table with unknown type')
+    else
+      return nil
     end
   else
     err.err(state, position, true, 'Internal error: unknown type')

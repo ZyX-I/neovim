@@ -1,3 +1,7 @@
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
+
 #include "nvim/vim.h"
 #include "nvim/misc1.h"
 #include "nvim/term.h"
@@ -5,9 +9,10 @@
 #include "nvim/api/private/helpers.h"
 #include "nvim/api/vim.h"
 
-#include <lua.h>
-#include <lualib.h>
-#include <lauxlib.h>
+#include "nvim/translator/executor/executor.h"
+#include "nvim/translator/executor/converter.h"
+
+#include "translator/executor/vim_module.generated.c"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/executor/executor.c.generated.h"
@@ -48,51 +53,6 @@ static void set_lua_error(lua_State *lstate, Error *err) FUNC_ATTR_NONNULL_ALL
   // FIXME!! Print error message
 }
 
-/// Convert lua value to Object
-///
-/// @param[in]   lstate  Lua state.
-/// @param[in]   index   Index of the object on the stack.
-/// @param[out]  obj     Pointer to Object where the result will be saved.
-static void convert_lua_to_object(lua_State *lstate, int index, Object *obj)
-  FUNC_ATTR_NONNULL_ALL
-{
-  switch(lua_type(lstate, index)) {
-    case LUA_TBOOLEAN: {
-      obj->type = kObjectTypeBoolean;
-      obj->data.boolean = lua_toboolean(lstate, index);
-      break;
-    }
-    case LUA_TSTRING: {
-      obj->type = kObjectTypeString;
-      obj->data.string.data = (char *) lua_tolstring(lstate, index,
-                                                     &(obj->data.string.size));
-      break;
-    }
-    case LUA_TNUMBER: {
-      obj->type = kObjectTypeFloat;
-      obj->data.floating = lua_tonumber(lstate, index);
-      break;
-    }
-    case LUA_TNONE: {
-      // FIXME Give error message?
-    }
-    case LUA_TTABLE: {
-      // FIXME Based on chosen implementation this or the next types should be 
-      // converted to kObjectTypeArray or kObjectTypeDictionary based on their 
-      // metatable.
-      // FIXME What to do with FuncRefs?
-    }
-    case LUA_TUSERDATA: {
-      // FIXME
-    }
-    case LUA_TNIL:
-    default: {
-      obj->type = kObjectTypeNil;
-      break;
-    }
-  }
-}
-
 /// Evaluate lua string
 ///
 /// Expects three values on the stack: string to evaluate, pointer to the 
@@ -113,8 +73,7 @@ static int nlua_eval_lua_string(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
     set_lua_error(lstate, err);
     return 0;
   }
-  convert_lua_to_object(lstate, -1, obj);
-  lua_pop(lstate, -1);
+  *obj = nlua_pop_Object(lstate, err);
   return 0;
 }
 
@@ -123,6 +82,10 @@ static int nlua_eval_lua_string(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 /// Called by lua interpreter itself to initialize state.
 static int nlua_state_init(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 {
+  if (luaL_dostring(lstate, vim_module)) {
+    return 1;
+  }
+  lua_setglobal(lstate, "vim");
   return 0;
 }
 
