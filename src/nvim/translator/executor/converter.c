@@ -114,6 +114,19 @@ void nlua_push_Dictionary(lua_State *lstate, const Dictionary dict)
   }
 }
 
+/// Convert given position to lua table
+///
+/// Leaves converted table on top of the stack.
+void nlua_push_Position(lua_State *lstate, const Position pos)
+  FUNC_ATTR_NONNULL_ALL
+{
+  lua_createtable(lstate, 0, 2);
+  nlua_push_Integer(lstate, pos.row);
+  lua_setfield(lstate, -2, "row");
+  nlua_push_Integer(lstate, pos.col);
+  lua_setfield(lstate, -2, "col");
+}
+
 /// Convert given Array to lua table
 ///
 /// Leaves converted table on top of the stack.
@@ -123,11 +136,41 @@ void nlua_push_Array(lua_State *lstate, const Array array)
   nlua_create_typed_table(lstate, array.size, 1, "VIM_FLOAT");
   nlua_add_locks_table(lstate);
   for (size_t i = 0; i < array.size; i++) {
-    nlua_push_Integer(lstate, (Integer) i + 1);
     nlua_push_Object(lstate, array.items[i]);
-    lua_rawset(lstate, -3);
+    lua_rawseti(lstate, -3, (int) i + 1);
   }
 }
+
+#define GENERATE_INDEX_FUNCTION(type) \
+void nlua_push_##type(lua_State *lstate, const type item) \
+  FUNC_ATTR_NONNULL_ALL \
+{ \
+  lua_pushnumber(lstate, (lua_Number) item); \
+}
+
+GENERATE_INDEX_FUNCTION(Buffer)
+GENERATE_INDEX_FUNCTION(Window)
+GENERATE_INDEX_FUNCTION(Tabpage)
+
+#undef GENERATE_INDEX_FUNCTION
+
+#define GENERATE_ARRAY_FUNCTION(type) \
+void nlua_push_##type##Array(lua_State *lstate, const type##Array array) \
+  FUNC_ATTR_NONNULL_ALL \
+{ \
+  lua_createtable(lstate, array.size, 0); \
+  for (size_t i = 0; i < array.size; i++) { \
+    nlua_push_##type(lstate, array.items[i]); \
+    lua_rawseti(lstate, -3, (int) i + 1); \
+  } \
+}
+
+GENERATE_ARRAY_FUNCTION(String)
+GENERATE_ARRAY_FUNCTION(Buffer)
+GENERATE_ARRAY_FUNCTION(Window)
+GENERATE_ARRAY_FUNCTION(Tabpage)
+
+#undef GENERATE_ARRAY_FUNCTION
 
 /// Convert given Object to lua value
 ///
@@ -271,9 +314,8 @@ Array nlua_pop_Array(lua_State *lstate, Error *err)
     return ret;
   }
 
-  for (lua_Number i = 1; ; i++, ret.size++) {
-    lua_pushnumber(lstate, (lua_Number) i);
-    lua_rawget(lstate, -2);
+  for (int i = 1; ; i++, ret.size++) {
+    lua_rawgeti(lstate, -2, i);
 
     if (lua_isnil(lstate, -1))
       break;
@@ -286,8 +328,7 @@ Array nlua_pop_Array(lua_State *lstate, Error *err)
   for (size_t i = 1; i <= ret.size; i++) {
     Object val;
 
-    lua_pushnumber(lstate, (lua_Number) i);
-    lua_rawget(lstate, -2);
+    lua_rawgeti(lstate, -2, (int) i);
 
     val = nlua_pop_Object(lstate, err);
     if (err->set) {
@@ -377,6 +418,29 @@ Dictionary nlua_pop_Dictionary(lua_State *lstate, Error *err)
   return nlua_pop_Dictionary_unchecked(lstate, err);
 }
 
+Position nlua_pop_Position(lua_State *lstate, Error *err)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  Position ret;
+#define SET_POSITION_FIELD(field) \
+  lua_getfield(lstate, -1, #field); \
+  if (!lua_isnumber(lstate, -1)) { \
+    lua_pop(lstate, 2); \
+    set_api_error("Expected " #field " field to be a number", err); \
+    return (Position) {.row = 0, .col = 0}; \
+  } \
+  ret.field = lua_tonumber(lstate, -1); \
+  lua_pop(lstate, -1);
+
+  SET_POSITION_FIELD(col)
+  SET_POSITION_FIELD(row)
+
+#undef SET_POSITION_FIELD
+
+  lua_pop(lstate, -1);
+  return ret;
+}
+
 /// Convert lua table to object
 ///
 /// Always pops one value from the stack.
@@ -447,3 +511,57 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
 
   return ret;
 }
+
+#define GENERATE_INDEX_FUNCTION(type) \
+type nlua_pop_##type(lua_State *lstate, Error *err) \
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT \
+{ \
+  return (type) nlua_pop_Integer(lstate, err); \
+}
+
+GENERATE_INDEX_FUNCTION(Buffer)
+GENERATE_INDEX_FUNCTION(Window)
+GENERATE_INDEX_FUNCTION(Tabpage)
+
+#undef GENERATE_INDEX_FUNCTION
+
+#define GENERATE_ARRAY_FUNCTION(type, lctype) \
+type##Array nlua_pop_##type##Array(lua_State *lstate, Error *err) \
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT \
+{ \
+  type##Array ret = {.size = 0, .items = NULL}; \
+  for (int i = 1; ; i++, ret.size++) { \
+    lua_rawgeti(lstate, -2, i); \
+\
+    if (lua_isnil(lstate, -1)) \
+      break; \
+  } \
+\
+  if (ret.size == 0) \
+    return ret; \
+\
+  ret.items = xcalloc(ret.size, sizeof(*ret.items)); \
+  for (size_t i = 1; i <= ret.size; i++) { \
+    type val; \
+\
+    lua_rawgeti(lstate, -2, (int) i); \
+\
+    val = nlua_pop_##type(lstate, err); \
+    if (err->set) { \
+      ret.size = i; \
+      lua_pop(lstate, 1); \
+      msgpack_rpc_free_##lctype##array(ret); \
+      return (type##Array) {.size = 0, .items = NULL}; \
+    } \
+    ret.items[i - 1] = val; \
+  } \
+  lua_pop(lstate, 1); \
+  return ret; \
+}
+
+GENERATE_ARRAY_FUNCTION(String, string)
+GENERATE_ARRAY_FUNCTION(Buffer, buffer)
+GENERATE_ARRAY_FUNCTION(Window, window)
+GENERATE_ARRAY_FUNCTION(Tabpage, tabpage)
+
+#undef GENERATE_ARRAY_FUNCTION
