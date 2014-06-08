@@ -245,7 +245,7 @@ dict = {
 
 float = {
   new=function(state, f)
-    return {[type_idx]=VIM_LIST, [val_idx]=f}
+    return {[type_idx]=VIM_FLOAT, [val_idx]=f}
   end,
   to_string_echo=function(state, n, _)
     return tostring(n[f])
