@@ -12,9 +12,9 @@
 #include "nvim/translator/executor/executor.h"
 #include "nvim/translator/executor/converter.h"
 
-#include "translator/executor/vim_module.generated.c"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "translator/executor/vim_module.generated.c"
 # include "translator/executor/executor.c.generated.h"
 #endif
 
