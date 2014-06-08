@@ -269,6 +269,7 @@ generate_lua_c_bindings_header = function(output, headers)
   #include <lualib.h>
   #include <lauxlib.h>
 
+  #include "nvim/func_attr.h"
   #include "nvim/api/private/defs.h"
   #include "nvim/translator/executor/converter.h"
   ]])
@@ -288,7 +289,10 @@ generate_lua_c_bindings_fn = function(output, fn)
   {
     Error err = {.set = false};
   ]], lua_c_function_name))
-  lua_c_functions[#lua_c_functions + 1] = lua_c_function_name
+  lua_c_functions[#lua_c_functions + 1] = {
+    binding=lua_c_function_name,
+    api=fn.name
+  }
   cparams = ''
   for j, param in ipairs(fn.parameters) do
     cparam = string.format('arg%u', j)
@@ -317,6 +321,7 @@ generate_lua_c_bindings_fn = function(output, fn)
       return lua_error(lstate);
     }
     nlua_push_%s(lstate, ret);
+    return 1;
     ]], fn.return_type, fn.name, cparams, fn.return_type))
   else
     write_shifted_output(output, string.format([[
@@ -325,15 +330,31 @@ generate_lua_c_bindings_fn = function(output, fn)
       lua_pushstring(lstate, err.msg);
       return lua_error(lstate);
     }
+    return 0;
     ]], fn.name, cparams))
   end
   write_shifted_output(output, [[
-    return 0;
   }
   ]])
 end
 
 generate_lua_c_bindings_footer = function(output)
+  write_shifted_output(output, string.format([[
+  void nlua_add_api_functions(lua_State *lstate)
+    FUNC_ATTR_NONNULL_ALL
+  {
+    lua_createtable(lstate, 0, %u);
+  ]], #lua_c_functions))
+  for _, func in ipairs(lua_c_functions) do
+    write_shifted_output(output, string.format([[
+    lua_pushcfunction(lstate, &%s);
+    lua_setfield(lstate, -2, "%s");
+    ]], func.binding, func.api))
+  end
+  write_shifted_output(output, [[
+    lua_setfield(lstate, -2, "api");
+  }
+  ]])
 end
 
 generate_dispatch_header(dispatch_output, headers)
