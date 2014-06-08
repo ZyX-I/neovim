@@ -944,13 +944,13 @@ static WFDEC(translate_string, ExpressionType type, const char_u *const s,
 ///   :   Determines whether this segment is the only one.
 ///
 ///   TS_FUNCCALL
-///   :   Use "state.functions" in place of "state.current_scope" in some 
-///       cases. Note that vim.call implementation should still be able to use 
-///       "state.user_functions" if appropriate.
+///   :   Use "vim.functions" in place of "state.current_scope" in some cases. 
+///       Note that vim.call implementation should still be able to use 
+///       "state.global.user_functions" if appropriate.
 ///
 ///   TS_FUNCASSIGN
-///   :   Use "state.user_functions" in place of "state.current_scope" in some 
-///       cases.
+///   :   Use "state.global.user_functions" in place of "state.current_scope" in 
+///       some cases.
 /// @endparblock
 ///
 /// @return FAIL in case of unrecoverable error, OK otherwise.
@@ -967,9 +967,9 @@ static WFDEC(translate_scope, const char_u **start,
     } else {
       *start = expr->position;
       if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position))
-        WS("state.functions")
+        WS("vim.functions")
       else if (flags & (TS_FUNCASSIGN|TS_FUNCCALL))
-        WS("state.user_functions")
+        WS("state.global.user_functions")
       else
         WS("state.current_scope")
     }
@@ -982,28 +982,31 @@ static WFDEC(translate_scope, const char_u **start,
       case 'g': {
         *start = expr->position + 2;
         WS("state.")
+        if (*expr->position == 'g'
+            || *expr->position == 'v')
+          WS("global.")
         W_LEN(expr->position, 1)
         break;
       }
       case 't': {
         *start = expr->position + 2;
-        WS("state.tabpage.t")
+        WS("state.global.tabpage.t")
         break;
       }
       case 'w': {
         *start = expr->position + 2;
-        WS("state.window.w")
+        WS("state.global.window.w")
         break;
       }
       case 'b': {
         *start = expr->position + 2;
-        WS("state.buffer.b")
+        WS("state.global.buffer.b")
         break;
       }
       default: {
         *start = expr->position;
         if (flags & (TS_FUNCASSIGN|TS_FUNCCALL))
-          WS("state.user_functions")
+          WS("state.global.user_functions")
         else
           WS("state.current_scope")
         break;
@@ -1024,9 +1027,9 @@ static WFDEC(translate_scope, const char_u **start,
       }
     }
     if (isfunc && !(flags & TS_FUNCASSIGN))
-      WS("state.functions")
+      WS("vim.functions")
     else if (flags & (TS_FUNCASSIGN|TS_FUNCCALL))
-      WS("state.user_functions")
+      WS("state.global.user_functions")
     else
       WS("state.current_scope")
   }
@@ -1106,17 +1109,17 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
         if ((type == kOptGlobal && (option_properties & GOP_GLOBAL))
             // Or requested option that has nothing, but global value
             || !((option_properties & GOP_LOCALITY_MASK) ^ GOP_GLOBAL)) {
-          WS("state.options['")
+          WS("state.global.options['")
           W_END(name_start, e)
           WS("']")
         } else {
           if (option_properties & GOP_GLOBAL)
-            WS("state:get_local_option(")
+            WS("vim.get_local_option(state, ")
 
           if (option_properties & GOP_BUFFER_LOCAL)
-            WS("state.buffer")
+            WS("state.global.buffer")
           else if (option_properties & GOP_WINDOW_LOCAL)
-            WS("state.window")
+            WS("state.global.window")
           else
             assert(false);
 
@@ -1153,7 +1156,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
     }
     case kExprSimpleVariableName: {
       const char_u *start;
-      WS("vim.subscript(state, ")
+      WS("vim.subscript.subscript(state, ")
       CALL(translate_scope, &start, expr, TS_ONLY_SEGMENT | (is_funccall
                                                              ? TS_FUNCCALL
                                                              : 0))
@@ -1164,7 +1167,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
       break;
     }
     case kExprVariableName: {
-      WS("vim.subscript(state, ")
+      WS("vim.subscript.subscript(state, ")
       CALL(translate_varname, expr, FALSE)
       WS(")")
       break;
@@ -1211,11 +1214,11 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
         case kExprSubscript: {
           if (expr->children->next->next == NULL) {
             if (is_funccall)
-              WS("vim.func_subscript(state")
+              WS("vim.subscript.func(state")
             else
-              WS("vim.subscript(state")
+              WS("vim.subscript.subscript(state")
           } else {
-            WS("vim.slice(state")
+            WS("vim.subscript.slice(state")
           }
           break;
         }
@@ -1226,16 +1229,16 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
           break; \
         }
 
-        OPERATOR(kExprAdd,          "add")
-        OPERATOR(kExprSubtract,     "subtract")
-        OPERATOR(kExprDivide,       "divide")
-        OPERATOR(kExprMultiply,     "multiply")
-        OPERATOR(kExprModulo,       "modulo")
-        OPERATOR(kExprCall,         "call")
-        OPERATOR(kExprMinus,        "negate")
-        OPERATOR(kExprNot,          "negate_logical")
-        OPERATOR(kExprPlus,         "promote_integer")
-        OPERATOR(kExprStringConcat, "concat")
+        OPERATOR(kExprAdd,          "op.add")
+        OPERATOR(kExprSubtract,     "op.subtract")
+        OPERATOR(kExprDivide,       "op.divide")
+        OPERATOR(kExprMultiply,     "op.multiply")
+        OPERATOR(kExprModulo,       "op.modulo")
+        OPERATOR(kExprCall,         "subscript.call")
+        OPERATOR(kExprMinus,        "op.negate")
+        OPERATOR(kExprNot,          "op.negate_logical")
+        OPERATOR(kExprPlus,         "op.promote_integer")
+        OPERATOR(kExprStringConcat, "op.concat")
 #undef OPERATOR
 
 #define COMPARISON(forward_type, rev_type, op) \
@@ -1245,7 +1248,7 @@ static WFDEC(translate_expr, const ExpressionNode *const expr,
             reversed = true; \
             WS("vim.negate_logical(state, ") \
           } \
-          WS("vim." op "(state") \
+          WS("vim.op." op "(state") \
           CALL(dump_bool, (bool) expr->ignore_case) \
           WS(", ") \
           break; \
@@ -1324,7 +1327,7 @@ static WFDEC(translate_function, const TranslateFuncArgs *const args)
   if (args->node->children != NULL) {
     WINDENT(args->indent + 1)
     // TODO; dump information about function call
-    WS("state = state:enter_function({})\n")
+    WS("state = vim.state.enter_function(state, {})\n")
     CALL_FUNC(translate_nodes, args->node->children, args->indent + 1)
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
@@ -1410,7 +1413,7 @@ static WFDEC(translate_varname, const ExpressionNode *const expr,
   return OK;
 }
 
-/// Translate lvalue into one of vim.assign_* calls
+/// Translate lvalue into one of vim.assign.* calls
 ///
 /// @note Newline is not written.
 ///
@@ -1429,11 +1432,11 @@ static WFDEC(translate_lval, const ExpressionNode *const expr,
 #define ADD_ASSIGN(what) \
   { \
     if (is_funccall) { \
-      WS("vim.assign_" what "_function(state, ") \
+      WS("vim.assign." what "_function(state, ") \
       CALL(dump_bool, unique) \
       WS(", ") \
     } else { \
-      WS("vim.assign_" what "(state, ") \
+      WS("vim.assign." what "(state, ") \
     } \
   }
   switch (expr->type) {
@@ -1873,7 +1876,7 @@ static WFDEC(translate_node, const CommandNode *const node,
     WS(" = pcall(function(state)\n")
     CALL(translate_nodes, node->children, indent + 1)
     WINDENT(indent)
-    WS("end, state:trying())\n")
+    WS("end, vim.state.enter_try(state))\n")
 
     if (finally != NULL) {
       WINDENT(indent)
@@ -2174,11 +2177,12 @@ int translate_script(const CommandNode *const node, Writer write, void *cookie)
 {
   TranslationOptions to = kTransScript;
 
+  // FIXME Add <SID>
   WS("vim = require 'vim'\n"
-     "s = vim.new_scope(false)\n"
+     "s = vim.new_script_scope(state, false)\n"
      "return {\n"
      "  run=function(state)\n"
-     "    state = state:set_script_locals(s)\n")
+     "    state = vim.state.enter_script(state, s)\n")
 
   CALL_SCRIPT(translate_nodes, node, 2)
 
