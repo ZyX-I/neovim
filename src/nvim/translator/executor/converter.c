@@ -17,13 +17,13 @@
 static inline void nlua_push_type_idx(lua_State *lstate)
   FUNC_ATTR_NONNULL_ALL
 {
-  lua_pushnumber(lstate, -2);
+  lua_pushboolean(lstate, true);
 }
 
 static inline void nlua_push_locks_idx(lua_State *lstate)
   FUNC_ATTR_NONNULL_ALL
 {
-  lua_pushnumber(lstate, -1);
+  lua_pushboolean(lstate, false);
 }
 
 static inline void nlua_push_val_idx(lua_State *lstate)
