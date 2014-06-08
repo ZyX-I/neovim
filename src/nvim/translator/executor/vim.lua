@@ -1,9 +1,9 @@
 -- {{{1 Utility functions
-get_local_option = function(state, other, name)
+local get_local_option = function(state, other, name)
   return other.options[name] or state.options[name]
 end
 
-non_nil = function(wrapped)
+local non_nil = function(wrapped)
   return function(state, ...)
     local i
     local maxi = select('#', ...)
@@ -20,7 +20,7 @@ non_nil = function(wrapped)
 end
 
 -- {{{1 Built-in function implementations
-functions = {
+local functions = {
   [type_idx] = VIM_FUNCTIONS,
   type = function(state, self, ...)
     return vim_type(state, ...)[1]
@@ -28,7 +28,7 @@ functions = {
 }
 
 -- {{{1 State manipulations
-copy_table = function(state)
+local copy_table = function(state)
   local new_state = {}
   for k, v in pairs(state) do
     new_state[k] = v
@@ -36,17 +36,17 @@ copy_table = function(state)
   return new_state
 end
 
-new_scope = function(is_default_scope)
+local new_scope = function(is_default_scope)
   ret = dict.new(state, ':is_default_scope', is_default_scope)
   ret[type_idx] = VIM_SCOPE
   return ret
 end
 
-new_script_scope = function(state)
+local new_script_scope = function(state)
   return new_scope(false)
 end
 
-state = {
+local state = {
   new = function()
     local state = {
       -- values that need to be altered when entering/exiting some scopes
@@ -101,22 +101,22 @@ state = {
 -- {{{1 Types
 -- {{{2 Related constants
 -- Special values that cannot be assigned from VimL
-type_idx = true
-locks_idx = false
-val_idx = 0
+local type_idx = true
+local locks_idx = false
+local val_idx = 0
 
 VIM_NUMBER     = {0}
 VIM_STRING     = {1}
 VIM_FUNCREF    = {2}
 VIM_LIST       = {3}
-VIM_DICTIONARY = {4}
+local VIM_DICTIONARY = {4}
 VIM_FLOAT      = {5}
 
 VIM_SCOPE      = {4}
 VIM_FUNCTIONS  = {4}
 
 -- {{{2 Number
-number = {
+local number = {
   new = function(state, n)
     return n
   end,
@@ -126,7 +126,7 @@ number = {
 }
 
 -- {{{2 String
-string = {
+local string = {
   new = function(state, s)
     return s
   end,
@@ -136,7 +136,7 @@ string = {
 }
 
 -- {{{2 List
-list = {
+local list = {
   new = function(state, ...)
     local ret = {...}
     ret[type_idx] = VIM_LIST
@@ -232,7 +232,7 @@ list = {
 }
 
 -- {{{2 Dictionary
-dict = {
+local dict = {
   new = function(state, ...)
     local i = 1
     local key
@@ -284,7 +284,7 @@ dict = {
 }
 
 -- {{{2 Float
-float = {
+local float = {
   new = function(state, f)
     return {[type_idx] = VIM_FLOAT, [val_idx] = f}
   end,
@@ -294,7 +294,7 @@ float = {
 }
 
 -- {{{2 Type tables
-types = {
+local types = {
   [VIM_NUMBER] = number,
   [VIM_STRING] = string,
   [VIM_FUNCREF] = funcref,
@@ -303,13 +303,13 @@ types = {
   [VIM_FLOAT] = float,
 }
 
-pseudo_types = {
+local pseudo_types = {
   [VIM_SCOPE] = VIM_DICTIONARY,
   [VIM_FUNCTIONS] = VIM_DICTIONARY,
 }
 
 -- {{{1 Error manipulation
-err = {
+local err = {
   matches = function(state, err, regex)
     if (err:match(regex)) then
       return true
@@ -337,7 +337,7 @@ err = {
 }
 
 -- {{{1 Built-in commands implementations
-string_echo = function(state, v, v_position, refs)
+local string_echo = function(state, v, v_position, refs)
   t = vim_type(state, v, v_position)
   if t == nil then
     return nil
@@ -348,7 +348,7 @@ string_echo = function(state, v, v_position, refs)
   return types[t].to_string_echo(state, v, refs)
 end
 
-commands = {
+local commands = {
   append = function(state, range, bang, lines)
   end,
   abclear = function(state, buffer)
@@ -370,11 +370,11 @@ commands = {
 }
 
 -- {{{1 User commands implementation
-parse = function(state, command, range, bang, args)
+local parse = function(state, command, range, bang, args)
   return args, nil
 end
 
-run_user_command = function(state, command, range, bang, args)
+local run_user_command = function(state, command, range, bang, args)
   command = state.user_commands[command]
   if (command == nil) then
     -- TODO Record line number
@@ -389,7 +389,7 @@ run_user_command = function(state, command, range, bang, args)
 end
 
 -- {{{1 Assign support
-assign = {
+local assign = {
   dict = non_nil(function(state, val, dct, key)
     if (key == '') then
       err.err(state, key_position, true,
@@ -469,7 +469,7 @@ assign = {
 assign.scope = assign.dict
 
 -- {{{1 Range handling
-range = {
+local range = {
   compose = function(state, ...)
   end,
   apply_followup = function(state, followup_type, followup_data, lnr)
@@ -494,7 +494,7 @@ range = {
 }
 
 -- {{{1 Type manipulations
-vim_type = function(state, value, position)
+local vim_type = function(state, value, position)
   if (value == nil) then
     return nil
   end
@@ -517,7 +517,7 @@ vim_type = function(state, value, position)
   return nil
 end
 
-get_number = function(state, value, position)
+local get_number = function(state, value, position)
   t = vim_type(state, value, position)
   if (t == nil) then
     return nil
@@ -541,7 +541,7 @@ get_number = function(state, value, position)
   end
 end
 
-get_string = function(state, value, position)
+local get_string = function(state, value, position)
   t = vim_type(state, value, position)
   if (t == nil) then
     return nil
@@ -564,7 +564,7 @@ get_string = function(state, value, position)
   end
 end
 
-get_boolean = function(state, value, position)
+local get_boolean = function(state, value, position)
   num = get_number(state, value, position)
   if num == nil then
     return nil
@@ -573,7 +573,7 @@ get_boolean = function(state, value, position)
 end
 
 -- {{{1 Operators
-iterop = non_nil(function(state, converter, opfunc, ...)
+local iterop = non_nil(function(state, converter, opfunc, ...)
   local result
   local i, v
   for i, v in ipairs({...}) do
@@ -596,10 +596,10 @@ iterop = non_nil(function(state, converter, opfunc, ...)
   return result
 end)
 
-vim_true = 1
-vim_false = 0
+local vim_true = 1
+local vim_false = 0
 
-same_complex_types = function(state, t1, t2, arg2_position)
+local same_complex_types = function(state, t1, t2, arg2_position)
   if (t1 == nil or t2 == nil) then
     return nil
   elseif (t1 == VIM_LIST) then
@@ -627,7 +627,7 @@ same_complex_types = function(state, t1, t2, arg2_position)
   return 2
 end
 
-less_greater_cmp = function(state, ic, cmp, string_icmp, arg1, arg1_position,
+local less_greater_cmp = function(state, ic, cmp, string_icmp, arg1, arg1_position,
                                                          arg2, arg2_position)
   t1 = vim_type(state, arg1, arg1_position)
   t2 = vim_type(state, arg2, arg2_position)
@@ -672,7 +672,7 @@ less_greater_cmp = function(state, ic, cmp, string_icmp, arg1, arg1_position,
   end
 end
 
-op = {
+local op = {
   add = function(state, ...)
     return iterop(state, get_number, function(state, result, a2, a2_position)
       return result + a2
@@ -822,7 +822,7 @@ op = {
 }
 
 -- {{{1 Subscripting
-subscript = {
+local subscript = {
   func = non_nil(function(state, value, index)
     local t, f, ft
     t = vim_type(state, value, value_position)
@@ -893,7 +893,7 @@ subscript = {
   end),
 }
 
-func_concat_or_subscript = non_nil(function(state, dct, key)
+local func_concat_or_subscript = non_nil(function(state, dct, key)
   local t, f, ft
   t = vim_type(state, dct, dct_position)
   if t == VIM_DICTIONARY then
@@ -921,7 +921,7 @@ func_concat_or_subscript = non_nil(function(state, dct, key)
   end
 end)
 
-concat_or_subscript = non_nil(function(state, dct, key)
+local concat_or_subscript = non_nil(function(state, dct, key)
   t = vim_type(state, dct, dct_position)
   if (t == VIM_DICTIONARY) then
     return dict.subscript(state, dct, dct_position, key, key_position)
@@ -930,12 +930,12 @@ concat_or_subscript = non_nil(function(state, dct, key)
   end
 end)
 
-get_scope_and_key = non_nil(function(state, key)
+local get_scope_and_key = non_nil(function(state, key)
   -- TODO
 end)
 
 -- {{{1 return
-zero = number.new(state, 0)
+local zero = number.new(state, 0)
 return {
   state = state,
   new_script_scope = new_script_scope,
