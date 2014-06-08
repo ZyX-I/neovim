@@ -315,10 +315,13 @@ Array nlua_pop_Array(lua_State *lstate, Error *err)
   }
 
   for (int i = 1; ; i++, ret.size++) {
-    lua_rawgeti(lstate, -2, i);
+    lua_rawgeti(lstate, -1, i);
 
-    if (lua_isnil(lstate, -1))
+    if (lua_isnil(lstate, -1)) {
+      lua_pop(lstate, 1);
       break;
+    }
+    lua_pop(lstate, 1);
   }
 
   if (ret.size == 0)
@@ -328,7 +331,7 @@ Array nlua_pop_Array(lua_State *lstate, Error *err)
   for (size_t i = 1; i <= ret.size; i++) {
     Object val;
 
-    lua_rawgeti(lstate, -2, (int) i);
+    lua_rawgeti(lstate, -1, (int) i);
 
     val = nlua_pop_Object(lstate, err);
     if (err->set) {
@@ -531,10 +534,13 @@ type##Array nlua_pop_##type##Array(lua_State *lstate, Error *err) \
 { \
   type##Array ret = {.size = 0, .items = NULL}; \
   for (int i = 1; ; i++, ret.size++) { \
-    lua_rawgeti(lstate, -2, i); \
+    lua_rawgeti(lstate, -1, i); \
 \
-    if (lua_isnil(lstate, -1)) \
+    if (lua_isnil(lstate, -1)) { \
+      lua_pop(lstate, 1); \
       break; \
+    } \
+    lua_pop(lstate, 1); \
   } \
 \
   if (ret.size == 0) \
@@ -544,7 +550,7 @@ type##Array nlua_pop_##type##Array(lua_State *lstate, Error *err) \
   for (size_t i = 1; i <= ret.size; i++) { \
     type val; \
 \
-    lua_rawgeti(lstate, -2, (int) i); \
+    lua_rawgeti(lstate, -1, (int) i); \
 \
     val = nlua_pop_##type(lstate, err); \
     if (err->set) { \
