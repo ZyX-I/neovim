@@ -8,7 +8,7 @@ to_cstr = (function(string)
   return cstr(string:len() + 1, string)
 end)
 
-libnvim = ffi.load './build/src/libnvim-test.so'
+libnvim = ffi.load './build/src/nvim/libnvim-test.so'
 
 cimport = (function(path)
   pipe = io.popen('cc -Isrc -P -E ' .. path)
