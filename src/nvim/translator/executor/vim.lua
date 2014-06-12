@@ -19,14 +19,6 @@ local non_nil = function(wrapped)
   end
 end
 
--- {{{1 Built-in function implementations
-local functions = {
-  [type_idx] = VIM_FUNCTIONS,
-  type = function(state, self, ...)
-    return vim_type(state, ...)[1]
-  end,
-}
-
 -- {{{1 State manipulations
 local copy_table = function(state)
   local new_state = {}
@@ -333,6 +325,14 @@ local err = {
   end,
 
   throw = function(...)
+  end,
+}
+
+-- {{{1 Built-in function implementations
+local functions = {
+  [type_idx] = VIM_FUNCTIONS,
+  type = function(state, self, ...)
+    return vim_type(state, ...)[1]
   end,
 }
 
