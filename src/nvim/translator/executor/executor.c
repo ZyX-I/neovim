@@ -51,6 +51,7 @@ static void set_lua_error(lua_State *lstate, Error *err) FUNC_ATTR_NONNULL_ALL
   set_api_error("Error while executing lua code", err);
 
   // FIXME!! Print error message
+  fputs(str, stderr);
 }
 
 /// Evaluate lua string
@@ -83,6 +84,8 @@ static int nlua_eval_lua_string(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 static int nlua_state_init(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 {
   if (luaL_dostring(lstate, vim_module)) {
+    Error err;
+    set_lua_error(lstate, &err);
     return 1;
   }
   nlua_add_api_functions(lstate);

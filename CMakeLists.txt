@@ -96,6 +96,10 @@ else()
   endif()
 endif()
 
+if(${LUAJIT_FOUND})
+  set(HAVE_LUAJIT 1)
+endif()
+
 find_package(LibIntl)
 if(LibIntl_FOUND)
   include_directories(SYSTEM ${LibIntl_INCLUDE_DIR})

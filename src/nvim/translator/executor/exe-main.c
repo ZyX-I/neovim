@@ -111,6 +111,10 @@ int main(int argc, char **argv, char **env)
   Object result = eval_lua(arg, &err);
 
   print_object(result);
+  if (err.set) {
+    puts("Error was set:");
+    puts(err.msg);
+  }
 
   return 0;
 }

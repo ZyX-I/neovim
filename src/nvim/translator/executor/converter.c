@@ -10,6 +10,35 @@
 
 #include "nvim/translator/executor/converter.h"
 
+#ifndef LUA_TINTEGER
+# ifdef HAVE_LUAJIT
+#  warning Using magic number 10, should be using a standard constant
+#  define LUA_TINTEGER 10
+# elif LUA_VERSION_NUM < 503
+#  define LUA_TINTEGER LUA_TNUMBER
+# else
+#  error No LUA_TINTEGER type
+# endif
+#endif
+
+#ifdef HAVE_LUAJIT
+# define lua_isinteger(lstate, idx) \
+    (lua_type(lstate, idx) == LUA_TINTEGER || lua_isnumber(lstate, idx))
+#elif LUA_VERSION_NUM < 503
+# define lua_pushinteger lua_pushnumber
+# define lua_Integer lua_Number
+# define lua_isinteger lua_isnumber
+# define lua_tointeger lua_tonumber
+#endif
+
+#if LUA_VERSION_NUM >= 503
+# ifdef lua_isinteger
+#  undef lua_isinteger
+# endif
+# define lua_isinteger(lstate, idx) \
+    (lua_isinteger(lstate, idx) || lua_isnumber(lstate, idx))
+#endif
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "translator/executor/converter.c.generated.h"
 #endif
@@ -68,7 +97,7 @@ void nlua_push_String(lua_State *lstate, const String s)
 void nlua_push_Integer(lua_State *lstate, const Integer n)
   FUNC_ATTR_NONNULL_ALL
 {
-  lua_pushnumber(lstate, (lua_Number) n);
+  lua_pushinteger(lstate, (lua_Integer) n);
 }
 
 /// Convert given Float to lua table
@@ -145,7 +174,7 @@ void nlua_push_Array(lua_State *lstate, const Array array)
 void nlua_push_##type(lua_State *lstate, const type item) \
   FUNC_ATTR_NONNULL_ALL \
 { \
-  lua_pushnumber(lstate, (lua_Number) item); \
+  lua_pushinteger(lstate, (lua_Integer) item); \
 }
 
 GENERATE_INDEX_FUNCTION(Buffer)
@@ -229,12 +258,12 @@ Integer nlua_pop_Integer(lua_State *lstate, Error *err)
 {
   Integer ret = 0;
 
-  if (!lua_isnumber(lstate, -1)) {
+  if (!lua_isinteger(lstate, -1)) {
     lua_pop(lstate, 1);
-    set_api_error("Expected lua number", err);
+    set_api_error("Expected lua integer", err);
     return ret;
   }
-  ret = (Integer) lua_tonumber(lstate, -1);
+  ret = (Integer) lua_tointeger(lstate, -1);
   lua_pop(lstate, 1);
 
   return ret;
@@ -451,6 +480,7 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   Object ret = {.type = kObjectTypeNil};
+  printf("type: %i\n", lua_type(lstate, -1));
 
   switch (lua_type(lstate, -1)) {
     case LUA_TNIL: {
@@ -463,6 +493,7 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
       ret.data.string = nlua_pop_String(lstate, err);
       break;
     }
+    case LUA_TINTEGER:
     case LUA_TNUMBER: {
       ret.type = kObjectTypeInteger;
       ret.data.integer = nlua_pop_Integer(lstate, err);
