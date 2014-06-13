@@ -480,7 +480,6 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   Object ret = {.type = kObjectTypeNil};
-  printf("type: %i\n", lua_type(lstate, -1));
 
   switch (lua_type(lstate, -1)) {
     case LUA_TNIL: {
