@@ -60,7 +60,7 @@
  * String searches
  *
  * The string search functions are divided into two levels:
- * lowest:  searchit(); uses an pos_T for starting position and found match.
+ * lowest:  searchit(); uses a pos_T for starting position and found match.
  * Highest: do_search(); uses curwin->w_cursor; calls searchit().
  *
  * The last search pattern is remembered for repeating the same search.
@@ -375,14 +375,14 @@ void reset_search_dir(void)
  * Set the last search pattern.  For ":let @/ =" and viminfo.
  * Also set the saved search pattern, so that this works in an autocommand.
  */
-void set_last_search_pat(char_u *s, int idx, int magic, int setlast)
+void set_last_search_pat(const char_u *s, int idx, int magic, int setlast)
 {
   free(spats[idx].pat);
   /* An empty string means that nothing should be matched. */
   if (*s == NUL)
     spats[idx].pat = NULL;
   else
-    spats[idx].pat = vim_strsave(s);
+    spats[idx].pat = (char_u *) xstrdup((char *) s);
   spats[idx].magic = magic;
   spats[idx].no_scs = FALSE;
   spats[idx].off.dir = '/';
@@ -1475,7 +1475,7 @@ pos_T *findmatchlimit(oparg_T *oap, int initc, int flags, int maxtravel)
   /*
    * if initc given, look in the table for the matching character
    * '/' and '*' are special cases: look for start or end of comment.
-   * When '/' is used, we ignore running backwards into an star-slash, for
+   * When '/' is used, we ignore running backwards into a star-slash, for
    * "[*" command, we just want to find any comment.
    */
   if (initc == '/' || initc == '*') {
@@ -2022,7 +2022,7 @@ showmatch (
     if (!curwin->w_p_wrap)
       getvcol(curwin, lpos, NULL, &vcol, NULL);
     if (curwin->w_p_wrap || (vcol >= curwin->w_leftcol
-                             && vcol < curwin->w_leftcol + W_WIDTH(curwin))) {
+                             && vcol < curwin->w_leftcol + curwin->w_width)) {
       mpos = *lpos;          /* save the pos, update_screen() may change it */
       save_cursor = curwin->w_cursor;
       save_so = p_so;
@@ -2091,7 +2091,7 @@ int findsent(int dir, long count)
 
   while (count--) {
     /*
-     * if on an empty line, skip upto a non-empty line
+     * if on an empty line, skip up to a non-empty line
      */
     if (gchar_pos(&pos) == NUL) {
       do

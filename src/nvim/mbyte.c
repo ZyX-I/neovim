@@ -1213,12 +1213,12 @@ int utf_char2cells(int c)
  * Return the number of display cells character at "*p" occupies.
  * This doesn't take care of unprintable characters, use ptr2cells() for that.
  */
-int latin_ptr2cells(char_u *p)
+int latin_ptr2cells(const char_u *p)
 {
   return 1;
 }
 
-int utf_ptr2cells(char_u *p)
+int utf_ptr2cells(const char_u *p)
 {
   int c;
 
@@ -1236,7 +1236,7 @@ int utf_ptr2cells(char_u *p)
   return 1;
 }
 
-int dbcs_ptr2cells(char_u *p)
+int dbcs_ptr2cells(const char_u *p)
 {
   /* Number of cells is equal to number of bytes, except for euc-jp when
    * the first byte is 0x8e. */
@@ -1250,12 +1250,12 @@ int dbcs_ptr2cells(char_u *p)
  * Like mb_ptr2cells(), but limit string length to "size".
  * For an empty string or truncated character returns 1.
  */
-int latin_ptr2cells_len(char_u *p, int size)
+int latin_ptr2cells_len(const char_u *p, int size)
 {
   return 1;
 }
 
-static int utf_ptr2cells_len(char_u *p, int size)
+static int utf_ptr2cells_len(const char_u *p, int size)
 {
   int c;
 
@@ -1275,7 +1275,7 @@ static int utf_ptr2cells_len(char_u *p, int size)
   return 1;
 }
 
-static int dbcs_ptr2cells_len(char_u *p, int size)
+static int dbcs_ptr2cells_len(const char_u *p, int size)
 {
   /* Number of cells is equal to number of bytes, except for euc-jp when
    * the first byte is 0x8e. */
@@ -1304,17 +1304,19 @@ static int dbcs_char2cells(int c)
   return MB_BYTE2LEN((unsigned)c >> 8);
 }
 
-/*
- * Return the number of cells occupied by string "p".
- * Stop at a NUL character.  When "len" >= 0 stop at character "p[len]".
- */
-int mb_string2cells(char_u *p, int len)
+/// Calculate the number of cells occupied by string `str`.
+///
+/// @param str The source string, may not be NULL, must be a NUL-terminated
+///            string.
+/// @return The number of cells occupied by string `str`
+size_t mb_string2cells(const char_u *str)
 {
-  int i;
-  int clen = 0;
+  size_t clen = 0;
 
-  for (i = 0; (len < 0 || i < len) && p[i] != NUL; i += (*mb_ptr2len)(p + i))
-    clen += (*mb_ptr2cells)(p + i);
+  for (const char_u *p = str; *p != NUL; p += (*mb_ptr2len)(p)) {
+    clen += (*mb_ptr2cells)(p);
+  }
+
   return clen;
 }
 
@@ -1505,13 +1507,12 @@ int utf_composinglike(const char_u *p1, const char_u *p2)
 }
 
 /*
- * Convert a UTF-8 byte string to a wide character.  Also get up to MAX_MCO
+ * Convert a UTF-8 byte string to a wide character. Also get up to MAX_MCO
  * composing characters.
+ *
+ * @param [out] pcc: composing chars, last one is 0
  */
-int utfc_ptr2char(
-    char_u      *p,
-    int         *pcc        /* return: composing chars, last one is 0 */
-    )
+int utfc_ptr2char(const char_u *p, int *pcc)
 {
   int len;
   int c;
@@ -1545,12 +1546,10 @@ int utfc_ptr2char(
 /*
  * Convert a UTF-8 byte string to a wide character.  Also get up to MAX_MCO
  * composing characters.  Use no more than p[maxlen].
+ *
+ * @param [out] pcc: composing chars, last one is 0
  */
-int utfc_ptr2char_len(
-    char_u      *p,
-    int         *pcc,       /* return: composing chars, last one is 0 */
-    int maxlen
-    )
+int utfc_ptr2char_len(const char_u *p, int *pcc, int maxlen)
 {
   int len;
   int c;
@@ -2885,25 +2884,26 @@ void show_utf8()
  * If "p" points to the NUL at the end of the string return 0.
  * Returns 0 when already at the first byte of a character.
  */
-int latin_head_off(char_u *base, char_u *p)
+int latin_head_off(const char_u *base, const char_u *p)
 {
   return 0;
 }
 
-int dbcs_head_off(char_u *base, char_u *p)
+int dbcs_head_off(const char_u *base, const char_u *p)
 {
-  char_u      *q;
-
   /* It can't be a trailing byte when not using DBCS, at the start of the
    * string or the previous byte can't start a double-byte. */
-  if (p <= base || MB_BYTE2LEN(p[-1]) == 1 || *p == NUL)
+  if (p <= base || MB_BYTE2LEN(p[-1]) == 1 || *p == NUL) {
     return 0;
+  }
 
   /* This is slow: need to start at the base and go forward until the
    * byte we are looking for.  Return 1 when we went past it, 0 otherwise. */
-  q = base;
-  while (q < p)
+  const char_u *q = base;
+  while (q < p) {
     q += dbcs_ptr2len(q);
+  }
+
   return (q == p) ? 0 : 1;
 }
 
@@ -2911,10 +2911,8 @@ int dbcs_head_off(char_u *base, char_u *p)
  * Special version of dbcs_head_off() that works for ScreenLines[], where
  * single-width DBCS_JPNU characters are stored separately.
  */
-int dbcs_screen_head_off(char_u *base, char_u *p)
+int dbcs_screen_head_off(const char_u *base, const char_u *p)
 {
-  char_u      *q;
-
   /* It can't be a trailing byte when not using DBCS, at the start of the
    * string or the previous byte can't start a double-byte.
    * For euc-jp an 0x8e byte in the previous cell always means we have a
@@ -2929,33 +2927,35 @@ int dbcs_screen_head_off(char_u *base, char_u *p)
    * byte we are looking for.  Return 1 when we went past it, 0 otherwise.
    * For DBCS_JPNU look out for 0x8e, which means the second byte is not
    * stored as the next byte. */
-  q = base;
+  const char_u *q = base;
   while (q < p) {
-    if (enc_dbcs == DBCS_JPNU && *q == 0x8e)
+    if (enc_dbcs == DBCS_JPNU && *q == 0x8e) {
       ++q;
-    else
+    }
+    else {
       q += dbcs_ptr2len(q);
+    }
   }
+
   return (q == p) ? 0 : 1;
 }
 
-int utf_head_off(char_u *base, char_u *p)
+int utf_head_off(const char_u *base, const char_u *p)
 {
-  char_u      *q;
-  char_u      *s;
   int c;
   int len;
-  char_u      *j;
 
   if (*p < 0x80)                /* be quick for ASCII */
     return 0;
 
   /* Skip backwards over trailing bytes: 10xx.xxxx
    * Skip backwards again if on a composing char. */
+  const char_u *q;
   for (q = p;; --q) {
     /* Move s to the last byte of this char. */
-    for (s = q; (s[1] & 0xc0) == 0x80; ++s)
-      ;
+    const char_u *s;
+    for (s = q; (s[1] & 0xc0) == 0x80; ++s) {}
+
     /* Move q to the first byte of this char. */
     while (q > base && (*q & 0xc0) == 0x80)
       --q;
@@ -2974,7 +2974,7 @@ int utf_head_off(char_u *base, char_u *p)
 
     if (arabic_maycombine(c)) {
       /* Advance to get a sneak-peak at the next char */
-      j = q;
+      const char_u *j = q;
       --j;
       /* Move j to the first byte of this char. */
       while (j > base && (*j & 0xc0) == 0x80)

@@ -1280,7 +1280,7 @@ int plines_win_nofold(win_T *wp, linenr_T lnum)
   /*
    * Add column offset for 'number', 'relativenumber' and 'foldcolumn'.
    */
-  width = W_WIDTH(wp) - win_col_off(wp);
+  width = wp->w_width - win_col_off(wp);
   if (width <= 0)
     return 32000;
   if (col <= width)
@@ -1332,7 +1332,7 @@ int plines_win_col(win_T *wp, linenr_T lnum, long column)
   /*
    * Add column offset for 'number', 'relativenumber', 'foldcolumn', etc.
    */
-  width = W_WIDTH(wp) - win_col_off(wp);
+  width = wp->w_width - win_col_off(wp);
   if (width <= 0)
     return 9999;
 
@@ -3153,12 +3153,11 @@ char_u *get_users(expand_T *xp, int idx)
  */
 int match_user(char_u *name)
 {
-  int i;
   int n = (int)STRLEN(name);
   int result = 0;
 
   init_users();
-  for (i = 0; i < ga_users.ga_len; i++) {
+  for (int i = 0; i < ga_users.ga_len; i++) {
     if (STRCMP(((char_u **)ga_users.ga_data)[i], name) == 0)
       return 2;       /* full match */
     if (STRNCMP(((char_u **)ga_users.ga_data)[i], name, n) == 0)

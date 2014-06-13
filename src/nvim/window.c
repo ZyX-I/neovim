@@ -2096,7 +2096,7 @@ winframe_remove (
    * updated.  Can only be done after the sizes have been updated. */
   if (frp2 == frp_close->fr_next) {
     int row = win->w_winrow;
-    int col = W_WINCOL(win);
+    int col = win->w_wincol;
 
     frame_comp_pos(frp2, &row, &col);
   }
@@ -3252,7 +3252,7 @@ win_goto_ver (
   foundfr = curwin->w_frame;
   while (count--) {
     /*
-     * First go upwards in the tree of frames until we find a upwards or
+     * First go upwards in the tree of frames until we find an upwards or
      * downwards neighbor.
      */
     fr = foundfr;
@@ -3796,10 +3796,9 @@ void win_size_save(garray_T *gap)
 void win_size_restore(garray_T *gap)
 {
   win_T       *wp;
-  int i;
 
   if (win_count() * 2 == gap->ga_len) {
-    i = 0;
+    int i = 0;
     for (wp = firstwin; wp != NULL; wp = wp->w_next) {
       frame_setwidth(wp->w_frame, ((int *)gap->ga_data)[i++]);
       win_setheight_win(((int *)gap->ga_data)[i++], wp);
@@ -4526,11 +4525,11 @@ void win_new_height(win_T *wp, int height)
        */
       wp->w_wrow = line_size;
       if (wp->w_wrow >= wp->w_height
-          && (W_WIDTH(wp) - win_col_off(wp)) > 0) {
-        wp->w_skipcol += W_WIDTH(wp) - win_col_off(wp);
+          && (wp->w_width - win_col_off(wp)) > 0) {
+        wp->w_skipcol += wp->w_width - win_col_off(wp);
         --wp->w_wrow;
         while (wp->w_wrow >= wp->w_height) {
-          wp->w_skipcol += W_WIDTH(wp) - win_col_off(wp)
+          wp->w_skipcol += wp->w_width - win_col_off(wp)
                            + win_col_off2(wp);
           --wp->w_wrow;
         }

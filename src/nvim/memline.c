@@ -304,8 +304,7 @@ int ml_open(buf_T *buf)
   b0p->b0_magic_int = (int)B0_MAGIC_INT;
   b0p->b0_magic_short = (short)B0_MAGIC_SHORT;
   b0p->b0_magic_char = B0_MAGIC_CHAR;
-  STRNCPY(b0p->b0_version, "VIM ", 4);
-  STRNCPY(b0p->b0_version + 4, Version, 6);
+  xstrlcpy(xstpcpy((char *) b0p->b0_version, "VIM "), Version, 6);
   long_to_char((long)mfp->mf_page_size, b0p->b0_page_size);
 
   if (!buf->b_spell) {
@@ -2974,7 +2973,7 @@ static int ml_add_stack(buf_T *buf)
  * Update the pointer blocks on the stack for inserted/deleted lines.
  * The stack itself is also updated.
  *
- * When a insert/delete line action fails, the line is not inserted/deleted,
+ * When an insert/delete line action fails, the line is not inserted/deleted,
  * but the pointer blocks have already been updated. That is fixed here by
  * walking through the stack.
  *
@@ -3384,7 +3383,7 @@ findswapname (
           process_still_running = FALSE;
 #endif
           /*
-           * If there is an SwapExists autocommand and we can handle
+           * If there is a SwapExists autocommand and we can handle
            * the response, trigger it.  It may return 0 to ask the
            * user anyway.
            */
