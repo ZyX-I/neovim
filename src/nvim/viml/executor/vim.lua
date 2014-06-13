@@ -1,3 +1,5 @@
+-- {{{1 Global declarations
+local vim_type
 -- {{{1 Utility functions
 local get_local_option = function(state, other, name)
   return other.options[name] or state.options[name]
@@ -494,7 +496,7 @@ local range = {
 }
 
 -- {{{1 Type manipulations
-local vim_type = function(state, value, position)
+vim_type = function(state, value, position)
   if (value == nil) then
     return nil
   end
