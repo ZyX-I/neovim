@@ -9,7 +9,7 @@ KLEE_CFLAGS="${CFLAGS} -emit-llvm -I$HOME/tmp/image/klee/include -DCOMPILE_KLEE"
 
 LINK_FLAGS="-o expr.lo"
 
-for src in ../src/nvim/garray.c ../src/nvim/translator/{parser,printer}/expr*.c ../src/nvim/translator/testhelpers/{parser,fgetline}.c ; do
+for src in ../src/nvim/garray.c ../src/nvim/viml/{parser,printer}/expr*.c ../src/nvim/translator/testhelpers/{parser,fgetline}.c ; do
   out=$(basename $src)
   while test -e "${out}.lo" ; do
     out="${out}.2"

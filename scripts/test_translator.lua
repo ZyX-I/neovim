@@ -18,19 +18,19 @@ cimport = (function(path)
   ffi.cdef(header)
 end)
 
-cimport 'src/vim.h'
--- cimport 'src/translator/translator/translator.h'
+cimport 'src/nvim/vim.h'
+-- cimport 'src/nvim/viml/translator/translator.h'
 ffi.cdef('int translate_script_str_to_file(char_u *, char *);')
-cimport 'src/os_unix.h'
-cimport 'src/eval.h'
--- cimport 'src/main.h'
+cimport 'src/nvim/os_unix.h'
+cimport 'src/nvim/eval.h'
+-- cimport 'src/nvim/main.h'
 ffi.cdef('void allocate_generic_buffers(void);')
-cimport 'src/window.h'
-cimport 'src/ops.h'
--- cimport 'src/misc1.h'
+cimport 'src/nvim/window.h'
+cimport 'src/nvim/ops.h'
+-- cimport 'src/nvim/misc1.h'
 ffi.cdef('void init_homedir(void);')
-cimport 'src/option.h'
-cimport 'src/ex_cmds2.h'
+cimport 'src/nvim/option.h'
+cimport 'src/nvim/ex_cmds2.h'
 
 libnvim.mch_early_init()
 libnvim.mb_init()
@@ -51,7 +51,7 @@ else
 end
 libnvim.translate_script_str_to_file(to_cstr(s), to_cstr('test.lua'))
 
-package.path = './src/translator/executor/?.lua;' .. package.path
+package.path = './src/nvim/viml/executor/?.lua;' .. package.path
 
 vim = require 'vim'
 test = require 'test'

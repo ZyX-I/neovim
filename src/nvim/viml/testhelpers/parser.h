@@ -1,0 +1,7 @@
+#ifndef NEOVIM_VIML_TESTHELPERS_PARSER_H
+#define NEOVIM_VIML_TESTHELPERS_PARSER_H
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "viml/testhelpers/parser.h.generated.h"
+#endif
+#endif  // NEOVIM_VIML_TESTHELPERS_PARSER_H

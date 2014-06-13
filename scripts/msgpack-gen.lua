@@ -271,7 +271,7 @@ generate_lua_c_bindings_header = function(output, headers)
 
   #include "nvim/func_attr.h"
   #include "nvim/api/private/defs.h"
-  #include "nvim/translator/executor/converter.h"
+  #include "nvim/viml/executor/converter.h"
   ]])
   include_headers(output, headers)
   output:write('\n')
