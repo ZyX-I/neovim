@@ -2148,3 +2148,20 @@ int translate_script(const CommandNode *const node, Writer write, void *cookie)
     "}\n")
   return OK;
 }
+
+/// Dump command executed from user input as code that runs immediately
+///
+/// @param[in]  node    Pointer to the first command inside this script.
+/// @param[in]  write   Function that will be used to write the result.
+/// @param[in]  cookie  Last argument to the above function.
+///
+/// @return OK in case of success, FAIL otherwise.
+int translate_input(const CommandNode *const node, Writer write, void *cookie)
+{
+  TranslationOptions to = kTransUser;
+
+  WS("state = vim.state\n")
+  CALL_SCRIPT(translate_nodes, node, 0)
+
+  return OK;
+}

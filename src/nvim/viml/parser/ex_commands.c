@@ -2412,8 +2412,13 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
   return OK;
 }
 
-static const char_u *do_fgetline_allocated(int c, const char_u **arg,
-                                           int indent)
+/// Fgetline implementation that simply returns given string
+///
+/// Useful for :execute, :*do, etc.
+///
+/// @param[in,out]  arg  Pointer to pointer to the start of string which will be 
+///                      returned. This string must live in an allocated memory.
+const char_u *do_fgetline_allocated(int c, const char_u **arg, int indent)
 {
   if (*arg) {
     const char_u *saved_arg = *arg;

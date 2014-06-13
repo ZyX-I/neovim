@@ -48,6 +48,8 @@ file( GLOB API_SOURCES api/*.c )
 file( GLOB API_PRIV_SOURCES api/private/*.c )
 file( GLOB TRANSLATOR_SOURCES translator/*/*.c )
 
+list(APPEND VIML_SOURCES "${PROJECT_SOURCE_DIR}/src/nvim/viml/viml.c")
+
 set(CONV_SRCS
   api.c
   arabic.c

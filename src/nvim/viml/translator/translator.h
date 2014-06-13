@@ -4,7 +4,7 @@
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
 
-typedef size_t (*Writer)(const void *ptr, size_t len, size_t nmemb,
+typedef size_t (*Writer)(const void *ptr, size_t size, size_t nmemb,
                          void *cookie);
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS

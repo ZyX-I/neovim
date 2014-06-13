@@ -121,6 +121,7 @@ static Object eval_lua_string(lua_State *lstate, String str, Error *err)
 static lua_State *global_lstate = NULL;
 
 Object eval_lua(String str, Error *err)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   if (global_lstate == NULL)
     global_lstate = init_lua();

@@ -7,10 +7,13 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+#include "nvim/vim.h"
 #include "nvim/api/private/defs.h"
 
 static void (*init_func)(void);
 static Object (*eval_lua)(String str, Error *err);
+
+static int (*execute_viml)(const char *const s);
 
 void print_object(Object obj)
 {
@@ -97,23 +100,32 @@ int main(int argc, char **argv, char **env)
     init_func();
   }
 
-  eval_lua = dlsym(handle, "eval_lua");
-  if (eval_lua == NULL)
-    return 5;
+  if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'v') {
+    execute_viml = dlsym(handle, "execute_viml");
+    if (execute_viml == NULL)
+      return 5;
 
-  String arg = {
-    .data = argv[1],
-    .size = strlen(argv[1]),
-  };
-  Error err = {
-    .set = false,
-  };
-  Object result = eval_lua(arg, &err);
+    if (execute_viml(argv[2]) == FAIL)
+      return 6;
+  } else {
+    eval_lua = dlsym(handle, "eval_lua");
+    if (eval_lua == NULL)
+      return 7;
 
-  print_object(result);
-  if (err.set) {
-    puts("Error was set:");
-    puts(err.msg);
+    String arg = {
+      .data = argv[1],
+      .size = strlen(argv[1]),
+    };
+    Error err = {
+      .set = false,
+    };
+    Object result = eval_lua(arg, &err);
+
+    print_object(result);
+    if (err.set) {
+      puts("Error was set:");
+      puts(err.msg);
+    }
   }
 
   return 0;
