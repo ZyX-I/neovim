@@ -1,0 +1,7 @@
+#ifndef NEOVIM_VIML_TESTHELPERS_FGETLINE_H
+#define NEOVIM_VIML_TESTHELPERS_FGETLINE_H
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "viml/testhelpers/fgetline.h.generated.h"
+#endif
+#endif  // NEOVIM_VIML_TESTHELPERS_FGETLINE_H

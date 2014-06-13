@@ -19,11 +19,11 @@ cimport = (function(path)
 end)
 
 cimport 'src/nvim/vim.h'
--- cimport 'src/translator/translator/translator.h'
+-- cimport 'src/nvim/viml/translator/translator.h'
 ffi.cdef('int translate_script_std(void);')
 cimport 'src/nvim/os_unix.h'
 cimport 'src/nvim/eval.h'
--- cimport 'src/main.h'
+-- cimport 'src/nvim/main.h'
 ffi.cdef('void allocate_generic_buffers(void);')
 cimport 'src/nvim/window.h'
 cimport 'src/nvim/ops.h'

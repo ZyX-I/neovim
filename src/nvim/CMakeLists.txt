@@ -8,8 +8,8 @@ set(MSGPACK_DISPATCH ${GENERATED_DIR}/msgpack_dispatch.c)
 set(MSGPACK_LUA_C_BINDINGS ${GENERATED_DIR}/msgpack_lua_c_bindings.c)
 set(HEADER_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/gendeclarations.lua)
 set(GENERATED_INCLUDES_DIR ${PROJECT_BINARY_DIR}/include)
-set(VIM_MODULE_FILE ${GENERATED_DIR}/translator/executor/vim_module.generated.c)
-set(VIM_MODULE_SOURCE ${PROJECT_SOURCE_DIR}/src/nvim/translator/executor/vim.lua)
+set(VIM_MODULE_FILE ${GENERATED_DIR}/viml/executor/vim_module.generated.c)
+set(VIM_MODULE_SOURCE ${PROJECT_SOURCE_DIR}/src/nvim/viml/executor/vim.lua)
 set(VIM_MODULE_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/generate_vim_module.lua)
 
 include_directories(${GENERATED_DIR})
@@ -20,12 +20,12 @@ file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR})
 foreach(subdir os
                api
                api/private
-               translator
-               translator/parser
-               translator/printer
-               translator/testhelpers
-               translator/translator
-               translator/executor)
+               viml
+               viml/parser
+               viml/printer
+               viml/testhelpers
+               viml/translator
+               viml/executor)
   file(MAKE_DIRECTORY ${GENERATED_DIR}/${subdir})
   file(MAKE_DIRECTORY ${GENERATED_INCLUDES_DIR}/${subdir})
 endforeach()
@@ -42,6 +42,8 @@ endforeach()
 list(REMOVE_ITEM NEOVIM_SOURCES ${to_remove})
 
 file( GLOB OS_SOURCES os/*.c )
+file( GLOB VIML_SOURCES viml/*/*.c )
+file( GLOB VIML_CH_SOURCES viml/*/*.c.h)
 file( GLOB API_SOURCES api/*.c )
 file( GLOB API_PRIV_SOURCES api/private/*.c )
 file( GLOB TRANSLATOR_SOURCES translator/*/*.c )
@@ -107,7 +109,8 @@ foreach(sfile ${NEOVIM_SOURCES}
               ${OS_SOURCES}
               ${API_SOURCES}
               ${API_PRIV_SOURCES}
-              ${TRANSLATOR_SOURCES})
+              ${VIML_SOURCES}
+              ${VIML_CH_SOURCES})
   get_filename_component(full_d ${sfile} PATH)
   file(RELATIVE_PATH d "${PROJECT_SOURCE_DIR}/src/nvim" "${full_d}")
   get_filename_component(f ${sfile} NAME)
@@ -151,8 +154,8 @@ add_custom_command(OUTPUT ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
 
 list(APPEND NEOVIM_SOURCES "${PROJECT_BINARY_DIR}/config/auto/pathdef.c")
 list(APPEND NEOVIM_SOURCES "${MSGPACK_DISPATCH}")
-list(APPEND TRANSLATOR_SOURCES "${MSGPACK_LUA_C_BINDINGS}")
-list(APPEND TRANSLATOR_SOURCES "${VIM_MODULE_FILE}")
+list(APPEND VIML_SOURCES "${MSGPACK_LUA_C_BINDINGS}")
+list(APPEND VIML_SOURCES "${VIM_MODULE_FILE}")
 
 # Our dependencies come first.
 
@@ -195,6 +198,6 @@ endif()
 if(NOT DEFINED ENV{SKIP_UNITTEST})
   add_library(nvim-test MODULE EXCLUDE_FROM_ALL ${NEOVIM_GENERATED_SOURCES}
     ${NEOVIM_SOURCES} ${OS_SOURCES} ${API_SOURCES} ${API_PRIV_SOURCES}
-    ${TRANSLATOR_SOURCES})
+    ${VIML_SOURCES})
   target_link_libraries(nvim-test ${NVIM_TEST_LINK_LIBRARIES})
 endif()
