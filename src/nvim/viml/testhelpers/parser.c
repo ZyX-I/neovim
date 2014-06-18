@@ -40,7 +40,7 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
     char_u *line;
     line = (char_u *) fgetline_string(0, pp, 0);
     p = line;
-    if (parse_one_cmd((const char_u **) &p, &node, o, &position,
+    if (parse_one_cmd((const char_u **) &p, &node, o, position,
                       (LineGetter) fgetline_string, (void *) pp) == FAIL)
       return NULL;
     vim_free(line);

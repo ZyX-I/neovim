@@ -272,7 +272,7 @@ char_u *vim_strnsave(char_u *string, int len)
 int parse_one_cmd(const char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
-                  CommandPosition *position,
+                  CommandPosition position,
                   LineGetter fgetline,
                   void *cookie)
 {
