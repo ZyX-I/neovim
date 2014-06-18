@@ -2626,6 +2626,82 @@ parse_argopt_ff_error:
   return NOTDONE;
 }
 
+/// Parses command modifiers
+///
+/// @param[in,out]  pp        Command to parse.
+/// @param[out]     node      Location where parsing results are saved.
+/// @param[in]      o         Options that control parsing behavior.
+/// @param[in]      position  Position of input.
+/// @param[in]      pstart    Position of the first leading digit, if any. 
+///                           Points to the same location pp does otherwise.
+/// @param[out]     type      Resulting command type.
+int parse_modifiers(const char_u **pp, CommandNode ***node,
+                    CommandParserOptions o, CommandPosition *position,
+                    const char_u *const pstart, CommandType *type)
+{
+  const char_u *p = *pp;
+  const char_u *mod_start = p;
+  const char_u *s = p;
+
+  // FIXME (genex_cmds.lua): Iterate over precomputed table with only modifier 
+  //                         commands
+  for (int i = cmdidxs[(int) (*p - 'a')]; *(CMDDEF(i).name) == *p; i++) {
+    if (CMDDEF(i).flags & ISMODIFIER) {
+      size_t common_len = 0;
+      if (i > 0) {
+        const char_u *name = CMDDEF(i).name;
+        const char_u *prev_name = CMDDEF(i - 1).name;
+        common_len++;
+        // FIXME (genex_cmds.lua): Precompute and record this in cmddefs
+        while (name[common_len] == prev_name[common_len])
+          common_len++;
+      }
+      if (checkforcmd(&p, CMDDEF(i).name, common_len + 1)) {
+        *type = (CommandType) i;
+        break;
+      }
+    }
+  }
+  if (*type != kCmdUnknown) {
+    if (VIM_ISDIGIT(*pstart) && !((CMDDEF(*type).flags) & COUNT)) {
+      CommandParserError error = {
+        .message = (char *) e_norange,
+        .position = pstart
+      };
+      if (create_error_node(*node, &error, position, s) == FAIL)
+        return FAIL;
+      return NOTDONE;
+    }
+    if (*p == '!' && !(CMDDEF(*type).flags & BANG)) {
+      CommandParserError error = {
+        .message = (char *) e_nobang,
+        .position = p
+      };
+      if (create_error_node(*node, &error, position, s) == FAIL)
+        return FAIL;
+      return NOTDONE;
+    }
+    if ((**node = cmd_alloc(*type, position)) == NULL)
+      return FAIL;
+    if (VIM_ISDIGIT(*pstart)) {
+      (**node)->cnt_type = kCntCount;
+      (**node)->cnt.count = getdigits(&pstart);
+    }
+    if (*p == '!') {
+      (**node)->bang = true;
+      p++;
+    }
+    (**node)->position.col = position->col + (mod_start - s);
+    (**node)->end_col = position->col + (p - s - 1);
+    *node = &((**node)->children);
+    *type = kCmdUnknown;
+  } else {
+    p = pstart;
+  }
+  *pp = p;
+  return OK;
+}
+
 /// Parses one command
 ///
 /// @param[in,out]  pp        Command to parse.
@@ -2673,7 +2749,6 @@ int parse_one_cmd(const char_u **pp,
   uint_least32_t optflags = 0;
   char_u *enc = NULL;
   size_t len;
-  size_t i;
   CommandArgsParser parse = NULL;
   CountType cnt_type = kCntMissing;
   int count = 0;
@@ -2740,58 +2815,14 @@ int parse_one_cmd(const char_u **pp,
 
     // 2. handle command modifiers.
     if (ASCII_ISLOWER(*p)) {
-      const char_u *mod_start = p;
-
-      for (i = cmdidxs[(int) (*p - 'a')]; *(CMDDEF(i).name) == *p; i++) {
-        if (CMDDEF(i).flags & ISMODIFIER) {
-          size_t common_len = 0;
-          if (i > 0) {
-            const char_u *name = CMDDEF(i).name;
-            const char_u *prev_name = CMDDEF(i - 1).name;
-            common_len++;
-            // FIXME: Precompute and record this in cmddefs
-            while (name[common_len] == prev_name[common_len])
-              common_len++;
-          }
-          if (checkforcmd(&p, CMDDEF(i).name, common_len + 1)) {
-            type = (CommandType) i;
-            break;
-          }
-        }
-      }
-      if (type != kCmdUnknown) {
-        if (VIM_ISDIGIT(*pstart) && !((CMDDEF(type).flags) & COUNT)) {
-          error.message = (char *) e_norange;
-          error.position = pstart;
-          if (create_error_node(next_node, &error, position, s) == FAIL)
-            return FAIL;
-          return NOTDONE;
-        }
-        if (*p == '!' && !(CMDDEF(type).flags & BANG)) {
-          error.message = (char *) e_nobang;
-          error.position = p;
-          if (create_error_node(next_node, &error, position, s) == FAIL)
-            return FAIL;
-          return NOTDONE;
-        }
-        if ((*next_node = cmd_alloc(type, position)) == NULL)
-          return FAIL;
-        if (VIM_ISDIGIT(*pstart)) {
-          (*next_node)->cnt_type = kCntCount;
-          (*next_node)->cnt.count = getdigits(&pstart);
-        }
-        if (*p == '!') {
-          (*next_node)->bang = true;
-          p++;
-        }
-        (*next_node)->position.col = position->col + (mod_start - s);
-        (*next_node)->end_col = position->col + (p - s - 1);
-        next_node = &((*next_node)->children);
-        type = kCmdUnknown;
-      } else {
-        p = pstart;
+      CommandPosition new_position = *position;
+      new_position.col += p - s;
+      int ret = parse_modifiers(&p, &next_node, o, &new_position, pstart,
+                                &type);
+      if (ret != OK)
+        return ret;
+      else if (p == pstart)
         break;
-      }
     } else {
       p = pstart;
       break;
