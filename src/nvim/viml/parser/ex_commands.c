@@ -2626,6 +2626,124 @@ parse_argopt_ff_error:
   return NOTDONE;
 }
 
+/// Parse a range specifier of the form addr[,addr][;addr]…
+///
+/// Here `addr` is `main[+-]followup[+-]followup…` where `main` is one of
+///
+/// `main` | Accepts followup | Description
+/// ------ | ---------------- | ------------------------------------------------
+///  `%`   |       No         | Entire buffer. Equivalent to `1,$`.
+///  `*`   |       No         | Visual range. Equivalent to `'<,'>`.
+///  `$`   |       Yes        | Last line of the buffer.
+///  `.`   |       Yes        | Current line.
+/// empty  |       Yes        | Current line.
+///  NUM   |       Yes        | Line number NUM in the buffer.
+///  `'x`  |       Yes        | Mark `x`, defined for the current buffer.
+/// `/re/` |       Yes        | Next line matching `re`.
+/// `?re?` |       Yes        | Previous line matching `re`.
+///
+/// and `followup` is one of
+///
+/// `followup` | Description
+/// ---------- | --------------------------------------------
+///    NUM     | Move address defined by `main` by NUM lines.
+///   `/re/`   | Search for `re` after `main`.
+///   `?re?`   | Search for `re` before `main`.
+///
+/// @param[in,out]  pp           Command to parse.
+/// @param[out]     node         Location where parsing results are saved. Only 
+///                              applicable if parser errors need to be saved.
+/// @param[in]      o            Options that control parsing behavior.
+/// @param[in]      position     Position of input.
+/// @param[out]     range        Location where to save resulting range.
+/// @param[out]     range_start  Location where to save pointer to the first 
+///                              character of the range.
+///
+/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+///         FAIL otherwise.
+int parse_range(const char_u **pp, CommandNode **node, CommandParserOptions o,
+                CommandPosition position, Range *range,
+                const char_u **range_start)
+{
+  const char_u *p = *pp;
+  const char_u *s = p;
+  Range current_range;
+
+  *range_start = NULL;
+
+  memset(range, 0, sizeof(Range));
+  memset(&current_range, 0, sizeof(Range));
+
+  // repeat for all ',' or ';' separated addresses
+  for (;;) {
+    CommandParserError error = {
+      .message = NULL
+    };
+    p = skipwhite(p);
+    if (*range_start == NULL)
+      *range_start = p;
+    if (get_address(&p, &current_range.address, &error) == FAIL) {
+      free_range_data(&current_range);
+      if (error.message == NULL)
+        return FAIL;
+      if (create_error_node(node, &error, position, s) == FAIL)
+        return FAIL;
+      return NOTDONE;
+    }
+    if (get_address_followups(&p, &error, &current_range.address.followups)
+        == FAIL) {
+      free_range_data(&current_range);
+      if (error.message == NULL)
+        return FAIL;
+      if (create_error_node(node, &error, position, s) == FAIL)
+        return FAIL;
+      return NOTDONE;
+    }
+    p = skipwhite(p);
+    if (current_range.address.followups != NULL) {
+      if (current_range.address.type == kAddrMissing)
+        current_range.address.type = kAddrCurrent;
+    } else if (range->address.type == kAddrMissing
+               && current_range.address.type == kAddrMissing) {
+      if (*p == '%') {
+        current_range.address.type = kAddrFixed;
+        current_range.address.data.lnr = 1;
+        current_range.next = XCALLOC_NEW(Range, 1);
+        current_range.next->address.type = kAddrEnd;
+        *range = current_range;
+        p++;
+        break;
+      } else if (*p == '*' && !(o.flags&FLAG_POC_CPO_STAR)) {
+        current_range.address.type = kAddrMark;
+        current_range.address.data.mark = '<';
+        current_range.next = XCALLOC_NEW(Range, 1);
+        current_range.next->address.type = kAddrMark;
+        current_range.next->address.data.mark = '>';
+        *range = current_range;
+        p++;
+        break;
+      }
+    }
+    current_range.setpos = (*p == ';');
+    if (range->address.type != kAddrMissing) {
+      Range **target = (&(range->next));
+      while (*target != NULL)
+        target = &((*target)->next);
+      *target = XCALLOC_NEW(Range, 1);
+      **target = current_range;
+    } else {
+      *range = current_range;
+    }
+    memset(&current_range, 0, sizeof(Range));
+    if (*p == ';' || *p == ',')
+      p++;
+    else
+      break;
+  }
+  *pp = p;
+  return OK;
+}
+
 /// Parses command modifiers
 ///
 /// @param[in,out]  pp        Command to parse.
@@ -2635,6 +2753,9 @@ parse_argopt_ff_error:
 /// @param[in]      pstart    Position of the first leading digit, if any. 
 ///                           Points to the same location pp does otherwise.
 /// @param[out]     type      Resulting command type.
+///
+/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+///         FAIL otherwise.
 int parse_modifiers(const char_u **pp, CommandNode ***node,
                     CommandParserOptions o, CommandPosition position,
                     const char_u *const pstart, CommandType *type)
@@ -2738,7 +2859,6 @@ int parse_one_cmd(const char_u **pp,
   CommandParserError error;
   CommandType type = kCmdUnknown;
   Range range;
-  Range current_range;
   const char_u *p;
   const char_u *s = *pp;
   const char_u *nextcmd = NULL;
@@ -2755,8 +2875,6 @@ int parse_one_cmd(const char_u **pp,
   Glob *glob = NULL;
   char_u *expr = NULL;
 
-  memset(&range, 0, sizeof(Range));
-  memset(&current_range, 0, sizeof(Range));
   memset(&error, 0, sizeof(CommandParserError));
 
   if (((*pp)[0] == '#') &&
@@ -2830,85 +2948,13 @@ int parse_one_cmd(const char_u **pp,
   }
 
   const char_u *modifiers_end = p;
-  /*
-   * 3. parse a range specifier of the form: addr [,addr] [;addr] ..
-   *
-   * where 'addr' is:
-   *
-   * %	      (entire file)
-   * $  [+-NUM]
-   * 'x [+-NUM] (where x denotes a currently defined mark)
-   * .  [+-NUM]
-   * [+-NUM]..
-   * NUM
-   *
-   * The ea.cmd pointer is updated to point to the first character following the
-   * range spec. If an initial address is found, but no second, the upper bound
-   * is equal to the lower.
-   */
-
-  /* repeat for all ',' or ';' separated addresses */
-  for (;;) {
-    p = skipwhite(p);
-    if (range_start == NULL)
-      range_start = p;
-    if (get_address(&p, &current_range.address, &error) == FAIL) {
-      free_range_data(&current_range);
-      if (error.message == NULL)
-        return FAIL;
-      if (create_error_node(next_node, &error, position, s) == FAIL)
-        return FAIL;
-      return NOTDONE;
-    }
-    if (get_address_followups(&p, &error, &current_range.address.followups)
-        == FAIL) {
-      free_range_data(&current_range);
-      if (error.message == NULL)
-        return FAIL;
-      if (create_error_node(next_node, &error, position, s) == FAIL)
-        return FAIL;
-      return NOTDONE;
-    }
-    p = skipwhite(p);
-    if (current_range.address.followups != NULL) {
-      if (current_range.address.type == kAddrMissing)
-        current_range.address.type = kAddrCurrent;
-    } else if (range.address.type == kAddrMissing
-               && current_range.address.type == kAddrMissing) {
-      if (*p == '%') {
-        current_range.address.type = kAddrFixed;
-        current_range.address.data.lnr = 1;
-        current_range.next = XCALLOC_NEW(Range, 1);
-        current_range.next->address.type = kAddrEnd;
-        range = current_range;
-        p++;
-        break;
-      } else if (*p == '*' && !(o.flags&FLAG_POC_CPO_STAR)) {
-        current_range.address.type = kAddrMark;
-        current_range.address.data.mark = '<';
-        current_range.next = XCALLOC_NEW(Range, 1);
-        current_range.next->address.type = kAddrMark;
-        current_range.next->address.data.mark = '>';
-        range = current_range;
-        p++;
-        break;
-      }
-    }
-    current_range.setpos = (*p == ';');
-    if (range.address.type != kAddrMissing) {
-      Range **target = (&(range.next));
-      while (*target != NULL)
-        target = &((*target)->next);
-      *target = XCALLOC_NEW(Range, 1);
-      **target = current_range;
-    } else {
-      range = current_range;
-    }
-    memset(&current_range, 0, sizeof(Range));
-    if (*p == ';' || *p == ',')
-      p++;
-    else
-      break;
+  // 3. parse a range specifier
+  {
+    CommandPosition new_position = position;
+    new_position.col += p - s;
+    int ret = parse_range(&p, next_node, o, new_position, &range, &range_start);
+    if (ret != OK)
+      return ret;
   }
 
   // 4. parse command
