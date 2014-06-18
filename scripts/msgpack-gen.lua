@@ -208,7 +208,7 @@ generate_dispatch_fn = function(output, fn)
     if #args > 0 then
       output:write('channel_id, '..call_args)
     else
-      output:write('channel_id)')
+      output:write('channel_id')
     end
   else
     output:write(call_args)

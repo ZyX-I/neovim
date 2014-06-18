@@ -26,6 +26,7 @@
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
 #include "nvim/farsi.h"
+#include "nvim/func_attr.h"
 #include "nvim/main.h"
 #include "nvim/mbyte.h"
 #include "nvim/memline.h"
@@ -266,7 +267,7 @@ add_buff (
   ssize_t len;
   if (buf->bh_space >= (int)slen) {
     len = STRLEN(buf->bh_curr->b_str);
-    vim_strncpy(buf->bh_curr->b_str + len, s, (size_t)slen);
+    STRLCPY(buf->bh_curr->b_str + len, s, slen + 1);
     buf->bh_space -= slen;
   } else {
     if (slen < MINIMAL_SIZE)
@@ -275,7 +276,7 @@ add_buff (
       len = slen;
     buffblock_T *p = xmalloc(sizeof(buffblock_T) + len);
     buf->bh_space = (int)(len - slen);
-    vim_strncpy(p->b_str, s, (size_t)slen);
+    STRLCPY(p->b_str, s, slen + 1);
 
     p->b_next = buf->bh_curr->b_next;
     buf->bh_curr->b_next = p;
@@ -2584,7 +2585,7 @@ int input_available(void)
  * Return 0 for success
  *	  1 for invalid arguments
  *	  2 for no match
- *	  4 for out of mem
+ *	  4 for out of mem (deprecated, WON'T HAPPEN)
  *	  5 for entry not unique
  */
 int 
@@ -3727,10 +3728,6 @@ eval_map_expr (
   vim_unescape_csi(expr);
 
   save_cmd = save_cmdline_alloc();
-  if (save_cmd == NULL) {
-    free(expr);
-    return NULL;
-  }
 
   /* Forbid changing text or using ":normal" to avoid most of the bad side
    * effects.  Also restore the cursor position. */
@@ -3767,17 +3764,13 @@ static bool is_user_input(int k)
 /*
  * Copy "p" to allocated memory, escaping K_SPECIAL and CSI so that the result
  * can be put in the typeahead buffer.
- * Returns NULL when out of memory.
  */
 char_u *vim_strsave_escape_csi(char_u *p)
 {
-  char_u      *res;
-  char_u      *s, *d;
-
   /* Need a buffer to hold up to three times as much. */
-  res = xmalloc(STRLEN(p) * 3 + 1);
-  d = res;
-  for (s = p; *s != NUL; ) {
+  char_u *res = xmalloc(STRLEN(p) * 3 + 1);
+  char_u *d = res;
+  for (char_u *s = p; *s != NUL; ) {
     if (s[0] == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
       /* Copy special key unmodified. */
       *d++ = *s++;

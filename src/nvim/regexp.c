@@ -6500,10 +6500,8 @@ static int vim_regsub_both(char_u *source, char_u *dest, int copy, int magic, in
         if (had_backslash && backslash) {
           /* Backslashes will be consumed, need to double them. */
           s = vim_strsave_escaped(eval_result, (char_u *)"\\");
-          if (s != NULL) {
-            free(eval_result);
-            eval_result = s;
-          }
+          free(eval_result);
+          eval_result = s;
         }
 
         dst += STRLEN(eval_result);
@@ -6772,7 +6770,7 @@ char_u *reg_submatch(int no)
         len = submatch_mmatch->endpos[no].col
               - submatch_mmatch->startpos[no].col;
         if (round == 2)
-          vim_strncpy(retval, s, len);
+          STRLCPY(retval, s, len + 1);
         ++len;
       } else {
         /* Multiple lines: take start line from start col, middle

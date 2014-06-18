@@ -182,11 +182,8 @@ ex_menu (
       for (i = 0; i < MENU_INDEX_TIP; ++i)
         if (modes & (1 << i)) {
           p = popup_mode_name(menu_path, i);
-          if (p != NULL) {
-            menu_nable_recurse(root_menu, p, MENU_ALL_MODES,
-                enable);
-            free(p);
-          }
+          menu_nable_recurse(root_menu, p, MENU_ALL_MODES, enable);
+          free(p);
         }
     }
     menu_nable_recurse(root_menu, menu_path, modes, enable);
@@ -204,10 +201,8 @@ ex_menu (
       for (i = 0; i < MENU_INDEX_TIP; ++i)
         if (modes & (1 << i)) {
           p = popup_mode_name(menu_path, i);
-          if (p != NULL) {
-            remove_menu(&root_menu, p, MENU_ALL_MODES, TRUE);
-            free(p);
-          }
+          remove_menu(&root_menu, p, MENU_ALL_MODES, TRUE);
+          free(p);
         }
     }
 
@@ -239,13 +234,10 @@ ex_menu (
       for (i = 0; i < MENU_INDEX_TIP; ++i)
         if (modes & (1 << i)) {
           p = popup_mode_name(menu_path, i);
-          if (p != NULL) {
-            /* Include all modes, to make ":amenu" work */
-            menuarg.modes = modes;
-            add_menu_path(p, &menuarg, pri_tab, map_to
-                );
-            free(p);
-          }
+          // Include all modes, to make ":amenu" work
+          menuarg.modes = modes;
+          add_menu_path(p, &menuarg, pri_tab, map_to);
+          free(p);
         }
     }
 
@@ -885,7 +877,7 @@ char_u *set_context_in_menu_cmd(expand_T *xp, char_u *cmd, char_u *arg, int forc
     menu = root_menu;
     if (after_dot != arg) {
       path_name = xmalloc(after_dot - arg);
-      vim_strncpy(path_name, arg, after_dot - arg - 1);
+      STRLCPY(path_name, arg, after_dot - arg);
     }
     name = path_name;
     while (name != NULL && *name) {
@@ -1001,9 +993,9 @@ char_u *get_menu_names(expand_T *xp, int idx)
   if (menu->modes & expand_modes) {
     if (menu->children != NULL) {
       if (should_advance)
-        vim_strncpy(tbuffer, menu->en_dname, TBUFFER_LEN - 2);
+        STRLCPY(tbuffer, menu->en_dname, TBUFFER_LEN - 1);
       else {
-        vim_strncpy(tbuffer, menu->dname,  TBUFFER_LEN - 2);
+        STRLCPY(tbuffer, menu->dname,  TBUFFER_LEN - 1);
         if (menu->en_dname == NULL)
           should_advance = TRUE;
       }
@@ -1150,10 +1142,9 @@ get_menu_cmd_modes (
  */
 static char_u *popup_mode_name(char_u *name, int idx)
 {
-  char_u      *p;
   int len = (int)STRLEN(name);
 
-  p = vim_strnsave(name, len + 1);
+  char_u *p = vim_strnsave(name, len + 1);
   memmove(p + 6, p + 5, (size_t)(len - 4));
   p[5] = menu_mode_chars[idx];
 

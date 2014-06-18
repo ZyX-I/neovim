@@ -21,6 +21,7 @@
 #include "nvim/eval.h"
 #include "nvim/ex_eval.h"
 #include "nvim/fileio.h"
+#include "nvim/func_attr.h"
 #include "nvim/getchar.h"
 #include "nvim/mbyte.h"
 #include "nvim/memory.h"
@@ -1838,7 +1839,8 @@ store_sb_text (
     mp->sb_eol = finish;
     mp->sb_msg_col = *sb_col;
     mp->sb_attr = attr;
-    vim_strncpy(mp->sb_text, *sb_str, s - *sb_str);
+    memcpy(mp->sb_text, *sb_str, s - *sb_str);
+    mp->sb_text[s - *sb_str] = NUL;
 
     if (last_msgchunk == NULL) {
       last_msgchunk = mp;
@@ -2062,7 +2064,7 @@ static int do_more_prompt(int typed_char)
     toscroll = 0;
     switch (c) {
     case K_EVENT:
-      event_process();
+      event_process(true);
       break;
     case BS:                    /* scroll one line back */
     case K_BS:
@@ -2709,50 +2711,48 @@ do_dialog (
   ++no_wait_return;
   hotkeys = msg_show_console_dialog(message, buttons, dfltbutton);
 
-  if (hotkeys != NULL) {
-    for (;; ) {
-      /* Get a typed character directly from the user. */
-      c = get_keystroke();
-      switch (c) {
-      case CAR:                 /* User accepts default option */
-      case NL:
-        retval = dfltbutton;
-        break;
-      case Ctrl_C:              /* User aborts/cancels */
-      case ESC:
-        retval = 0;
-        break;
-      default:                  /* Could be a hotkey? */
-        if (c < 0)              /* special keys are ignored here */
-          continue;
-        if (c == ':' && ex_cmd) {
-          retval = dfltbutton;
-          ins_char_typebuf(':');
-          break;
-        }
-
-        /* Make the character lowercase, as chars in "hotkeys" are. */
-        c = vim_tolower(c);
-        retval = 1;
-        for (i = 0; hotkeys[i]; ++i) {
-          if (has_mbyte) {
-            if ((*mb_ptr2char)(hotkeys + i) == c)
-              break;
-            i += (*mb_ptr2len)(hotkeys + i) - 1;
-          } else if (hotkeys[i] == c)
-            break;
-          ++retval;
-        }
-        if (hotkeys[i])
-          break;
-        /* No hotkey match, so keep waiting */
-        continue;
-      }
+  for (;; ) {
+    /* Get a typed character directly from the user. */
+    c = get_keystroke();
+    switch (c) {
+    case CAR:                 /* User accepts default option */
+    case NL:
+      retval = dfltbutton;
       break;
-    }
+    case Ctrl_C:              /* User aborts/cancels */
+    case ESC:
+      retval = 0;
+      break;
+    default:                  /* Could be a hotkey? */
+      if (c < 0)              /* special keys are ignored here */
+        continue;
+      if (c == ':' && ex_cmd) {
+        retval = dfltbutton;
+        ins_char_typebuf(':');
+        break;
+      }
 
-    free(hotkeys);
+      /* Make the character lowercase, as chars in "hotkeys" are. */
+      c = vim_tolower(c);
+      retval = 1;
+      for (i = 0; hotkeys[i]; ++i) {
+        if (has_mbyte) {
+          if ((*mb_ptr2char)(hotkeys + i) == c)
+            break;
+          i += (*mb_ptr2len)(hotkeys + i) - 1;
+        } else if (hotkeys[i] == c)
+          break;
+        ++retval;
+      }
+      if (hotkeys[i])
+        break;
+      /* No hotkey match, so keep waiting */
+      continue;
+    }
+    break;
   }
+
+  free(hotkeys);
 
   State = oldState;
   setmouse();
@@ -2867,9 +2867,10 @@ static char_u * console_dialog_alloc(const char_u *message,
  * the button is used.
  * The hotkeys can be multi-byte characters, but without combining chars.
  *
- * Returns an allocated string with hotkeys, or NULL for error.
+ * Returns an allocated string with hotkeys.
  */
 static char_u *msg_show_console_dialog(char_u *message, char_u *buttons, int dfltbutton)
+  FUNC_ATTR_NONNULL_RET
 {
   bool has_hotkey[HAS_HOTKEY_LEN];
   char_u *hotk = console_dialog_alloc(message, buttons, has_hotkey);

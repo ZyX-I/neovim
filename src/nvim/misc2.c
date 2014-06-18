@@ -318,8 +318,6 @@ int call_shell(char_u *cmd, ShellOpts opts, char_u *extra_shell_arg)
 
       if (*p_sxe != NUL && STRCMP(p_sxq, "(") == 0) {
         ecmd = vim_strsave_escaped_ext(cmd, p_sxe, '^', FALSE);
-        if (ecmd == NULL)
-          ecmd = cmd;
       }
       ncmd = xmalloc(STRLEN(ecmd) + STRLEN(p_sxq) * 2 + 1);
       STRCPY(ncmd, p_sxq);
@@ -375,7 +373,7 @@ int vim_chdirfile(char_u *fname)
 {
   char_u dir[MAXPATHL];
 
-  vim_strncpy(dir, fname, MAXPATHL - 1);
+  STRLCPY(dir, fname, MAXPATHL);
   *path_tail_with_sep(dir) = NUL;
   return os_chdir((char *)dir) == 0 ? OK : FAIL;
 }

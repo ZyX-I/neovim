@@ -2915,7 +2915,7 @@ check_keyword_id (
    * Must make a copy of the keyword, so we can add a NUL and make it
    * lowercase.
    */
-  vim_strncpy(keyword, kwp, kwlen);
+  STRLCPY(keyword, kwp, kwlen + 1);
 
   keyentry_T *kp = NULL;
 
@@ -4399,10 +4399,6 @@ syn_cmd_region (
       ++key_end;
     free(key);
     key = vim_strnsave_up(rest, (int)(key_end - rest));
-    if (key == NULL) {                          /* out of memory */
-      rest = NULL;
-      break;
-    }
     if (STRCMP(key, "MATCHGROUP") == 0)
       item = ITEM_MATCHGROUP;
     else if (STRCMP(key, "START") == 0)
@@ -4692,12 +4688,8 @@ static void syn_combine_list(short **clstr1, short **clstr2, int list_op)
  */
 static int syn_scl_name2id(char_u *name)
 {
-  char_u      *name_u;
-
-  /* Avoid using stricmp() too much, it's slow on some systems */
-  name_u = vim_strsave_up(name);
-  if (name_u == NULL)
-    return 0;
+  // Avoid using stricmp() too much, it's slow on some systems
+  char_u *name_u = vim_strsave_up(name);
   int i;
   for (i = curwin->w_s->b_syn_clusters.ga_len; --i >= 0; ) {
     if (SYN_CLSTR(curwin->w_s)[i].scl_name_u != NULL
@@ -5122,7 +5114,7 @@ get_id_list (
       for (end = p; *end && !vim_iswhite(*end) && *end != ','; ++end)
         ;
       name = xmalloc((int)(end - p + 3));             /* leave room for "^$" */
-      vim_strncpy(name + 1, p, end - p);
+      STRLCPY(name + 1, p, end - p + 1);
       if (       STRCMP(name + 1, "ALLBUT") == 0
                  || STRCMP(name + 1, "ALL") == 0
                  || STRCMP(name + 1, "TOP") == 0
@@ -7230,7 +7222,7 @@ int syn_name2id(char_u *name)
   /* Avoid using stricmp() too much, it's slow on some systems */
   /* Avoid alloc()/free(), these are slow too.  ID names over 200 chars
    * don't deserve to be found! */
-  vim_strncpy(name_u, name, 199);
+  STRLCPY(name_u, name, 200);
   vim_strup(name_u);
   for (i = highlight_ga.ga_len; --i >= 0; )
     if (HL_TABLE()[i].sg_name_u != NULL

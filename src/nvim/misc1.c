@@ -24,6 +24,7 @@
 #include "nvim/ex_docmd.h"
 #include "nvim/ex_getln.h"
 #include "nvim/fileio.h"
+#include "nvim/func_attr.h"
 #include "nvim/fold.h"
 #include "nvim/getchar.h"
 #include "nvim/indent.h"
@@ -503,7 +504,7 @@ open_line (
           + (second_line_indent > 0 ? second_line_indent : 0) + 1);
       allocated = leader;                   /* remember to free it later */
 
-      vim_strncpy(leader, saved_line, lead_len);
+      STRLCPY(leader, saved_line, lead_len + 1);
 
       /*
        * Replace leader with lead_repl, right or left adjusted
@@ -2560,11 +2561,9 @@ void msgmore(long n)
   if (pn > p_report) {
     if (pn == 1) {
       if (n > 0)
-        vim_strncpy(msg_buf, (char_u *)_("1 more line"),
-            MSG_BUF_LEN - 1);
+        STRLCPY(msg_buf, _("1 more line"), MSG_BUF_LEN);
       else
-        vim_strncpy(msg_buf, (char_u *)_("1 line less"),
-            MSG_BUF_LEN - 1);
+        STRLCPY(msg_buf, _("1 line less"), MSG_BUF_LEN);
     } else {
       if (n > 0)
         vim_snprintf((char *)msg_buf, MSG_BUF_LEN,
@@ -2849,12 +2848,10 @@ expand_env_esc (
       if (esc && var != NULL && vim_strpbrk(var, (char_u *)" \t") != NULL) {
         char_u  *p = vim_strsave_escaped(var, (char_u *)" \t");
 
-        if (p != NULL) {
-          if (mustfree)
-            free(var);
-          var = p;
-          mustfree = TRUE;
-        }
+        if (mustfree)
+          free(var);
+        var = p;
+        mustfree = TRUE;
       }
 
       if (var != NULL && *var != NUL
@@ -3109,7 +3106,7 @@ char_u *get_env_name(expand_T *xp, int idx)
   static char_u name[ENVNAMELEN];
   char *envname = os_getenvname_at_index(idx);
   if (envname) {
-    vim_strncpy(name, (char_u *)envname, ENVNAMELEN - 1);
+    STRLCPY(name, envname, ENVNAMELEN);
     free(envname);
     return name;
   } else {
@@ -3282,20 +3279,17 @@ home_replace (
 
 /*
  * Like home_replace, store the replaced string in allocated memory.
- * When something fails, NULL is returned.
  */
 char_u *
 home_replace_save (
     buf_T *buf,       /* when not NULL, check for help files */
     char_u *src       /* input file name */
-)
+) FUNC_ATTR_NONNULL_RET
 {
-  char_u      *dst;
-
   size_t len = 3;                      /* space for "~/" and trailing NUL */
   if (src != NULL)              /* just in case */
     len += STRLEN(src);
-  dst = xmalloc(len);
+  char_u *dst = xmalloc(len);
   home_replace(buf, src, dst, (int)len, TRUE);
   return dst;
 }

@@ -26,6 +26,7 @@
 #include "nvim/ex_eval.h"
 #include "nvim/ex_getln.h"
 #include "nvim/fileio.h"
+#include "nvim/func_attr.h"
 #include "nvim/fold.h"
 #include "nvim/getchar.h"
 #include "nvim/hashtab.h"
@@ -69,6 +70,7 @@
 #include "nvim/os/rstream_defs.h"
 #include "nvim/os/time.h"
 #include "nvim/os/channel.h"
+#include "nvim/api/private/helpers.h"
 
 #define DICT_MAXNEST 100        /* maximum nesting of lists and dicts */
 
@@ -1396,8 +1398,6 @@ ex_let_vars (
       /* Put the rest of the list (may be empty) in the var after ';'.
        * Create a new list for this. */
       l = list_alloc();
-      if (l == NULL)
-        return FAIL;
       while (item != NULL) {
         list_append_tv(l, &item->li_tv);
         item = item->li_next;
@@ -2236,8 +2236,6 @@ static void set_var_lval(lval_T *lp, char_u *endp, typval_T *rettv, int copy, ch
 
       /* Need to add an item to the Dictionary. */
       di = dictitem_alloc(lp->ll_newkey);
-      if (di == NULL)
-        return;
       if (dict_add(lp->ll_tv->vval.v_dict, di) == FAIL) {
         free(di);
         return;
@@ -4297,8 +4295,6 @@ eval_index (
         if (!empty2 && (n2 < 0 || n2 + 1 < n1))
           n2 = -1;
         l = list_alloc();
-        if (l == NULL)
-          return FAIL;
         item = list_find(rettv->vval.v_list, n1);
         while (n1++ <= n2) {
           list_append_tv(l, &item->li_tv);
@@ -4609,8 +4605,6 @@ static int get_list_tv(char_u **arg, typval_T *rettv, int evaluate)
 
   if (evaluate) {
     l = list_alloc();
-    if (l == NULL)
-      return FAIL;
   }
 
   *arg = skipwhite(*arg + 1);
@@ -4619,12 +4613,9 @@ static int get_list_tv(char_u **arg, typval_T *rettv, int evaluate)
       goto failret;
     if (evaluate) {
       item = listitem_alloc();
-      if (item != NULL) {
-        item->li_tv = tv;
-        item->li_tv.v_lock = 0;
-        list_append(l, item);
-      } else
-        clear_tv(&tv);
+      item->li_tv = tv;
+      item->li_tv.v_lock = 0;
+      list_append(l, item);
     }
 
     if (**arg == ']')
@@ -4658,7 +4649,7 @@ failret:
  * Allocate an empty header for a list.
  * Caller should take care of the reference count.
  */
-list_T *list_alloc(void)
+list_T *list_alloc(void) FUNC_ATTR_NONNULL_RET
 {
   list_T *list = xcalloc(1, sizeof(list_T));
 
@@ -4726,7 +4717,7 @@ list_free (
 /*
  * Allocate a list item.
  */
-listitem_T *listitem_alloc(void)
+listitem_T *listitem_alloc(void) FUNC_ATTR_NONNULL_RET
 {
   return xmalloc(sizeof(listitem_T));
 }
@@ -5107,17 +5098,13 @@ static void list_append_number(list_T *l, varnumber_T n)
 /*
  * Insert typval_T "tv" in list "l" before "item".
  * If "item" is NULL append at the end.
- * Return FAIL when out of memory.
  */
-int list_insert_tv(list_T *l, typval_T *tv, listitem_T *item)
+void list_insert_tv(list_T *l, typval_T *tv, listitem_T *item)
 {
   listitem_T  *ni = listitem_alloc();
 
-  if (ni == NULL)
-    return FAIL;
   copy_tv(tv, &ni->li_tv);
   list_insert(l, ni, item);
-  return OK;
 }
 
 void list_insert(list_T *l, listitem_T *ni, listitem_T *item)
@@ -5144,24 +5131,22 @@ void list_insert(list_T *l, listitem_T *ni, listitem_T *item)
 /*
  * Extend "l1" with "l2".
  * If "bef" is NULL append at the end, otherwise insert before this item.
- * Returns FAIL when out of memory.
  */
-static int list_extend(list_T *l1, list_T *l2, listitem_T *bef)
+static void list_extend(list_T *l1, list_T *l2, listitem_T *bef)
 {
   listitem_T  *item;
   int todo = l2->lv_len;
 
   /* We also quit the loop when we have inserted the original item count of
    * the list, avoid a hang when we extend a list with itself. */
-  for (item = l2->lv_first; item != NULL && --todo >= 0; item = item->li_next)
-    if (list_insert_tv(l1, &item->li_tv, bef) == FAIL)
-      return FAIL;
-  return OK;
+  for (item = l2->lv_first; item != NULL && --todo >= 0; item = item->li_next) {
+    list_insert_tv(l1, &item->li_tv, bef);
+  }
 }
 
 /*
  * Concatenate lists "l1" and "l2" into a new list, stored in "tv".
- * Return FAIL when out of memory.
+ * Return FAIL on failure to copy.
  */
 static int list_concat(list_T *l1, list_T *l2, typval_T *tv)
 {
@@ -5178,51 +5163,47 @@ static int list_concat(list_T *l1, list_T *l2, typval_T *tv)
   tv->vval.v_list = l;
 
   /* append all items from the second list */
-  return list_extend(l, l2, NULL);
+  list_extend(l, l2, NULL);
+  return OK;
 }
 
 /*
  * Make a copy of list "orig".  Shallow if "deep" is FALSE.
  * The refcount of the new list is set to 1.
  * See item_copy() for "copyID".
- * Returns NULL when out of memory.
+ * Returns NULL if orig is NULL or some failure happens.
  */
 static list_T *list_copy(list_T *orig, int deep, int copyID)
 {
-  list_T      *copy;
   listitem_T  *item;
   listitem_T  *ni;
 
   if (orig == NULL)
     return NULL;
 
-  copy = list_alloc();
-  if (copy != NULL) {
-    if (copyID != 0) {
-      /* Do this before adding the items, because one of the items may
-       * refer back to this list. */
-      orig->lv_copyID = copyID;
-      orig->lv_copylist = copy;
-    }
-    for (item = orig->lv_first; item != NULL && !got_int;
-         item = item->li_next) {
-      ni = listitem_alloc();
-      if (ni == NULL)
+  list_T *copy = list_alloc();
+  if (copyID != 0) {
+    /* Do this before adding the items, because one of the items may
+     * refer back to this list. */
+    orig->lv_copyID = copyID;
+    orig->lv_copylist = copy;
+  }
+  for (item = orig->lv_first; item != NULL && !got_int;
+       item = item->li_next) {
+    ni = listitem_alloc();
+    if (deep) {
+      if (item_copy(&item->li_tv, &ni->li_tv, deep, copyID) == FAIL) {
+        free(ni);
         break;
-      if (deep) {
-        if (item_copy(&item->li_tv, &ni->li_tv, deep, copyID) == FAIL) {
-          free(ni);
-          break;
-        }
-      } else
-        copy_tv(&item->li_tv, &ni->li_tv);
-      list_append(copy, ni);
-    }
-    ++copy->lv_refcount;
-    if (item != NULL) {
-      list_unref(copy);
-      copy = NULL;
-    }
+      }
+    } else
+      copy_tv(&item->li_tv, &ni->li_tv);
+    list_append(copy, ni);
+  }
+  ++copy->lv_refcount;
+  if (item != NULL) {
+    list_unref(copy);
+    copy = NULL;
   }
 
   return copy;
@@ -5593,7 +5574,7 @@ void set_ref_in_item(typval_T *tv, int copyID)
 /*
  * Allocate an empty header for a dictionary.
  */
-dict_T *dict_alloc(void)
+dict_T *dict_alloc(void) FUNC_ATTR_NONNULL_RET
 {
   dict_T *d = xmalloc(sizeof(dict_T));
 
@@ -5615,19 +5596,14 @@ dict_T *dict_alloc(void)
 
 /*
  * Allocate an empty dict for a return value.
- * Returns OK or FAIL.
  */
-static int rettv_dict_alloc(typval_T *rettv)
+static void rettv_dict_alloc(typval_T *rettv)
 {
-  dict_T      *d = dict_alloc();
-
-  if (d == NULL)
-    return FAIL;
+  dict_T *d = dict_alloc();
 
   rettv->vval.v_dict = d;
   rettv->v_type = VAR_DICT;
   ++d->dv_refcount;
-  return OK;
 }
 
 
@@ -5688,7 +5664,7 @@ dict_free (
  * The "key" is copied to the new item.
  * Note that the value of the item "di_tv" still needs to be initialized!
  */
-dictitem_T *dictitem_alloc(char_u *key)
+dictitem_T *dictitem_alloc(char_u *key) FUNC_ATTR_NONNULL_RET
 {
   dictitem_T *di = xmalloc(sizeof(dictitem_T) + STRLEN(key));
   STRCPY(di->di_key, key);
@@ -5699,7 +5675,7 @@ dictitem_T *dictitem_alloc(char_u *key)
 /*
  * Make a copy of a Dictionary item.
  */
-static dictitem_T *dictitem_copy(dictitem_T *org)
+static dictitem_T *dictitem_copy(dictitem_T *org) FUNC_ATTR_NONNULL_RET
 {
   dictitem_T *di = xmalloc(sizeof(dictitem_T) + STRLEN(org->di_key));
 
@@ -5738,11 +5714,10 @@ void dictitem_free(dictitem_T *item)
  * Make a copy of dict "d".  Shallow if "deep" is FALSE.
  * The refcount of the new dict is set to 1.
  * See item_copy() for "copyID".
- * Returns NULL when out of memory.
+ * Returns NULL if orig is NULL or some other failure.
  */
 static dict_T *dict_copy(dict_T *orig, int deep, int copyID)
 {
-  dict_T      *copy;
   dictitem_T  *di;
   int todo;
   hashitem_T  *hi;
@@ -5750,8 +5725,8 @@ static dict_T *dict_copy(dict_T *orig, int deep, int copyID)
   if (orig == NULL)
     return NULL;
 
-  copy = dict_alloc();
-  if (copy != NULL) {
+  dict_T *copy = dict_alloc();
+  {
     if (copyID != 0) {
       orig->dv_copyID = copyID;
       orig->dv_copydict = copy;
@@ -5762,8 +5737,6 @@ static dict_T *dict_copy(dict_T *orig, int deep, int copyID)
         --todo;
 
         di = dictitem_alloc(hi->hi_key);
-        if (di == NULL)
-          break;
         if (deep) {
           if (item_copy(&HI2DI(hi)->di_tv, &di->di_tv, deep,
                   copyID) == FAIL) {
@@ -5791,7 +5764,7 @@ static dict_T *dict_copy(dict_T *orig, int deep, int copyID)
 
 /*
  * Add item "item" to Dictionary "d".
- * Returns FAIL when out of memory and when key already exists.
+ * Returns FAIL when key already exists.
  */
 int dict_add(dict_T *d, dictitem_T *item)
 {
@@ -5801,15 +5774,13 @@ int dict_add(dict_T *d, dictitem_T *item)
 /*
  * Add a number or string entry to dictionary "d".
  * When "str" is NULL use number "nr", otherwise use "str".
- * Returns FAIL when out of memory and when key already exists.
+ * Returns FAIL when key already exists.
  */
 int dict_add_nr_str(dict_T *d, char *key, long nr, char_u *str)
 {
   dictitem_T  *item;
 
   item = dictitem_alloc((char_u *)key);
-  if (item == NULL)
-    return FAIL;
   item->di_tv.v_lock = 0;
   if (str == NULL) {
     item->di_tv.v_type = VAR_NUMBER;
@@ -5827,15 +5798,12 @@ int dict_add_nr_str(dict_T *d, char *key, long nr, char_u *str)
 
 /*
  * Add a list entry to dictionary "d".
- * Returns FAIL when out of memory and when key already exists.
+ * Returns FAIL when key already exists.
  */
 int dict_add_list(dict_T *d, char *key, list_T *list)
 {
-  dictitem_T  *item;
+  dictitem_T *item = dictitem_alloc((char_u *)key);
 
-  item = dictitem_alloc((char_u *)key);
-  if (item == NULL)
-    return FAIL;
   item->di_tv.v_lock = 0;
   item->di_tv.v_type = VAR_LIST;
   item->di_tv.vval.v_list = list;
@@ -5876,7 +5844,7 @@ dictitem_T *dict_find(dict_T *d, char_u *key, int len)
     tofree = akey = vim_strnsave(key, len);
   } else {
     /* Avoid a malloc/free by using buf[]. */
-    vim_strncpy(buf, key, len);
+    STRLCPY(buf, key, len + 1);
     akey = buf;
   }
 
@@ -5890,7 +5858,7 @@ dictitem_T *dict_find(dict_T *d, char_u *key, int len)
 /*
  * Get a string item from a dictionary.
  * When "save" is TRUE allocate memory for it.
- * Returns NULL if the entry doesn't exist or out of memory.
+ * Returns NULL if the entry doesn't exist.
  */
 char_u *get_dict_string(dict_T *d, char_u *key, int save)
 {
@@ -5901,20 +5869,19 @@ char_u *get_dict_string(dict_T *d, char_u *key, int save)
   if (di == NULL)
     return NULL;
   s = get_tv_string(&di->di_tv);
-  if (save && s != NULL)
+  if (save) {
     s = vim_strsave(s);
+  }
   return s;
 }
 
 /*
  * Get a number item from a dictionary.
- * Returns 0 if the entry doesn't exist or out of memory.
+ * Returns 0 if the entry doesn't exist.
  */
 long get_dict_number(dict_T *d, char_u *key)
 {
-  dictitem_T  *di;
-
-  di = dict_find(d, key, -1);
+  dictitem_T *di = dict_find(d, key, -1);
   if (di == NULL)
     return 0;
   return get_tv_number(&di->di_tv);
@@ -6004,8 +5971,6 @@ static int get_dict_tv(char_u **arg, typval_T *rettv, int evaluate)
 
   if (evaluate) {
     d = dict_alloc();
-    if (d == NULL)
-      return FAIL;
   }
   tvkey.v_type = VAR_UNKNOWN;
   tv.v_type = VAR_UNKNOWN;
@@ -6046,11 +6011,10 @@ static int get_dict_tv(char_u **arg, typval_T *rettv, int evaluate)
       }
       item = dictitem_alloc(key);
       clear_tv(&tvkey);
-      if (item != NULL) {
-        item->di_tv = tv;
-        item->di_tv.v_lock = 0;
-        if (dict_add(d, item) == FAIL)
-          dictitem_free(item);
+      item->di_tv = tv;
+      item->di_tv.v_lock = 0;
+      if (dict_add(d, item) == FAIL) {
+        dictitem_free(item);
       }
     }
 
@@ -8204,7 +8168,7 @@ void dict_extend(dict_T *d1, dict_T *d2, char_u *action)
       }
       if (di1 == NULL) {
         di1 = dictitem_copy(HI2DI(hi2));
-        if (di1 != NULL && dict_add(d1, di1) == FAIL)
+        if (dict_add(d1, di1) == FAIL)
           dictitem_free(di1);
       } else if (*action == 'e') {
         EMSG2(_("E737: Key already exists: %s"), hi2->hi_key);
@@ -8323,13 +8287,11 @@ static void f_feedkeys(typval_T *argvars, typval_T *rettv)
     /* Need to escape K_SPECIAL and CSI before putting the string in the
      * typeahead buffer. */
     keys_esc = vim_strsave_escape_csi(keys);
-    if (keys_esc != NULL) {
-      ins_typebuf(keys_esc, (remap ? REMAP_YES : REMAP_NONE),
-          typebuf.tb_len, !typed, FALSE);
-      free(keys_esc);
-      if (vgetc_busy)
-        typebuf_was_filled = TRUE;
-    }
+    ins_typebuf(keys_esc, (remap ? REMAP_YES : REMAP_NONE),
+        typebuf.tb_len, !typed, FALSE);
+    free(keys_esc);
+    if (vgetc_busy)
+      typebuf_was_filled = TRUE;
   }
 }
 
@@ -10410,8 +10372,6 @@ static void dict_list(typval_T *argvars, typval_T *rettv, int what)
       di = HI2DI(hi);
 
       li = listitem_alloc();
-      if (li == NULL)
-        break;
       list_append(rettv->vval.v_list, li);
 
       if (what == 0) {
@@ -10428,21 +10388,15 @@ static void dict_list(typval_T *argvars, typval_T *rettv, int what)
         li->li_tv.v_type = VAR_LIST;
         li->li_tv.v_lock = 0;
         li->li_tv.vval.v_list = l2;
-        if (l2 == NULL)
-          break;
         ++l2->lv_refcount;
 
         li2 = listitem_alloc();
-        if (li2 == NULL)
-          break;
         list_append(l2, li2);
         li2->li_tv.v_type = VAR_STRING;
         li2->li_tv.v_lock = 0;
         li2->li_tv.vval.v_string = vim_strsave(di->di_key);
 
         li2 = listitem_alloc();
-        if (li2 == NULL)
-          break;
         list_append(l2, li2);
         copy_tv(&di->di_tv, &li2->li_tv);
       }
@@ -10519,11 +10473,13 @@ static void f_job_start(typval_T *argvars, typval_T *rettv)
   // The last item of argv must be NULL
   argv[i] = NULL;
 
-  rettv->vval.v_number = job_start(argv,
-                                   xstrdup((char *)argvars[0].vval.v_string),
-                                   on_job_stdout,
-                                   on_job_stderr,
-                                   on_job_exit);
+  job_start(argv,
+            xstrdup((char *)argvars[0].vval.v_string),
+            on_job_stdout,
+            on_job_stderr,
+            on_job_exit,
+            true,
+            &rettv->vval.v_number);
 
   if (rettv->vval.v_number <= 0) {
     if (rettv->vval.v_number == 0) {
@@ -10550,19 +10506,21 @@ static void f_job_stop(typval_T *argvars, typval_T *rettv)
     return;
   }
 
-  if (!job_stop(argvars[0].vval.v_number)) {
+  Job *job = job_find(argvars[0].vval.v_number);
+
+  if (!job) {
     // Probably an invalid job id
     EMSG(_(e_invjob));
     return;
   }
 
+  job_stop(job);
   rettv->vval.v_number = 1;
 }
 
 // "jobwrite()" function
 static void f_job_write(typval_T *argvars, typval_T *rettv)
 {
-  bool res;
   rettv->v_type = VAR_NUMBER;
   rettv->vval.v_number = 0;
 
@@ -10577,16 +10535,17 @@ static void f_job_write(typval_T *argvars, typval_T *rettv)
     return;
   }
 
-  res = job_write(argvars[0].vval.v_number,
-                  xstrdup((char *)argvars[1].vval.v_string),
-                  strlen((char *)argvars[1].vval.v_string));
+  Job *job = job_find(argvars[0].vval.v_number);
 
-  if (!res) {
+  if (!job) {
     // Invalid job id
     EMSG(_(e_invjob));
   }
 
-  rettv->vval.v_number = 1;
+  WBuffer *buf = wstream_new_buffer(xstrdup((char *)argvars[1].vval.v_string),
+                                    strlen((char *)argvars[1].vval.v_string),
+                                    free);
+  rettv->vval.v_number = job_write(job, buf);
 }
 
 /*
@@ -10822,24 +10781,27 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
     if (rhs != NULL)
       rettv->vval.v_string = str2special_save(rhs, FALSE);
 
-  } else if (rettv_dict_alloc(rettv) != FAIL && rhs != NULL) {
-    /* Return a dictionary. */
-    char_u      *lhs = str2special_save(mp->m_keys, TRUE);
-    char_u      *mapmode = map_mode_to_chars(mp->m_mode);
-    dict_T      *dict = rettv->vval.v_dict;
+  } else {
+    rettv_dict_alloc(rettv);
+    if (rhs != NULL) {
+      // Return a dictionary.
+      char_u      *lhs = str2special_save(mp->m_keys, TRUE);
+      char_u      *mapmode = map_mode_to_chars(mp->m_mode);
+      dict_T      *dict = rettv->vval.v_dict;
 
-    dict_add_nr_str(dict, "lhs",     0L, lhs);
-    dict_add_nr_str(dict, "rhs",     0L, mp->m_orig_str);
-    dict_add_nr_str(dict, "noremap", mp->m_noremap ? 1L : 0L, NULL);
-    dict_add_nr_str(dict, "expr",    mp->m_expr    ? 1L : 0L, NULL);
-    dict_add_nr_str(dict, "silent",  mp->m_silent  ? 1L : 0L, NULL);
-    dict_add_nr_str(dict, "sid",     (long)mp->m_script_ID, NULL);
-    dict_add_nr_str(dict, "buffer",  (long)buffer_local, NULL);
-    dict_add_nr_str(dict, "nowait",  mp->m_nowait  ? 1L : 0L, NULL);
-    dict_add_nr_str(dict, "mode",    0L, mapmode);
+      dict_add_nr_str(dict, "lhs",     0L, lhs);
+      dict_add_nr_str(dict, "rhs",     0L, mp->m_orig_str);
+      dict_add_nr_str(dict, "noremap", mp->m_noremap ? 1L : 0L, NULL);
+      dict_add_nr_str(dict, "expr",    mp->m_expr    ? 1L : 0L, NULL);
+      dict_add_nr_str(dict, "silent",  mp->m_silent  ? 1L : 0L, NULL);
+      dict_add_nr_str(dict, "sid",     (long)mp->m_script_ID, NULL);
+      dict_add_nr_str(dict, "buffer",  (long)buffer_local, NULL);
+      dict_add_nr_str(dict, "nowait",  mp->m_nowait  ? 1L : 0L, NULL);
+      dict_add_nr_str(dict, "mode",    0L, mapmode);
 
-    free(lhs);
-    free(mapmode);
+      free(lhs);
+      free(mapmode);
+    }
   }
 }
 
@@ -11582,11 +11544,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
           prevlen = prevsize = 0;
         }
 
-        if ((li = listitem_alloc()) == NULL) {
-          free(s);
-          failed = TRUE;
-          break;
-        }
+        li = listitem_alloc();
         li->li_tv.v_type = VAR_STRING;
         li->li_tv.v_lock = 0;
         li->li_tv.vval.v_string = s;
@@ -11853,10 +11811,7 @@ static void f_repeat(typval_T *argvars, typval_T *rettv)
     rettv_list_alloc(rettv);
     if (argvars[0].vval.v_list != NULL) {
       while (n-- > 0) {
-        if (list_extend(rettv->vval.v_list, argvars[0].vval.v_list, NULL)
-            == FAIL) {
-          break;
-        }
+        list_extend(rettv->vval.v_list, argvars[0].vval.v_list, NULL);
       }
     }
   } else {
@@ -11955,15 +11910,10 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
          * concatenate the remainders. */
         q = path_next_component(vim_ispathsep(*buf) ? buf + 1 : buf);
         if (*q != NUL) {
-          if (remain == NULL)
-            remain = vim_strsave(q - 1);
-          else {
-            cpy = concat_str(q - 1, remain);
-            if (cpy != NULL) {
-              free(remain);
-              remain = cpy;
-            }
-          }
+          cpy = remain;
+          remain = remain ?
+            concat_str(q - 1, remain) : (char_u *) xstrdup((char *)q - 1);
+          free(cpy);
           q[-1] = NUL;
         }
 
@@ -12019,10 +11969,8 @@ static void f_resolve(typval_T *argvars, typval_T *rettv)
                            || vim_ispathsep(p[2])))))) {
         /* Prepend "./". */
         cpy = concat_str((char_u *)"./", p);
-        if (cpy != NULL) {
-          free(p);
-          p = cpy;
-        }
+        free(p);
+        p = cpy;
       } else if (!is_relative_to_current) {
         /* Strip leading "./". */
         q = p;
@@ -12610,7 +12558,7 @@ static void f_send_event(typval_T *argvars, typval_T *rettv)
 
   if (!channel_send_event((uint64_t)argvars[0].vval.v_number,
                           (char *)argvars[1].vval.v_string,
-                          &argvars[2])) {
+                          vim_to_object(&argvars[2]))) {
     EMSG2(_(e_invarg2), "Channel doesn't exist");
     return;
   }
@@ -13413,14 +13361,10 @@ static void f_spellsuggest(typval_T *argvars, typval_T *rettv)
       str = ((char_u **)ga.ga_data)[i];
 
       li = listitem_alloc();
-      if (li == NULL)
-        free(str);
-      else {
-        li->li_tv.v_type = VAR_STRING;
-        li->li_tv.v_lock = 0;
-        li->li_tv.vval.v_string = str;
-        list_append(rettv->vval.v_list, li);
-      }
+      li->li_tv.v_type = VAR_STRING;
+      li->li_tv.v_lock = 0;
+      li->li_tv.vval.v_string = str;
+      list_append(rettv->vval.v_list, li);
     }
     ga_clear(&ga);
   }
@@ -14506,24 +14450,22 @@ static void f_undofile(typval_T *argvars, typval_T *rettv)
  */
 static void f_undotree(typval_T *argvars, typval_T *rettv)
 {
-  if (rettv_dict_alloc(rettv) == OK) {
-    dict_T *dict = rettv->vval.v_dict;
-    list_T *list;
+  rettv_dict_alloc(rettv);
 
-    dict_add_nr_str(dict, "synced", (long)curbuf->b_u_synced, NULL);
-    dict_add_nr_str(dict, "seq_last", curbuf->b_u_seq_last, NULL);
-    dict_add_nr_str(dict, "save_last",
-        (long)curbuf->b_u_save_nr_last, NULL);
-    dict_add_nr_str(dict, "seq_cur", curbuf->b_u_seq_cur, NULL);
-    dict_add_nr_str(dict, "time_cur", (long)curbuf->b_u_time_cur, NULL);
-    dict_add_nr_str(dict, "save_cur", (long)curbuf->b_u_save_nr_cur, NULL);
+  dict_T *dict = rettv->vval.v_dict;
+  list_T *list;
 
-    list = list_alloc();
-    if (list != NULL) {
-      u_eval_tree(curbuf->b_u_oldhead, list);
-      dict_add_list(dict, "entries", list);
-    }
-  }
+  dict_add_nr_str(dict, "synced", (long)curbuf->b_u_synced, NULL);
+  dict_add_nr_str(dict, "seq_last", curbuf->b_u_seq_last, NULL);
+  dict_add_nr_str(dict, "save_last",
+      (long)curbuf->b_u_save_nr_last, NULL);
+  dict_add_nr_str(dict, "seq_cur", curbuf->b_u_seq_cur, NULL);
+  dict_add_nr_str(dict, "time_cur", (long)curbuf->b_u_time_cur, NULL);
+  dict_add_nr_str(dict, "save_cur", (long)curbuf->b_u_save_nr_cur, NULL);
+
+  list = list_alloc();
+  u_eval_tree(curbuf->b_u_oldhead, list);
+  dict_add_list(dict, "entries", list);
 }
 
 /*
@@ -14702,8 +14644,7 @@ static void f_winsaveview(typval_T *argvars, typval_T *rettv)
 {
   dict_T      *dict;
 
-  if (rettv_dict_alloc(rettv) == FAIL)
-    return;
+  rettv_dict_alloc(rettv);
   dict = rettv->vval.v_dict;
 
   dict_add_nr_str(dict, "lnum", (long)curwin->w_cursor.lnum, NULL);
@@ -17052,15 +16993,13 @@ void ex_function(exarg_T *eap)
       int j = FAIL;
       if (sourcing_name != NULL) {
         scriptname = autoload_name(name);
-        if (scriptname != NULL) {
-          p = vim_strchr(scriptname, '/');
-          plen = (int)STRLEN(p);
-          slen = (int)STRLEN(sourcing_name);
-          if (slen > plen && fnamecmp(p,
-                  sourcing_name + slen - plen) == 0)
-            j = OK;
-          free(scriptname);
-        }
+        p = vim_strchr(scriptname, '/');
+        plen = (int)STRLEN(p);
+        slen = (int)STRLEN(sourcing_name);
+        if (slen > plen && fnamecmp(p,
+                sourcing_name + slen - plen) == 0)
+          j = OK;
+        free(scriptname);
       }
       if (j == FAIL) {
         EMSG2(_(
@@ -17076,10 +17015,6 @@ void ex_function(exarg_T *eap)
       if (fudi.fd_di == NULL) {
         /* add new dict entry */
         fudi.fd_di = dictitem_alloc(fudi.fd_newkey);
-        if (fudi.fd_di == NULL) {
-          free(fp);
-          goto erret;
-        }
         if (dict_add(fudi.fd_dict, fudi.fd_di) == FAIL) {
           free(fudi.fd_di);
           free(fp);
@@ -17493,9 +17428,6 @@ static void func_do_profile(ufunc_T *fp)
   }
 
   fp->uf_tml_idx = -1;
-  if (fp->uf_tml_count == NULL || fp->uf_tml_total == NULL
-      || fp->uf_tml_self == NULL)
-    return;         /* out of memory */
 
   fp->uf_profiling = TRUE;
 }
@@ -17686,21 +17618,20 @@ script_autoload (
 
 /*
  * Return the autoload script name for a function or variable name.
- * Returns NULL when out of memory.
  */
 static char_u *autoload_name(char_u *name)
 {
-  char_u      *p;
-  char_u      *scriptname;
-
   /* Get the script file name: replace '#' with '/', append ".vim". */
-  scriptname = xmalloc(STRLEN(name) + 14);
+  char_u *scriptname = xmalloc(STRLEN(name) + 14);
   STRCPY(scriptname, "autoload/");
   STRCAT(scriptname, name);
   *vim_strrchr(scriptname, AUTOLOAD_CHAR) = NUL;
   STRCAT(scriptname, ".vim");
+
+  char_u *p;
   while ((p = vim_strchr(scriptname, AUTOLOAD_CHAR)) != NULL)
     *p = '/';
+
   return scriptname;
 }
 
@@ -18654,8 +18585,6 @@ int store_session_globals(FILE *fd)
          * CR into \n and \r. */
         p = vim_strsave_escaped(get_tv_string(&this_var->di_tv),
             (char_u *)"\\\"\n\r");
-        if (p == NULL)              /* out of memory */
-          break;
         for (t = p; *t != NUL; ++t)
           if (*t == '\n')
             *t = 'n';
@@ -18698,17 +18627,13 @@ int store_session_globals(FILE *fd)
  */
 void last_set_msg(scid_T scriptID)
 {
-  char_u *p;
-
   if (scriptID != 0) {
-    p = home_replace_save(NULL, get_scriptname(scriptID));
-    if (p != NULL) {
-      verbose_enter();
-      MSG_PUTS(_("\n\tLast set from "));
-      MSG_PUTS(p);
-      free(p);
-      verbose_leave();
-    }
+    char_u *p = home_replace_save(NULL, get_scriptname(scriptID));
+    verbose_enter();
+    MSG_PUTS(_("\n\tLast set from "));
+    MSG_PUTS(p);
+    free(p);
+    verbose_leave();
   }
 }
 
@@ -19109,10 +19034,8 @@ static void on_job_data(RStream *rstream, void *data, bool eof, char *type)
 
 static void apply_job_autocmds(Job *job, char *name, char *type, char *str)
 {
-  list_T *list;
-
   // Create the list which will be set to v:job_data
-  list = list_alloc();
+  list_T *list = list_alloc();
   list_append_number(list, job_id(job));
   list_append_string(list, (uint8_t *)type, -1);
 
