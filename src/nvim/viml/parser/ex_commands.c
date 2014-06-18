@@ -65,7 +65,7 @@ typedef struct {
 /// @param[in]  position  Position of command start.
 ///
 /// @return Pointer to allocated block of memory or NULL in case of error.
-static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
+static CommandNode *cmd_alloc(CommandType type, CommandPosition position)
 {
   // XXX May allocate less space then needed to hold the whole struct: less by 
   // one size of CommandArg.
@@ -77,12 +77,12 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition *position)
 
   node = (CommandNode *) xcalloc(1, size);
   char_u *fname;
-  if ((fname = vim_strsave(position->fname)) == NULL) {
+  if ((fname = vim_strsave(position.fname)) == NULL) {
     free(node);
     return NULL;
   }
   node->type = type;
-  node->position = *position;
+  node->position = position;
   node->position.fname = fname;
 
   return node;
@@ -629,7 +629,7 @@ get_glob_error_return:
 ///
 /// @return FAIL when out of memory, OK otherwise.
 static int create_error_node(CommandNode **node, CommandParserError *error,
-                             CommandPosition *position, const char_u *s)
+                             CommandPosition position, const char_u *s)
 {
   if (error->message != NULL) {
     char_u *line;
@@ -737,7 +737,7 @@ static int parse_append(const char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
-                        CommandPosition *position,
+                        CommandPosition position,
                         LineGetter fgetline,
                         void *cookie)
 {
@@ -796,7 +796,7 @@ static int parse_append(const char_u **pp,
 /// @return FAIL when out of memory, OK otherwise.
 static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
-                        CommandPosition *position)
+                        CommandPosition position)
 {
   char_u *rhs_buf;
   char_u *new_rhs;
@@ -870,7 +870,7 @@ static int do_parse_map(const char_u **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
-                        CommandPosition *position,
+                        CommandPosition position,
                         LineGetter fgetline,
                         void *cookie,
                         bool unmap)
@@ -1005,7 +1005,7 @@ static int parse_map(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
-                     CommandPosition *position,
+                     CommandPosition position,
                      LineGetter fgetline,
                      void *cookie)
 {
@@ -1016,7 +1016,7 @@ static int parse_unmap(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
-                       CommandPosition *position,
+                       CommandPosition position,
                        LineGetter fgetline,
                        void *cookie)
 {
@@ -1027,7 +1027,7 @@ static int parse_mapclear(const char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
-                          CommandPosition *position,
+                          CommandPosition position,
                           LineGetter fgetline,
                           void *cookie)
 {
@@ -1062,7 +1062,7 @@ static int parse_menu(const char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
-                      CommandPosition *position,
+                      CommandPosition position,
                       LineGetter fgetline,
                       void *cookie)
 {
@@ -1307,7 +1307,7 @@ static int parse_expr(const char_u **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
-                      CommandPosition *position,
+                      CommandPosition position,
                       LineGetter fgetline,
                       void *cookie)
 {
@@ -1320,7 +1320,7 @@ static int parse_exprs(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
-                       CommandPosition *position,
+                       CommandPosition position,
                        LineGetter fgetline,
                        void *cookie)
 {
@@ -1333,7 +1333,7 @@ static int parse_rest_line(const char_u **pp,
                            CommandNode *node,
                            CommandParserError *error,
                            CommandParserOptions o,
-                           CommandPosition *position,
+                           CommandPosition position,
                            LineGetter fgetline,
                            void *cookie)
 {
@@ -1356,7 +1356,7 @@ static int parse_rest_allow_empty(const char_u **pp,
                                   CommandNode *node,
                                   CommandParserError *error,
                                   CommandParserOptions o,
-                                  CommandPosition *position,
+                                  CommandPosition position,
                                   LineGetter fgetline,
                                   void *cookie)
 {
@@ -1382,7 +1382,7 @@ static int parse_do(const char_u **pp,
                     CommandNode *node,
                     CommandParserError *error,
                     CommandParserOptions o,
-                    CommandPosition *position,
+                    CommandPosition position,
                     LineGetter fgetline,
                     void *cookie)
 {
@@ -1604,7 +1604,7 @@ static int parse_lvals(const char_u **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
-                       CommandPosition *position,
+                       CommandPosition position,
                        LineGetter fgetline,
                        void *cookie)
 {
@@ -1645,7 +1645,7 @@ static int parse_lockvar(const char_u **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
-                         CommandPosition *position,
+                         CommandPosition position,
                          LineGetter fgetline,
                          void *cookie)
 {
@@ -1659,7 +1659,7 @@ static int parse_for(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
-                     CommandPosition *position,
+                     CommandPosition position,
                      LineGetter fgetline,
                      void *cookie)
 {
@@ -1719,7 +1719,7 @@ static int parse_function(const char_u **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
-                          CommandPosition *position,
+                          CommandPosition position,
                           LineGetter fgetline,
                           void *cookie)
 {
@@ -1868,7 +1868,7 @@ static int parse_let(const char_u **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
-                     CommandPosition *position,
+                     CommandPosition position,
                      LineGetter fgetline,
                      void *cookie)
 {
@@ -1986,7 +1986,7 @@ static int parse_scriptencoding(const char_u **pp,
                                 CommandNode *node,
                                 CommandParserError *error,
                                 CommandParserOptions o,
-                                CommandPosition *position,
+                                CommandPosition position,
                                 LineGetter fgetline,
                                 void *cookie)
 {
@@ -2417,8 +2417,8 @@ const char_u *do_fgetline_allocated(int c, const char_u **arg, int indent)
 /// @param[out]     next_node  Location where parsing results are saved.
 /// @param[in]      o          Options that control parsing behavior.
 /// @param[in]      position   Position of input.
-/// @param[in]      s          Address of position->col. Used to adjust 
-///                            position in case of error.
+/// @param[in]      s          Address of position.col. Used to adjust position 
+///                            in case of error.
 ///
 /// @return OK if everything was parsed correctly, FAIL if out of memory.
 ///
@@ -2426,7 +2426,7 @@ const char_u *do_fgetline_allocated(int c, const char_u **arg, int indent)
 static int parse_argcmd(const char_u **pp,
                         CommandNode **next_node,
                         CommandParserOptions o,
-                        CommandPosition *position,
+                        CommandPosition position,
                         const char_u *s)
 {
   const char_u *p = *pp;
@@ -2437,15 +2437,15 @@ static int parse_argcmd(const char_u **pp,
       if ((*next_node = cmd_alloc(kCmdMissing, position)) == NULL)
         return FAIL;
       (*next_node)->range.address.type = kAddrEnd;
-      (*next_node)->end_col = position->col + (p - s);
+      (*next_node)->end_col = position.col + (p - s);
     } else {
       const char_u *cmd_start = p;
       char_u *arg;
       char_u *arg_start;
       CommandPosition new_position = {
-        position->lnr,
-        position->col + (p - s),
-        position->fname,
+        position.lnr,
+        position.col + (p - s),
+        position.fname,
       };
 
       while (*p && !vim_isspace(*p)) {
@@ -2636,7 +2636,7 @@ parse_argopt_ff_error:
 ///                           Points to the same location pp does otherwise.
 /// @param[out]     type      Resulting command type.
 int parse_modifiers(const char_u **pp, CommandNode ***node,
-                    CommandParserOptions o, CommandPosition *position,
+                    CommandParserOptions o, CommandPosition position,
                     const char_u *const pstart, CommandType *type)
 {
   const char_u *p = *pp;
@@ -2691,8 +2691,8 @@ int parse_modifiers(const char_u **pp, CommandNode ***node,
       (**node)->bang = true;
       p++;
     }
-    (**node)->position.col = position->col + (mod_start - s);
-    (**node)->end_col = position->col + (p - s - 1);
+    (**node)->position.col = position.col + (mod_start - s);
+    (**node)->end_col = position.col + (p - s - 1);
     *node = &((**node)->children);
     *type = kCmdUnknown;
   } else {
@@ -2729,7 +2729,7 @@ int parse_modifiers(const char_u **pp, CommandNode ***node,
 int parse_one_cmd(const char_u **pp,
                   CommandNode **node,
                   CommandParserOptions o,
-                  CommandPosition *position,
+                  CommandPosition position,
                   LineGetter fgetline,
                   void *cookie)
 {
@@ -2761,7 +2761,7 @@ int parse_one_cmd(const char_u **pp,
 
   if (((*pp)[0] == '#') &&
       ((*pp)[1] == '!') &&
-      position->col == 1) {
+      position.col == 1) {
     if ((*next_node = cmd_alloc(kCmdHashbangComment, position)) == NULL)
       return FAIL;
     p = *pp + 2;
@@ -2769,7 +2769,7 @@ int parse_one_cmd(const char_u **pp,
     if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
       return FAIL;
     *pp = p + len;
-    (*next_node)->end_col = position->col + (*pp - s);
+    (*next_node)->end_col = position.col + (*pp - s);
     return OK;
   }
 
@@ -2788,7 +2788,7 @@ int parse_one_cmd(const char_u **pp,
       fw = address_followup_alloc(kAddressFollowupShift);
       fw->data.shift = 1;
       (*next_node)->range.address.followups = fw;
-      (*next_node)->end_col = position->col + (*pp - s);
+      (*next_node)->end_col = position.col + (*pp - s);
       return OK;
     }
 
@@ -2800,7 +2800,7 @@ int parse_one_cmd(const char_u **pp,
       if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
         return FAIL;
       *pp = p + len;
-      (*next_node)->end_col = position->col + (*pp - s);
+      (*next_node)->end_col = position.col + (*pp - s);
       return OK;
     }
 
@@ -2815,9 +2815,9 @@ int parse_one_cmd(const char_u **pp,
 
     // 2. handle command modifiers.
     if (ASCII_ISLOWER(*p)) {
-      CommandPosition new_position = *position;
+      CommandPosition new_position = position;
       new_position.col += p - s;
-      int ret = parse_modifiers(&p, &next_node, o, &new_position, pstart,
+      int ret = parse_modifiers(&p, &next_node, o, new_position, pstart,
                                 &type);
       if (ret != OK)
         return ret;
@@ -2931,7 +2931,7 @@ int parse_one_cmd(const char_u **pp,
     if (*p == '|' || (o.flags&FLAG_POC_EXMODE
                       && range.address.type != kAddrMissing)) {
       if (NODE_IS_ALLOCATED(*next_node))
-        (*next_node)->end_col = position->col + (p - modifiers_end);
+        (*next_node)->end_col = position.col + (p - modifiers_end);
       if ((*next_node = cmd_alloc(kCmdPrint, position)) == NULL) {
         free_range_data(&range);
         return FAIL;
@@ -2939,12 +2939,12 @@ int parse_one_cmd(const char_u **pp,
       (*next_node)->range = range;
       p++;
       *pp = p;
-      (*next_node)->end_col = position->col + (*pp - s);
+      (*next_node)->end_col = position.col + (*pp - s);
       return OK;
     } else if (*p == '"') {
       free_range_data(&range);
       if (NODE_IS_ALLOCATED(*next_node))
-        (*next_node)->end_col = position->col + (p - modifiers_end);
+        (*next_node)->end_col = position.col + (p - modifiers_end);
       if ((*next_node = cmd_alloc(kCmdComment, position)) == NULL)
         return FAIL;
       p++;
@@ -2952,11 +2952,11 @@ int parse_one_cmd(const char_u **pp,
       if (((*next_node)->args[0].arg.str = vim_strnsave(p, len)) == NULL)
         return FAIL;
       *pp = p + len;
-      (*next_node)->end_col = position->col + (*pp - s);
+      (*next_node)->end_col = position.col + (*pp - s);
       return OK;
     } else {
       if (NODE_IS_ALLOCATED(*next_node))
-        (*next_node)->end_col = position->col + (p - modifiers_end);
+        (*next_node)->end_col = position.col + (p - modifiers_end);
       if ((*next_node = cmd_alloc(kCmdMissing, position)) == NULL) {
         free_range_data(&range);
         return FAIL;
@@ -2966,7 +2966,7 @@ int parse_one_cmd(const char_u **pp,
       *pp = (nextcmd == NULL
              ? p
              : nextcmd);
-      (*next_node)->end_col = position->col + (*pp - s);
+      (*next_node)->end_col = position.col + (*pp - s);
       return OK;
     }
   }
@@ -3093,7 +3093,7 @@ int parse_one_cmd(const char_u **pp,
   }
 
   if (NODE_IS_ALLOCATED(*next_node))
-    (*next_node)->end_col = position->col + (p - modifiers_end);
+    (*next_node)->end_col = position.col + (p - modifiers_end);
   if ((*next_node = cmd_alloc(type, position)) == NULL) {
     free_range_data(&range);
     return FAIL;
@@ -3164,12 +3164,12 @@ int parse_one_cmd(const char_u **pp,
       p = cmd_arg;
     }
     *pp = p;
-    (*next_node)->end_col = position->col + (*pp - s);
+    (*next_node)->end_col = position.col + (*pp - s);
     return ret;
   }
 
   *pp = p;
-  (*next_node)->end_col = position->col + (*pp - s);
+  (*next_node)->end_col = position.col + (*pp - s);
   return OK;
 }
 
@@ -3346,7 +3346,7 @@ const CommandNode nocmd = {
                  next_node != NULL); \
           if (create_error_node(prev_node == NULL \
                                 ? next_node \
-                                : &(prev_node->next), &error, &position, \
+                                : &(prev_node->next), &error, position, \
                                 line_start) \
               == FAIL) { \
             free_cmd(result); \
@@ -3433,7 +3433,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
 
       position.col = line - line_start + 1;
       assert(!NODE_IS_ALLOCATED(*next_node));
-      if ((ret = parse_one_cmd((const char_u **) &line, next_node, o, &position,
+      if ((ret = parse_one_cmd((const char_u **) &line, next_node, o, position,
                                fgetline, cookie))
           == FAIL) {
         free_cmd(result);
@@ -3535,7 +3535,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
             // FIXME Make message with error code
             error.message = N_("too many nested blocks");
             error.position = line;
-            if (create_error_node(next_node, &error, &position, line_start)
+            if (create_error_node(next_node, &error, position, line_start)
                 == FAIL) {
               free_cmd(result);
               free(line_start);

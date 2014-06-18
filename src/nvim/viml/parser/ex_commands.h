@@ -238,7 +238,7 @@ typedef int (*CommandArgsParser)(const char_u **,
                                  CommandNode *,
                                  CommandParserError *,
                                  CommandParserOptions,
-                                 CommandPosition *,
+                                 CommandPosition,
                                  LineGetter,
                                  void *);
 
