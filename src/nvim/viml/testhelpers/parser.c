@@ -50,13 +50,13 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
       return NULL;
   }
 
-  len = print_cmd_len(&default_po, node);
+  len = sprint_cmd_len(&default_po, node);
 
   repr = XCALLOC_NEW(char, len + 1);
 
   r = repr;
 
-  print_cmd(&default_po, node, &r);
+  sprint_cmd(&default_po, node, &r);
 
   free_cmd(node);
   return repr;
@@ -92,8 +92,9 @@ char *represent_parse0(const char *arg, const bool print_as_expr)
   if (error.message != NULL)
     len = 6 + STRLEN(error.message);
   else
-    len = (print_as_expr ? print_expr_node_len : represent_expr_node_len)(&po,
-                                                                          expr);
+    len = (print_as_expr
+           ? sprint_expr_node_len
+           : srepresent_expr_node_len)(&po, expr);
 
   offset = e - arg;
   i = offset;
@@ -121,7 +122,7 @@ char *represent_parse0(const char *arg, const bool print_as_expr)
     p += 6;
     STRCPY(p, error.message);
   } else {
-    (print_as_expr ? print_expr_node : represent_expr_node)(&po, expr, &p);
+    (print_as_expr ? sprint_expr_node : srepresent_expr_node)(&po, expr, &p);
   }
 
   return result;

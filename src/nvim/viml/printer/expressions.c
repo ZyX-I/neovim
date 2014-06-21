@@ -181,49 +181,49 @@ static char *case_compare_strategy_string[] = {
 
 #include "nvim/viml/printer/expressions.c.h"
 
-size_t print_expr_node_len(const PrinterOptions *const po,
-                           const ExpressionNode *const node)
+size_t sprint_expr_node_len(const PrinterOptions *const po,
+                            const ExpressionNode *const node)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
-  size_t len = print_node_len(po, (ExpressionNode *) node);
+  size_t len = sprint_node_len(po, (ExpressionNode *) node);
   ExpressionNode *next = node->next;
 
   while (next != NULL) {
     len++;
-    len += print_node_len(po, next);
+    len += sprint_node_len(po, next);
     next = next->next;
   }
 
   return len;
 }
 
-void print_expr_node(const PrinterOptions *const po,
-                     const ExpressionNode *const node,
-                     char **pp)
+void sprint_expr_node(const PrinterOptions *const po,
+                      const ExpressionNode *const node,
+                      char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
   ExpressionNode *next = node->next;
 
-  print_node(po, (ExpressionNode *) node, pp);
+  sprint_node(po, (ExpressionNode *) node, pp);
 
   while (next != NULL) {
     *(*pp)++ = ' ';
-    print_node(po, next, pp);
+    sprint_node(po, next, pp);
     next = next->next;
   }
 }
 
-size_t represent_expr_node_len(const PrinterOptions *const po,
-                               const ExpressionNode *const node)
+size_t srepresent_expr_node_len(const PrinterOptions *const po,
+                                const ExpressionNode *const node)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
-  return represent_node_len(po, node);
+  return srepresent_node_len(po, node);
 }
 
-void represent_expr_node(const PrinterOptions *const po,
-                         const ExpressionNode *const node,
-                         char **pp)
+void srepresent_expr_node(const PrinterOptions *const po,
+                          const ExpressionNode *const node,
+                          char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
-  represent_node(po, node, pp);
+  srepresent_node(po, node, pp);
 }

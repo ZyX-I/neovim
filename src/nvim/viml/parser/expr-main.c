@@ -292,13 +292,13 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   return NULL;
 }
 
-void print_cmd(const PrinterOptions *const po, const CommandNode *node,
+void sprint_cmd(const PrinterOptions *const po, const CommandNode *node,
               char **pp)
 {
   return;
 }
 
-size_t print_cmd_len(const PrinterOptions *const po, const CommandNode *node)
+size_t sprint_cmd_len(const PrinterOptions *const po, const CommandNode *node)
 {
   return 0;
 }

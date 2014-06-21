@@ -44,7 +44,7 @@
 # define F2(f, ...) \
     len += 2 * CALL_LEN(f, __VA_ARGS__)
 # define FDEC(f, ...) \
-    size_t f##_len(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__)
+    size_t s##f##_len(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__)
 # define FUNCTION_START \
     size_t len = 0
 # define RETURN \
@@ -65,9 +65,9 @@
     len += length * STRLEN(o->command.indent);
 #else
 # define F(f, ...) \
-     f(o, __VA_ARGS__, &p)
+     s##f(o, __VA_ARGS__, &p)
 # define FDEC(f, ...) \
-     void f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, char **pp)
+     void s##f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, char **pp)
 # define FUNCTION_START \
      char *p = *pp
 # define RETURN \
@@ -117,7 +117,7 @@
     } while (0)
 # define OPERATOR_SPACES(op) \
      _OPERATOR_SPACES(o, op)
-# define CALL_LEN(f, ...) f##_len(o, __VA_ARGS__)
+# define CALL_LEN(f, ...) s##f##_len(o, __VA_ARGS__)
 
 # define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(o->a1.a2.before_subscript)
 # define SPACES_BEFORE_TEXT2(a1, a2)      SPACES(o->a1.a2.before_text)
