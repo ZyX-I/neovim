@@ -17,19 +17,20 @@
 # include "viml/printer/ex_commands.c.h.generated.h"
 #endif
 
-#ifndef DEFINE_LENGTH
-# define DEFINE_LENGTH
+#ifndef CH_MACROS_DEFINE_LENGTH
+# define CH_MACROS_DEFINE_LENGTH
 # include "nvim/viml/printer/ex_commands.c.h"
-# undef DEFINE_LENGTH
+# undef CH_MACROS_DEFINE_LENGTH
 #endif
 #define NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
 
+#define CH_MACROS_OPTIONS_TYPE PrinterOptions
 #include "nvim/viml/printer/ch_macros.h"
 
 static FDEC(print_unumber, const uintmax_t unumber)
 {
   FUNCTION_START;
-#ifdef DEFINE_LENGTH
+#ifdef CH_MACROS_DEFINE_LENGTH
   uintmax_t i = unumber;
   do {
     i /= 10;
@@ -74,7 +75,7 @@ static FDEC(print_glob, const Glob *const glob)
         break;
       }
       case kGlobShell: {
-        ADD_STRING(cur_glob->data.str)
+        ADD_STRING(cur_glob->data.str);
         break;
       }
       case kPatHome: {
@@ -135,7 +136,7 @@ static FDEC(print_glob, const Glob *const glob)
         break;
       }
       case kPatLiteral: {
-        ADD_STRING(cur_glob->data.str)
+        ADD_STRING(cur_glob->data.str);
         break;
       }
       case kPatMissing: {
@@ -151,7 +152,7 @@ static FDEC(print_regex, const Regex *const regex)
 {
   FUNCTION_START;
   assert(regex->string != NULL);
-  ADD_STRING(regex->string)
+  ADD_STRING(regex->string);
   FUNCTION_END;
 }
 
@@ -172,7 +173,7 @@ static FDEC(print_address_followup, const AddressFollowup *const followup)
     }
     case kAddressFollowupForwardPattern:
     case kAddressFollowupBackwardPattern: {
-#ifndef DEFINE_LENGTH
+#ifndef CH_MACROS_DEFINE_LENGTH
       char_u ch = followup->type == kAddressFollowupForwardPattern
                   ? '/'
                   : '?';
@@ -219,7 +220,7 @@ static FDEC(print_address, const Address *const address)
     }
     case kAddrForwardSearch:
     case kAddrBackwardSearch: {
-#ifndef DEFINE_LENGTH
+#ifndef CH_MACROS_DEFINE_LENGTH
       char_u ch = address->type == kAddrForwardSearch
                   ? '/'
                   : '?';
@@ -277,7 +278,7 @@ static FDEC(print_node_name, const CommandType node_type,
   else
     name = CMDDEF(node_type).name;
 
-  ADD_STRING(name)
+  ADD_STRING(name);
 
   if (node_bang)
     ADD_CHAR('!');
@@ -402,9 +403,8 @@ static FDEC(print_node, const CommandNode *const node,
   if (node == NULL)
     RETURN;
 
-  if (!barnext) {
-    INDENT(indent)
-  }
+  if (!barnext)
+    INDENT(indent);
 
   F(print_range, &(node->range));
   F(print_node_name, node->type, node->name, node->bang);
@@ -413,11 +413,11 @@ static FDEC(print_node, const CommandNode *const node,
   if (CMDDEF(node->type).flags & EDITCMD && node->children) {
     did_children = true;
     ADD_STATIC_STRING(" +");
-#ifndef DEFINE_LENGTH
+#ifndef CH_MACROS_DEFINE_LENGTH
     char *arg_start = p;
 #endif
     F2(print_node, node->children, indent, true);
-#ifndef DEFINE_LENGTH
+#ifndef CH_MACROS_DEFINE_LENGTH
     {
       while (arg_start < p) {
         if (vim_isspace(*arg_start) || *arg_start == '\\'
@@ -626,32 +626,32 @@ static FDEC(print_node, const CommandNode *const node,
         if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
           const uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
           const garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
-          SPACES_BEFORE_SUBSCRIPT2(command, function)
+          SPACES_BEFORE_SUBSCRIPT2(command, function);
           ADD_CHAR('(');
-          SPACES_AFTER_START3(command, function, call)
+          SPACES_AFTER_START3(command, function, call);
           for (int i = 0; i < ga->ga_len; i++) {
             ADD_STRING(((char_u **)ga->ga_data)[i]);
             if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
-              SPACES_BEFORE3(command, function, argument)
+              SPACES_BEFORE3(command, function, argument);
               ADD_CHAR(',');
-              SPACES_AFTER3(command, function, argument)
+              SPACES_AFTER3(command, function, argument);
             }
           }
           if (flags&FLAG_FUNC_VARARGS) {
             ADD_STATIC_STRING("...");
           }
-          SPACES_BEFORE_END3(command, function, call)
+          SPACES_BEFORE_END3(command, function, call);
           ADD_CHAR(')');
           if (flags&FLAG_FUNC_RANGE) {
-            SPACES_BEFORE_ATTRIBUTE2(command, function)
+            SPACES_BEFORE_ATTRIBUTE2(command, function);
             ADD_STATIC_STRING("range");
           }
           if (flags&FLAG_FUNC_DICT) {
-            SPACES_BEFORE_ATTRIBUTE2(command, function)
+            SPACES_BEFORE_ATTRIBUTE2(command, function);
             ADD_STATIC_STRING("dict");
           }
           if (flags&FLAG_FUNC_ABORT) {
-            SPACES_BEFORE_ATTRIBUTE2(command, function)
+            SPACES_BEFORE_ATTRIBUTE2(command, function);
             ADD_STATIC_STRING("abort");
           }
         }
@@ -671,27 +671,27 @@ static FDEC(print_node, const CommandNode *const node,
           break;
         }
         case VAL_LET_ASSIGN: {
-          SPACES_BEFORE3(command, let, assign)
+          SPACES_BEFORE3(command, let, assign);
           ADD_CHAR('=');
-          SPACES_AFTER3(command, let, assign)
+          SPACES_AFTER3(command, let, assign);
           break;
         }
         case VAL_LET_ADD: {
-          SPACES_BEFORE3(command, let, add)
+          SPACES_BEFORE3(command, let, add);
           ADD_STATIC_STRING("+=");
-          SPACES_AFTER3(command, let, add)
+          SPACES_AFTER3(command, let, add);
           break;
         }
         case VAL_LET_SUBTRACT: {
-          SPACES_BEFORE3(command, let, subtract)
+          SPACES_BEFORE3(command, let, subtract);
           ADD_STATIC_STRING("-=");
-          SPACES_AFTER3(command, let, subtract)
+          SPACES_AFTER3(command, let, subtract);
           break;
         }
         case VAL_LET_APPEND: {
-          SPACES_BEFORE3(command, let, concat)
+          SPACES_BEFORE3(command, let, concat);
           ADD_STATIC_STRING(".=");
-          SPACES_AFTER3(command, let, concat)
+          SPACES_AFTER3(command, let, concat);
           break;
         }
       }
@@ -720,7 +720,7 @@ static FDEC(print_node, const CommandNode *const node,
         case kArgString: {
           if (node->args[i].arg.str != NULL) {
             if (node->type == kCmdComment) {
-              SPACES_BEFORE_TEXT2(command, comment)
+              SPACES_BEFORE_TEXT2(command, comment);
             } else if (node->type != kCmdHashbangComment) {
               ADD_CHAR(' ');
             }
@@ -764,5 +764,7 @@ static FDEC(print_node, const CommandNode *const node,
 
   FUNCTION_END;
 }
+
+#undef CH_MACROS_OPTIONS_TYPE
 
 #endif  // NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
