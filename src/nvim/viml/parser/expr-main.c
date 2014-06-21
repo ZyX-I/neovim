@@ -188,15 +188,15 @@ int main(int argc, char **argv) {
   char input[12];
   klee_make_symbolic(input, sizeof(input), "input");
   klee_assume(input[11] == '\0');
-  if ((result = parse0_repr(input, true)) == NULL)
+  if ((result = represent_parse0(input, true)) == NULL)
     return 1;
   return 0;
 #else
-  if ((result = parse0_repr(argv[1], true)) == NULL)
+  if ((result = represent_parse0(argv[1], true)) == NULL)
     return 1;
   puts(result);
   free(result);
-  if ((result = parse0_repr(argv[1], false)) == NULL)
+  if ((result = represent_parse0(argv[1], false)) == NULL)
     return 1;
   puts(result);
   free(result);
@@ -290,13 +290,13 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   return NULL;
 }
 
-void cmd_repr(const PrinterOptions *const po, const CommandNode *node,
+void print_cmd(const PrinterOptions *const po, const CommandNode *node,
               char **pp)
 {
   return;
 }
 
-size_t cmd_repr_len(const PrinterOptions *const po, const CommandNode *node)
+size_t print_cmd_len(const PrinterOptions *const po, const CommandNode *node)
 {
   return 0;
 }

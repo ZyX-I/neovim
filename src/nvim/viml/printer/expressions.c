@@ -177,45 +177,45 @@ static char *case_compare_strategy_string[] = {
 
 #include "nvim/viml/printer/expressions.c.h"
 
-size_t expr_node_dump_len(const PrinterOptions *const po,
-                          const ExpressionNode *const node)
+size_t print_expr_node_len(const PrinterOptions *const po,
+                           const ExpressionNode *const node)
 {
-  size_t len = node_dump_len(po, (ExpressionNode *) node);
+  size_t len = print_node_len(po, (ExpressionNode *) node);
   ExpressionNode *next = node->next;
 
   while (next != NULL) {
     len++;
-    len += node_dump_len(po, next);
+    len += print_node_len(po, next);
     next = next->next;
   }
 
   return len;
 }
 
-void expr_node_dump(const PrinterOptions *const po,
-                    const ExpressionNode *const node,
-                    char **pp)
+void print_expr_node(const PrinterOptions *const po,
+                     const ExpressionNode *const node,
+                     char **pp)
 {
   ExpressionNode *next = node->next;
 
-  node_dump(po, (ExpressionNode *) node, pp);
+  print_node(po, (ExpressionNode *) node, pp);
 
   while (next != NULL) {
     *(*pp)++ = ' ';
-    node_dump(po, next, pp);
+    print_node(po, next, pp);
     next = next->next;
   }
 }
 
-size_t expr_node_repr_len(const PrinterOptions *const po,
-                          const ExpressionNode *const node)
+size_t represent_expr_node_len(const PrinterOptions *const po,
+                               const ExpressionNode *const node)
 {
-  return node_repr_len(po, node);
+  return represent_node_len(po, node);
 }
 
-void expr_node_repr(const PrinterOptions *const po,
-                    const ExpressionNode *const node,
-                    char **pp)
+void represent_expr_node(const PrinterOptions *const po,
+                         const ExpressionNode *const node,
+                         char **pp)
 {
-  node_repr(po, node, pp);
+  represent_node(po, node, pp);
 }

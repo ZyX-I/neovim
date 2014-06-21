@@ -26,7 +26,7 @@
 
 #include "nvim/viml/printer/ch_macros.h"
 
-static FDEC(unumber_repr, const uintmax_t unumber)
+static FDEC(print_unumber, const uintmax_t unumber)
 {
   FUNCTION_START;
 #ifdef DEFINE_LENGTH
@@ -36,7 +36,7 @@ static FDEC(unumber_repr, const uintmax_t unumber)
     ADD_CHAR(0);
   } while (i);
 #else
-  uintmax_t i = CALL_LEN(unumber_repr, unumber);
+  uintmax_t i = CALL_LEN(print_unumber, unumber);
   do {
     uintmax_t digit;
     uintmax_t d = 1;
@@ -49,15 +49,15 @@ static FDEC(unumber_repr, const uintmax_t unumber)
   FUNCTION_END;
 }
 
-static FDEC(number_repr, const intmax_t number)
+static FDEC(print_number, const intmax_t number)
 {
   FUNCTION_START;
   ADD_CHAR((number >= 0 ? '+' : '-'));
-  F(unumber_repr, (uintmax_t) (number >= 0 ? number : -number));
+  F(print_unumber, (uintmax_t) (number >= 0 ? number : -number));
   FUNCTION_END;
 }
 
-static FDEC(glob_repr, const Glob *const glob)
+static FDEC(print_glob, const Glob *const glob)
 {
   FUNCTION_START;
   const Glob *cur_glob;
@@ -69,7 +69,7 @@ static FDEC(glob_repr, const Glob *const glob)
     switch (cur_glob->type) {
       case kGlobExpression: {
         ADD_STATIC_STRING("`=");
-        F(expr_node_dump, cur_glob->data.expr);
+        F(print_expr_node, cur_glob->data.expr);
         ADD_CHAR('`');
         break;
       }
@@ -107,12 +107,12 @@ static FDEC(glob_repr, const Glob *const glob)
       }
       case kPatOldFile: {
         ADD_STATIC_STRING("#<");
-        F(unumber_repr, (uintmax_t) cur_glob->data.number);
+        F(print_unumber, (uintmax_t) cur_glob->data.number);
         break;
       }
       case kPatBufname: {
         ADD_CHAR('#');
-        F(unumber_repr, (uintmax_t) cur_glob->data.number);
+        F(print_unumber, (uintmax_t) cur_glob->data.number);
         break;
       }
       case kPatCollection: {
@@ -127,7 +127,7 @@ static FDEC(glob_repr, const Glob *const glob)
         Glob *cglob;
         ADD_CHAR('{');
         for (cglob = cur_glob->data.glob; cglob != NULL; cglob = cglob->next) {
-          F(glob_repr, cglob);
+          F(print_glob, cglob);
           if (cglob->next != NULL)
             ADD_CHAR(',');
         }
@@ -147,7 +147,7 @@ static FDEC(glob_repr, const Glob *const glob)
   FUNCTION_END;
 }
 
-static FDEC(regex_repr, const Regex *const regex)
+static FDEC(print_regex, const Regex *const regex)
 {
   FUNCTION_START;
   assert(regex->string != NULL);
@@ -155,7 +155,7 @@ static FDEC(regex_repr, const Regex *const regex)
   FUNCTION_END;
 }
 
-static FDEC(address_followup_repr, const AddressFollowup *const followup)
+static FDEC(print_address_followup, const AddressFollowup *const followup)
 {
   FUNCTION_START;
 
@@ -167,7 +167,7 @@ static FDEC(address_followup_repr, const AddressFollowup *const followup)
       RETURN;
     }
     case kAddressFollowupShift: {
-      F(number_repr, (intmax_t) followup->data.shift);
+      F(print_number, (intmax_t) followup->data.shift);
       break;
     }
     case kAddressFollowupForwardPattern:
@@ -178,18 +178,18 @@ static FDEC(address_followup_repr, const AddressFollowup *const followup)
                   : '?';
 #endif
       ADD_CHAR(ch);
-      F(regex_repr, followup->data.regex);
+      F(print_regex, followup->data.regex);
       ADD_CHAR(ch);
       break;
     }
   }
 
-  F(address_followup_repr, followup->next);
+  F(print_address_followup, followup->next);
 
   FUNCTION_END;
 }
 
-static FDEC(address_repr, const Address *const address)
+static FDEC(print_address, const Address *const address)
 {
   FUNCTION_START;
 
@@ -201,7 +201,7 @@ static FDEC(address_repr, const Address *const address)
       RETURN;
     }
     case kAddrFixed: {
-      F(unumber_repr, (uintmax_t) address->data.lnr);
+      F(print_unumber, (uintmax_t) address->data.lnr);
       break;
     }
     case kAddrEnd: {
@@ -225,7 +225,7 @@ static FDEC(address_repr, const Address *const address)
                   : '?';
 #endif
       ADD_CHAR(ch);
-      F(regex_repr, address->data.regex);
+      F(print_regex, address->data.regex);
       ADD_CHAR(ch);
       break;
     }
@@ -246,24 +246,24 @@ static FDEC(address_repr, const Address *const address)
   FUNCTION_END;
 }
 
-static FDEC(range_repr, const Range *const range)
+static FDEC(print_range, const Range *const range)
 {
   FUNCTION_START;
 
   if (range->address.type == kAddrMissing)
     RETURN;
 
-  F(address_repr, &(range->address));
-  F(address_followup_repr, range->address.followups);
+  F(print_address, &(range->address));
+  F(print_address_followup, range->address.followups);
   if (range->next != NULL) {
     ADD_CHAR(range->setpos ? ';' : ',');
-    F(range_repr, range->next);
+    F(print_range, range->next);
   }
 
   FUNCTION_END;
 }
 
-static FDEC(node_name_repr, const CommandType node_type,
+static FDEC(print_node_name, const CommandType node_type,
                             const char_u *const node_name,
                             const bool node_bang)
 {
@@ -285,7 +285,7 @@ static FDEC(node_name_repr, const CommandType node_type,
   FUNCTION_END;
 }
 
-static FDEC(optflags_repr, const uint_least32_t optflags,
+static FDEC(print_optflags, const uint_least32_t optflags,
                            const char_u *const enc)
 {
   FUNCTION_START;
@@ -345,7 +345,7 @@ static FDEC(optflags_repr, const uint_least32_t optflags,
   FUNCTION_END;
 }
 
-static FDEC(count_repr, const CommandNode *const node)
+static FDEC(print_count, const CommandNode *const node)
 {
   FUNCTION_START;
 
@@ -356,7 +356,7 @@ static FDEC(count_repr, const CommandNode *const node)
     case kCntCount:
     case kCntBuffer: {
       ADD_CHAR(' ');
-      F(unumber_repr, (uintmax_t) node->cnt.count);
+      F(print_unumber, (uintmax_t) node->cnt.count);
       break;
     }
     case kCntReg: {
@@ -373,7 +373,7 @@ static FDEC(count_repr, const CommandNode *const node)
   FUNCTION_END;
 }
 
-static FDEC(exflags_repr, const uint_least8_t exflags)
+static FDEC(print_exflags, const uint_least8_t exflags)
 {
   FUNCTION_START;
 
@@ -390,7 +390,7 @@ static FDEC(exflags_repr, const uint_least8_t exflags)
   FUNCTION_END;
 }
 
-static FDEC(node_repr, const CommandNode *const node,
+static FDEC(print_node, const CommandNode *const node,
                        const size_t indent,
                        const bool barnext)
 {
@@ -406,9 +406,9 @@ static FDEC(node_repr, const CommandNode *const node,
     INDENT(indent)
   }
 
-  F(range_repr, &(node->range));
-  F(node_name_repr, node->type, node->name, node->bang);
-  F(optflags_repr, node->optflags, node->enc);
+  F(print_range, &(node->range));
+  F(print_node_name, node->type, node->name, node->bang);
+  F(print_optflags, node->optflags, node->enc);
 
   if (CMDDEF(node->type).flags & EDITCMD && node->children) {
     did_children = true;
@@ -416,7 +416,7 @@ static FDEC(node_repr, const CommandNode *const node,
 #ifndef DEFINE_LENGTH
     char *arg_start = p;
 #endif
-    F2(node_repr, node->children, indent, true);
+    F2(print_node, node->children, indent, true);
 #ifndef DEFINE_LENGTH
     {
       while (arg_start < p) {
@@ -434,12 +434,12 @@ static FDEC(node_repr, const CommandNode *const node,
 #endif
   }
 
-  F(count_repr, node);
-  F(exflags_repr, node->exflags);
+  F(print_count, node);
+  F(print_exflags, node->exflags);
 
   if (node->glob != NULL) {
     ADD_CHAR(' ');
-    F(glob_repr, node->glob);
+    F(print_glob, node->glob);
   }
 
   if (node->type == kCmdSyntaxError) {
@@ -519,11 +519,11 @@ static FDEC(node_repr, const CommandNode *const node,
       if (unmap) {
       } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
         ADD_CHAR(' ');
-        F(expr_node_dump, node->args[ARG_MAP_EXPR].arg.expr);
+        F(print_expr_node, node->args[ARG_MAP_EXPR].arg.expr);
       } else if (node->children != NULL) {
         ADD_CHAR('\n');
         // FIXME untranslate mappings
-        F(node_repr, node->children, indent, barnext);
+        F(print_node, node->children, indent, barnext);
         did_children = true;
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
         ADD_CHAR(' ');
@@ -565,7 +565,7 @@ static FDEC(node_repr, const CommandNode *const node,
 
       while (*number) {
         if (*number != MENU_DEFAULT_PRI)
-          F(unumber_repr, (uintmax_t) *number);
+          F(print_unumber, (uintmax_t) *number);
         number++;
         if (*number)
           ADD_CHAR('.');
@@ -603,9 +603,9 @@ static FDEC(node_repr, const CommandNode *const node,
     do_arg_dump = true;
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdFor).parse) {
     ADD_CHAR(' ');
-    F(expr_node_dump, node->args[ARG_FOR_LHS].arg.expr);
+    F(print_expr_node, node->args[ARG_FOR_LHS].arg.expr);
     ADD_STATIC_STRING(" in ");
-    F(expr_node_dump, node->args[ARG_FOR_RHS].arg.expr);
+    F(print_expr_node, node->args[ARG_FOR_RHS].arg.expr);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdCaddexpr).parse
              || CMDDEF(node->type).parse == CMDDEF(kCmdEcho).parse
              || CMDDEF(node->type).parse == CMDDEF(kCmdDelfunction).parse) {
@@ -614,15 +614,15 @@ static FDEC(node_repr, const CommandNode *const node,
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLockvar).parse) {
     if (node->args[ARG_LOCKVAR_DEPTH].arg.number) {
       ADD_CHAR(' ');
-      F(unumber_repr, node->args[ARG_LOCKVAR_DEPTH].arg.number);
+      F(print_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.number);
     }
     ADD_CHAR(' ');
-    F(expr_node_dump, node->args[ARG_EXPRS_EXPRS].arg.expr);
+    F(print_expr_node, node->args[ARG_EXPRS_EXPRS].arg.expr);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdFunction).parse) {
     if (node->args[ARG_FUNC_REG].arg.reg == NULL) {
       if (node->args[ARG_FUNC_NAME].arg.expr != NULL) {
         ADD_CHAR(' ');
-        F(expr_node_dump, node->args[ARG_FUNC_NAME].arg.expr);
+        F(print_expr_node, node->args[ARG_FUNC_NAME].arg.expr);
         if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
           const uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
           const garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
@@ -664,7 +664,7 @@ static FDEC(node_repr, const CommandNode *const node,
       bool add_rval = true;
 
       ADD_CHAR(' ');
-      F(expr_node_dump, node->args[ARG_LET_LHS].arg.expr);
+      F(print_expr_node, node->args[ARG_LET_LHS].arg.expr);
       switch (ass_type) {
         case VAL_LET_NO_ASS: {
           add_rval = false;
@@ -696,7 +696,7 @@ static FDEC(node_repr, const CommandNode *const node,
         }
       }
       if (add_rval) {
-        F(expr_node_dump, node->args[ARG_LET_RHS].arg.expr);
+        F(print_expr_node, node->args[ARG_LET_RHS].arg.expr);
       }
     }
   } else {
@@ -713,7 +713,7 @@ static FDEC(node_repr, const CommandNode *const node,
         case kArgExpression: {
           if (node->args[i].arg.expr != NULL) {
             ADD_CHAR(' ');
-            F(expr_node_dump, node->args[i].arg.expr);
+            F(print_expr_node, node->args[i].arg.expr);
           }
           break;
         }
@@ -739,17 +739,17 @@ static FDEC(node_repr, const CommandNode *const node,
   if (node->children && !did_children) {
     if (CMDDEF(node->type).flags & ISMODIFIER) {
       ADD_CHAR(' ');
-      F(node_repr, node->children, indent, barnext);
+      F(print_node, node->children, indent, barnext);
     } else if (CMDDEF(node->type).parse == CMDDEF(kCmdArgdo).parse) {
       ADD_CHAR(' ');
-      F(node_repr, node->children, indent, true);
+      F(print_node, node->children, indent, true);
     } else {
       if (barnext) {
         ADD_STATIC_STRING(" | ");
       } else {
         ADD_CHAR('\n');
       }
-      F(node_repr, node->children, indent + 1, barnext);
+      F(print_node, node->children, indent + 1, barnext);
     }
   }
 
@@ -759,7 +759,7 @@ static FDEC(node_repr, const CommandNode *const node,
     } else {
       ADD_CHAR('\n');
     }
-    F(node_repr, node->next, indent, barnext);
+    F(print_node, node->next, indent, barnext);
   }
 
   FUNCTION_END;
