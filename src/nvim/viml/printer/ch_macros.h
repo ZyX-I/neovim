@@ -31,20 +31,20 @@
 #ifdef ADD_STRING_LEN
 # undef ADD_STRING_LEN
 #endif
-#ifdef MEMSET
-# undef MEMSET
+#ifdef FILL
+# undef FILL
 #endif
 #ifdef INDENT
 # undef INDENT
 #endif
 
-#ifdef DEFINE_LENGTH
+#ifdef CH_MACROS_DEFINE_LENGTH
 # define F(f, ...) \
     len += CALL_LEN(f, __VA_ARGS__)
 # define F2(f, ...) \
     len += 2 * CALL_LEN(f, __VA_ARGS__)
 # define FDEC(f, ...) \
-    size_t f##_len(const PrinterOptions *const po, __VA_ARGS__)
+    size_t f##_len(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__)
 # define FUNCTION_START \
     size_t len = 0
 # define RETURN \
@@ -59,79 +59,79 @@
     len += STRLEN(s);
 # define ADD_STRING_LEN(s, length) \
     len += length;
-# define MEMSET(c, length) \
+# define FILL(c, length) \
     len += length
 # define INDENT(length) \
-    len += length * STRLEN(po->command.indent);
+    len += length * STRLEN(o->command.indent);
 #else
 # define F(f, ...) \
-    f(po, __VA_ARGS__, &p)
-# define F2(f, ...) \
-    f(po, __VA_ARGS__, &p)
+     f(o, __VA_ARGS__, &p)
 # define FDEC(f, ...) \
-    void f(const PrinterOptions *const po, __VA_ARGS__, char **pp)
+     void f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, char **pp)
 # define FUNCTION_START \
-    char *p = *pp
+     char *p = *pp
 # define RETURN \
-    return
+     return
 # define FUNCTION_END \
-    *pp = p
+     *pp = p
 # define ADD_CHAR(c) \
-    *p++ = c
+     *p++ = c
 # define ADD_STATIC_STRING(s) \
-    memcpy(p, s, sizeof(s) - 1); \
-    p += sizeof(s) - 1
+     memcpy(p, s, sizeof(s) - 1); \
+     p += sizeof(s) - 1
 # define ADD_STRING(s) \
-    { \
-      size_t len = STRLEN(s); \
-      if (len) {\
-        memcpy(p, s, len); \
-        p += len; \
-      } \
-    }
+     do { \
+       size_t len = STRLEN(s); \
+       if (len) {\
+         memcpy(p, s, len); \
+         p += len; \
+       } \
+     } while (0)
 # define ADD_STRING_LEN(s, length) \
-    { \
-      if (length) {\
-        memcpy(p, s, length); \
-        p += length; \
-      } \
-    }
-# define MEMSET(c, length) \
-    memset(p, c, length); \
-    p += length
+     do { \
+       if (length) {\
+         memcpy(p, s, length); \
+         p += length; \
+       } \
+     } while (0)
+# define FILL(c, length) \
+     memset(p, c, length); \
+     p += length
 # define INDENT(length) \
-    { \
-      size_t i; \
-      size_t len = STRLEN(po->command.indent); \
-      for (i = 0; i < length; i++) \
-        ADD_STRING_LEN(po->command.indent, len) \
-    }
+    do { \
+      const size_t len = STRLEN(o->command.indent); \
+      const size_t mlen = length; \
+      for (size_t i = 0; i < mlen; i++) \
+        ADD_STRING_LEN(o->command.indent, len); \
+    } while (0)
+# define F2(f, ...) \
+   F(f, __VA_ARGS__)
 #endif
 
 #ifndef NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
 # define SPACES(length) \
-    { \
+    do { \
       if (length) { \
-        MEMSET(' ', length); \
+        FILL(' ', length); \
       } \
-    }
+    } while (0)
 # define OPERATOR_SPACES(op) \
-     _OPERATOR_SPACES(po, op)
-# define CALL_LEN(f, ...) f##_len(po, __VA_ARGS__)
+     _OPERATOR_SPACES(o, op)
+# define CALL_LEN(f, ...) f##_len(o, __VA_ARGS__)
 
-# define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(po->a1.a2.before_subscript)
-# define SPACES_BEFORE_TEXT2(a1, a2)      SPACES(po->a1.a2.before_text)
-# define SPACES_BEFORE_ATTRIBUTE2(a1, a2) SPACES(po->a1.a2.before_attribute)
-# define SPACES_BEFORE_END2(a1, a2)       SPACES(po->a1.a2.before_end)
-# define SPACES_AFTER_START2(a1, a2)      SPACES(po->a1.a2.after_start)
+# define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(o->a1.a2.before_subscript)
+# define SPACES_BEFORE_TEXT2(a1, a2)      SPACES(o->a1.a2.before_text)
+# define SPACES_BEFORE_ATTRIBUTE2(a1, a2) SPACES(o->a1.a2.before_attribute)
+# define SPACES_BEFORE_END2(a1, a2)       SPACES(o->a1.a2.before_end)
+# define SPACES_AFTER_START2(a1, a2)      SPACES(o->a1.a2.after_start)
 
-# define SPACES_BEFORE_END3(a1, a2, a3)   SPACES(po->a1.a2.a3.before_end)
-# define SPACES_BEFORE3(a1, a2, a3)       SPACES(po->a1.a2.a3.before)
-# define SPACES_AFTER_START3(a1, a2, a3)  SPACES(po->a1.a2.a3.after_start)
-# define SPACES_AFTER3(a1, a2, a3)        SPACES(po->a1.a2.a3.after)
+# define SPACES_BEFORE_END3(a1, a2, a3)   SPACES(o->a1.a2.a3.before_end)
+# define SPACES_BEFORE3(a1, a2, a3)       SPACES(o->a1.a2.a3.before)
+# define SPACES_AFTER_START3(a1, a2, a3)  SPACES(o->a1.a2.a3.after_start)
+# define SPACES_AFTER3(a1, a2, a3)        SPACES(o->a1.a2.a3.after)
 
-# define SPACES_BEFORE4(a1, a2, a3, a4)   SPACES(po->a1.a2.a3.a4.before)
-# define SPACES_AFTER4(a1, a2, a3, a4)    SPACES(po->a1.a2.a3.a4.after)
+# define SPACES_BEFORE4(a1, a2, a3, a4)   SPACES(o->a1.a2.a3.a4.before)
+# define SPACES_AFTER4(a1, a2, a3, a4)    SPACES(o->a1.a2.a3.a4.after)
 
-# define ADD_TRAILING_COMMA2(a1, a2)      po->a1.a2.trailing_comma
+# define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
 #endif
