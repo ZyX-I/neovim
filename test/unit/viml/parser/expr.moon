@@ -4,9 +4,9 @@ libnvim = cimport('./src/nvim/viml/testhelpers/parser.h')
 
 p0 = (str) ->
   s = to_cstr(str)
-  parsed = libnvim.parse0_repr(s, false)
+  parsed = libnvim.represent_parse0(s, false)
   if parsed == nil
-    error('parse0_dump returned nil')
+    error('represent_parse0 returned nil')
   return ffi.string(parsed)
 
 eqn = (expected_result, expr, expected_offset=nil) ->

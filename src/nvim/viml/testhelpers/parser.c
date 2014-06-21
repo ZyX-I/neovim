@@ -50,13 +50,13 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
       return NULL;
   }
 
-  len = cmd_repr_len(&default_po, node);
+  len = print_cmd_len(&default_po, node);
 
   repr = XCALLOC_NEW(char, len + 1);
 
   r = repr;
 
-  cmd_repr(&default_po, node, &r);
+  print_cmd(&default_po, node, &r);
 
   free_cmd(node);
   return repr;
@@ -64,12 +64,12 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
 
 /// Represent parsed expression
 ///
-/// @param[in]  arg           Expression to parse.
-/// @param[in]  dump_as_expr  Determines whether dumped output should look as 
-///                           a VimL expression or as a syntax tree.
+/// @param[in]  arg            Expression to parse.
+/// @param[in]  print_as_expr  Determines whether dumped output should look as 
+///                            a VimL expression or as a syntax tree.
 ///
 /// @return Represented string or NULL in case of error (*not* parsing error).
-char *parse0_repr(const char *arg, const bool dump_as_expr)
+char *represent_parse0(const char *arg, const bool print_as_expr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionParserError error = {NULL, NULL};
@@ -92,7 +92,8 @@ char *parse0_repr(const char *arg, const bool dump_as_expr)
   if (error.message != NULL)
     len = 6 + STRLEN(error.message);
   else
-    len = (dump_as_expr ? expr_node_dump_len : expr_node_repr_len)(&po, expr);
+    len = (print_as_expr ? print_expr_node_len : represent_expr_node_len)(&po,
+                                                                          expr);
 
   offset = e - arg;
   i = offset;
@@ -120,7 +121,7 @@ char *parse0_repr(const char *arg, const bool dump_as_expr)
     p += 6;
     STRCPY(p, error.message);
   } else {
-    (dump_as_expr ? expr_node_dump : expr_node_repr)(&po, expr, &p);
+    (print_as_expr ? print_expr_node : represent_expr_node)(&po, expr, &p);
   }
 
   return result;

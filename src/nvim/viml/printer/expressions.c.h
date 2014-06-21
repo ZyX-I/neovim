@@ -21,7 +21,7 @@
 
 #include "nvim/viml/printer/ch_macros.h"
 
-static FDEC(node_dump, const ExpressionNode *const node)
+static FDEC(print_node, const ExpressionNode *const node)
 {
   FUNCTION_START;
   bool add_ccs = false;
@@ -63,7 +63,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
 
       child = node->children;
       do {
-        F(node_dump, child);
+        F(print_node, child);
         child = child->next;
         if (child != NULL) {
           SPACES(OPERATOR_SPACES(node->type).before)
@@ -83,15 +83,15 @@ static FDEC(node_dump, const ExpressionNode *const node)
       assert(node->children->next->next != NULL);
       assert(node->children->next->next->next == NULL);
 
-      F(node_dump, node->children);
+      F(print_node, node->children);
       SPACES_BEFORE4(expression, operators, ternary, condition)
       ADD_CHAR('?');
       SPACES_AFTER4(expression, operators, ternary, condition)
-      F(node_dump, node->children->next);
+      F(print_node, node->children->next);
       SPACES_BEFORE4(expression, operators, ternary, values)
       ADD_CHAR(':');
       SPACES_AFTER4(expression, operators, ternary, values)
-      F(node_dump, node->children->next->next);
+      F(print_node, node->children->next->next);
       break;
     }
     case kExprNot:
@@ -102,7 +102,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
       SPACES(OPERATOR_SPACES(node->type).before)
       ADD_CHAR(*(expression_type_string[node->type]));
       SPACES(OPERATOR_SPACES(node->type).after)
-      F(node_dump, node->children);
+      F(print_node, node->children);
       break;
     }
     case kExprEnvironmentVariable:
@@ -134,7 +134,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
       assert(child != NULL);
 
       do {
-        F(node_dump, child);
+        F(print_node, child);
         child = child->next;
       } while (child != NULL);
       break;
@@ -149,7 +149,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
         SPACES_AFTER_START2(expression, curly_name)
       else
         SPACES_AFTER_START3(expression, function_call, call)
-      F(node_dump, node->children);
+      F(print_node, node->children);
       if (node->type == kExprCurlyName)
         SPACES_BEFORE_END2(expression, curly_name)
       else
@@ -163,7 +163,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
       ADD_CHAR('[');
       SPACES_AFTER_START3(expression, list, braces)
       while (child != NULL) {
-        F(node_dump, child);
+        F(print_node, child);
         child = child->next;
         if (child != NULL || ADD_TRAILING_COMMA2(expression, list)) {
           SPACES_BEFORE3(expression, list, item)
@@ -188,13 +188,13 @@ static FDEC(node_dump, const ExpressionNode *const node)
       ADD_CHAR('{');
       SPACES_AFTER_START3(expression, dictionary, curly_braces)
       while (child != NULL) {
-        F(node_dump, child);
+        F(print_node, child);
         child = child->next;
         assert(child != NULL);
         SPACES_BEFORE3(expression, dictionary, key)
         ADD_CHAR(':');
         SPACES_AFTER3(expression, dictionary, key)
-        F(node_dump, child);
+        F(print_node, child);
         child = child->next;
         if (child != NULL || ADD_TRAILING_COMMA2(expression, dictionary)) {
           SPACES_BEFORE3(expression, dictionary, item)
@@ -210,16 +210,16 @@ static FDEC(node_dump, const ExpressionNode *const node)
       assert(node->children != NULL);
       assert(node->children->next != NULL);
 
-      F(node_dump, node->children);
+      F(print_node, node->children);
       ADD_CHAR('[');
       SPACES_AFTER_START3(expression, subscript, brackets)
-      F(node_dump, node->children->next);
+      F(print_node, node->children->next);
       if (node->children->next->next != NULL) {
         assert(node->children->next->next->next == NULL);
         SPACES_BEFORE3(expression, subscript, slice)
         ADD_CHAR(':');
         SPACES_AFTER3(expression, subscript, slice)
-        F(node_dump, node->children->next->next);
+        F(print_node, node->children->next->next);
       }
       SPACES_BEFORE_END3(expression, subscript, brackets)
       ADD_CHAR(']');
@@ -231,7 +231,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
       assert(node->children != NULL);
       assert(node->children->next == NULL);
 
-      F(node_dump, node->children);
+      F(print_node, node->children);
       ADD_CHAR('.');
       ADD_STRING_LEN(node->position, node_len);
       break;
@@ -241,11 +241,11 @@ static FDEC(node_dump, const ExpressionNode *const node)
 
       assert(node->children != NULL);
 
-      F(node_dump, node->children);
+      F(print_node, node->children);
       ADD_CHAR('(');
       child = node->children->next;
       while (child != NULL) {
-        F(node_dump, child);
+        F(print_node, child);
         child = child->next;
         if (child != NULL) {
           ADD_CHAR(',');
@@ -266,7 +266,7 @@ static FDEC(node_dump, const ExpressionNode *const node)
   FUNCTION_END;
 }
 
-static FDEC(node_repr, const ExpressionNode *const node)
+static FDEC(represent_node, const ExpressionNode *const node)
 {
   FUNCTION_START;
 
@@ -296,13 +296,13 @@ static FDEC(node_repr, const ExpressionNode *const node)
 
   if (node->children != NULL) {
     ADD_CHAR('(');
-    F(node_repr, node->children);
+    F(represent_node, node->children);
     ADD_CHAR(')');
   }
 
   if (node->next != NULL) {
     ADD_STATIC_STRING(", ");
-    F(node_repr, node->next);
+    F(represent_node, node->next);
   }
 
   FUNCTION_END;
