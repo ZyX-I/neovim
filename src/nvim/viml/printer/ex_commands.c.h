@@ -493,6 +493,9 @@ static CMD_FDEC(print_syntax_error)
     W_LEN(line, line_len);
     WS("!!!");
   }
+  if (node->children != NULL) {
+    F(print_block_children, node->children, indent + 1, barnext);
+  }
   FUNCTION_END;
 }
 
