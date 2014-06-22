@@ -27,7 +27,7 @@
 #endif
 #define NEOVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
-#define CH_MACROS_OPTIONS_TYPE PrinterOptions
+#define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
 #include "nvim/viml/dumpers/ch_macros.h"
 
 static FDEC(print_node, const ExpressionNode *const node)
