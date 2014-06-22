@@ -15,10 +15,6 @@
 #include "nvim/viml/parser/ex_commands.h"
 #include "nvim/viml/dumpers/dumpers.h"
 
-#ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "viml/printer/ex_commands.c.h.generated.h"
-#endif
-
 #if !defined(CH_MACROS_DEFINE_LENGTH) && !defined(CH_MACROS_DEFINE_FWRITE)
 # define CH_MACROS_DEFINE_LENGTH
 # include "nvim/viml/printer/ex_commands.c.h"
@@ -32,8 +28,15 @@
 #endif
 #define NVIM_VIML_PRINTER_EX_COMMANDS_C_H
 
-#define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
+#ifndef NVIM_VIML_DUMPERS_CH_MACROS
+# define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
+# define CH_MACROS_INDENT_STR o->command.indent
+#endif
 #include "nvim/viml/dumpers/ch_macros.h"
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "viml/printer/ex_commands.c.h.generated.h"
+#endif
 
 static FDEC(print_unumber, const uintmax_t unumber)
 {
@@ -412,7 +415,7 @@ static FDEC(print_node, const CommandNode *const node,
     EARLY_RETURN;
 
   if (!barnext)
-    INDENT(indent);
+    WINDENT(indent);
 
   F(print_range, &(node->range));
   F(print_node_name, node->type, node->name, node->bang);

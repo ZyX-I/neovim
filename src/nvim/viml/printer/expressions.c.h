@@ -10,10 +10,6 @@
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/dumpers/dumpers.h"
 
-#ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "viml/printer/expressions.c.h.generated.h"
-#endif
-
 #if !defined(CH_MACROS_DEFINE_LENGTH) && !defined(CH_MACROS_DEFINE_FWRITE)
 # define CH_MACROS_DEFINE_LENGTH
 # include "nvim/viml/printer/expressions.c.h"
@@ -27,8 +23,15 @@
 #endif
 #define NVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
-typedef const PrinterOptions *const CH_MACROS_OPTIONS_TYPE;
+#ifndef NVIM_VIML_DUMPERS_CH_MACROS
+# define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
+# define CH_MACROS_INDENT_STR o->command.indent
+#endif
 #include "nvim/viml/dumpers/ch_macros.h"
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+# include "viml/printer/expressions.c.h.generated.h"
+#endif
 
 static FDEC(print_node, const ExpressionNode *const node)
 {
@@ -128,13 +131,11 @@ static FDEC(print_node, const ExpressionNode *const node)
     case kExprRegister:
     case kExprSimpleVariableName:
     case kExprIdentifier: {
-      size_t node_len = node->end_position - node->position + 1;
-
       assert(node->position != NULL);
       assert(node->end_position != NULL);
       assert(node->children == NULL);
 
-      W_LEN(node->position, node_len);
+      W_EXPR_POS(node);
       break;
     }
     case kExprVariableName: {
@@ -235,14 +236,12 @@ static FDEC(print_node, const ExpressionNode *const node)
       break;
     }
     case kExprConcatOrSubscript: {
-      size_t node_len = node->end_position - node->position + 1;
-
       assert(node->children != NULL);
       assert(node->children->next == NULL);
 
       F(print_node, node->children);
       WC('.');
-      W_LEN(node->position, node_len);
+      W_EXPR_POS(node);
       break;
     }
     case kExprCall: {
@@ -297,7 +296,7 @@ static FDEC(represent_node, const ExpressionNode *const node)
       WC('+');
     } else {
       WC('!');
-      WC(*(node->position));
+      W_LEN(node->position, 1);
       WC('!');
     }
     WC(']');
