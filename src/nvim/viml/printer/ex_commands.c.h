@@ -32,7 +32,7 @@
 #endif
 #define NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
 
-#define CH_MACROS_OPTIONS_TYPE PrinterOptions
+#define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
 #include "nvim/viml/dumpers/ch_macros.h"
 
 static FDEC(print_unumber, const uintmax_t unumber)
@@ -72,7 +72,7 @@ static FDEC(print_glob, const Glob *const glob)
   const Glob *cur_glob;
 
   if (glob == NULL)
-    RETURN;
+    EARLY_RETURN;
 
   for (cur_glob = glob; cur_glob != NULL; cur_glob = cur_glob->next) {
     switch (cur_glob->type) {
@@ -169,11 +169,11 @@ static FDEC(print_address_followup, const AddressFollowup *const followup)
   FUNCTION_START;
 
   if (followup == NULL)
-    RETURN;
+    EARLY_RETURN;
 
   switch (followup->type) {
     case kAddressFollowupMissing: {
-      RETURN;
+      EARLY_RETURN;
     }
     case kAddressFollowupShift: {
       F(print_number, (intmax_t) followup->data.shift);
@@ -203,11 +203,11 @@ static FDEC(print_address, const Address *const address)
   FUNCTION_START;
 
   if (address == NULL)
-    RETURN;
+    EARLY_RETURN;
 
   switch (address->type) {
     case kAddrMissing: {
-      RETURN;
+      EARLY_RETURN;
     }
     case kAddrFixed: {
       F(print_unumber, (uintmax_t) address->data.lnr);
@@ -260,7 +260,7 @@ static FDEC(print_range, const Range *const range)
   FUNCTION_START;
 
   if (range->address.type == kAddrMissing)
-    RETURN;
+    EARLY_RETURN;
 
   F(print_address, &(range->address));
   F(print_address_followup, range->address.followups);
@@ -409,7 +409,7 @@ static FDEC(print_node, const CommandNode *const node,
   bool did_children = false;
 
   if (node == NULL)
-    RETURN;
+    EARLY_RETURN;
 
   if (!barnext)
     INDENT(indent);

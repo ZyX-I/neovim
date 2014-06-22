@@ -1,4 +1,101 @@
-#define NEOVIM_SRC_VIML_PRINTER_CH_MACROS_H
+#define NEOVIM_SRC_VIML_DUMPERS_CH_MACROS_H
+
+/// @def CH_MACROS_DEFINE_LENGTH
+/// @brief If set, `s*_len` functions will be defined
+///
+/// Defined functions will have signature `size_t f(CH_MACROS_OPTIONS_TYPE o, 
+/// ...)`. They are supposed to return a value that is greater then or equal to 
+/// the amount of bytes resulting string will occupy.
+
+/// @def CH_MACROS_DEFINE_FWRITE
+/// @brief If set, `*` functions will be defined
+///
+/// Defined functions will have signature `int f(CH_MACROS_OPTIONS_TYPE o, ..., 
+/// Writer write, void *cookie)`. They are supposed to write resulting string 
+/// using given `write` function.
+///
+/// @note If neither #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE 
+///       macros are defined then functions with `void f(CH_MACROS_OPTIONS_TYPE 
+///       o, ..., char **p)` signature are defined. They are supposed to write 
+///       resulting string to `**p` and advance `*p` to the end of written 
+///       string. They are not supposed to output trailing NUL though.
+
+/// @def CH_MACROS_OPTIONS_TYPE
+/// @brief Type of the first function argument
+///
+/// Is used in #FDEC macros.
+
+/// @def F
+/// @brief Call given function with proper name and some predefined arguments
+///
+/// @param  f    Called function.
+/// @param  ...  Function arguments that are not predefined.
+///
+/// @note Function return value is handled by macros itself. You should not 
+///       expect macros to return anything.
+
+/// @def F_ESCAPED
+/// @brief Like #F(f, ...), but also escapes characters listed in e with '\\'
+///
+/// @param  e    Escaped characters. This parameter is used only once.
+
+/// @def FDEC
+/// @brief Generate function declaration
+///
+/// @param  f    Function name. May be modified by adding `s` suffix (with 
+///              #CH_MACROS_DEFINE_LENGTH or without it and 
+///              #CH_MACROS_DEFINE_FWRITE) and/or `_len` prefix (with 
+///              #CH_MACROS_DEFINE_LENGTH).
+
+/// @def FUNCTION_START
+/// @brief Macros that should start each function defined with #FDEC
+
+/// @def EARLY_RETURN
+/// @brief Macros that should be used to return when function does nothing
+///
+/// @warning Do not use this macros to return when function has written 
+///          something. It should be used only when function has nothing to do 
+///          and thus may early return.
+
+/// @def FUNCTION_END
+/// @brief Macros that should end each function defined with #FDEC
+///
+/// May be used to return from the function when it did something.
+
+/// @def ADD_CHAR
+/// @brief Write given character
+
+/// @def ADD_STATIC_STRING
+/// @brief Write given static string
+///
+/// May be used with any string for which `sizeof(s) - 1` returns its length.
+///
+/// @param  s  String which will be written. @warning {May be substituted more 
+///            then once.}
+
+/// @def ADD_STRING
+/// @brief Write given NUL-terminated string
+
+/// @def ADD_STRING_LEN
+/// @brief Write string with given length
+///
+/// @param  s       String which will be written.
+/// @param  length  Length of this string.
+
+/// @def FILL
+/// @brief Write some character multiple times
+///
+/// @param  c       Character that will be written.
+/// @param  length  Number of times it should be written.
+
+/// @def INDENT
+/// @brief Write indentation
+///
+/// @param  length  Indentation level.
+
+#if defined(CH_MACROS_DEFINE_LENGTH) && defined(CH_MACROS_DEFINE_FWRITE)
+# error Trying to use both CH_MACROS_DEFINE_LENGTH and CH_MACROS_DEFINE_FWRITE.
+#endif
 
 #ifdef F
 # undef F
@@ -12,8 +109,8 @@
 #ifdef FUNCTION_START
 # undef FUNCTION_START
 #endif
-#ifdef RETURN
-# undef RETURN
+#ifdef EARLY_RETURN
+# undef EARLY_RETURN
 #endif
 #ifdef FUNCTION_END
 # undef FUNCTION_END
@@ -43,13 +140,13 @@
 # define F_ESCAPED(f, e, ...) \
     len += 2 * CALL_LEN(f, __VA_ARGS__)
 # define FDEC(f, ...) \
-    size_t s##f##_len(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__)
+    size_t s##f##_len(CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__)
 # define FUNCTION_START \
     size_t len = 0
-# define RETURN \
+# define EARLY_RETURN \
     return len
 # define FUNCTION_END \
-    RETURN
+    return len
 # define ADD_CHAR(c) \
     len++
 # define ADD_STATIC_STRING(s) \
@@ -78,7 +175,7 @@
      int f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, \
            Writer write, void *cookie)
 #  define FUNCTION_START
-#  define RETURN \
+#  define EARLY_RETURN \
     return OK
 #  define FUNCTION_END \
     return OK
@@ -119,10 +216,13 @@
     void s##f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, char **pp)
 #  define FUNCTION_START \
     char *p = *pp
-#  define RETURN \
+#  define EARLY_RETURN \
     return
 #  define FUNCTION_END \
-    *pp = p
+    do { \
+      *pp = p; \
+      return; \
+    } while (0)
 #  define ADD_CHAR(c) \
     *p++ = c
 #  define ADD_STATIC_STRING(s) \
