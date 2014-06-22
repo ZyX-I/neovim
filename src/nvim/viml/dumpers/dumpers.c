@@ -1,4 +1,6 @@
 #include <string.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #include "nvim/vim.h"
 #include "nvim/viml/dumpers/dumpers.h"
@@ -6,6 +8,15 @@
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/dumpers/dumpers.h.generated.h"
 #endif
+
+#define _STRINGIFY(x) #x
+#define STRINGIFY(x) _STRINGIFY(x)
+
+/// Length of a buffer capable of holding decimal intmax_t representation
+///
+/// @note Size of the buffer may be actually a few characters off compared to 
+///       minimum required size.
+#define MAXNUMBUFLEN (sizeof(STRINGIFY(INTMAX_MAX)) - 1 + 1)
 
 /// Write string with the given length
 ///
@@ -57,3 +68,87 @@ size_t write_escaped_string_len(const void *s, size_t size, size_t nmemb,
   }
   return written;
 }
+
+/// Return given unsigned integer number string representation length
+///
+/// @param[in]  unumber  Dumped integer.
+size_t sdump_unumber_len(const uintmax_t unumber)
+{
+  uintmax_t i = unumber;
+  size_t len = 0;
+  do {
+    i /= 10;
+    len++;
+  } while (i);
+  return len;
+}
+
+/// Dump given unsigned integer number to given location
+///
+/// @param[in]   unumber  Dumped integer.
+/// @param[out]  pp       Location where number should be written to.
+void sdump_unumber(const uintmax_t unumber, char **pp)
+{
+  char *p = *pp;
+  size_t i = sdump_unumber_len(unumber);
+  do {
+    uintmax_t digit;
+    uintmax_t d = 1;
+    for (size_t j = 1; j < i; j++)
+      d *= 10;
+    digit = (unumber / d) % 10;
+    *p++ = '0' + (char) digit;
+  } while (--i);
+  *pp = p;
+}
+
+/// Write given unsigned integer number
+///
+/// @param[in]  unumber  Dumped integer.
+/// @param[in]  write    Function used to write result.
+/// @param[in]  cookie   Last argument to that function.
+int dump_unumber(const uintmax_t unumber, Writer write, void *cookie)
+{
+  char result[MAXNUMBUFLEN];
+  char *e = result;
+  sdump_unumber(unumber, &e);
+  return write_string_len(result, e - result + 1, write, cookie);
+}
+
+#define ABS(n) ((uintmax_t) (n >= 0 ? n : -n))
+
+/// Return given signed integer number string representation length
+///
+/// @param[in]  number  Dumped integer.
+size_t sdump_number_len(const intmax_t number)
+{
+  return sdump_unumber_len(ABS(number)) + (number < 0);
+}
+
+/// Dump given signed integer number to given location
+///
+/// @param[in]   number  Dumped integer.
+/// @param[out]  pp      Location where number should be written to.
+void sdump_number(const intmax_t number, char **pp)
+{
+  char *p = *pp;
+  if (number < 0)
+    *p++ = '-';
+  sdump_unumber(ABS(number), &p);
+  *pp = p;
+}
+
+/// Write given signed integer number
+///
+/// @param[in]  number  Dumped integer.
+/// @param[in]  write   Function used to write result.
+/// @param[in]  cookie  Last argument to that function.
+int dump_number(const uintmax_t number, Writer write, void *cookie)
+{
+  char result[MAXNUMBUFLEN + 1];
+  char *e = result;
+  sdump_number(ABS(number), &e);
+  return write_string_len(result, e - result + 1, write, cookie);
+}
+
+#undef ABS

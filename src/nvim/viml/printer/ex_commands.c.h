@@ -38,37 +38,6 @@
 # include "viml/printer/ex_commands.c.h.generated.h"
 #endif
 
-static FDEC(print_unumber, const uintmax_t unumber)
-{
-  FUNCTION_START;
-#ifdef CH_MACROS_DEFINE_LENGTH
-  uintmax_t i = unumber;
-  do {
-    i /= 10;
-    WC(0);
-  } while (i);
-#else
-  uintmax_t i = CALL_LEN(print_unumber, unumber);
-  do {
-    uintmax_t digit;
-    uintmax_t d = 1;
-    for (uintmax_t j = 1; j < i; j++)
-      d *= 10;
-    digit = (unumber / d) % 10;
-    WC('0' + (char) digit);
-  } while (--i);
-#endif
-  FUNCTION_END;
-}
-
-static FDEC(print_number, const intmax_t number)
-{
-  FUNCTION_START;
-  WC((number >= 0 ? '+' : '-'));
-  F(print_unumber, (uintmax_t) (number >= 0 ? number : -number));
-  FUNCTION_END;
-}
-
 static FDEC(print_glob, const Glob *const glob)
 {
   FUNCTION_START;
@@ -119,12 +88,12 @@ static FDEC(print_glob, const Glob *const glob)
       }
       case kPatOldFile: {
         WS("#<");
-        F(print_unumber, (uintmax_t) cur_glob->data.number);
+        F_NOOPT(dump_unumber, (uintmax_t) cur_glob->data.number);
         break;
       }
       case kPatBufname: {
         WC('#');
-        F(print_unumber, (uintmax_t) cur_glob->data.number);
+        F_NOOPT(dump_unumber, (uintmax_t) cur_glob->data.number);
         break;
       }
       case kPatCollection: {
@@ -179,7 +148,10 @@ static FDEC(print_address_followup, const AddressFollowup *const followup)
       EARLY_RETURN;
     }
     case kAddressFollowupShift: {
-      F(print_number, (intmax_t) followup->data.shift);
+      if (followup->data.shift >= 0) {
+        WC('+');
+      }
+      F_NOOPT(dump_number, (intmax_t) followup->data.shift);
       break;
     }
     case kAddressFollowupForwardPattern:
@@ -213,7 +185,7 @@ static FDEC(print_address, const Address *const address)
       EARLY_RETURN;
     }
     case kAddrFixed: {
-      F(print_unumber, (uintmax_t) address->data.lnr);
+      F_NOOPT(dump_unumber, (uintmax_t) address->data.lnr);
       break;
     }
     case kAddrEnd: {
@@ -368,7 +340,7 @@ static FDEC(print_count, const CommandNode *const node)
     case kCntCount:
     case kCntBuffer: {
       WC(' ');
-      F(print_unumber, (uintmax_t) node->cnt.count);
+      F_NOOPT(dump_unumber, (uintmax_t) node->cnt.count);
       break;
     }
     case kCntReg: {
@@ -563,7 +535,7 @@ static FDEC(print_node, const CommandNode *const node,
 
       while (*number) {
         if (*number != MENU_DEFAULT_PRI)
-          F(print_unumber, (uintmax_t) *number);
+          F_NOOPT(dump_unumber, (uintmax_t) *number);
         number++;
         if (*number)
           WC('.');
@@ -612,7 +584,7 @@ static FDEC(print_node, const CommandNode *const node,
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLockvar).parse) {
     if (node->args[ARG_LOCKVAR_DEPTH].arg.number) {
       WC(' ');
-      F(print_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.number);
+      F_NOOPT(dump_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.number);
     }
     WC(' ');
     F(print_expr_node, node->args[ARG_EXPRS_EXPRS].arg.expr);
