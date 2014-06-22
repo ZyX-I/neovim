@@ -293,6 +293,12 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   return NULL;
 }
 
+void print_cmd(const PrinterOptions *const po, const CommandNode *node,
+               Writer write, void *cookie)
+{
+  return;
+}
+
 void sprint_cmd(const PrinterOptions *const po, const CommandNode *node,
               char **pp)
 {
