@@ -62,7 +62,10 @@ int execute_viml(const char *const s)
     .size = len,
     .data = xcalloc(len, 1)
   };
-  stranslate(kTransUser, node, lua_str.data);
+  char *p = lua_str.data;
+  stranslate(kTransUser, node, &p);
+  assert(p - lua_str.data <= (ptrdiff_t) lua_str.size);
+  lua_str.size = (p - lua_str.data);
 
   Error err = {
     .set = false
