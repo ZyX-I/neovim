@@ -8,7 +8,8 @@
 #include "nvim/memory.h"
 #include "nvim/strings.h"
 
-#include "nvim/viml/printer/ch_macros.h"
+
+#include "nvim/viml/printer/printer.h"
 #include "nvim/viml/printer/expressions.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
@@ -25,7 +26,7 @@
 #define NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
 
 #define CH_MACROS_OPTIONS_TYPE PrinterOptions
-#include "nvim/viml/printer/ch_macros.h"
+#include "nvim/viml/dumpers/ch_macros.h"
 
 static FDEC(print_unumber, const uintmax_t unumber)
 {

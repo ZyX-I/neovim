@@ -1,5 +1,4 @@
 #define NEOVIM_SRC_VIML_PRINTER_CH_MACROS_H
-#include "nvim/viml/printer/printer.h"
 
 #ifdef F
 # undef F
@@ -108,7 +107,7 @@
    F(f, __VA_ARGS__)
 #endif
 
-#ifndef NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
+#ifndef SPACES
 # define SPACES(length) \
     do { \
       if (length) { \
