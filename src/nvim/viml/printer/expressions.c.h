@@ -7,6 +7,7 @@
 #include "nvim/memory.h"
 
 #include "nvim/viml/parser/expressions.h"
+#include "nvim/viml/printer/printer.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/printer/expressions.c.h.generated.h"
@@ -20,7 +21,7 @@
 #define NEOVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
 #define CH_MACROS_OPTIONS_TYPE PrinterOptions
-#include "nvim/viml/printer/ch_macros.h"
+#include "nvim/viml/dumpers/ch_macros.h"
 
 static FDEC(print_node, const ExpressionNode *const node)
 {

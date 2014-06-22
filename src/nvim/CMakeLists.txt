@@ -22,6 +22,7 @@ foreach(subdir os
                api/private
                viml
                viml/parser
+               viml/dumpers
                viml/printer
                viml/testhelpers
                viml/translator
