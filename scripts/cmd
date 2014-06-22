@@ -38,7 +38,7 @@ p1ct = (function(str, flags)
     flags = tonumber(flags)
   end
   s = to_cstr(str)
-  result = libnvim.parse_cmd_test(s, flags, false)
+  result = libnvim.parse_cmd_test(s, flags, false, false)
   if result == nil then
     error('parse_cmd_test returned nil')
   end

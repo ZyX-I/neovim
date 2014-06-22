@@ -17,6 +17,7 @@
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
 #include "nvim/viml/parser/command_definitions.h"
+#include "nvim/viml/dumpers/dumpers.h"
 
 #define _STRINGIFY(x) #x
 #define STRINGIFY(x) _STRINGIFY(x)
@@ -99,10 +100,10 @@
     }
 /// Write string with given length, propagate FAIL
 #define W_LEN(s, len) \
-    CALL(write_string_len, (char *) s, len)
+    CALL(raw_dump_string_len, (char *) s, len)
 /// Write string with given length, goto error_label in case of failure
 #define W_LEN_ERR(error_label, s, len) \
-    CALL_ERR(error_label, write_string_len, (char *) s, len)
+    CALL_ERR(error_label, raw_dump_string_len, (char *) s, len)
 /// Write NUL-terminated string, propagate FAIL
 #define W(s) \
     W_LEN(s, STRLEN(s))
@@ -229,17 +230,9 @@ typedef enum {
 ///
 /// @param[in]  s    String that will be written.
 /// @param[in]  len  Length of this string.
-static WFDEC(write_string_len, const char *const s, size_t len)
+static WFDEC(raw_dump_string_len, const char *const s, size_t len)
 {
-  size_t written;
-  if (len) {
-    written = RAW_WRITE(s, len);
-    if (written < len) {
-      // TODO: generate error message
-      return FAIL;
-    }
-  }
-  return OK;
+  return write_string_len(s, len, write, cookie);
 }
 
 /// Dump number that is not a vim Number

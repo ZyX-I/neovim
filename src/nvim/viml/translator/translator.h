@@ -3,9 +3,7 @@
 
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
-
-typedef size_t (*Writer)(const void *ptr, size_t size, size_t nmemb,
-                         void *cookie);
+#include "nvim/viml/dumpers/dumpers.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/translator/translator.h.generated.h"

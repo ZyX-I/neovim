@@ -13,15 +13,22 @@
 #include "nvim/viml/printer/expressions.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
+#include "nvim/viml/dumpers/dumpers.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/printer/ex_commands.c.h.generated.h"
 #endif
 
-#ifndef CH_MACROS_DEFINE_LENGTH
+#if !defined(CH_MACROS_DEFINE_LENGTH) && !defined(CH_MACROS_DEFINE_FWRITE)
 # define CH_MACROS_DEFINE_LENGTH
 # include "nvim/viml/printer/ex_commands.c.h"
 # undef CH_MACROS_DEFINE_LENGTH
+#elif !defined(CH_MACROS_DEFINE_FWRITE)
+# undef CH_MACROS_DEFINE_LENGTH
+# define CH_MACROS_DEFINE_FWRITE
+# include "nvim/viml/printer/ex_commands.c.h"
+# undef CH_MACROS_DEFINE_FWRITE
+# define CH_MACROS_DEFINE_LENGTH
 #endif
 #define NEOVIM_VIML_PRINTER_EX_COMMANDS_C_H
 
@@ -393,8 +400,8 @@ static FDEC(print_exflags, const uint_least8_t exflags)
 }
 
 static FDEC(print_node, const CommandNode *const node,
-                       const size_t indent,
-                       const bool barnext)
+                        const size_t indent,
+                        const bool barnext)
 {
   FUNCTION_START;
   size_t start_from_arg;
@@ -415,24 +422,11 @@ static FDEC(print_node, const CommandNode *const node,
     did_children = true;
     ADD_STATIC_STRING(" +");
 #ifndef CH_MACROS_DEFINE_LENGTH
-    char *arg_start = p;
+    const char *const escapes = "\011\012\013\014\015 \\\n|\"";
+    // vim_isspace:              ^9  ^10 ^11 ^12 ^13 ^  | ||
+    // ENDS_EXCMD:                                      ^ ^^
 #endif
-    F2(print_node, node->children, indent, true);
-#ifndef CH_MACROS_DEFINE_LENGTH
-    {
-      while (arg_start < p) {
-        if (vim_isspace(*arg_start) || *arg_start == '\\'
-            || ENDS_EXCMD(*arg_start)) {
-          STRMOVE(arg_start + 1, arg_start);
-          *arg_start = '\\';
-          arg_start += 2;
-          p++;
-        } else {
-          arg_start++;
-        }
-      }
-    }
-#endif
+    F_ESCAPED(print_node, escapes, node->children, indent, true);
   }
 
   F(print_count, node);

@@ -8,15 +8,22 @@
 
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/printer/printer.h"
+#include "nvim/viml/dumpers/dumpers.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/printer/expressions.c.h.generated.h"
 #endif
 
-#ifndef CH_MACROS_DEFINE_LENGTH
+#if !defined(CH_MACROS_DEFINE_LENGTH) && !defined(CH_MACROS_DEFINE_FWRITE)
 # define CH_MACROS_DEFINE_LENGTH
 # include "nvim/viml/printer/expressions.c.h"
 # undef CH_MACROS_DEFINE_LENGTH
+#elif !defined(CH_MACROS_DEFINE_FWRITE)
+# undef CH_MACROS_DEFINE_LENGTH
+# define CH_MACROS_DEFINE_FWRITE
+# include "nvim/viml/printer/expressions.c.h"
+# undef CH_MACROS_DEFINE_FWRITE
+# define CH_MACROS_DEFINE_LENGTH
 #endif
 #define NEOVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
