@@ -667,6 +667,9 @@ static CMD_FDEC(print_expr_cmd)
 {
   FUNCTION_START;
   PRINT_FROM_ARG(node, 1);
+  if (node->children != NULL) {
+    F(print_block_children, node->children, indent + 1, barnext);
+  }
   FUNCTION_END;
 }
 
