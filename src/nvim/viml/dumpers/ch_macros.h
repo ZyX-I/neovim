@@ -60,10 +60,10 @@
 ///
 /// May be used to return from the function when it did something.
 
-/// @def ADD_CHAR
+/// @def WC
 /// @brief Write given character
 
-/// @def ADD_STATIC_STRING
+/// @def WS
 /// @brief Write given static string
 ///
 /// May be used with any string for which `sizeof(s) - 1` returns its length.
@@ -71,10 +71,10 @@
 /// @param  s  String which will be written. @warning {May be substituted more 
 ///            then once.}
 
-/// @def ADD_STRING
+/// @def W
 /// @brief Write given NUL-terminated string
 
-/// @def ADD_STRING_LEN
+/// @def W_LEN
 /// @brief Write string with given length
 ///
 /// @param  s       String which will be written.
@@ -121,17 +121,17 @@
 #ifdef FUNCTION_END
 # undef FUNCTION_END
 #endif
-#ifdef ADD_CHAR
-# undef ADD_CHAR
+#ifdef WC
+# undef WC
 #endif
-#ifdef ADD_STATIC_STRING
-# undef ADD_STATIC_STRING
+#ifdef WS
+# undef WS
 #endif
-#ifdef ADD_STRING
-# undef ADD_STRING
+#ifdef W
+# undef W
 #endif
-#ifdef ADD_STRING_LEN
-# undef ADD_STRING_LEN
+#ifdef W_LEN
+# undef W_LEN
 #endif
 #ifdef FILL
 # undef FILL
@@ -153,13 +153,13 @@
     return len
 # define FUNCTION_END \
     return len
-# define ADD_CHAR(c) \
+# define WC(c) \
     len++
-# define ADD_STATIC_STRING(s) \
+# define WS(s) \
     len += sizeof(s) - 1
-# define ADD_STRING(s) \
+# define W(s) \
     len += STRLEN(s);
-# define ADD_STRING_LEN(s, length) \
+# define W_LEN(s, length) \
     len += length;
 # define FILL(c, length) \
     len += length
@@ -185,16 +185,16 @@
     return OK
 #  define FUNCTION_END \
     return OK
-#  define ADD_CHAR(c) \
+#  define WC(c) \
     do { \
       char s[] = {c}; \
       _WRITE(s, 1); \
     } while (0)
-#  define ADD_STATIC_STRING(s) \
+#  define WS(s) \
     _WRITE(s, sizeof(s) - 1)
-#  define ADD_STRING(s) \
+#  define W(s) \
     _WRITE(s, STRLEN(s))
-#  define ADD_STRING_LEN(s, length) \
+#  define W_LEN(s, length) \
     _WRITE(s, length)
 #  define FILL(c, length) \
     do { \
@@ -229,12 +229,12 @@
       *pp = p; \
       return; \
     } while (0)
-#  define ADD_CHAR(c) \
+#  define WC(c) \
     *p++ = c
-#  define ADD_STATIC_STRING(s) \
+#  define WS(s) \
     memcpy(p, s, sizeof(s) - 1); \
     p += sizeof(s) - 1
-#  define ADD_STRING(s) \
+#  define W(s) \
     do { \
       size_t len = STRLEN(s); \
       if (len) {\
@@ -242,7 +242,7 @@
         p += len; \
       } \
     } while (0)
-#  define ADD_STRING_LEN(s, length) \
+#  define W_LEN(s, length) \
     do { \
       if (length) {\
         memcpy(p, s, length); \
@@ -274,7 +274,7 @@
       const size_t len = STRLEN(o->command.indent); \
       const size_t mlen = length; \
       for (size_t i = 0; i < mlen; i++) \
-        ADD_STRING_LEN(o->command.indent, len); \
+        W_LEN(o->command.indent, len); \
     } while (0)
 #endif
 

@@ -27,7 +27,7 @@
 #endif
 #define NVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
-#define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
+typedef const PrinterOptions *const CH_MACROS_OPTIONS_TYPE;
 #include "nvim/viml/dumpers/ch_macros.h"
 
 static FDEC(print_node, const ExpressionNode *const node)
@@ -76,10 +76,10 @@ static FDEC(print_node, const ExpressionNode *const node)
         child = child->next;
         if (child != NULL) {
           SPACES(OPERATOR_SPACES(node->type).before);
-          ADD_STRING(operator);
+          W(operator);
           if (add_ccs)
             if (node->ignore_case)
-              ADD_CHAR(*(case_compare_strategy_string[node->ignore_case]));
+              W_LEN(case_compare_strategy_string[node->ignore_case], 1);
           SPACES(OPERATOR_SPACES(node->type).after);
         }
       } while (child != NULL);
@@ -94,11 +94,11 @@ static FDEC(print_node, const ExpressionNode *const node)
 
       F(print_node, node->children);
       SPACES_BEFORE4(expression, operators, ternary, condition);
-      ADD_CHAR('?');
+      WC('?');
       SPACES_AFTER4(expression, operators, ternary, condition);
       F(print_node, node->children->next);
       SPACES_BEFORE4(expression, operators, ternary, values);
-      ADD_CHAR(':');
+      WC(':');
       SPACES_AFTER4(expression, operators, ternary, values);
       F(print_node, node->children->next->next);
       break;
@@ -109,14 +109,14 @@ static FDEC(print_node, const ExpressionNode *const node)
       assert(node->children != NULL);
       assert(node->children->next == NULL);
       SPACES(OPERATOR_SPACES(node->type).before);
-      ADD_CHAR(*(expression_type_string[node->type]));
+      W_LEN(expression_type_string[node->type], 1);
       SPACES(OPERATOR_SPACES(node->type).after);
       F(print_node, node->children);
       break;
     }
     case kExprEnvironmentVariable:
     case kExprOption: {
-      ADD_CHAR((node->type == kExprEnvironmentVariable ? '$' : '&'));
+      WC((node->type == kExprEnvironmentVariable ? '$' : '&'));
       // fallthrough
     }
     case kExprDecimalNumber:
@@ -134,7 +134,7 @@ static FDEC(print_node, const ExpressionNode *const node)
       assert(node->end_position != NULL);
       assert(node->children == NULL);
 
-      ADD_STRING_LEN(node->position, node_len);
+      W_LEN(node->position, node_len);
       break;
     }
     case kExprVariableName: {
@@ -153,7 +153,7 @@ static FDEC(print_node, const ExpressionNode *const node)
       assert(node->children != NULL);
       assert(node->children->next == NULL);
 
-      ADD_CHAR((node->type == kExprExpression ? '(' : '{'));
+      WC((node->type == kExprExpression ? '(' : '{'));
       if (node->type == kExprCurlyName)
         SPACES_AFTER_START2(expression, curly_name);
       else
@@ -163,13 +163,13 @@ static FDEC(print_node, const ExpressionNode *const node)
         SPACES_BEFORE_END2(expression, curly_name);
       else
         SPACES_BEFORE_END3(expression, function_call, call);
-      ADD_CHAR((node->type == kExprExpression ? ')' : '}'));
+      WC((node->type == kExprExpression ? ')' : '}'));
       break;
     }
     case kExprList: {
       ExpressionNode *child = node->children;
 
-      ADD_CHAR('[');
+      WC('[');
       SPACES_AFTER_START3(expression, list, braces);
       while (child != NULL) {
         F(print_node, child);
@@ -181,38 +181,38 @@ static FDEC(print_node, const ExpressionNode *const node)
             assert(child->next == NULL);
             assert(child->children->next == NULL);
             child = child->children;
-            ADD_CHAR(';');
+            WC(';');
           } else {
-            ADD_CHAR(',');
+            WC(',');
           }
           SPACES_AFTER3(expression, list, item);
         }
       }
       SPACES_BEFORE_END3(expression, list, braces);
-      ADD_CHAR(']');
+      WC(']');
       break;
     }
     case kExprDictionary: {
       ExpressionNode *child = node->children;
-      ADD_CHAR('{');
+      WC('{');
       SPACES_AFTER_START3(expression, dictionary, curly_braces);
       while (child != NULL) {
         F(print_node, child);
         child = child->next;
         assert(child != NULL);
         SPACES_BEFORE3(expression, dictionary, key);
-        ADD_CHAR(':');
+        WC(':');
         SPACES_AFTER3(expression, dictionary, key);
         F(print_node, child);
         child = child->next;
         if (child != NULL || ADD_TRAILING_COMMA2(expression, dictionary)) {
           SPACES_BEFORE3(expression, dictionary, item);
-          ADD_CHAR(',');
+          WC(',');
           SPACES_AFTER3(expression, dictionary, item);
         }
       }
       SPACES_BEFORE_END3(expression, dictionary, curly_braces);
-      ADD_CHAR('}');
+      WC('}');
       break;
     }
     case kExprSubscript: {
@@ -220,18 +220,18 @@ static FDEC(print_node, const ExpressionNode *const node)
       assert(node->children->next != NULL);
 
       F(print_node, node->children);
-      ADD_CHAR('[');
+      WC('[');
       SPACES_AFTER_START3(expression, subscript, brackets);
       F(print_node, node->children->next);
       if (node->children->next->next != NULL) {
         assert(node->children->next->next->next == NULL);
         SPACES_BEFORE3(expression, subscript, slice);
-        ADD_CHAR(':');
+        WC(':');
         SPACES_AFTER3(expression, subscript, slice);
         F(print_node, node->children->next->next);
       }
       SPACES_BEFORE_END3(expression, subscript, brackets);
-      ADD_CHAR(']');
+      WC(']');
       break;
     }
     case kExprConcatOrSubscript: {
@@ -241,8 +241,8 @@ static FDEC(print_node, const ExpressionNode *const node)
       assert(node->children->next == NULL);
 
       F(print_node, node->children);
-      ADD_CHAR('.');
-      ADD_STRING_LEN(node->position, node_len);
+      WC('.');
+      W_LEN(node->position, node_len);
       break;
     }
     case kExprCall: {
@@ -251,17 +251,17 @@ static FDEC(print_node, const ExpressionNode *const node)
       assert(node->children != NULL);
 
       F(print_node, node->children);
-      ADD_CHAR('(');
+      WC('(');
       child = node->children->next;
       while (child != NULL) {
         F(print_node, child);
         child = child->next;
         if (child != NULL) {
-          ADD_CHAR(',');
-          ADD_CHAR(' ');
+          WC(',');
+          WC(' ');
         }
       }
-      ADD_CHAR(')');
+      WC(')');
       break;
     }
     case kExprEmptySubscript: {
@@ -279,38 +279,38 @@ static FDEC(represent_node, const ExpressionNode *const node)
 {
   FUNCTION_START;
 
-  ADD_STRING(expression_type_string[node->type]);
-  ADD_STRING(case_compare_strategy_string[node->ignore_case]);
+  W(expression_type_string[node->type]);
+  W(case_compare_strategy_string[node->ignore_case]);
 
   if (node->position != NULL) {
-    ADD_CHAR('[');
+    WC('[');
     if (node->end_position != NULL) {
       size_t node_len = node->end_position - node->position + 1;
 
-      ADD_CHAR('+');
+      WC('+');
 
       if (node->type == kExprRegister && *(node->end_position) == NUL)
         node_len--;
 
-      ADD_STRING_LEN(node->position, node_len);
+      W_LEN(node->position, node_len);
 
-      ADD_CHAR('+');
+      WC('+');
     } else {
-      ADD_CHAR('!');
-      ADD_CHAR(*(node->position));
-      ADD_CHAR('!');
+      WC('!');
+      WC(*(node->position));
+      WC('!');
     }
-    ADD_CHAR(']');
+    WC(']');
   }
 
   if (node->children != NULL) {
-    ADD_CHAR('(');
+    WC('(');
     F(represent_node, node->children);
-    ADD_CHAR(')');
+    WC(')');
   }
 
   if (node->next != NULL) {
-    ADD_STATIC_STRING(", ");
+    WS(", ");
     F(represent_node, node->next);
   }
 

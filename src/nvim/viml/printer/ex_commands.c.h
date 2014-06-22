@@ -42,7 +42,7 @@ static FDEC(print_unumber, const uintmax_t unumber)
   uintmax_t i = unumber;
   do {
     i /= 10;
-    ADD_CHAR(0);
+    WC(0);
   } while (i);
 #else
   uintmax_t i = CALL_LEN(print_unumber, unumber);
@@ -52,7 +52,7 @@ static FDEC(print_unumber, const uintmax_t unumber)
     for (uintmax_t j = 1; j < i; j++)
       d *= 10;
     digit = (unumber / d) % 10;
-    ADD_CHAR('0' + (char) digit);
+    WC('0' + (char) digit);
   } while (--i);
 #endif
   FUNCTION_END;
@@ -61,7 +61,7 @@ static FDEC(print_unumber, const uintmax_t unumber)
 static FDEC(print_number, const intmax_t number)
 {
   FUNCTION_START;
-  ADD_CHAR((number >= 0 ? '+' : '-'));
+  WC((number >= 0 ? '+' : '-'));
   F(print_unumber, (uintmax_t) (number >= 0 ? number : -number));
   FUNCTION_END;
 }
@@ -77,50 +77,50 @@ static FDEC(print_glob, const Glob *const glob)
   for (cur_glob = glob; cur_glob != NULL; cur_glob = cur_glob->next) {
     switch (cur_glob->type) {
       case kGlobExpression: {
-        ADD_STATIC_STRING("`=");
+        WS("`=");
         F(print_expr_node, cur_glob->data.expr);
-        ADD_CHAR('`');
+        WC('`');
         break;
       }
       case kGlobShell: {
-        ADD_STRING(cur_glob->data.str);
+        W(cur_glob->data.str);
         break;
       }
       case kPatHome: {
-        ADD_CHAR('~');
+        WC('~');
         break;
       }
       case kPatCurrent: {
-        ADD_CHAR('%');
+        WC('%');
         break;
       }
       case kPatAlternate: {
-        ADD_CHAR('#');
+        WC('#');
         break;
       }
       case kPatCharacter: {
-        ADD_CHAR('?');
+        WC('?');
         break;
       }
       case kPatAnything: {
-        ADD_CHAR('*');
+        WC('*');
         break;
       }
       case kPatArguments: {
-        ADD_STATIC_STRING("##");
+        WS("##");
         break;
       }
       case kPatAnyRecurse: {
-        ADD_STATIC_STRING("**");
+        WS("**");
         break;
       }
       case kPatOldFile: {
-        ADD_STATIC_STRING("#<");
+        WS("#<");
         F(print_unumber, (uintmax_t) cur_glob->data.number);
         break;
       }
       case kPatBufname: {
-        ADD_CHAR('#');
+        WC('#');
         F(print_unumber, (uintmax_t) cur_glob->data.number);
         break;
       }
@@ -134,17 +134,17 @@ static FDEC(print_glob, const Glob *const glob)
       }
       case kPatBranch: {
         Glob *cglob;
-        ADD_CHAR('{');
+        WC('{');
         for (cglob = cur_glob->data.glob; cglob != NULL; cglob = cglob->next) {
           F(print_glob, cglob);
           if (cglob->next != NULL)
-            ADD_CHAR(',');
+            WC(',');
         }
-        ADD_CHAR('}');
+        WC('}');
         break;
       }
       case kPatLiteral: {
-        ADD_STRING(cur_glob->data.str);
+        W(cur_glob->data.str);
         break;
       }
       case kPatMissing: {
@@ -160,7 +160,7 @@ static FDEC(print_regex, const Regex *const regex)
 {
   FUNCTION_START;
   assert(regex->string != NULL);
-  ADD_STRING(regex->string);
+  W(regex->string);
   FUNCTION_END;
 }
 
@@ -186,9 +186,9 @@ static FDEC(print_address_followup, const AddressFollowup *const followup)
                   ? '/'
                   : '?';
 #endif
-      ADD_CHAR(ch);
+      WC(ch);
       F(print_regex, followup->data.regex);
-      ADD_CHAR(ch);
+      WC(ch);
       break;
     }
   }
@@ -214,16 +214,16 @@ static FDEC(print_address, const Address *const address)
       break;
     }
     case kAddrEnd: {
-      ADD_CHAR('$');
+      WC('$');
       break;
     }
     case kAddrCurrent: {
-      ADD_CHAR('.');
+      WC('.');
       break;
     }
     case kAddrMark: {
-      ADD_CHAR('\'');
-      ADD_CHAR(address->data.mark);
+      WC('\'');
+      WC(address->data.mark);
       break;
     }
     case kAddrForwardSearch:
@@ -233,21 +233,21 @@ static FDEC(print_address, const Address *const address)
                   ? '/'
                   : '?';
 #endif
-      ADD_CHAR(ch);
+      WC(ch);
       F(print_regex, address->data.regex);
-      ADD_CHAR(ch);
+      WC(ch);
       break;
     }
     case kAddrForwardPreviousSearch: {
-      ADD_STATIC_STRING("\\/");
+      WS("\\/");
       break;
     }
     case kAddrBackwardPreviousSearch: {
-      ADD_STATIC_STRING("\\?");
+      WS("\\?");
       break;
     }
     case kAddrSubstituteSearch: {
-      ADD_STATIC_STRING("\\&");
+      WS("\\&");
       break;
     }
   }
@@ -265,7 +265,7 @@ static FDEC(print_range, const Range *const range)
   F(print_address, &(range->address));
   F(print_address_followup, range->address.followups);
   if (range->next != NULL) {
-    ADD_CHAR(range->setpos ? ';' : ',');
+    WC(range->setpos ? ';' : ',');
     F(print_range, range->next);
   }
 
@@ -286,10 +286,10 @@ static FDEC(print_node_name, const CommandType node_type,
   else
     name = CMDDEF(node_type).name;
 
-  ADD_STRING(name);
+  W(name);
 
   if (node_bang)
-    ADD_CHAR('!');
+    WC('!');
 
   FUNCTION_END;
 }
@@ -301,28 +301,28 @@ static FDEC(print_optflags, const uint_least32_t optflags,
 
   if (optflags & FLAG_OPT_BIN_USE_FLAG) {
     if (optflags & FLAG_OPT_BIN) {
-      ADD_STATIC_STRING(" ++bin");
+      WS(" ++bin");
     } else {
-      ADD_STRING(" ++nobin");
+      W(" ++nobin");
     }
   }
   if (optflags & FLAG_OPT_EDIT) {
-    ADD_STATIC_STRING(" ++edit");
+    WS(" ++edit");
   }
   switch (optflags & FLAG_OPT_FF_MASK) {
     case 0: {
       break;
     }
     case VAL_OPT_FF_DOS: {
-      ADD_STATIC_STRING(" ++ff=dos");
+      WS(" ++ff=dos");
       break;
     }
     case VAL_OPT_FF_MAC: {
-      ADD_STATIC_STRING(" ++ff=mac");
+      WS(" ++ff=mac");
       break;
     }
     case VAL_OPT_FF_UNIX: {
-      ADD_STATIC_STRING(" ++ff=unix");
+      WS(" ++ff=unix");
       break;
     }
     default: {
@@ -334,21 +334,21 @@ static FDEC(print_optflags, const uint_least32_t optflags,
       break;
     }
     case VAL_OPT_BAD_KEEP: {
-      ADD_STATIC_STRING(" ++bad=keep");
+      WS(" ++bad=keep");
       break;
     }
     case VAL_OPT_BAD_DROP: {
-      ADD_STATIC_STRING(" ++bad=drop");
+      WS(" ++bad=drop");
       break;
     }
     default: {
-      ADD_STATIC_STRING(" ++bad=");
-      ADD_CHAR(VAL_OPT_BAD_TO_CHAR(optflags));
+      WS(" ++bad=");
+      WC(VAL_OPT_BAD_TO_CHAR(optflags));
     }
   }
   if (enc != NULL) {
-    ADD_STATIC_STRING(" ++enc=");
-    ADD_STRING(enc);
+    WS(" ++enc=");
+    W(enc);
   }
 
   FUNCTION_END;
@@ -364,13 +364,13 @@ static FDEC(print_count, const CommandNode *const node)
     }
     case kCntCount:
     case kCntBuffer: {
-      ADD_CHAR(' ');
+      WC(' ');
       F(print_unumber, (uintmax_t) node->cnt.count);
       break;
     }
     case kCntReg: {
-      ADD_CHAR(' ');
-      ADD_CHAR(node->cnt.reg);
+      WC(' ');
+      WC(node->cnt.reg);
       break;
     }
     case kCntExprReg: {
@@ -387,13 +387,13 @@ static FDEC(print_exflags, const uint_least8_t exflags)
   FUNCTION_START;
 
   if (exflags) {
-    ADD_CHAR(' ');
+    WC(' ');
     if (exflags & FLAG_EX_LIST)
-      ADD_CHAR('l');
+      WC('l');
     if (exflags & FLAG_EX_LNR)
-      ADD_CHAR('#');
+      WC('#');
     if (exflags & FLAG_EX_PRINT)
-      ADD_CHAR('p');
+      WC('p');
   }
 
   FUNCTION_END;
@@ -420,7 +420,7 @@ static FDEC(print_node, const CommandNode *const node,
 
   if (CMDDEF(node->type).flags & EDITCMD && node->children) {
     did_children = true;
-    ADD_STATIC_STRING(" +");
+    WS(" +");
 #ifndef CH_MACROS_DEFINE_LENGTH
     const char *const escapes = "\011\012\013\014\015 \\\n|\"";
     // vim_isspace:              ^9  ^10 ^11 ^12 ^13 ^  | ||
@@ -433,7 +433,7 @@ static FDEC(print_node, const CommandNode *const node,
   F(print_exflags, node->exflags);
 
   if (node->glob != NULL) {
-    ADD_CHAR(' ');
+    WC(' ');
     F(print_glob, node->glob);
   }
 
@@ -443,26 +443,26 @@ static FDEC(print_node, const CommandNode *const node,
     const size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
     size_t line_len;
 
-    ADD_STATIC_STRING("\\ error: ");
+    WS("\\ error: ");
 
-    ADD_STRING(message);
+    W(message);
 
-    ADD_STATIC_STRING(": ");
+    WS(": ");
 
     line_len = STRLEN(line);
 
     if (offset < line_len) {
       if (offset) {
-        ADD_STRING_LEN(line, offset);
+        W_LEN(line, offset);
       }
-      ADD_STATIC_STRING("!!");
-      ADD_CHAR(line[offset]);
-      ADD_STATIC_STRING("!!");
+      WS("!!");
+      W_LEN(line + offset, 1);
+      WS("!!");
 
-      ADD_STRING_LEN(line + offset + 1, line_len - offset - 1);
+      W_LEN(line + offset + 1, line_len - offset - 1);
     } else {
-      ADD_STRING_LEN(line, line_len);
-      ADD_STATIC_STRING("!!!");
+      W_LEN(line, line_len);
+      WS("!!!");
     }
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdAppend).parse) {
     const garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.strs);
@@ -470,110 +470,110 @@ static FDEC(print_node, const CommandNode *const node,
     int i;
 
     for (i = 0; i < ga_len ; i++) {
-      ADD_CHAR('\n');
-      ADD_STRING(((char_u **)ga->ga_data)[i]);
+      WC('\n');
+      W(((char_u **)ga->ga_data)[i]);
     }
-    ADD_CHAR('\n');
-    ADD_CHAR('.');
+    WC('\n');
+    WC('.');
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMap).parse
              || CMDDEF(node->type).parse == CMDDEF(kCmdUnmap).parse) {
     const uint_least32_t map_flags = node->args[ARG_MAP_FLAGS].arg.flags;
 
     if (map_flags)
-      ADD_CHAR(' ');
+      WC(' ');
 
     if (map_flags & FLAG_MAP_BUFFER) {
-      ADD_STATIC_STRING("<buffer>");
+      WS("<buffer>");
     }
     if (map_flags & FLAG_MAP_NOWAIT) {
-      ADD_STATIC_STRING("<nowait>");
+      WS("<nowait>");
     }
     if (map_flags & FLAG_MAP_SILENT) {
-      ADD_STATIC_STRING("<silent>");
+      WS("<silent>");
     }
     if (map_flags & FLAG_MAP_SPECIAL) {
-      ADD_STATIC_STRING("<special>");
+      WS("<special>");
     }
     if (map_flags & FLAG_MAP_SCRIPT) {
-      ADD_STATIC_STRING("<script>");
+      WS("<script>");
     }
     if (map_flags & FLAG_MAP_EXPR) {
-      ADD_STATIC_STRING("<expr>");
+      WS("<expr>");
     }
     if (map_flags & FLAG_MAP_UNIQUE) {
-      ADD_STATIC_STRING("<unique>");
+      WS("<unique>");
     }
 
     if (node->args[ARG_MAP_LHS].arg.str != NULL) {
       bool unmap = CMDDEF(node->type).parse == CMDDEF(kCmdUnmap).parse;
-      ADD_CHAR(' ');
+      WC(' ');
 
       // FIXME untranslate mappings
-      ADD_STRING(node->args[ARG_MAP_LHS].arg.str);
+      W(node->args[ARG_MAP_LHS].arg.str);
 
       if (unmap) {
       } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
-        ADD_CHAR(' ');
+        WC(' ');
         F(print_expr_node, node->args[ARG_MAP_EXPR].arg.expr);
       } else if (node->children != NULL) {
-        ADD_CHAR('\n');
+        WC('\n');
         // FIXME untranslate mappings
         F(print_node, node->children, indent, barnext);
         did_children = true;
       } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
-        ADD_CHAR(' ');
+        WC(' ');
         // FIXME untranslate mappings
-        ADD_STRING(node->args[ARG_MAP_RHS].arg.str);
+        W(node->args[ARG_MAP_RHS].arg.str);
       }
     }
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMapclear).parse) {
     if (node->args[ARG_CLEAR_BUFFER].arg.flags) {
-      ADD_CHAR(' ');
-      ADD_STATIC_STRING("<buffer>");
+      WC(' ');
+      WS("<buffer>");
     }
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMenu).parse) {
     const uint_least32_t menu_flags = node->args[ARG_MENU_FLAGS].arg.flags;
 
     if (menu_flags & (FLAG_MENU_SILENT|FLAG_MENU_SPECIAL|FLAG_MENU_SCRIPT))
-      ADD_CHAR(' ');
+      WC(' ');
 
     if (menu_flags & FLAG_MENU_SILENT) {
-      ADD_STATIC_STRING("<silent>");
+      WS("<silent>");
     }
     if (menu_flags & FLAG_MENU_SPECIAL) {
-      ADD_STATIC_STRING("<special>");
+      WS("<special>");
     }
     if (menu_flags & FLAG_MENU_SCRIPT) {
-      ADD_STATIC_STRING("<script>");
+      WS("<script>");
     }
 
     if (node->args[ARG_MENU_ICON].arg.str != NULL) {
-      ADD_CHAR(' ');
-      ADD_STATIC_STRING("icon=");
-      ADD_STRING(node->args[ARG_MENU_ICON].arg.str);
+      WC(' ');
+      WS("icon=");
+      W(node->args[ARG_MENU_ICON].arg.str);
     }
 
     if (node->args[ARG_MENU_PRI].arg.numbers != NULL) {
       const int *number = node->args[ARG_MENU_PRI].arg.numbers;
 
-      ADD_CHAR(' ');
+      WC(' ');
 
       while (*number) {
         if (*number != MENU_DEFAULT_PRI)
           F(print_unumber, (uintmax_t) *number);
         number++;
         if (*number)
-          ADD_CHAR('.');
+          WC('.');
       }
     }
 
     if (menu_flags & FLAG_MENU_DISABLE) {
-      ADD_CHAR(' ');
-      ADD_STATIC_STRING("disable");
+      WC(' ');
+      WS("disable");
     }
     if (menu_flags & FLAG_MENU_ENABLE) {
-      ADD_CHAR(' ');
-      ADD_STATIC_STRING("enable");
+      WC(' ');
+      WS("enable");
     }
 
     if (node->args[ARG_MENU_NAME].arg.menu_item != NULL) {
@@ -581,25 +581,25 @@ static FDEC(print_node, const CommandNode *const node,
 
       while (cur != NULL) {
         if (cur == node->args[ARG_MENU_NAME].arg.menu_item)
-          ADD_CHAR(' ');
+          WC(' ');
         else
-          ADD_CHAR('.');
-        ADD_STRING(cur->name);
+          WC('.');
+        W(cur->name);
         cur = cur->subitem;
       }
 
       if (node->args[ARG_MENU_TEXT].arg.str != NULL) {
-        ADD_STATIC_STRING("<Tab>");
-        ADD_STRING(node->args[ARG_MENU_TEXT].arg.str);
+        WS("<Tab>");
+        W(node->args[ARG_MENU_TEXT].arg.str);
       }
     }
 
     start_from_arg = ARG_MENU_RHS;
     do_arg_dump = true;
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdFor).parse) {
-    ADD_CHAR(' ');
+    WC(' ');
     F(print_expr_node, node->args[ARG_FOR_LHS].arg.expr);
-    ADD_STATIC_STRING(" in ");
+    WS(" in ");
     F(print_expr_node, node->args[ARG_FOR_RHS].arg.expr);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdCaddexpr).parse
              || CMDDEF(node->type).parse == CMDDEF(kCmdEcho).parse
@@ -608,46 +608,46 @@ static FDEC(print_node, const CommandNode *const node,
     do_arg_dump = true;
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLockvar).parse) {
     if (node->args[ARG_LOCKVAR_DEPTH].arg.number) {
-      ADD_CHAR(' ');
+      WC(' ');
       F(print_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.number);
     }
-    ADD_CHAR(' ');
+    WC(' ');
     F(print_expr_node, node->args[ARG_EXPRS_EXPRS].arg.expr);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdFunction).parse) {
     if (node->args[ARG_FUNC_REG].arg.reg == NULL) {
       if (node->args[ARG_FUNC_NAME].arg.expr != NULL) {
-        ADD_CHAR(' ');
+        WC(' ');
         F(print_expr_node, node->args[ARG_FUNC_NAME].arg.expr);
         if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
           const uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
           const garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
           SPACES_BEFORE_SUBSCRIPT2(command, function);
-          ADD_CHAR('(');
+          WC('(');
           SPACES_AFTER_START3(command, function, call);
           for (int i = 0; i < ga->ga_len; i++) {
-            ADD_STRING(((char_u **)ga->ga_data)[i]);
+            W(((char_u **)ga->ga_data)[i]);
             if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
               SPACES_BEFORE3(command, function, argument);
-              ADD_CHAR(',');
+              WC(',');
               SPACES_AFTER3(command, function, argument);
             }
           }
           if (flags&FLAG_FUNC_VARARGS) {
-            ADD_STATIC_STRING("...");
+            WS("...");
           }
           SPACES_BEFORE_END3(command, function, call);
-          ADD_CHAR(')');
+          WC(')');
           if (flags&FLAG_FUNC_RANGE) {
             SPACES_BEFORE_ATTRIBUTE2(command, function);
-            ADD_STATIC_STRING("range");
+            WS("range");
           }
           if (flags&FLAG_FUNC_DICT) {
             SPACES_BEFORE_ATTRIBUTE2(command, function);
-            ADD_STATIC_STRING("dict");
+            WS("dict");
           }
           if (flags&FLAG_FUNC_ABORT) {
             SPACES_BEFORE_ATTRIBUTE2(command, function);
-            ADD_STATIC_STRING("abort");
+            WS("abort");
           }
         }
       }
@@ -658,7 +658,7 @@ static FDEC(print_node, const CommandNode *const node,
           (LetAssignmentType) node->args[ARG_LET_ASS_TYPE].arg.flags;
       bool add_rval = true;
 
-      ADD_CHAR(' ');
+      WC(' ');
       F(print_expr_node, node->args[ARG_LET_LHS].arg.expr);
       switch (ass_type) {
         case VAL_LET_NO_ASS: {
@@ -667,25 +667,25 @@ static FDEC(print_node, const CommandNode *const node,
         }
         case VAL_LET_ASSIGN: {
           SPACES_BEFORE3(command, let, assign);
-          ADD_CHAR('=');
+          WC('=');
           SPACES_AFTER3(command, let, assign);
           break;
         }
         case VAL_LET_ADD: {
           SPACES_BEFORE3(command, let, add);
-          ADD_STATIC_STRING("+=");
+          WS("+=");
           SPACES_AFTER3(command, let, add);
           break;
         }
         case VAL_LET_SUBTRACT: {
           SPACES_BEFORE3(command, let, subtract);
-          ADD_STATIC_STRING("-=");
+          WS("-=");
           SPACES_AFTER3(command, let, subtract);
           break;
         }
         case VAL_LET_APPEND: {
           SPACES_BEFORE3(command, let, concat);
-          ADD_STATIC_STRING(".=");
+          WS(".=");
           SPACES_AFTER3(command, let, concat);
           break;
         }
@@ -707,7 +707,7 @@ static FDEC(print_node, const CommandNode *const node,
         case kArgExpressions:
         case kArgExpression: {
           if (node->args[i].arg.expr != NULL) {
-            ADD_CHAR(' ');
+            WC(' ');
             F(print_expr_node, node->args[i].arg.expr);
           }
           break;
@@ -717,10 +717,10 @@ static FDEC(print_node, const CommandNode *const node,
             if (node->type == kCmdComment) {
               SPACES_BEFORE_TEXT2(command, comment);
             } else if (node->type != kCmdHashbangComment) {
-              ADD_CHAR(' ');
+              WC(' ');
             }
             // FIXME Escape arguments if necessary
-            ADD_STRING(node->args[i].arg.str);
+            W(node->args[i].arg.str);
           }
           break;
         }
@@ -733,16 +733,16 @@ static FDEC(print_node, const CommandNode *const node,
 
   if (node->children && !did_children) {
     if (CMDDEF(node->type).flags & ISMODIFIER) {
-      ADD_CHAR(' ');
+      WC(' ');
       F(print_node, node->children, indent, barnext);
     } else if (CMDDEF(node->type).parse == CMDDEF(kCmdArgdo).parse) {
-      ADD_CHAR(' ');
+      WC(' ');
       F(print_node, node->children, indent, true);
     } else {
       if (barnext) {
-        ADD_STATIC_STRING(" | ");
+        WS(" | ");
       } else {
-        ADD_CHAR('\n');
+        WC('\n');
       }
       F(print_node, node->children, indent + 1, barnext);
     }
@@ -750,9 +750,9 @@ static FDEC(print_node, const CommandNode *const node,
 
   if (node->next != NULL) {
     if (barnext) {
-      ADD_STATIC_STRING(" | ");
+      WS(" | ");
     } else {
-      ADD_CHAR('\n');
+      WC('\n');
     }
     F(print_node, node->next, indent, barnext);
   }
