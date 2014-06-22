@@ -5,6 +5,7 @@
 #include "nvim/memory.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/printer/printer.h"
+#include "nvim/viml/dumpers/dumpers.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/printer/expressios.c.generated.h"
@@ -213,6 +214,28 @@ void sprint_expr_node(const PrinterOptions *const po,
   }
 }
 
+int print_expr_node(const PrinterOptions *const po,
+                    const ExpressionNode *const node,
+                    Writer write, void *cookie)
+{
+  ExpressionNode *next = node->next;
+
+  if (print_node(po, (ExpressionNode *) node, write, cookie) == FAIL) {
+    return FAIL;
+  }
+
+  while (next != NULL) {
+    if (write(" ", 1, 1, cookie) != 1) {
+      return FAIL;
+    }
+    if (print_node(po, next, write, cookie) == FAIL) {
+      return FAIL;
+    }
+    next = next->next;
+  }
+  return OK;
+}
+
 size_t srepresent_expr_node_len(const PrinterOptions *const po,
                                 const ExpressionNode *const node)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
@@ -226,4 +249,11 @@ void srepresent_expr_node(const PrinterOptions *const po,
   FUNC_ATTR_NONNULL_ALL
 {
   srepresent_node(po, node, pp);
+}
+
+int represent_expr_node(const PrinterOptions *const po,
+                        const ExpressionNode *const node,
+                        Writer write, void *cookie)
+{
+  return represent_node(po, node, write, cookie);
 }

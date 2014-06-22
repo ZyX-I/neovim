@@ -7,14 +7,15 @@
 #include <stdio.h>
 
 static void (*init_func)(void);
-static char *(*parse_cmd_test)(char *arg, uint_least8_t flags, bool one);
+static char *(*parse_cmd_test)(char *arg, uint_least8_t flags, bool one,
+                               bool out);
 
 int main(int argc, char **argv, char **env)
 {
   if (argc <= 1)
     return 1;
 
-  void *handle = dlopen("build/src/libnvim-test.so", RTLD_LAZY);
+  void *handle = dlopen("build/src/nvim/libnvim-test.so", RTLD_LAZY);
 
   if (handle == NULL) {
     const char *error = dlerror();
@@ -49,15 +50,11 @@ int main(int argc, char **argv, char **env)
   if (parse_cmd_test == NULL)
     return 5;
 
-  char *result = parse_cmd_test(argv[1], (argc > 2
-                                          ? (uint_least8_t) atoi(argv[2])
-                                          : 0),
-                                false);
-
-  if (result == NULL)
-    return 6;
-
-  puts(result);
+  parse_cmd_test(argv[1], (argc > 2
+                           ? (uint_least8_t) atoi(argv[2])
+                           : 0),
+                 false, true);
+  putc('\n', stdout);
   return 0;
 }
 #endif  // COMPILE_TEST_VERSION

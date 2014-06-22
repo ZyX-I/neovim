@@ -2,7 +2,7 @@
 libnvim = cimport('./src/nvim/viml/testhelpers/parser.h')
 p1ct = (str, one, flags=0) ->
   s = to_cstr(str)
-  result = libnvim.parse_cmd_test(s, flags, one)
+  result = libnvim.parse_cmd_test(s, flags, one, false)
   if result == nil
     error('parse_cmd_test returned nil')
   return ffi.string(result)

@@ -3,8 +3,8 @@
 #ifdef F
 # undef F
 #endif
-#ifdef F2
-# undef F2
+#ifdef F_ESCAPED
+# undef F_ESCAPED
 #endif
 #ifdef FDEC
 # undef FDEC
@@ -40,7 +40,7 @@
 #ifdef CH_MACROS_DEFINE_LENGTH
 # define F(f, ...) \
     len += CALL_LEN(f, __VA_ARGS__)
-# define F2(f, ...) \
+# define F_ESCAPED(f, e, ...) \
     len += 2 * CALL_LEN(f, __VA_ARGS__)
 # define FDEC(f, ...) \
     size_t s##f##_len(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__)
@@ -63,39 +63,106 @@
 # define INDENT(length) \
     len += length * STRLEN(o->command.indent);
 #else
-# define F(f, ...) \
-     s##f(o, __VA_ARGS__, &p)
-# define FDEC(f, ...) \
-     void s##f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, char **pp)
-# define FUNCTION_START \
-     char *p = *pp
-# define RETURN \
-     return
-# define FUNCTION_END \
-     *pp = p
-# define ADD_CHAR(c) \
-     *p++ = c
-# define ADD_STATIC_STRING(s) \
-     memcpy(p, s, sizeof(s) - 1); \
-     p += sizeof(s) - 1
-# define ADD_STRING(s) \
-     do { \
-       size_t len = STRLEN(s); \
-       if (len) {\
-         memcpy(p, s, len); \
-         p += len; \
-       } \
-     } while (0)
-# define ADD_STRING_LEN(s, length) \
-     do { \
-       if (length) {\
-         memcpy(p, s, length); \
-         p += length; \
-       } \
-     } while (0)
-# define FILL(c, length) \
-     memset(p, c, length); \
-     p += length
+# ifdef CH_MACROS_DEFINE_FWRITE
+#  define _WRITE(s, length) \
+    do { \
+      if (write_string_len((const char *) s, length, write, cookie) == FAIL) \
+        return FAIL; \
+    } while (0)
+#  define F(f, ...) \
+    do { \
+      if (f(o, __VA_ARGS__, write, cookie) == FAIL) \
+        return FAIL; \
+    } while (0)
+#  define FDEC(f, ...) \
+     int f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, \
+           Writer write, void *cookie)
+#  define FUNCTION_START
+#  define RETURN \
+    return OK
+#  define FUNCTION_END \
+    return OK
+#  define ADD_CHAR(c) \
+    do { \
+      char s[] = {c}; \
+      _WRITE(s, 1); \
+    } while (0)
+#  define ADD_STATIC_STRING(s) \
+    _WRITE(s, sizeof(s) - 1)
+#  define ADD_STRING(s) \
+    _WRITE(s, STRLEN(s))
+#  define ADD_STRING_LEN(s, length) \
+    _WRITE(s, length)
+#  define FILL(c, length) \
+    do { \
+      char s[length]; \
+      memset(s, c, length); \
+      _WRITE(s, length); \
+    } while (0)
+#  define F_ESCAPED(f, e, ...) \
+    do { \
+      const EscapedCookie new_cookie = { \
+        .echars = e, \
+        .write = write, \
+        .cookie = cookie \
+      }; \
+      { \
+        Writer write = &write_escaped_string_len; \
+        void *cookie = (void *) &new_cookie; \
+        F(f, __VA_ARGS__); \
+      } \
+    } while (0)
+# else
+#  define F(f, ...) \
+    s##f(o, __VA_ARGS__, &p)
+#  define FDEC(f, ...) \
+    void s##f(const CH_MACROS_OPTIONS_TYPE *const o, __VA_ARGS__, char **pp)
+#  define FUNCTION_START \
+    char *p = *pp
+#  define RETURN \
+    return
+#  define FUNCTION_END \
+    *pp = p
+#  define ADD_CHAR(c) \
+    *p++ = c
+#  define ADD_STATIC_STRING(s) \
+    memcpy(p, s, sizeof(s) - 1); \
+    p += sizeof(s) - 1
+#  define ADD_STRING(s) \
+    do { \
+      size_t len = STRLEN(s); \
+      if (len) {\
+        memcpy(p, s, len); \
+        p += len; \
+      } \
+    } while (0)
+#  define ADD_STRING_LEN(s, length) \
+    do { \
+      if (length) {\
+        memcpy(p, s, length); \
+        p += length; \
+      } \
+    } while (0)
+#  define FILL(c, length) \
+    memset(p, c, length); \
+    p += length
+#  define F_ESCAPED(f, e, ...) \
+    do { \
+      char *arg_start = p; \
+      const char *const echars = e; \
+      F(f, __VA_ARGS__); \
+      while (arg_start < p) { \
+        if (strchr(echars, *arg_start) != NULL) { \
+          STRMOVE(arg_start + 1, arg_start); \
+          *arg_start = '\\'; \
+          arg_start += 2; \
+          p++; \
+        } else { \
+          arg_start++; \
+        } \
+      } \
+    } while (0)
+# endif
 # define INDENT(length) \
     do { \
       const size_t len = STRLEN(o->command.indent); \
@@ -103,8 +170,6 @@
       for (size_t i = 0; i < mlen; i++) \
         ADD_STRING_LEN(o->command.indent, len); \
     } while (0)
-# define F2(f, ...) \
-   F(f, __VA_ARGS__)
 #endif
 
 #ifndef SPACES

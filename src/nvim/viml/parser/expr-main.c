@@ -10,11 +10,15 @@
 #include "nvim/viml/parser/ex_commands.h"
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/testhelpers/parser.h"
+#include "nvim/viml/dumpers/dumpers.h"
 #include <stdio.h>
 
 #ifdef COMPILE_KLEE
 #include "klee/klee.h"
 #endif
+
+static Writer write_file = (Writer) &fwrite;
+
 static void print_node(int indent, ExpressionNode *node)
 {
   char *name = NULL;
@@ -188,18 +192,15 @@ int main(int argc, char **argv) {
   char input[12];
   klee_make_symbolic(input, sizeof(input), "input");
   klee_assume(input[11] == '\0');
-  if ((result = represent_parse0(input, true)) == NULL)
+  if ((result = srepresent_parse0(input, true)) == NULL)
     return 1;
-  return 0;
 #else
-  if ((result = represent_parse0(argv[1], true)) == NULL)
+  if (represent_parse0(argv[1], false) == FAIL)
     return 1;
-  puts(result);
-  free(result);
-  if ((result = represent_parse0(argv[1], false)) == NULL)
-    return 1;
-  puts(result);
-  free(result);
+  putc('\n', stdout);
+  if (represent_parse0(argv[1], true) == FAIL)
+    return 2;
+  putc('\n', stdout);
 #endif
   return 0;
 }
@@ -216,7 +217,7 @@ char_u *skipwhite(char_u *q)
   return p;
 }
 
-char_u *alloc_clear(unsigned size)
+void *xcalloc(size_t nmemb, size_t size)
 {
   void *res = (char_u *) malloc(size);
   memset(res, 0, size);
