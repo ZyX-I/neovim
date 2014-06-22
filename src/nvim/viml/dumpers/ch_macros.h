@@ -304,8 +304,10 @@
 #  define WC(c) \
     *p++ = c
 #  define WS(s) \
-    memcpy(p, s, sizeof(s) - 1); \
-    p += sizeof(s) - 1
+    do { \
+      memcpy(p, s, sizeof(s) - 1); \
+      p += sizeof(s) - 1; \
+    } while (0)
 #  define W(s) \
     do { \
       size_t len = STRLEN(s); \
