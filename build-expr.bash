@@ -3,6 +3,7 @@ SOURCES=(
   src/nvim/viml/{parser,printer}/expr*.c
   src/nvim/viml/dumpers/dumpers.c
   src/nvim/viml/testhelpers/{parser,fgetline}.c
+  src/nvim/viml/testhelpers/progs/expr-main.c
 )
 CFLAGS=(
   -Isrc
