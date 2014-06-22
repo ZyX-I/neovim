@@ -1,9 +1,5 @@
-// vim: ts=8 sts=2 sw=2 tw=80
-//
-// Copyright 2014 Nikolay Pavlov
-
-#ifndef NEOVIM_VIML_PARSER_COMMAND_ARGUMENTS_H_
-#define NEOVIM_VIML_PARSER_COMMAND_ARGUMENTS_H_
+#ifndef NVIM_VIML_PARSER_COMMAND_ARGUMENTS_H_
+#define NVIM_VIML_PARSER_COMMAND_ARGUMENTS_H_
 
 typedef enum {
   kArgExpression,    // :let a={expr}
@@ -628,4 +624,4 @@ enum {
   ARG_USER_ARG      = 0,
 };
 
-#endif  // NEOVIM_VIML_PARSER_COMMAND_ARGUMENTS_H_
+#endif  // NVIM_VIML_PARSER_COMMAND_ARGUMENTS_H_

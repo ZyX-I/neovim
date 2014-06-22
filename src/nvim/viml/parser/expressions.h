@@ -1,9 +1,5 @@
-// vim: ts=8 sts=2 sw=2 tw=80
-//
-// Copyright 2014 Nikolay Pavlov
-
-#ifndef NEOVIM_VIML_PARSER_EXPRESSIONS_H
-#define NEOVIM_VIML_PARSER_EXPRESSIONS_H
+#ifndef NVIM_VIML_PARSER_EXPRESSIONS_H
+#define NVIM_VIML_PARSER_EXPRESSIONS_H
 
 #include "nvim/types.h"
 
@@ -134,4 +130,4 @@ typedef ExpressionNode *(*ExpressionParser)(const char_u **,
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/expressions.h.generated.h"
 #endif
-#endif  // NEOVIM_VIML_PARSER_EXPRESSIONS_H
+#endif  // NVIM_VIML_PARSER_EXPRESSIONS_H

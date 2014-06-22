@@ -1,5 +1,5 @@
-#ifndef NEOVIM_VIML_PRINTER_PRINTER_H
-#define NEOVIM_VIML_PRINTER_PRINTER_H
+#ifndef NVIM_VIML_PRINTER_PRINTER_H
+#define NVIM_VIML_PRINTER_PRINTER_H
 
 #include "nvim/viml/parser/expressions.h"
 
@@ -89,4 +89,4 @@ typedef struct {
 
 const PrinterOptions default_po;
 
-#endif  // NEOVIM_VIML_PRINTER_PRINTER_H
+#endif  // NVIM_VIML_PRINTER_PRINTER_H
