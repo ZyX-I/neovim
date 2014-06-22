@@ -92,7 +92,7 @@
 /// Created name is prefix concatenated with indentation level.
 #define INDENTVAR(var, prefix) \
     char var[SIZETBUFLEN + sizeof(prefix) - 1]; \
-    size_t var##_len; \
+    const size_t var##_len = sizeof(prefix) - 1 + sdump_unumber_len(indent); \
     memcpy(var, prefix, sizeof(prefix) - 1); \
     do { \
       char *p = var + sizeof(prefix) - 1; \
@@ -2067,7 +2067,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
 static FDEC(translate_script, const CommandNode *const node)
 {
   FUNCTION_START;
-  {
+  do {
     const TranslationOptions o = kTransScript;
 
     // FIXME Add <SID>
@@ -2077,11 +2077,11 @@ static FDEC(translate_script, const CommandNode *const node)
        "  run=function(state)\n"
        "    state = vim.state.enter_script(state, s)\n");
 
-    F_SCRIPT(translate_nodes, node, 2);
+    F(translate_nodes, node, 2);
 
     WS("  end\n"
       "}\n");
-  }
+  } while (0);
   FUNCTION_END;
 }
 
@@ -2093,12 +2093,12 @@ static FDEC(translate_script, const CommandNode *const node)
 static FDEC(translate_input, const CommandNode *const node)
 {
   FUNCTION_START;
-  {
+  do {
     const TranslationOptions o = kTransUser;
 
-    WS("state = vim.state\n");
-    F_SCRIPT(translate_nodes, node, 0);
-  }
+    WS("local state = vim.state\n");
+    F(translate_nodes, node, 0);
+  } while (0);
   FUNCTION_END;
 }
 #endif  // NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
