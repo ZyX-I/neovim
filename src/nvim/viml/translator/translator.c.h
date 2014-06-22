@@ -457,10 +457,11 @@ static FDEC(translate_range, const Range *const range)
       F(translate_address_followup, current_followup);
       followup_number++;
       current_followup = current_followup->next;
-      if (current_followup == NULL)
+      if (current_followup == NULL) {
         break;
-      else
+      } else {
         WS(", ");
+      }
     }
 
     switch (current_range->address.type) {
@@ -521,10 +522,11 @@ static FDEC(translate_range, const Range *const range)
     F(dump_bool, current_range->setpos);
 
     current_range = current_range->next;
-    if (current_range == NULL)
+    if (current_range == NULL) {
       break;
-    else
+    } else {
       WS(", ");
+    }
   }
 
   WS(")");
@@ -538,12 +540,15 @@ static FDEC(translate_ex_flags, uint_least8_t exflags)
 {
   FUNCTION_START;
   WS("{");
-  if (exflags & FLAG_EX_LIST)
+  if (exflags & FLAG_EX_LIST) {
     WS("list=true, ");
-  if (exflags & FLAG_EX_LNR)
+  }
+  if (exflags & FLAG_EX_LNR) {
     WS("lnr=true, ");
-  if (exflags & FLAG_EX_PRINT)
+  }
+  if (exflags & FLAG_EX_PRINT) {
     WS("print=true, ");
+  }
   WS("}");
   FUNCTION_END;
 }
@@ -673,8 +678,9 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
               break;
             }
           }
-          if (!can_dump_as_is)
+          if (!can_dump_as_is) {
             break;
+          }
         }
       }
       if (can_dump_as_is) {
@@ -710,10 +716,11 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
                     uint_least32_t nr = 0;
                     bool isx = (*curp == 'X' || *curp == 'x');
 
-                    if (isx)
+                    if (isx) {
                       n = 2;
-                    else
+                    } else {
                       n = 4;
+                    }
 
                     while (--n >= 0 && vim_isxdigit(curp[1])) {
                       curp++;
@@ -746,8 +753,9 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
                   c = *curp++ - '0';
                   if ('0' <= *curp && *curp <= '7') {
                     c = (c << 3) + (*curp++ - '0');
-                    if ('0' <= *curp && *curp <= '7')
+                    if ('0' <= *curp && *curp <= '7') {
                       c = (c << 3) + (*curp++ - '0');
+                    }
                   }
                   F(dump_char, c);
                   break;
@@ -985,8 +993,9 @@ static FDEC(translate_expr, const ExpressionNode *const expr,
           W_END(name_start, e);
           WS("']");
         } else {
-          if (option_properties & GOP_GLOBAL)
+          if (option_properties & GOP_GLOBAL) {
             WS("vim.get_local_option(state, ");
+          }
 
           if (option_properties & GOP_BUFFER_LOCAL) {
             WS("state.global.buffer");
@@ -1154,8 +1163,9 @@ static FDEC(translate_expr, const ExpressionNode *const expr,
       }
       WS(")");
 
-      if (reversed)
+      if (reversed) {
         WS(")");
+      }
 
       break;
     }
@@ -1174,10 +1184,11 @@ static FDEC(translate_exprs, const ExpressionNode *const expr)
   for (;;) {
     F(translate_expr, current_expr, false);
     current_expr = current_expr->next;
-    if (current_expr == NULL)
+    if (current_expr == NULL) {
       break;
-    else
+    } else {
       WS(", ");
+    }
   }
 
   FUNCTION_END;
@@ -1199,8 +1210,9 @@ static FDEC(translate_function, const TranslateFuncArgs *const args)
     WS(", ");
     W(data[i]);
   }
-  if (args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS)
+  if (args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS) {
     WS(", ...");
+  }
   WS(")\n");
   if (args->node->children != NULL) {
     WINDENT(args->indent + 1);
@@ -1287,8 +1299,9 @@ static FDEC(translate_varname, const ExpressionNode *const expr,
 
   WS(")");
 
-  if (close_parenthesis)
+  if (close_parenthesis) {
     WS(")");
+  }
 
   FUNCTION_END;
 }
@@ -1359,10 +1372,11 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
       break;
     }
     case kExprSubscript: {
-      if (expr->children->next->next == NULL)
+      if (expr->children->next->next == NULL) {
         ADD_ASSIGN("subscript");
-      else
+      } else {
         ADD_ASSIGN("slice");
+      }
       F(dump, dump_cookie);
       WS(", ");
       F(translate_expr, expr->children, false);
@@ -1496,10 +1510,11 @@ static FDEC(translate_assignment, const ExpressionNode *const lval_expr,
 
     current_expr = lval_expr->children;
     for (; current_expr != NULL; current_expr = current_expr->next)
-      if (current_expr->type == kExprListRest)
+      if (current_expr->type == kExprListRest) {
         has_rest = true;
-      else
+      } else {
         val_num++;
+      }
 
     assert(val_num > 0);
 
@@ -1737,8 +1752,9 @@ static FDEC(translate_node, const CommandNode *const node,
          next = next->next) {
       switch (next->type) {
         case kCmdCatch: {
-          if (first_catch == NULL)
+          if (first_catch == NULL) {
             first_catch = next;
+          }
           continue;
         }
         case kCmdFinally: {
@@ -1805,8 +1821,9 @@ static FDEC(translate_node, const CommandNode *const node,
         }
 
         if (next->args[ARG_REG_REG].arg.reg == NULL) {
-          if (did_first_if)
+          if (did_first_if) {
             WS("\n");
+          }
         } else {
           WINDENT(indent + 1);
           WS("if (vim.err.matches(state, ");
@@ -1827,8 +1844,9 @@ static FDEC(translate_node, const CommandNode *const node,
         ADDINDENTVAR(ok_var);
         WS(" = 'caught'\n");  // String "'caught'" is true
 
-        if (next->args[ARG_REG_REG].arg.reg == NULL)
+        if (next->args[ARG_REG_REG].arg.reg == NULL) {
           break;
+        }
       }
 
       if (did_first_if) {
@@ -1871,8 +1889,9 @@ static FDEC(translate_node, const CommandNode *const node,
       WS("end\n");
     }
 
-    if (finally != NULL)
+    if (finally != NULL) {
       ADD_VAR_CALL(fin_var, indent)
+    }
 
     WINDENT(indent);
     WS("if (not ");
@@ -1924,29 +1943,33 @@ static FDEC(translate_node, const CommandNode *const node,
   WS("(state, ");
 
   if (CMDDEF(node->type).flags & RANGE) {
-    if (add_comma)
+    if (add_comma) {
       WS(", ");
+    }
     F(translate_range, &(node->range));
     add_comma = true;
   }
 
   if (CMDDEF(node->type).flags & BANG) {
-    if (add_comma)
+    if (add_comma) {
       WS(", ");
+    }
     F(dump_bool, node->bang);
     add_comma = true;
   }
 
   if (CMDDEF(node->type).flags & EXFLAGS) {
-    if (add_comma)
+    if (add_comma) {
       WS(", ");
+    }
     F(translate_ex_flags, node->exflags);
     add_comma = true;
   }
 
   if (CMDDEF(node->type).parse == CMDDEF(kCmdAbclear).parse) {
-    if (add_comma)
+    if (add_comma) {
       WS(", ");
+    }
     F(dump_bool, (bool) node->args[ARG_CLEAR_BUFFER].arg.flags);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdEcho).parse) {
     start_from_arg = 1;
@@ -1959,8 +1982,9 @@ static FDEC(translate_node, const CommandNode *const node,
     size_t num_args = CMDDEF(node->type).num_args;
 
     for (i = start_from_arg; i < num_args; i++) {
-      if (add_comma)
+      if (add_comma) {
         WS(", ");
+      }
       add_comma = false;
       switch (CMDDEF(node->type).arg_types[i]) {
         case kArgExpression: {
