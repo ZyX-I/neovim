@@ -18,6 +18,9 @@
 ///       resulting string to `**p` and advance `*p` to the end of written 
 ///       string. They are not supposed to output trailing NUL though.
 
+/// @def CH_MACROS_INDENT_STR
+/// @brief NUL-terminated indentation string
+
 /// @def CH_MACROS_OPTIONS_TYPE
 /// @brief Type of the first function argument
 ///
@@ -107,7 +110,7 @@
 /// @param  c       Character that will be written.
 /// @param  length  Number of times it should be written.
 
-/// @def INDENT
+/// @def WINDENT
 /// @brief Write indentation
 ///
 /// @param  length  Indentation level.
@@ -120,10 +123,31 @@
 ///
 /// @return Length returned by given function.
 
+/// @def W_END
+/// @brief Write string specified by (start, end) pair
+///
+/// @param  s  Pointer to the start of the written string.
+/// @param  e  Pointer to the last character of the written string.
+
+/// @def W_EXPR_POS
+/// @brief Write ExpressionNode, propagate FAIL
+///
+/// Data written is string between expr->position and expr->end_position, 
+/// inclusive.
+
 #if defined(CH_MACROS_DEFINE_LENGTH) && defined(CH_MACROS_DEFINE_FWRITE)
 # error Trying to use both CH_MACROS_DEFINE_LENGTH and CH_MACROS_DEFINE_FWRITE.
 #endif
 
+#ifdef FNAME
+# undef FNAME
+#endif
+#ifdef _FARGS
+# undef _FARGS
+#endif
+#ifdef FTYPE
+# undef FTYPE
+#endif
 #ifdef F
 # undef F
 #endif
@@ -160,8 +184,8 @@
 #ifdef FILL
 # undef FILL
 #endif
-#ifdef INDENT
-# undef INDENT
+#ifdef WINDENT
+# undef WINDENT
 #endif
 
 #ifdef CH_MACROS_DEFINE_LENGTH
@@ -192,8 +216,8 @@
     len += length;
 # define FILL(c, length) \
     len += length
-# define INDENT(length) \
-    len += length * STRLEN(o->command.indent);
+# define WINDENT(length) \
+    len += length * STRLEN(CH_MACROS_INDENT_STR);
 #else
 # ifdef CH_MACROS_DEFINE_FWRITE
 #  define _WRITE(s, length) \
@@ -253,7 +277,7 @@
 #  define FNAME(f) s##f
 #  define F(f, ...) \
     FNAME(f)(o, __VA_ARGS__, &p)
-#  define _FARGS CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__, char **pp
+#  define _FARGS(...) CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__, char **pp
 #  define FDEC(f, ...) \
     void FNAME(f)(_FARGS(__VA_ARGS__))
 #  define FTYPE(t) t##Str
@@ -308,16 +332,20 @@
       } \
     } while (0)
 # endif
-# define INDENT(length) \
+# define WINDENT(length) \
     do { \
-      const size_t len = STRLEN(o->command.indent); \
       const size_t mlen = length; \
-      for (size_t i = 0; i < mlen; i++) \
-        W_LEN(o->command.indent, len); \
+      for (size_t i = 0; i < mlen; i++) { \
+        W(CH_MACROS_INDENT_STR); \
+      } \
     } while (0)
 #endif
 
 #ifndef NVIM_SRC_VIML_DUMPERS_CH_MACROS_H
+# define W_END(s, e) \
+    W_LEN(s, e - s + 1)
+# define W_EXPR_POS(expr) \
+    W_END(expr->position, expr->end_position)
 # define SPACES(length) \
     do { \
       if (length) { \
