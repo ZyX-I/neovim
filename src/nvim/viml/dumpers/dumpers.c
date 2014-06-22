@@ -112,7 +112,7 @@ int dump_unumber(const uintmax_t unumber, Writer write, void *cookie)
   char result[MAXNUMBUFLEN];
   char *e = result;
   sdump_unumber(unumber, &e);
-  return write_string_len(result, e - result + 1, write, cookie);
+  return write_string_len(result, e - result, write, cookie);
 }
 
 #define ABS(n) ((uintmax_t) (n >= 0 ? n : -n))
@@ -148,7 +148,7 @@ int dump_number(const uintmax_t number, Writer write, void *cookie)
   char result[MAXNUMBUFLEN + 1];
   char *e = result;
   sdump_number(ABS(number), &e);
-  return write_string_len(result, e - result + 1, write, cookie);
+  return write_string_len(result, e - result, write, cookie);
 }
 
 #undef ABS
