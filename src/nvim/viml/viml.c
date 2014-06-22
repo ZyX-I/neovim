@@ -57,16 +57,13 @@ int execute_viml(const char *const s)
   if (node == NULL)
     return FAIL;
 
-  garray_T lua_ga;
-  // TODO investigate what growsize will be the best here
-  ga_init(&lua_ga, 1, 64);
-  if (translate_input(node, &ga_write, (void *) &lua_ga) == FAIL)
-    return FAIL;
-
+  size_t len = stranslate_len(kTransUser, node);
   String lua_str = {
-    .size = lua_ga.ga_len,
-    .data = (char *) lua_ga.ga_data
+    .size = len,
+    .data = xcalloc(len, 1)
   };
+  stranslate(kTransUser, node, lua_str.data);
+
   Error err = {
     .set = false
   };

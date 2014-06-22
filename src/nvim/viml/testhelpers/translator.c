@@ -20,7 +20,7 @@ static Writer write_file = (Writer) &fwrite;
 /// @return OK in case of success, FAIL otherwise.
 static int translate_script_stdout(const CommandNode *const node)
 {
-  return translate_script(node, write_file, (void *) stdout);
+  return translate(kTransScript, node, write_file, (void *) stdout);
 }
 
 /// Translate script passed through stdin to stdout
@@ -68,7 +68,7 @@ int translate_script_str_to_file(const char_u *const str,
   if ((f = fopen(fname, "w")) == NULL)
     return FAIL;
 
-  ret = translate_script(node, write_file, (void *) f);
+  ret = translate(kTransScript, node, write_file, (void *) f);
 
   fclose(f);
 
