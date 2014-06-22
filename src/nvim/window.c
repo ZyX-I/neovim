@@ -1932,7 +1932,7 @@ void win_close_othertab(win_T *win, int free_buf, tabpage_T *tp)
     return;
 
   /* When closing the last window in a tab page remove the tab page. */
-  if (tp == NULL ? firstwin == lastwin : tp->tp_firstwin == tp->tp_lastwin) {
+  if (tp->tp_firstwin == tp->tp_lastwin) {
     if (tp == first_tabpage)
       first_tabpage = tp->tp_next;
     else {
@@ -4560,7 +4560,7 @@ void win_new_height(win_T *wp, int height)
         hasFoldingWin(wp, lnum, NULL, &lnum, TRUE, NULL);
         lnum++;
         wp->w_wrow -= line_size + sline;
-      } else if (sline > 0) {
+      } else if (sline >= 0) {
         /* First line of file reached, use that as topline. */
         lnum = 1;
         wp->w_wrow -= sline;

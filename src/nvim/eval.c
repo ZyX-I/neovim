@@ -2979,10 +2979,6 @@ static char_u *cat_prefix_varname(int prefix, char_u *name)
     free(varnamebuf);
     len += 10;                          /* some additional space */
     varnamebuf = xmalloc(len);
-    if (varnamebuf == NULL) {
-      varnamebuflen = 0;
-      return NULL;
-    }
     varnamebuflen = len;
   }
   *varnamebuf = prefix;
@@ -11475,7 +11471,6 @@ static void f_range(typval_T *argvars, typval_T *rettv)
 static void f_readfile(typval_T *argvars, typval_T *rettv)
 {
   int binary = FALSE;
-  int failed = FALSE;
   char_u      *fname;
   FILE        *fd;
   char_u buf[(IOSIZE/256)*256];         /* rounded to avoid odd + 1 */
@@ -11592,7 +11587,7 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
       }
     }     /* for */
 
-    if (failed || (cnt >= maxline && maxline >= 0) || readlen <= 0)
+    if ((cnt >= maxline && maxline >= 0) || readlen <= 0)
       break;
     if (start < p) {
       /* There's part of a line in buf, store it in "prev". */
@@ -11621,17 +11616,11 @@ static void f_readfile(typval_T *argvars, typval_T *rettv)
    * For a negative line count use only the lines at the end of the file,
    * free the rest.
    */
-  if (!failed && maxline < 0)
+  if (maxline < 0)
     while (cnt > -maxline) {
       listitem_remove(rettv->vval.v_list, rettv->vval.v_list->lv_first);
       --cnt;
     }
-
-  if (failed) {
-    list_free(rettv->vval.v_list, TRUE);
-    /* readfile doc says an empty list is returned on error */
-    rettv->vval.v_list = list_alloc();
-  }
 
   free(prev);
   fclose(fd);
@@ -16127,11 +16116,11 @@ var_check_func_name (
     int new_var         /* TRUE when creating the variable */
 )
 {
-  if (!(vim_strchr((char_u *)"wbs", name[0]) != NULL && name[1] == ':')
-      && !ASCII_ISUPPER((name[0] != NUL && name[1] == ':')
-          ? name[2] : name[0])) {
-    EMSG2(_("E704: Funcref variable name must start with a capital: %s"),
-        name);
+  // Allow for w: b: s: and t:.
+  if (!(vim_strchr((char_u *)"wbst", name[0]) != NULL && name[1] == ':')
+      && !ASCII_ISUPPER((name[0] != NUL && name[1] == ':') ? name[2]
+                                                           : name[0])) {
+    EMSG2(_("E704: Funcref variable name must start with a capital: %s"), name);
     return TRUE;
   }
   /* Don't allow hiding a function.  When "v" is not NULL we might be
