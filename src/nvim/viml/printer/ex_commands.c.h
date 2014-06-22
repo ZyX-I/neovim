@@ -811,7 +811,7 @@ static CMD_FDEC(print_simple_command)
 {
   FUNCTION_START;
   PRINT_FROM_ARG(node, 0);
-  if (node->children != NULL) {
+  if (node->children != NULL && !(CMDDEF(node->type).flags & EDITCMD)) {
     F(print_block_children, node->children, indent + 1, barnext);
   }
   FUNCTION_END;
