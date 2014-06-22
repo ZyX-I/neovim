@@ -446,6 +446,9 @@ static FDEC(print_block_children, const CommandNode *const node,
                                   const bool barnext)
 {
   FUNCTION_START;
+  if (node == NULL) {
+    EARLY_RETURN;
+  }
   if (barnext) {
     WS(" | ");
   } else {
@@ -493,9 +496,7 @@ static CMD_FDEC(print_syntax_error)
     W_LEN(line, line_len);
     WS("!!!");
   }
-  if (node->children != NULL) {
-    F(print_block_children, node->children, indent + 1, barnext);
-  }
+  F(print_block_children, node->children, indent + 1, barnext);
   FUNCTION_END;
 }
 
@@ -659,9 +660,7 @@ static CMD_FDEC(print_for)
   F(print_expr_node, node->args[ARG_FOR_LHS].arg.expr);
   WS(" in ");
   F(print_expr_node, node->args[ARG_FOR_RHS].arg.expr);
-  if (node->children != NULL) {
-    F(print_block_children, node->children, indent + 1, barnext);
-  }
+  F(print_block_children, node->children, indent + 1, barnext);
   FUNCTION_END;
 }
 
@@ -670,9 +669,7 @@ static CMD_FDEC(print_expr_cmd)
 {
   FUNCTION_START;
   PRINT_FROM_ARG(node, 1);
-  if (node->children != NULL) {
-    F(print_block_children, node->children, indent + 1, barnext);
-  }
+  F(print_block_children, node->children, indent + 1, barnext);
   FUNCTION_END;
 }
 
@@ -728,9 +725,7 @@ static CMD_FDEC(print_function)
           WS("abort");
         }
       }
-      if (node->children != NULL) {
-        F(print_block_children, node->children, indent + 1, barnext);
-      }
+      F(print_block_children, node->children, indent + 1, barnext);
     } else {
       assert(node->children == NULL);
     }
@@ -814,7 +809,7 @@ static CMD_FDEC(print_simple_command)
 {
   FUNCTION_START;
   PRINT_FROM_ARG(node, 0);
-  if (node->children != NULL && !(CMDDEF(node->type).flags & EDITCMD)) {
+  if (!(CMDDEF(node->type).flags & EDITCMD)) {
     F(print_block_children, node->children, indent + 1, barnext);
   }
   FUNCTION_END;
