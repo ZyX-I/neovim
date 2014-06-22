@@ -1,5 +1,3 @@
-#define NEOVIM_SRC_VIML_DUMPERS_CH_MACROS_H
-
 /// @def CH_MACROS_DEFINE_LENGTH
 /// @brief If set, `s*_len` functions will be defined
 ///
@@ -92,6 +90,14 @@
 /// @brief Write indentation
 ///
 /// @param  length  Indentation level.
+
+/// @def SPACES
+/// @brief Write given amount of spaces
+
+/// @def CALL_LEN
+/// @brief Call `s*_len` variant of function
+///
+/// @return Length returned by given function.
 
 #if defined(CH_MACROS_DEFINE_LENGTH) && defined(CH_MACROS_DEFINE_FWRITE)
 # error Trying to use both CH_MACROS_DEFINE_LENGTH and CH_MACROS_DEFINE_FWRITE.
@@ -272,7 +278,7 @@
     } while (0)
 #endif
 
-#ifndef SPACES
+#ifndef NVIM_SRC_VIML_DUMPERS_CH_MACROS_H
 # define SPACES(length) \
     do { \
       if (length) { \
@@ -299,3 +305,5 @@
 
 # define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
 #endif
+
+#define NVIM_SRC_VIML_DUMPERS_CH_MACROS_H

@@ -1,9 +1,5 @@
-// vim: ts=8 sts=2 sw=2 tw=80
-//
-// Copyright 2014 Nikolay Pavlov
-
-#ifndef NEOVIM_VIML_PARSER_EX_COMMANDS_H
-#define NEOVIM_VIML_PARSER_EX_COMMANDS_H
+#ifndef NVIM_VIML_PARSER_EX_COMMANDS_H
+#define NVIM_VIML_PARSER_EX_COMMANDS_H
 
 #include <stdint.h>
 
@@ -277,4 +273,4 @@ const CommandNode nocmd;
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.h.generated.h"
 #endif
-#endif  // NEOVIM_VIML_PARSER_EX_COMMANDS_H
+#endif  // NVIM_VIML_PARSER_EX_COMMANDS_H

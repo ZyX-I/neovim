@@ -1,4 +1,4 @@
-#ifndef NEOVIM_VIML_PRINTER_EXPRESSIONS_C_H
+#ifndef NVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -25,7 +25,7 @@
 # undef CH_MACROS_DEFINE_FWRITE
 # define CH_MACROS_DEFINE_LENGTH
 #endif
-#define NEOVIM_VIML_PRINTER_EXPRESSIONS_C_H
+#define NVIM_VIML_PRINTER_EXPRESSIONS_C_H
 
 #define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
 #include "nvim/viml/dumpers/ch_macros.h"
@@ -319,4 +319,4 @@ static FDEC(represent_node, const ExpressionNode *const node)
 
 #undef CH_MACROS_OPTIONS_TYPE
 
-#endif  // NEOVIM_VIML_PRINTER_EXPRESSIONS_C_H
+#endif  // NVIM_VIML_PRINTER_EXPRESSIONS_C_H

@@ -1,5 +1,5 @@
-#ifndef NEOVIM_VIML_DUMPERS_DUMPERS_H
-#define NEOVIM_VIML_DUMPERS_DUMPERS_H
+#ifndef NVIM_VIML_DUMPERS_DUMPERS_H
+#define NVIM_VIML_DUMPERS_DUMPERS_H
 
 /// Type of the fwrite-like function
 typedef size_t (*Writer)(const void *ptr, size_t size, size_t nmemb,
@@ -15,4 +15,4 @@ typedef struct {
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/dumpers/dumpers.h.generated.h"
 #endif
-#endif  // NEOVIM_VIML_DUMPERS_DUMPERS_H
+#endif  // NVIM_VIML_DUMPERS_DUMPERS_H
