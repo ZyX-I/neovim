@@ -814,6 +814,8 @@ static CMD_FDEC(print_simple_command)
   FUNCTION_END;
 }
 
+#undef CMD_FDEC
+
 static FDEC(print_node, const CommandNode *const node,
                         const size_t indent,
                         const bool barnext)
