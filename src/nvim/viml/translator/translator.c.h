@@ -1198,7 +1198,7 @@ static FDEC(translate_exprs, const ExpressionNode *const expr)
 ///
 /// @param[in]  args  Function node and indentation that was used for function 
 ///                   definition.
-static FDEC(translate_function, const TranslateFuncArgs *const args)
+static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 {
   FUNCTION_START;
   size_t i;
@@ -1607,6 +1607,344 @@ static FDEC(translate_assignment, const ExpressionNode *const lval_expr,
   FUNCTION_END;
 }
 
+#define CMD_FDEC(f) \
+    FDEC(f, const CommandNode *const node, const size_t indent)
+
+static CMD_FDEC(translate_comment)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("-- \"");
+  W(node->args[ARG_NAME_NAME].arg.str);
+  WS("\n");
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_hashbang_comment)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("-- #!");
+  W(node->args[ARG_NAME_NAME].arg.str);
+  WS("\n");
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_error)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("vim.err.err(state, ");
+  // FIXME Dump error information
+  WS(")\n");
+  FUNCTION_END;
+}
+
+/// Translate missing command
+static CMD_FDEC(translate_missing)
+{
+  FUNCTION_START;
+  WS("\n");
+  FUNCTION_END;
+}
+
+/// Translate user command call
+static CMD_FDEC(translate_user)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("vim.run_user_command(state, '");
+  W(node->name);
+  WS("', ");
+  F(translate_range, &(node->range));
+  WS(", ");
+  F(dump_bool, node->bang);
+  WS(", ");
+  F(dump_string, node->args[ARG_USER_ARG].arg.str);
+  WS(")\n");
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_function)
+{
+  FUNCTION_START;
+  const TranslateFuncArgs args = {node, indent};
+  WINDENT(indent);
+  F(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, true, !node->bang,
+                    (FTYPE(AssignmentValueDump))
+                      &FNAME(translate_function_definition),
+                    (void *) &args);
+  WS("\n");
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_for)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  INDENTVAR(iter_var, "i");
+  WS("local ");
+  ADDINDENTVAR(iter_var);
+  WS("\n");
+
+  WINDENT(indent);
+  WS("for _, ");
+  ADDINDENTVAR(iter_var);
+  WS(" in vim.list.iterator(state, ");
+  F(translate_expr, node->args[ARG_FOR_RHS].arg.expr, false);
+  WS(") do\n");
+
+  {
+    IndentVarAssArgs args = {
+      INDENTVARARGS(iter_var)
+    };
+    WINDENT(indent + 1);
+    F(translate_assignment, node->args[ARG_FOR_LHS].arg.expr, indent + 1,
+                            "break",
+                            (FTYPE(AssignmentValueDump))
+                              (&FNAME(dump_indentvar)),
+                            &args);
+  }
+
+  F(translate_nodes, node->children, indent + 1);
+
+  WINDENT(indent);
+  WS("end\n");
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_while)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("while vim.get_boolean(");
+  F(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false);
+  WS(") do\n");
+
+  F(translate_nodes, node->children, indent + 1);
+
+  WINDENT(indent);
+  WS("end\n");
+  FUNCTION_END;
+}
+
+// Translate :if, :elseif and :else
+static CMD_FDEC(translate_if_block)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  switch (node->type) {
+    case kCmdElse: {
+      WS("else\n");
+      break;
+    }
+    case kCmdElseif: {
+      WS("else");
+      // fallthrough
+    }
+    case kCmdIf: {
+      WS("if (");
+      F(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false);
+      WS(") then\n");
+      break;
+    }
+    default: {
+      assert(false);
+    }
+  }
+
+  F(translate_nodes, node->children, indent + 1);
+
+  if (node->next == NULL
+      || (node->next->type != kCmdElseif
+          && node->next->type != kCmdElse)) {
+    WINDENT(indent);
+    WS("end\n");
+  }
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_try_block)
+{
+  FUNCTION_START;
+#define ADD_VAR_CALL(var, indent) \
+  do { \
+    WINDENT(indent); \
+    WS("local "); \
+    ADDINDENTVAR(new_ret_var); \
+    WS(" = "); \
+    ADDINDENTVAR(var); \
+    WS("(state)\n"); \
+    WINDENT(indent); \
+    WS("if ("); \
+    ADDINDENTVAR(new_ret_var); \
+    WS(" ~= nil)\n"); \
+    WINDENT(indent + 1); \
+    ADDINDENTVAR(ret_var); \
+    WS(" = "); \
+    ADDINDENTVAR(new_ret_var); \
+    WS("\n"); \
+    WINDENT(indent); \
+    WS("end\n"); \
+  } while (0)
+  WINDENT(indent);
+  CommandNode *first_catch = NULL;
+  CommandNode *finally = NULL;
+  CommandNode *next = node->next;
+
+  for (next = node->next;
+       next->type == kCmdCatch || next->type == kCmdFinally;
+       next = next->next) {
+    switch (next->type) {
+      case kCmdCatch: {
+        if (first_catch == NULL) {
+          first_catch = next;
+        }
+        continue;
+      }
+      case kCmdFinally: {
+        finally = next;
+        break;
+      }
+      default: {
+        assert(false);
+      }
+    }
+    break;
+  }
+
+  INDENTVAR(ok_var,      "ok");
+  INDENTVAR(err_var,     "err");
+  INDENTVAR(ret_var,     "ret");
+  INDENTVAR(new_ret_var, "new_ret");
+  INDENTVAR(fin_var,     "fin");
+  INDENTVAR(catch_var,   "catch");
+
+  WS("local ");
+  ADDINDENTVAR(ok_var);
+  WS(", ");
+  ADDINDENTVAR(err_var);
+  WS(", ");
+  ADDINDENTVAR(ret_var);
+  WS(" = pcall(function(state)\n");
+  F(translate_nodes, node->children, indent + 1);
+  WINDENT(indent);
+  WS("end, vim.state.enter_try(state))\n");
+
+  if (finally != NULL) {
+    WINDENT(indent);
+    WS("local ");
+    ADDINDENTVAR(fin_var);
+    WS(" = function(state)\n");
+    F(translate_nodes, finally->children, indent + 1);
+    WINDENT(indent);
+    WS("end\n");
+  }
+
+  if (first_catch != NULL) {
+    WINDENT(indent);
+    WS("local ");
+    ADDINDENTVAR(catch_var);
+    WINDENT(indent);
+    WS("\n");
+  }
+
+  if (first_catch != NULL) {
+    bool did_first_if = false;
+
+    WINDENT(indent);
+    WS("if (not ");
+    ADDINDENTVAR(ok_var);
+    WS(")\n");
+
+    for (next = first_catch; next->type == kCmdCatch; next = next->next) {
+      size_t current_indent;
+
+      if (did_first_if) {
+        WINDENT(indent + 1);
+        WS("else");
+      }
+
+      if (next->args[ARG_REG_REG].arg.reg == NULL) {
+        if (did_first_if) {
+          WS("\n");
+        }
+      } else {
+        WINDENT(indent + 1);
+        WS("if (vim.err.matches(state, ");
+        ADDINDENTVAR(err_var);
+        WS(", ");
+        F(translate_regex, next->args[ARG_REG_REG].arg.reg);
+        WS(")\n");
+        did_first_if = true;
+      }
+      current_indent = indent + 1 + (did_first_if ? 1 : 0);
+      WINDENT(current_indent);
+      ADDINDENTVAR(catch_var);
+      WS(" = function(state)\n");
+      F(translate_nodes, next->children, current_indent + 1);
+      WINDENT(current_indent);
+      WS("end\n");
+      WINDENT(current_indent);
+      ADDINDENTVAR(ok_var);
+      WS(" = 'caught'\n");  // String "'caught'" is true
+
+      if (next->args[ARG_REG_REG].arg.reg == NULL) {
+        break;
+      }
+    }
+
+    if (did_first_if) {
+      WINDENT(indent + 1);
+      WS("end\n");
+    }
+
+    WINDENT(indent);
+    WS("end\n");
+  }
+
+  if (first_catch != NULL) {
+    WINDENT(indent);
+    WS("if (");
+    ADDINDENTVAR(catch_var);
+    WS(")\n");
+    ADD_VAR_CALL(catch_var, indent + 1);
+    WINDENT(indent);
+    WS("end\n");
+  }
+
+  if (finally != NULL) {
+    ADD_VAR_CALL(fin_var, indent);
+  }
+
+  WINDENT(indent);
+  WS("if (not ");
+  ADDINDENTVAR(ok_var);
+  WS(")\n");
+  WINDENT(indent + 1);
+  WS("vim.err.propagate(state, ");
+  ADDINDENTVAR(err_var);
+  WS(")\n");
+  WINDENT(indent);
+  WS("end\n");
+
+  WINDENT(indent);
+  WS("if (");
+  ADDINDENTVAR(ret_var);
+  WS(" ~= nil)\n");
+  WINDENT(indent + 1);
+  WS("return ");
+  ADDINDENTVAR(ret_var);
+  WS("\n");
+  WINDENT(indent);
+  WS("end\n");
+#undef ADD_VAR_CALL
+
+  FUNCTION_END;
+}
+
+#undef CMD_FDEC
+
 /// Dump VimL Ex command
 ///
 /// @param[in]  node    Node to translate.
@@ -1633,292 +1971,7 @@ static FDEC(translate_node, const CommandNode *const node,
 
   WINDENT(indent);
 
-  if (node->type == kCmdComment) {
-    WS("-- \"");
-    W(node->args[ARG_NAME_NAME].arg.str);
-    WS("\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdHashbangComment) {
-    WS("-- #!");
-    W(node->args[ARG_NAME_NAME].arg.str);
-    WS("\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdSyntaxError) {
-    WS("vim.err.err(state, ");
-    // FIXME Dump error information
-    WS(")\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdMissing) {
-    WS("\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdUSER) {
-    WS("vim.run_user_command(state, '");
-    W(node->name);
-    WS("', ");
-    F(translate_range, &(node->range));
-    WS(", ");
-    F(dump_bool, node->bang);
-    WS(", ");
-    F(dump_string, node->args[ARG_USER_ARG].arg.str);
-    WS(")\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdFunction
-             && node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
-    const TranslateFuncArgs args = {node, indent};
-    F(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, true, !node->bang,
-                      (FTYPE(AssignmentValueDump)) &FNAME(translate_function),
-                      (void *) &args);
-    WS("\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdFor) {
-    INDENTVAR(iter_var, "i");
-    WS("local ");
-    ADDINDENTVAR(iter_var);
-    WS("\n");
-
-    WINDENT(indent);
-    WS("for _, ");
-    ADDINDENTVAR(iter_var);
-    WS(" in vim.list.iterator(state, ");
-    F(translate_expr, node->args[ARG_FOR_RHS].arg.expr, false);
-    WS(") do\n");
-
-    {
-      IndentVarAssArgs args = {
-        INDENTVARARGS(iter_var)
-      };
-      WINDENT(indent + 1);
-      F(translate_assignment, node->args[ARG_FOR_LHS].arg.expr, indent + 1,
-                              "break",
-                              (FTYPE(AssignmentValueDump))
-                                (&FNAME(dump_indentvar)),
-                              &args);
-    }
-
-    F(translate_nodes, node->children, indent + 1);
-
-    WINDENT(indent);
-    WS("end\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdWhile) {
-    WS("while vim.get_boolean(");
-    F(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false);
-    WS(") do\n");
-
-    F(translate_nodes, node->children, indent + 1);
-
-    WINDENT(indent);
-    WS("end\n");
-    FUNCTION_END;
-  } else if (node->type == kCmdIf
-             || node->type == kCmdElseif
-             || node->type == kCmdElse) {
-    switch (node->type) {
-      case kCmdElse: {
-        WS("else\n");
-        break;
-      }
-      case kCmdElseif: {
-        WS("else");
-        // fallthrough
-      }
-      case kCmdIf: {
-        WS("if (");
-        F(translate_expr, node->args[ARG_EXPR_EXPR].arg.expr, false);
-        WS(") then\n");
-        break;
-      }
-      default: {
-        assert(false);
-      }
-    }
-
-    F(translate_nodes, node->children, indent + 1);
-
-    if (node->next == NULL
-        || (node->next->type != kCmdElseif
-            && node->next->type != kCmdElse)) {
-      WINDENT(indent);
-      WS("end\n");
-    }
-    FUNCTION_END;
-  } else if (node->type  == kCmdTry) {
-    CommandNode *first_catch = NULL;
-    CommandNode *finally = NULL;
-    CommandNode *next = node->next;
-
-    for (next = node->next;
-         next->type == kCmdCatch || next->type == kCmdFinally;
-         next = next->next) {
-      switch (next->type) {
-        case kCmdCatch: {
-          if (first_catch == NULL) {
-            first_catch = next;
-          }
-          continue;
-        }
-        case kCmdFinally: {
-          finally = next;
-          break;
-        }
-        default: {
-          assert(false);
-        }
-      }
-      break;
-    }
-
-    INDENTVAR(ok_var,      "ok");
-    INDENTVAR(err_var,     "err");
-    INDENTVAR(ret_var,     "ret");
-    INDENTVAR(new_ret_var, "new_ret");
-    INDENTVAR(fin_var,     "fin");
-    INDENTVAR(catch_var,   "catch");
-
-    WS("local ");
-    ADDINDENTVAR(ok_var);
-    WS(", ");
-    ADDINDENTVAR(err_var);
-    WS(", ");
-    ADDINDENTVAR(ret_var);
-    WS(" = pcall(function(state)\n");
-    F(translate_nodes, node->children, indent + 1);
-    WINDENT(indent);
-    WS("end, vim.state.enter_try(state))\n");
-
-    if (finally != NULL) {
-      WINDENT(indent);
-      WS("local ");
-      ADDINDENTVAR(fin_var);
-      WS(" = function(state)\n");
-      F(translate_nodes, finally->children, indent + 1);
-      WINDENT(indent);
-      WS("end\n");
-    }
-
-    if (first_catch != NULL) {
-      WINDENT(indent);
-      WS("local ");
-      ADDINDENTVAR(catch_var);
-      WINDENT(indent);
-      WS("\n");
-    }
-
-    if (first_catch != NULL) {
-      bool did_first_if = false;
-
-      WINDENT(indent);
-      WS("if (not ");
-      ADDINDENTVAR(ok_var);
-      WS(")\n");
-
-      for (next = first_catch; next->type == kCmdCatch; next = next->next) {
-        size_t current_indent;
-
-        if (did_first_if) {
-          WINDENT(indent + 1);
-          WS("else");
-        }
-
-        if (next->args[ARG_REG_REG].arg.reg == NULL) {
-          if (did_first_if) {
-            WS("\n");
-          }
-        } else {
-          WINDENT(indent + 1);
-          WS("if (vim.err.matches(state, ");
-          ADDINDENTVAR(err_var);
-          WS(", ");
-          F(translate_regex, next->args[ARG_REG_REG].arg.reg);
-          WS(")\n");
-          did_first_if = true;
-        }
-        current_indent = indent + 1 + (did_first_if ? 1 : 0);
-        WINDENT(current_indent);
-        ADDINDENTVAR(catch_var);
-        WS(" = function(state)\n");
-        F(translate_nodes, next->children, current_indent + 1);
-        WINDENT(current_indent);
-        WS("end\n");
-        WINDENT(current_indent);
-        ADDINDENTVAR(ok_var);
-        WS(" = 'caught'\n");  // String "'caught'" is true
-
-        if (next->args[ARG_REG_REG].arg.reg == NULL) {
-          break;
-        }
-      }
-
-      if (did_first_if) {
-        WINDENT(indent + 1);
-        WS("end\n");
-      }
-
-      WINDENT(indent);
-      WS("end\n");
-    }
-
-#define ADD_VAR_CALL(var, indent) \
-    { \
-      WINDENT(indent); \
-      WS("local "); \
-      ADDINDENTVAR(new_ret_var); \
-      WS(" = "); \
-      ADDINDENTVAR(var); \
-      WS("(state)\n"); \
-      WINDENT(indent); \
-      WS("if ("); \
-      ADDINDENTVAR(new_ret_var); \
-      WS(" ~= nil)\n"); \
-      WINDENT(indent + 1); \
-      ADDINDENTVAR(ret_var); \
-      WS(" = "); \
-      ADDINDENTVAR(new_ret_var); \
-      WS("\n"); \
-      WINDENT(indent); \
-      WS("end\n"); \
-    }
-
-    if (first_catch != NULL) {
-      WINDENT(indent);
-      WS("if (");
-      ADDINDENTVAR(catch_var);
-      WS(")\n");
-      ADD_VAR_CALL(catch_var, indent + 1)
-      WINDENT(indent);
-      WS("end\n");
-    }
-
-    if (finally != NULL) {
-      ADD_VAR_CALL(fin_var, indent)
-    }
-
-    WINDENT(indent);
-    WS("if (not ");
-    ADDINDENTVAR(ok_var);
-    WS(")\n");
-    WINDENT(indent + 1);
-    WS("vim.err.propagate(state, ");
-    ADDINDENTVAR(err_var);
-    WS(")\n");
-    WINDENT(indent);
-    WS("end\n");
-
-    WINDENT(indent);
-    WS("if (");
-    ADDINDENTVAR(ret_var);
-    WS(" ~= nil)\n");
-    WINDENT(indent + 1);
-    WS("return ");
-    ADDINDENTVAR(ret_var);
-    WS("\n");
-    WINDENT(indent);
-    WS("end\n");
-#undef ADD_VAR_CALL
-
-    FUNCTION_END;
-  } else if (node->type == kCmdLet
-             && node->args[ARG_LET_RHS].arg.expr != NULL) {
+  if (node->type == kCmdLet && node->args[ARG_LET_RHS].arg.expr != NULL) {
     const ExpressionNode *lval_expr = node->args[ARG_LET_LHS].arg.expr;
     const ExpressionNode *rval_expr = node->args[ARG_LET_RHS].arg.expr;
     F(translate_assignment, lval_expr, indent, NULL,
@@ -2026,6 +2079,8 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
 
   for (current_node = node; current_node != NULL;
        current_node = current_node->next) {
+#define CMD_F(f) \
+  F(f, current_node, indent)
     switch (current_node->type) {
       case kCmdFinish: {
         switch (TRANSLATION_CONTEXT) {
@@ -2067,12 +2122,44 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
         }
         break;
       }
+      case kCmdEndwhile:
+      case kCmdEndfor:
+      case kCmdEndif:
+      case kCmdEndfunction:
+      case kCmdEndtry: {
+        // Handled by :while/:for/:if/:function/:try handlers
+        continue;
+      }
+      case kCmdCatch:
+      case kCmdFinally: {
+        // Handled by :try handler
+        continue;
+      }
+#define SET_HANDLER(cmd_type, handler) \
+      case cmd_type: { \
+        CMD_F(handler); \
+        continue; \
+      }
+      SET_HANDLER(kCmdComment, translate_comment)
+      SET_HANDLER(kCmdHashbangComment, translate_hashbang_comment)
+      SET_HANDLER(kCmdSyntaxError, translate_error)
+      SET_HANDLER(kCmdMissing, translate_missing)
+      SET_HANDLER(kCmdUSER, translate_user)
+      SET_HANDLER(kCmdFunction, translate_function)
+      SET_HANDLER(kCmdFor, translate_for)
+      SET_HANDLER(kCmdWhile, translate_while)
+      case kCmdElse:
+      case kCmdElseif:
+      SET_HANDLER(kCmdIf, translate_if_block)
+      SET_HANDLER(kCmdTry, translate_try_block)
+#undef SET_HANDLER
       default: {
         F(translate_node, current_node, indent);
         continue;
       }
     }
     break;
+#undef CMD_F
   }
 
   if (current_node == NULL && TRANSLATION_CONTEXT == kTransFunc) {
