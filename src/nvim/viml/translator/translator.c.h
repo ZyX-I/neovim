@@ -1943,9 +1943,26 @@ static CMD_FDEC(translate_try_block)
   FUNCTION_END;
 }
 
+static CMD_FDEC(translate_let)
+{
+  FUNCTION_START;
+  if (node->args[ARG_LET_RHS].arg.expr != NULL) {
+    const ExpressionNode *lval_expr = node->args[ARG_LET_LHS].arg.expr;
+    const ExpressionNode *rval_expr = node->args[ARG_LET_RHS].arg.expr;
+    WINDENT(indent);
+    F(translate_assignment, lval_expr, indent, NULL,
+                               (FTYPE(AssignmentValueDump))
+                                  &FNAME(translate_rval_expr),
+                               (void *) rval_expr);
+  } else {
+    F(translate_node, node, indent);
+  }
+  FUNCTION_END;
+}
+
 #undef CMD_FDEC
 
-/// Dump VimL Ex command
+/// Generic VimL Ex commands dumper
 ///
 /// @param[in]  node    Node to translate.
 /// @param[in]  indent  Indentation of the result.
@@ -1959,16 +1976,6 @@ static FDEC(translate_node, const CommandNode *const node,
   bool add_comma = false;
 
   WINDENT(indent);
-
-  if (node->type == kCmdLet && node->args[ARG_LET_RHS].arg.expr != NULL) {
-    const ExpressionNode *lval_expr = node->args[ARG_LET_LHS].arg.expr;
-    const ExpressionNode *rval_expr = node->args[ARG_LET_RHS].arg.expr;
-    F(translate_assignment, lval_expr, indent, NULL,
-                               (FTYPE(AssignmentValueDump))
-                                  &FNAME(translate_rval_expr),
-                               (void *) rval_expr);
-    FUNCTION_END;
-  }
 
   name = CMDDEF(node->type).name;
   assert(name != NULL);
@@ -2141,6 +2148,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       case kCmdElseif:
       SET_HANDLER(kCmdIf, translate_if_block)
       SET_HANDLER(kCmdTry, translate_try_block)
+      SET_HANDLER(kCmdLet, translate_let)
 #undef SET_HANDLER
       default: {
         F(translate_node, current_node, indent);
