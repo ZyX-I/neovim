@@ -8,7 +8,7 @@ to_cstr = (function(string)
   return cstr(string:len() + 1, string)
 end)
 
-libnvim = ffi.load './build/src/libnvim-test.so'
+libnvim = ffi.load './build/src/nvim/libnvim-test.so'
 
 cimport = (function(path)
   pipe = io.popen('cc -Isrc -P -E ' .. path)
@@ -18,19 +18,29 @@ cimport = (function(path)
   ffi.cdef(header)
 end)
 
-cimport 'src/nvim/vim.h'
 -- cimport 'src/nvim/viml/translator/translator.h'
 ffi.cdef('int translate_script_std(void);')
-cimport 'src/nvim/os_unix.h'
-cimport 'src/nvim/eval.h'
--- cimport 'src/nvim/main.h'
+
+-- cimport './src/os_unix.h'
+ffi.cdef('void mch_early_init(void);')
+-- cimport './src/eval.h'
+ffi.cdef('void eval_init(void);')
+-- cimport './src/main.h'
 ffi.cdef('void allocate_generic_buffers(void);')
-cimport 'src/nvim/window.h'
-cimport 'src/nvim/ops.h'
--- cimport 'src/misc1.h'
+-- cimport './src/window.h'
+ffi.cdef('int win_alloc_first(void);')
+-- cimport './src/ops.h'
+ffi.cdef('void init_yank(void);')
+-- cimport './src/misc1.h'
 ffi.cdef('void init_homedir(void);')
-cimport 'src/nvim/option.h'
-cimport 'src/nvim/ex_cmds2.h'
+-- cimport './src/option.h'
+ffi.cdef('void set_init_1(void);')
+-- cimport './src/ex_cmds2.h'
+ffi.cdef('void set_lang_var(void);')
+-- cimport './src/mbyte.h'
+ffi.cdef('char *mb_init(void);')
+-- cimport './src/normal.h'
+ffi.cdef('void init_normal_cmds(void);')
 
 libnvim.mch_early_init()
 libnvim.mb_init()
