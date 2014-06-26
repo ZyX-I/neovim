@@ -31,7 +31,7 @@ char *fgetline_file(int _, FILE *file, int indent)
   if (c == EOF && errno != 0) {
     ga_clear(&ga);
     return NULL;
-  } else if (ga.ga_len == 0) {
+  } else if (ga.ga_len <= 1) {
     return NULL;
   } else {
     return (char *) ga.ga_data;
