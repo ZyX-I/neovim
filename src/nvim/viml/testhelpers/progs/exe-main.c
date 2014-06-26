@@ -10,7 +10,8 @@
 #include "nvim/vim.h"
 #include "nvim/api/private/defs.h"
 
-static void (*init_func)(void);
+int do_init(void **);
+
 static Object (*eval_lua)(String str, Error *err);
 
 static int (*execute_viml)(const char *const s);
@@ -69,36 +70,11 @@ int main(int argc, char **argv, char **env)
   if (argc <= 1)
     return 1;
 
-  void *handle = dlopen("build/src/nvim/libnvim-test.so", RTLD_LAZY);
+  void *handle;
 
-  if (handle == NULL) {
-    const char *error = dlerror();
-    if (error == NULL)
-      return 2;
-    fputs(error, stderr);
-    fputs("\n", stderr);
-    return 3;
-  }
-
-  const char *inits[] = {
-    "mch_early_init",
-    "mb_init",
-    "eval_init",
-    "init_normal_cmds",
-    "allocate_generic_buffers",
-    "win_alloc_first",
-    "init_yank",
-    "init_homedir",
-    "set_init_1",
-    "set_lang_var",
-    NULL
-  };
-  for (const char **iname = inits; *iname != NULL; iname++) {
-    init_func = dlsym(handle, *iname);
-    if (init_func == NULL)
-      return 4;
-    init_func();
-  }
+  int ret = do_init(&handle);
+  if (ret)
+    return ret + 1;
 
   if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'v') {
     execute_viml = dlsym(handle, "execute_viml");
