@@ -110,6 +110,8 @@ generate_dispatch_includes = function(output, headers)
   #include <msgpack.h>
 
   #include "nvim/os/msgpack_rpc.h"
+  #include "nvim/os/msgpack_rpc_helpers.h"
+  #include "nvim/api/private/helpers.h"
   ]])
 
   include_headers(output, headers)
@@ -137,11 +139,12 @@ generate_dispatch_msgpack_metadata = function(output)
   };
   const unsigned int msgpack_metadata_size = sizeof(msgpack_metadata);
 
-  void msgpack_rpc_dispatch(uint64_t channel_id, msgpack_object *req, msgpack_packer *res)
+  Object msgpack_rpc_dispatch(uint64_t channel_id,
+                              uint64_t method_id,
+                              msgpack_object *req,
+                              Error *error)
   {
-    Error error = { .set = false };
-    uint64_t method_id = (uint32_t)req->via.array.ptr[2].via.u64;
-
+    Object ret = NIL;
     switch (method_id) {
       case 0:
         msgpack_pack_nil(res);
@@ -167,8 +170,7 @@ generate_dispatch_fn = function(output, fn)
   output:write('\n    case '..fn.id..': {')
 
   output:write('\n      if (req->via.array.ptr[3].via.array.size != '..#fn.parameters..') {')
-  output:write('\n        snprintf(error.msg, sizeof(error.msg), "Wrong number of arguments: expecting '..#fn.parameters..' but got %u", req->via.array.ptr[3].via.array.size);')
-  output:write('\n        msgpack_rpc_error(error.msg, res);')
+  output:write('\n        snprintf(error->msg, sizeof(error->msg), "Wrong number of arguments: expecting '..#fn.parameters..' but got %u", req->via.array.ptr[3].via.array.size);')
   output:write('\n        goto '..cleanup_label..';')
   output:write('\n      }\n')
   -- Declare/initialize variables that will hold converted arguments
@@ -186,7 +188,9 @@ generate_dispatch_fn = function(output, fn)
     converted = 'arg_'..j
     convert_arg = 'msgpack_rpc_to_'..string.lower(param[1])
     output:write('\n      if (!'..convert_arg..'('..arg..', &'..converted..')) {')
-    output:write('\n        msgpack_rpc_error("Wrong type for argument '..j..', expecting '..param[1]..'", res);')
+    output:write('\n        snprintf(error->msg, sizeof(error->msg), "Wrong type for argument '..j..', expecting '..param[1]..'");')
+        
+    output:write('\n        error->set = true;')
     output:write('\n        goto '..cleanup_label..';')
     output:write('\n      }\n')
     args[#args + 1] = converted
@@ -217,28 +221,20 @@ generate_dispatch_fn = function(output, fn)
   if fn.can_fail then
     -- if the function can fail, also pass a pointer to the local error object
     if #args > 0 then
-      output:write(', &error);\n')
+      output:write(', error);\n')
     else
-      output:write('&error);\n')
+      output:write('error);\n')
     end
     -- and check for the error
-    output:write('\n      if (error.set) {')
-    output:write('\n        msgpack_rpc_error(error.msg, res);')
+    output:write('\n      if (error->set) {')
     output:write('\n        goto '..cleanup_label..';')
     output:write('\n      }\n')
   else
     output:write(');\n')
   end
 
-  -- nil error
-  output:write('\n      msgpack_pack_nil(res);');
-
-  if fn.return_type == 'void' then
-    output:write('\n      msgpack_pack_nil(res);');
-  else
-    output:write('\n      msgpack_rpc_from_'..string.lower(fn.return_type)..'(rv, res);')
-    -- free the return value
-    output:write('\n      msgpack_rpc_free_'..string.lower(fn.return_type)..'(rv);')
+  if fn.return_type ~= 'void' then
+    output:write('\n      ret = '..string.upper(fn.return_type)..'_OBJ(rv);')
   end
   -- Now generate the cleanup label for freeing memory allocated for the
   -- arguments
@@ -248,17 +244,17 @@ generate_dispatch_fn = function(output, fn)
     local param = fn.parameters[j]
     output:write('\n      msgpack_rpc_free_'..string.lower(param[1])..'(arg_'..j..');')
   end
-  output:write('\n      return;');
+  output:write('\n      break;');
   output:write('\n    };\n');
 end
 
 generate_dispatch_footer = function(output)
   write_shifted_output(output, [[
-
-
       default:
-        msgpack_rpc_error("Invalid function id", res);
+        snprintf(error->msg, sizeof(error->msg), "Invalid function id");
+        error->set = true;
     }
+    return ret;
   }
   ]])
 end
@@ -369,3 +365,4 @@ generate_dispatch_footer(dispatch_output)
 generate_lua_c_bindings_footer(lua_c_bindings_output)
 
 dispatch_output:close()
+lua_c_bindings_output:close()
