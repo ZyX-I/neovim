@@ -1958,17 +1958,6 @@ static FDEC(translate_node, const CommandNode *const node,
   bool do_arg_dump = true;
   bool add_comma = false;
 
-  if (node->type == kCmdEndwhile
-      || node->type == kCmdEndfor
-      || node->type == kCmdEndif
-      || node->type == kCmdEndfunction
-      || node->type == kCmdEndtry
-      // kCmdCatch and kCmdFinally are handled in kCmdTry handler
-      || node->type == kCmdCatch
-      || node->type == kCmdFinally) {
-    EARLY_RETURN;
-  }
-
   WINDENT(indent);
 
   if (node->type == kCmdLet && node->args[ARG_LET_RHS].arg.expr != NULL) {
