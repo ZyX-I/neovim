@@ -562,7 +562,6 @@ static FDEC(translate_number, ExpressionType type, const char_u *s,
                               const char_u *const e)
 {
   FUNCTION_START;
-  WS("vim.number.new(state, ");
   switch (type) {
     case kExprHexNumber:
     case kExprDecimalNumber: {
@@ -609,7 +608,6 @@ static FDEC(translate_number, ExpressionType type, const char_u *s,
       assert(false);
     }
   }
-  WS(")");
   FUNCTION_END;
 }
 
@@ -622,7 +620,6 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
                               const char_u *const e)
 {
   FUNCTION_START;
-  WS("vim.string.new(state, ");
   bool can_dump_as_is = true;
   switch (type) {
     case kExprSingleQuotedString: {
@@ -792,7 +789,6 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
       assert(false);
     }
   }
-  WS(")");
   FUNCTION_END;
 }
 
