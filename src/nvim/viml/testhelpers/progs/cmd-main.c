@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+int do_init(void **);
+
 static void (*init_func)(void);
 static char *(*parse_cmd_test)(char *arg, uint_least8_t flags, bool one,
                                bool out);
@@ -15,36 +17,11 @@ int main(int argc, char **argv, char **env)
   if (argc <= 1)
     return 1;
 
-  void *handle = dlopen("build/src/nvim/libnvim-test.so", RTLD_LAZY);
+  void *handle;
 
-  if (handle == NULL) {
-    const char *error = dlerror();
-    if (error == NULL)
-      return 2;
-    fputs(error, stderr);
-    fputs("\n", stderr);
-    return 3;
-  }
-
-  const char *inits[] = {
-    "mch_early_init",
-    "mb_init",
-    "eval_init",
-    "init_normal_cmds",
-    "allocate_generic_buffers",
-    "win_alloc_first",
-    "init_yank",
-    "init_homedir",
-    "set_init_1",
-    "set_lang_var",
-    NULL
-  };
-  for (const char **iname = inits; *iname != NULL; iname++) {
-    init_func = dlsym(handle, *iname);
-    if (init_func == NULL)
-      return 4;
-    init_func();
-  }
+  int ret = do_init(&handle);
+  if (ret)
+    return ret + 1;
 
   parse_cmd_test = dlsym(handle, "parse_cmd_test");
   if (parse_cmd_test == NULL)
