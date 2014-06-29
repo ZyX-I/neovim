@@ -12,38 +12,33 @@
 
 #include "nvim/viml/executor/converter.h"
 
-#ifndef LUA_TINTEGER
-# ifdef HAVE_LUAJIT
-#  warning Using magic number 10, should be using a standard constant
-#  define LUA_TINTEGER 10
-# elif LUA_VERSION_NUM < 503
-#  define LUA_TINTEGER LUA_TNUMBER
-# else
-#  error No LUA_TINTEGER type
-# endif
-#endif
-
-#ifdef HAVE_LUAJIT
-# define lua_isinteger(lstate, idx) \
-    (lua_type(lstate, idx) == LUA_TINTEGER || lua_isnumber(lstate, idx))
-#elif LUA_VERSION_NUM < 503
-# define lua_pushinteger lua_pushnumber
-# define lua_Integer lua_Number
-# define lua_isinteger lua_isnumber
-# define lua_tointeger lua_tonumber
-#endif
-
-#if LUA_VERSION_NUM >= 503
-# ifdef lua_isinteger
-#  undef lua_isinteger
-# endif
-# define lua_isinteger(lstate, idx) \
-    (lua_isinteger(lstate, idx) || lua_isnumber(lstate, idx))
-#endif
-
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/executor/converter.c.generated.h"
 #endif
+
+#define NLUA_PUSH_IDX(lstate, type, idx) \
+  do { \
+    /* FIXME Use STATIC_ASSERT */ \
+    assert(sizeof(type) == sizeof(lua_Number)); \
+    union { \
+      type src; \
+      lua_Number tgt; \
+    } tmp; \
+    tmp.src = idx; \
+    lua_pushnumber(lstate, tmp.tgt); \
+  } while (0)
+
+#define NLUA_POP_IDX(lstate, type, stack_idx, idx) \
+  do { \
+    /* FIXME Use STATIC_ASSERT */ \
+    assert(sizeof(type) == sizeof(lua_Number)); \
+    union { \
+      type tgt; \
+      lua_Number src; \
+    } tmp; \
+    tmp.src = lua_tonumber(lstate, stack_idx); \
+    idx = tmp.tgt; \
+  } while (0)
 
 static inline void nlua_push_type_idx(lua_State *lstate)
   FUNC_ATTR_NONNULL_ALL
@@ -101,7 +96,7 @@ void nlua_push_String(lua_State *lstate, const String s)
 void nlua_push_Integer(lua_State *lstate, const Integer n)
   FUNC_ATTR_NONNULL_ALL
 {
-  lua_pushinteger(lstate, (lua_Integer) n);
+  lua_pushnumber(lstate, (lua_Number) n);
 }
 
 /// Convert given Float to lua table
@@ -178,7 +173,7 @@ void nlua_push_Array(lua_State *lstate, const Array array)
 void nlua_push_##type(lua_State *lstate, const type item) \
   FUNC_ATTR_NONNULL_ALL \
 { \
-  lua_pushinteger(lstate, (lua_Integer) item); \
+  NLUA_PUSH_IDX(lstate, type, item); \
 }
 
 GENERATE_INDEX_FUNCTION(Buffer)
@@ -270,12 +265,12 @@ Integer nlua_pop_Integer(lua_State *lstate, Error *err)
 {
   Integer ret = 0;
 
-  if (!lua_isinteger(lstate, -1)) {
+  if (!lua_isnumber(lstate, -1)) {
     lua_pop(lstate, 1);
     set_api_error("Expected lua integer", err);
     return ret;
   }
-  ret = (Integer) lua_tointeger(lstate, -1);
+  ret = (Integer) lua_tonumber(lstate, -1);
   lua_pop(lstate, 1);
 
   return ret;
@@ -476,14 +471,14 @@ Position nlua_pop_Position(lua_State *lstate, Error *err)
     return (Position) {.row = 0, .col = 0}; \
   } \
   ret.field = lua_tonumber(lstate, -1); \
-  lua_pop(lstate, -1);
+  lua_pop(lstate, 1);
 
   SET_POSITION_FIELD(col)
   SET_POSITION_FIELD(row)
 
 #undef SET_POSITION_FIELD
 
-  lua_pop(lstate, -1);
+  lua_pop(lstate, 1);
   return ret;
 }
 
@@ -506,7 +501,6 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
       ret.data.string = nlua_pop_String(lstate, err);
       break;
     }
-    case LUA_TINTEGER:
     case LUA_TNUMBER: {
       ret.type = kObjectTypeInteger;
       ret.data.integer = nlua_pop_Integer(lstate, err);
@@ -563,7 +557,10 @@ Object nlua_pop_Object(lua_State *lstate, Error *err)
 type nlua_pop_##type(lua_State *lstate, Error *err) \
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT \
 { \
-  return (type) nlua_pop_Integer(lstate, err); \
+  type ret; \
+  NLUA_POP_IDX(lstate, type, -1, ret); \
+  lua_pop(lstate, 1); \
+  return ret; \
 }
 
 GENERATE_INDEX_FUNCTION(Buffer)
