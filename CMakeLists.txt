@@ -1,11 +1,6 @@
 cmake_minimum_required (VERSION 2.8.7)
 project (NEOVIM)
 
-set(CMAKE_SYSTEM_PROCESSOR i386)
-set(CMAKE_SYSTEM_LIBRARY_PATH /lib32 /usr/lib32 /usr/local/lib32)
-set(FIND_LIBRARY_USE_LIB64_PATHS OFF)
-set(CMAKE_IGNORE_PATH /lib /usr/lib /usr/local/lib)
-
 # Point CMake at any custom modules we may ship
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
@@ -22,6 +17,17 @@ set(NEOVIM_VERSION_MINOR 0)
 set(NEOVIM_VERSION_PATCH 0)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Work around some old, broken detection by CMake for knowing when to use the
+# isystem flag.  Apple's compilers have supported this for quite some time now.
+if(APPLE)
+  if(CMAKE_COMPILER_IS_GNUCC)
+    set(CMAKE_INCLUDE_SYSTEM_FLAG_C "-isystem ")
+  endif()
+  if(CMAKE_COMPILER_IS_GNUCXX)
+    set(CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-isystem ")
+  endif()
+endif()
 
 add_definitions(-Wall -Wextra -pedantic -Wno-unused-parameter -std=gnu99)
 
