@@ -4417,7 +4417,8 @@ did_set_string_option (
   /* 'pastetoggle': translate key codes like in a mapping */
   else if (varp == &p_pt) {
     if (*p_pt) {
-      (void)replace_termcodes(p_pt, &p, TRUE, TRUE, FALSE, CPO_TO_CPO_FLAGS);
+      (void)replace_termcodes(p_pt, STRLEN(p_pt), &p, TRUE, TRUE, FALSE,
+                              CPO_TO_CPO_FLAGS);
       if (p != NULL) {
         if (new_value_alloced)
           free_string_option(p_pt);
@@ -6038,7 +6039,7 @@ char_u *get_encoding_default(void)
 /*
  * Translate a string like "t_xx", "<t_xx>" or "<S-Tab>" to a key number.
  */
-static int find_key_option(char_u *arg)
+static int find_key_option(const char_u *arg)
 {
   int key;
   int modifiers;
@@ -6052,7 +6053,7 @@ static int find_key_option(char_u *arg)
   else {
     --arg;                          /* put arg at the '<' */
     modifiers = 0;
-    key = find_special_key(&arg, &modifiers, TRUE, TRUE);
+    key = find_special_key(&arg, STRLEN(arg), &modifiers, TRUE, TRUE);
     if (modifiers)                  /* can't handle modifiers here */
       key = 0;
   }

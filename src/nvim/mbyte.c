@@ -99,7 +99,6 @@
 #include "nvim/arabic.h"
 
 # define WINBYTE BYTE
-
 typedef struct {
   int rangeStart;
   int rangeEnd;

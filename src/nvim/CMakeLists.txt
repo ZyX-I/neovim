@@ -121,17 +121,27 @@ foreach(sfile ${NEOVIM_SOURCES}
     set(f "${d}/${f}")
     set(r "${d}/${r}")
   endif()
-  set(gf1 "${GENERATED_DIR}/${r}.c.generated.h")
-  set(gf2 "${GENERATED_INCLUDES_DIR}/${r}.h.generated.h")
+  set(gfs)
+  if (${sfile} MATCHES "\\.c\\.h$")
+    set(f "${f}.c")
+    set(r "${r}.c")
+    set(gf1 "${GENERATED_DIR}/${r}.h.generated.h")
+    list(APPEND gfs "${gf1}")
+    set(gf2 "none")
+  else()
+    set(gf1 "${GENERATED_DIR}/${r}.c.generated.h")
+    set(gf2 "${GENERATED_INCLUDES_DIR}/${r}.h.generated.h")
+    list(APPEND gfs "${gf1}")
+    list(APPEND gfs "${gf2}")
+  endif()
   add_custom_command(
-    OUTPUT "${gf1}" "${gf2}"
+    OUTPUT ${gfs}
     COMMAND "${LUA_PRG}" "${HEADER_GENERATOR}"
                              "${sfile}" "${gf1}" "${gf2}"
                              "${CMAKE_C_COMPILER} ${gen_cflags} -E"
     DEPENDS "${HEADER_GENERATOR}" "${sfile}"
     )
-  list(APPEND NEOVIM_GENERATED_SOURCES "${gf1}")
-  list(APPEND NEOVIM_GENERATED_SOURCES "${gf2}")
+  list(APPEND NEOVIM_GENERATED_SOURCES ${gfs})
   if(${d} MATCHES "^api$" AND NOT ${f} MATCHES "^api/helpers.c$")
     list(APPEND API_HEADERS ${gf2})
   endif()

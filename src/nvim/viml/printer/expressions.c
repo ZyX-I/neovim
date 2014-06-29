@@ -1,7 +1,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "nvim/misc2.h"
+#include "nvim/vim.h"
 #include "nvim/memory.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/printer/printer.h"

@@ -8,7 +8,6 @@
 #ifndef NVIM_VIM_H
 # define NVIM_VIM_H
 
-#include <string.h>
 #include "nvim/memory.h"// for xstrlcpy
 #include "nvim/types.h"
 
@@ -899,6 +898,10 @@ typedef enum {
 #define PERROR(msg) \
   (void) emsg3((char_u *) "%s: %s", (char_u *)msg, (char_u *)strerror(errno))
 
+typedef long linenr_T;                  /* line number type */
+typedef int colnr_T;                    /* column number type */
+typedef unsigned short disptick_T;      /* display tick type */
+
 #define MAXLNUM (0x7fffffffL)           /* maximum (invalid) line number */
 #define MAXCOL (0x7fffffffL)          /* maximum column number, 31 bits */
 
@@ -1126,35 +1129,6 @@ typedef int VimClipboard;       /* This is required for the prototypes. */
 
 
 #include "nvim/globals.h"        /* global variables and messages */
-
-
-
-/*
- * If console dialog not supported, but GUI dialog is, use the GUI one.
- */
-
-/*
- * Default filters for gui_mch_browse().
- * The filters are almost system independent.  Except for the difference
- * between "*" and "*.*" for MSDOS-like systems.
- * NOTE: Motif only uses the very first pattern.  Therefore
- * BROWSE_FILTER_DEFAULT should start with a "*" pattern.
- */
-
-/* stop using fastcall for Borland */
-
-
-/* Note: a NULL argument for vim_realloc() is not portable, don't use it. */
-#include <stdlib.h>
-#if defined(MEM_PROFILE)
-# define vim_realloc(ptr, size)  mem_realloc((ptr), (size))
-#else
-# define vim_realloc(ptr, size)  realloc((ptr), (size))
-#endif
-
-/*
- * The following macros stop display/event loop nesting at the wrong time.
- */
 
 /*
  * Return byte length of character that starts with byte "b".

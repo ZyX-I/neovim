@@ -28,8 +28,7 @@
 
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
-    if ((top_node = expr_alloc(type)) == NULL) \
-      return FAIL; \
+    top_node = expr_alloc(type); \
     next_node = &((*old_top_node)->next); \
     top_node->children = *old_top_node; \
     *old_top_node = top_node; \
@@ -44,8 +43,7 @@
 
 #define VALUE_NODE(type, error, node, pos, end_pos) \
   { \
-    if ((*node = expr_alloc(type)) == NULL) \
-      return FAIL; \
+    *node = expr_alloc(type); \
     (*node)->position = pos; \
     (*node)->end_position = end_pos; \
   }
@@ -98,15 +96,16 @@
 ///
 /// @param[in]  type   Node type.
 ///
-/// @return Pointer to allocated block of memory or NULL in case of error.
+/// @return Pointer to allocated block of memory.
 static ExpressionNode *expr_alloc(ExpressionType type)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *node;
 
-  node = xcalloc(ExpressionNode, 1);
+  node = XCALLOC_NEW(ExpressionNode, 1);
 
   node->type = type;
+
   return node;
 }
 
@@ -117,7 +116,7 @@ void free_expr(ExpressionNode *node)
 
   free_expr(node->children);
   free_expr(node->next);
-  vim_free(node);
+  free(node);
 }
 
 /// Check whether given character is a valid name character
@@ -370,10 +369,7 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
       return NOTDONE;
   }
 
-  if ((top_node = expr_alloc(kExprDictionary)) == NULL) {
-    free_expr(*parse1_node);
-    return FAIL;
-  }
+  top_node = expr_alloc(kExprDictionary);
   next_node = &(top_node->children);
   *node = top_node;
 
@@ -558,8 +554,7 @@ static EDEC_NOARGS(parse_dot_subscript)
   // XXX Workaround for concat ambiguity: s:autoload#var
   if (*e == AUTOLOAD_CHAR)
     return OK;
-  if ((top_node = expr_alloc(kExprConcatOrSubscript)) == NULL)
-    return FAIL;
+  top_node = expr_alloc(kExprConcatOrSubscript);
   top_node->children = *node;
   top_node->position = s + 1;
   top_node->end_position = e - 1;
@@ -1018,8 +1013,7 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
           break;
         }
       }
-      if ((top_node = expr_alloc(type)) == NULL)
-        return FAIL;
+      top_node = expr_alloc(type);
       top_node->children = *node;
       *node = top_node;
     }

@@ -219,9 +219,7 @@ char_u *skipwhite(char_u *q)
 
 void *xcalloc(size_t nmemb, size_t size)
 {
-  void *res = (char_u *) malloc(size);
-  memset(res, 0, size);
-  return res;
+  return calloc(nmemb, size);
 }
 
 void *xrealloc(void *ptr, size_t size)

@@ -498,7 +498,6 @@ enum key_extra {
  */
 #define MAX_KEY_CODE_LEN    6
 
-
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "keymap.h.generated.h"
 #endif
