@@ -576,7 +576,7 @@ static FDEC(translate_number, ExpressionType type, const char_u *s,
 #ifdef CH_MACROS_DEFINE_LENGTH
       return MAXOCTALNUMBUFLEN + 1;
 #else
-      intmax_t number;
+      uintmax_t unumber;
       char num_s[MAXOCTALNUMBUFLEN + 1];
 
       // Ignore leading zeroes
@@ -591,7 +591,7 @@ static FDEC(translate_number, ExpressionType type, const char_u *s,
         memcpy(num_s, s, (e - s) + 1);
         num_s[e - s + 1] = NUL;
       }
-      if (sscanf(num_s, "%" PRIoMAX, &number) != 1) {
+      if (sscanf(num_s, "%" PRIoMAX, &unumber) != 1) {
         // TODO: check errno
         // TODO: check %n output?
         // TODO: give error message
@@ -601,7 +601,7 @@ static FDEC(translate_number, ExpressionType type, const char_u *s,
         return;
 #endif
       }
-      F_NOOPT(dump_number, number);
+      F_NOOPT(dump_unumber, unumber);
       break;
 #endif
 #undef MAXOCTALNUMBUFLEN
