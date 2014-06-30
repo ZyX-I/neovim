@@ -49,10 +49,8 @@ local w = branch(
   rng('A', 'Z'),
   lit('_')
 )
-local aw = branch(
-  w,
-  rng('0', '9')
-)
+local d = rng('0', '9')
+local aw = branch(w, d)
 local s = set(' ', '\n', '\t')
 local raw_word = concat(w, any_amount(aw))
 local right_word = concat(
@@ -73,6 +71,23 @@ local spaces = any_amount(branch(
       any_character
     )),
     lit('*/')
+  ),
+  -- This is crap from GCC preprocessor when generating declarations with macros
+  concat(
+    -- # 820 "src/nvim/…"
+    lit('#'),
+    any_amount(s),
+    any_amount(d),  -- Line number
+    any_amount(s),
+    lit('"'),
+    any_amount(branch(
+      concat(lit('\\'), set('"', '\\')),
+      concat(
+        neg_look_ahead(set('"', '\\')),
+        any_character
+      )
+    )),
+    lit('"\n')
   ),
   concat(
     lit('//'),
@@ -200,6 +215,8 @@ while init ~= nil do
       -- needed
       declaration = declaration:gsub('/%*.-%*/', '')
       declaration = declaration:gsub('//.-\n', '\n')
+
+      declaration = declaration:gsub('#.-\n', '\n')
 
       declaration = declaration:gsub('\n', ' ')
       declaration = declaration:gsub('%s+', ' ')
