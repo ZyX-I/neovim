@@ -9,64 +9,18 @@
 
 #include "nvim/vim.h"
 #include "nvim/api/private/defs.h"
+#include "nvim/viml/dumpers/dumpers.h"
 
 int do_init(void **);
 
 static Object (*eval_lua)(String str, Error *err);
-
+static void (*msgpack_rpc_free_object)(Object);
 static Object (*execute_viml)(const char *const s);
-
-void print_object(Object obj)
-{
-  switch (obj.type) {
-    case kObjectTypeNil: {puts("kObjectTypeNil"); break;}
-    case kObjectTypeBoolean: {
-      puts("kObjectTypeBoolean");
-      if (obj.data.boolean)
-        puts("true");
-      else
-        puts("false");
-      break;
-    }
-    case kObjectTypeInteger: {
-      puts("kObjectTypeInteger");
-      printf("%" PRIi64 "\n", obj.data.integer);
-      break;
-    }
-    case kObjectTypeFloat: {
-      puts("kObjectTypeFloat");
-      printf("%lf\n", obj.data.floating);
-      break;
-    }
-    case kObjectTypeString: {
-      puts("kObjectTypeString");
-      fwrite(obj.data.string.data, 1, obj.data.string.size, stdout);
-      putchar('\n');
-      break;
-    }
-    case kObjectTypeArray: {
-      puts("kObjectTypeArray [");
-      for (size_t i = 0; i < obj.data.array.size; i++)
-        print_object(obj.data.array.items[i]);
-      puts("]");
-      break;
-    }
-    case kObjectTypeDictionary: {
-      puts("kObjectTypeDictionary {");
-      for (size_t i = 0; i < obj.data.dictionary.size; i++) {
-        Object new_obj = {.type = kObjectTypeString};
-        new_obj.data.string = obj.data.dictionary.items[i].key;
-        print_object(new_obj);
-        print_object(obj.data.dictionary.items[i].value);
-      }
-      puts("}");
-      break;
-    }
-  }
-}
+static int (*dump_object)(const Object, Writer, void *);
 
 int main(int argc, char **argv, char **env)
 {
+  Object result;
   if (argc <= 1)
     return 1;
 
@@ -76,10 +30,14 @@ int main(int argc, char **argv, char **env)
   if (ret)
     return ret + 1;
 
+  dump_object = dlsym(handle, "dump_object");
+  if (dump_object == NULL)
+    return 5;
+
   if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'v') {
     execute_viml = dlsym(handle, "execute_viml");
     if (execute_viml == NULL)
-      return 5;
+      return 6;
 
     result = execute_viml(argv[2]);
   } else {
@@ -102,7 +60,8 @@ int main(int argc, char **argv, char **env)
     }
   }
 
-  print_object(result);
+  if (dump_object(result, (Writer) &fwrite, (void *) stdout) == FAIL)
+    return 8;
 
   return 0;
 }
