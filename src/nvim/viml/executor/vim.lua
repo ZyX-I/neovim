@@ -63,6 +63,8 @@ state = {
       sid = nil,
       current_scope = nil,
       call_stack = {},
+      exception = '',
+      throwpoint = '',
     }
     -- Values that do not need to be altered when exiting scope.
     state.global = {
@@ -90,6 +92,14 @@ state = {
   enter_try = function(old_state)
     local state = copy_table(old_state)
     state.is_trying = true
+    return state
+  end,
+
+  enter_catch = function(old_state, err)
+    local state = copy_table(old_state)
+    state.exception = err
+    -- FIXME
+    state.throwpoint = nil
     return state
   end,
 
@@ -581,6 +591,15 @@ scope = join_tables(dict, {
     ret[scope_name_idx] = scope_name
     return ret
   end),
+  special_keys = {},
+  subscript = function(state, dct, dct_position, key, key_position)
+    local special = dct[type_idx].special_keys[key]
+    if special then
+      return special(state)
+    else
+      return dict.subscript(state, dct, dct_position, key, key_position)
+    end
+  end,
   missing_key_message = 'E121: Undefined variable',
   assign_subscript = function(state, dct, dct_position, key, key_position,
                                      val, val_position)
@@ -629,6 +648,14 @@ v_scope = join_tables(scope, {
   new = add_type_table(function(state, ...)
     return scope:new(state, 'v', ...)
   end),
+  special_keys = {
+    exception = function(state)
+      return state.exception
+    end,
+    throwpoint = function(state)
+      return state.throwpoint
+    end,
+  },
 })
 
 -- {{{2 Functions dictionary

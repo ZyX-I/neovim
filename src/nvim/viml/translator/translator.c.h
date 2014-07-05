@@ -1731,10 +1731,8 @@ static CMD_FDEC(translate_if_block)
 static CMD_FDEC(translate_try_block)
 {
   FUNCTION_START;
-#define ADD_VAR_CALL(var, indent) \
+#define CHECK_NEW_RET(indent) \
   do { \
-    WINDENT(indent); \
-    WS("local new_ret = " var "(state)\n"); \
     WINDENT(indent); \
     WS("if (new_ret ~= nil) then\n"); \
     WINDENT(indent + 1); \
@@ -1842,13 +1840,17 @@ static CMD_FDEC(translate_try_block)
   if (first_catch != NULL) {
     WINDENT(indent + 1);
     WS("if (catch) then\n");
-    ADD_VAR_CALL("catch", indent + 2);
+    WINDENT(indent + 2);
+    WS("local new_ret = catch(vim.state.enter_catch(state, err))\n");
+    CHECK_NEW_RET(indent + 2);
     WINDENT(indent + 1);
     WS("end\n");
   }
 
   if (finally != NULL) {
-    ADD_VAR_CALL("fin", indent + 1);
+    WINDENT(indent + 1);
+    WS("local new_ret = fin(state)\n");
+    CHECK_NEW_RET(indent + 1);
   }
 
   WINDENT(indent + 1);
@@ -1866,7 +1868,7 @@ static CMD_FDEC(translate_try_block)
   WS("end\n");
   WINDENT(indent);
   WS("end\n");
-#undef ADD_VAR_CALL
+#undef CHECK_NEW_RET
 
   FUNCTION_END;
 }
