@@ -13,10 +13,11 @@
 
 int do_init(void **);
 
-static Object (*eval_lua)(String str, Error *err);
+static Object (*eval_lua)(String, Error *);
 static void (*msgpack_rpc_free_object)(Object);
-static Object (*execute_viml)(const char *const s);
+static Object (*execute_viml)(const char *const);
 static int (*dump_object)(const Object, Writer, void *);
+static char *(*execute_viml_test)(const char *const);
 
 int main(int argc, char **argv, char **env)
 {
@@ -40,10 +41,22 @@ int main(int argc, char **argv, char **env)
       return 6;
 
     result = execute_viml(argv[2]);
+  } else if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 't') {
+    execute_viml_test = dlsym(handle, "execute_viml_test");
+    if (execute_viml_test == NULL)
+      return 7;
+
+    char *r = execute_viml_test(argv[2]);
+    if (r == NULL)
+      return 8;
+
+    puts(r);
+
+    return 0;
   } else {
     eval_lua = dlsym(handle, "eval_lua");
     if (eval_lua == NULL)
-      return 7;
+      return 9;
 
     String arg = {
       .data = argv[1],
@@ -61,7 +74,7 @@ int main(int argc, char **argv, char **env)
   }
 
   if (dump_object(result, (Writer) &fwrite, (void *) stdout) == FAIL)
-    return 8;
+    return 10;
 
   return 0;
 }

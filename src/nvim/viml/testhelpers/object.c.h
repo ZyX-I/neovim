@@ -49,8 +49,10 @@ static FDEC(dump_obj, const Object obj, size_t indent)
       break;
     }
     case kObjectTypeFloat: {
+      char buf[10];
       WS("float: ");
-      assert(false);  // Not implemented
+      snprintf(buf, 10, "%+.2e", obj.data.floating);
+      W_LEN(buf, 9);
       break;
     }
     case kObjectTypeString: {
