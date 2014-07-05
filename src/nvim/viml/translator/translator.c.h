@@ -90,34 +90,6 @@
     F(dump_string_length, expr->position, \
          expr->end_position - expr->position + 1)
 
-/// Create variable name based on indentation level
-///
-/// Created name is prefix concatenated with indentation level.
-#define INDENTVAR(var, prefix) \
-    char var[SIZETBUFLEN + sizeof(prefix) - 1]; \
-    const size_t var##_len = sizeof(prefix) - 1 + sdump_unumber_len(indent); \
-    memcpy(var, prefix, sizeof(prefix) - 1); \
-    do { \
-      char *p = var + sizeof(prefix) - 1; \
-      sdump_unumber(indent, &p); \
-    } while (0)
-
-/// Write previously defined indentation variable name
-#define ADDINDENTVAR(var) \
-    W_LEN(var, var##_len)
-
-/// Emit definitions for holding indentation variable inside a structure
-#define INDENTVARDEFS(var) \
-    char *var; \
-    size_t var##_len;
-
-/// Emit arguments for {} structure initializer
-///
-/// It is supposed that corresponding fields in structure were defined with the 
-/// above INDENTVARDEFS macros.
-#define INDENTVARARGS(var) \
-    var, var##_len
-
 /// Get translation context
 ///
 /// See documentation for TranslationOptions for more details.
@@ -136,12 +108,8 @@ typedef struct {
 
 typedef struct {
   size_t idx;
-  INDENTVARDEFS(var)
+  char *var;
 } LetListItemAssArgs;
-
-typedef struct {
-  INDENTVARDEFS(var)
-} IndentVarAssArgs;
 
 typedef enum {
   kOptDefault = 0,
@@ -1419,15 +1387,12 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
 ///
 /// List is located in indentvar described in args.
 ///
-/// Indentvar is a variable with name based on indentation level. It is used to 
-/// make variable name unique in some scope.
-///
-/// @param[in]  args  Indentvar description and number of the dumped element.
+/// @param[in]  args  Variable name and list index.
 static FDEC(translate_let_list_item, const LetListItemAssArgs *const args)
 {
   FUNCTION_START;
   WS("vim.list.raw_subscript(");
-  ADDINDENTVAR(args->var);
+  W(args->var);
   WS(", ");
   F_NOOPT(dump_number, (intmax_t) args->idx);
   WS(")");
@@ -1447,7 +1412,7 @@ static FDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
 {
   FUNCTION_START;
   WS("vim.list.raw_slice_to_end(");
-  ADDINDENTVAR(args->var);
+  W(args->var);
   WS(", ");
   F_NOOPT(dump_number, (intmax_t) args->idx);
   WS(")");
@@ -1466,16 +1431,13 @@ static FDEC(translate_rval_expr, const ExpressionNode *const expr)
   FUNCTION_END;
 }
 
-/// Helper function for dumping rvalue indentvar
+/// Helper function for dumping NUL-terminated string
 ///
-/// Indentvar is a variable with name based on indentation level. It is used to 
-/// make variable name unique in some scope.
-///
-/// @param[in]  args  Indentvar description.
-static FDEC(dump_indentvar, const IndentVarAssArgs *const args)
+/// @param[in]  str  Dumped string
+static FDEC(dump_raw_string, const char *const str)
 {
   FUNCTION_START;
-  ADDINDENTVAR(args->var);
+  W(str);
   FUNCTION_END;
 }
 
@@ -1519,32 +1481,28 @@ static FDEC(translate_assignment, const ExpressionNode *const lval_expr,
     size_t val_num = 0;
     const ExpressionNode *current_expr;
 
-    INDENTVAR(rhs_var, "rhs");
-    WS("local ");
-    ADDINDENTVAR(rhs_var);
-    WS(" = ");
+    WS("do\n");
+    WINDENT(indent + 1);
+    WS("local rhs = ");
     F(dump, dump_cookie);
     WS("\n");
 
     current_expr = lval_expr->children;
-    for (; current_expr != NULL; current_expr = current_expr->next)
+    for (; current_expr != NULL; current_expr = current_expr->next) {
       if (current_expr->type == kExprListRest) {
         has_rest = true;
       } else {
         val_num++;
       }
+    }
 
     assert(val_num > 0);
 
-    WINDENT(indent);
-    WS("if vim.is_list(");
-    ADDINDENTVAR(rhs_var);
-    WS(") then\n");
-
     WINDENT(indent + 1);
-    WS("if (vim.list.length(");
-    ADDINDENTVAR(rhs_var);
-    WS(")");
+    WS("if vim.is_list(rhs) then\n");
+
+    WINDENT(indent + 2);
+    WS("if (vim.list.length(rhs)");
     if (has_rest) {
       WS(" >= ");
     } else {
@@ -1557,10 +1515,10 @@ static FDEC(translate_assignment, const ExpressionNode *const lval_expr,
     for (size_t i = 0; i < val_num; i++) {
       LetListItemAssArgs args = {
         i,
-        INDENTVARARGS(rhs_var)
+        "rhs"
       };
-      WINDENT(indent + 2);
-      ADD_ASSIGN(current_expr, err_line, indent + 2,
+      WINDENT(indent + 3);
+      ADD_ASSIGN(current_expr, err_line, indent + 3,
                  (FTYPE(AssignmentValueDump)) (&FNAME(translate_let_list_item)),
                  &args);
       current_expr = current_expr->next;
@@ -1568,37 +1526,47 @@ static FDEC(translate_assignment, const ExpressionNode *const lval_expr,
     if (has_rest) {
       LetListItemAssArgs args = {
         val_num + 1,
-        INDENTVARARGS(rhs_var)
+        "rhs"
       };
-      WINDENT(indent + 2);
-      ADD_ASSIGN(current_expr->children, err_line, indent + 2,
+      WINDENT(indent + 3);
+      ADD_ASSIGN(current_expr->children, err_line, indent + 3,
                  (FTYPE(AssignmentValueDump)) (&FNAME(translate_let_list_rest)),
                  &args);
     }
 
-    WINDENT(indent + 1);
-    WS("else\n");
     WINDENT(indent + 2);
+    WS("else\n");
+    WINDENT(indent + 3);
     if (!has_rest) {
-      WS("if (vim.list.length(");
-      ADDINDENTVAR(rhs_var);
-      WS(") > ");
+      WS("if (vim.list.length(rhs) > ");
       F_NOOPT(dump_unumber, (uintmax_t) val_num);
       WS(") then\n");
-      WINDENT(indent + 3);
+      WINDENT(indent + 4);
       WS("vim.err.err(state, nil, true, "
           "\"E688: More targets than List items\")\n");
-      WINDENT(indent + 2);
-      WS("else\n");
       WINDENT(indent + 3);
+      WS("else\n");
+      WINDENT(indent + 4);
     }
     // TODO Dump position
     WS("vim.err.err(state, nil, true, "
         "\"E687: Less targets than List items\")\n");
     if (!has_rest) {
-      WINDENT(indent + 2);
+      WINDENT(indent + 3);
       WS("end\n");
     }
+    if (err_line != NULL) {
+      WINDENT(indent + 3);
+      W(err_line);
+      WS("\n");
+    }
+    WINDENT(indent + 2);
+    WS("end\n");
+
+    WINDENT(indent + 1);
+    WS("else\n");
+    WINDENT(indent + 2);
+    WS("vim.err.err(state, nil, true, \"E714: List required\")\n");
     if (err_line != NULL) {
       WINDENT(indent + 2);
       W(err_line);
@@ -1606,16 +1574,6 @@ static FDEC(translate_assignment, const ExpressionNode *const lval_expr,
     }
     WINDENT(indent + 1);
     WS("end\n");
-
-    WINDENT(indent);
-    WS("else\n");
-    WINDENT(indent + 1);
-    WS("vim.err.err(state, nil, true, \"E714: List required\")\n");
-    if (err_line != NULL) {
-      WINDENT(indent + 1);
-      W(err_line);
-      WS("\n");
-    }
     WINDENT(indent);
     WS("end\n");
   } else {
@@ -1701,29 +1659,16 @@ static CMD_FDEC(translate_for)
 {
   FUNCTION_START;
   WINDENT(indent);
-  INDENTVAR(iter_var, "i");
-  WS("local ");
-  ADDINDENTVAR(iter_var);
-  WS("\n");
-
-  WINDENT(indent);
-  WS("for _, ");
-  ADDINDENTVAR(iter_var);
-  WS(" in vim.list.iterator(state, ");
+  WS("for _, i in vim.list.iterator(state, ");
   F(translate_expr, node->args[ARG_FOR_RHS].arg.expr, false);
   WS(") do\n");
 
-  {
-    IndentVarAssArgs args = {
-      INDENTVARARGS(iter_var)
-    };
-    WINDENT(indent + 1);
-    F(translate_assignment, node->args[ARG_FOR_LHS].arg.expr, indent + 1,
-                            "break",
-                            (FTYPE(AssignmentValueDump))
-                              (&FNAME(dump_indentvar)),
-                            &args);
-  }
+  WINDENT(indent + 1);
+  F(translate_assignment, node->args[ARG_FOR_LHS].arg.expr, indent + 1,
+                          "break",
+                          (FTYPE(AssignmentValueDump))
+                            (&FNAME(dump_raw_string)),
+                          (void *) "i");
 
   F(translate_nodes, node->children, indent + 1);
 
@@ -1789,24 +1734,14 @@ static CMD_FDEC(translate_try_block)
 #define ADD_VAR_CALL(var, indent) \
   do { \
     WINDENT(indent); \
-    WS("local "); \
-    ADDINDENTVAR(new_ret_var); \
-    WS(" = "); \
-    ADDINDENTVAR(var); \
-    WS("(state)\n"); \
+    WS("local new_ret = " var "(state)\n"); \
     WINDENT(indent); \
-    WS("if ("); \
-    ADDINDENTVAR(new_ret_var); \
-    WS(" ~= nil) then\n"); \
+    WS("if (new_ret ~= nil) then\n"); \
     WINDENT(indent + 1); \
-    ADDINDENTVAR(ret_var); \
-    WS(" = "); \
-    ADDINDENTVAR(new_ret_var); \
-    WS("\n"); \
+    WS("ret = new_ret\n"); \
     WINDENT(indent); \
     WS("end\n"); \
   } while (0)
-  WINDENT(indent);
   CommandNode *first_catch = NULL;
   CommandNode *finally = NULL;
   CommandNode *next = node->next;
@@ -1832,49 +1767,35 @@ static CMD_FDEC(translate_try_block)
     break;
   }
 
-  INDENTVAR(ok_var,      "ok");
-  INDENTVAR(err_var,     "err");
-  INDENTVAR(ret_var,     "ret");
-  INDENTVAR(new_ret_var, "new_ret");
-  INDENTVAR(fin_var,     "fin");
-  INDENTVAR(catch_var,   "catch");
-
-  WS("local ");
-  ADDINDENTVAR(ok_var);
-  WS(", ");
-  ADDINDENTVAR(err_var);
-  WS(", ");
-  ADDINDENTVAR(ret_var);
-  WS(" = pcall(function(state)\n");
-  F(translate_nodes, node->children, indent + 1);
   WINDENT(indent);
+  WS("do\n");
+
+  WINDENT(indent + 1);
+  WS("local ok, err, ret\n");
+  WINDENT(indent + 1);
+  WS("ok, err, ret = pcall(function(state)\n");
+  F(translate_nodes, node->children, indent + 2);
+  WINDENT(indent + 1);
   WS("end, vim.state.enter_try(state))\n");
 
   if (finally != NULL) {
-    WINDENT(indent);
-    WS("local ");
-    ADDINDENTVAR(fin_var);
-    WS(" = function(state)\n");
-    F(translate_nodes, finally->children, indent + 1);
-    WINDENT(indent);
+    WINDENT(indent + 1);
+    WS("local fin = function(state)\n");
+    F(translate_nodes, finally->children, indent + 2);
+    WINDENT(indent + 1);
     WS("end\n");
   }
 
   if (first_catch != NULL) {
-    WINDENT(indent);
-    WS("local ");
-    ADDINDENTVAR(catch_var);
-    WINDENT(indent);
-    WS("\n");
+    WINDENT(indent + 1);
+    WS("local catch\n");
   }
 
   if (first_catch != NULL) {
     bool did_first_if = false;
 
-    WINDENT(indent);
-    WS("if (not ");
-    ADDINDENTVAR(ok_var);
-    WS(")\n");
+    WINDENT(indent + 1);
+    WS("if (not ok) then\n");
 
     for (next = first_catch; next->type == kCmdCatch; next = next->next) {
       size_t current_indent;
@@ -1889,24 +1810,20 @@ static CMD_FDEC(translate_try_block)
           WS("\n");
         }
       } else {
-        WINDENT(indent + 1);
-        WS("if (vim.err.matches(state, ");
-        ADDINDENTVAR(err_var);
-        WS(", ");
+        WINDENT(indent + 2);
+        WS("if (vim.err.matches(state, err, ");
         F(translate_regex, next->args[ARG_REG_REG].arg.reg);
-        WS(")\n");
+        WS(") then\n");
         did_first_if = true;
       }
-      current_indent = indent + 1 + (did_first_if ? 1 : 0);
+      current_indent = indent + 2 + (did_first_if ? 1 : 0);
       WINDENT(current_indent);
-      ADDINDENTVAR(catch_var);
-      WS(" = function(state)\n");
+      WS("catch = function(state)\n");
       F(translate_nodes, next->children, current_indent + 1);
       WINDENT(current_indent);
       WS("end\n");
       WINDENT(current_indent);
-      ADDINDENTVAR(ok_var);
-      WS(" = 'caught'\n");  // String "'caught'" is true
+      WS("ok = 'caught'\n");  // String "'caught'" is true
 
       if (next->args[ARG_REG_REG].arg.reg == NULL) {
         break;
@@ -1914,47 +1831,39 @@ static CMD_FDEC(translate_try_block)
     }
 
     if (did_first_if) {
-      WINDENT(indent + 1);
+      WINDENT(indent + 2);
       WS("end\n");
     }
 
-    WINDENT(indent);
+    WINDENT(indent + 1);
     WS("end\n");
   }
 
   if (first_catch != NULL) {
-    WINDENT(indent);
-    WS("if (");
-    ADDINDENTVAR(catch_var);
-    WS(")\n");
-    ADD_VAR_CALL(catch_var, indent + 1);
-    WINDENT(indent);
+    WINDENT(indent + 1);
+    WS("if (catch) then\n");
+    ADD_VAR_CALL("catch", indent + 2);
+    WINDENT(indent + 1);
     WS("end\n");
   }
 
   if (finally != NULL) {
-    ADD_VAR_CALL(fin_var, indent);
+    ADD_VAR_CALL("fin", indent + 1);
   }
 
-  WINDENT(indent);
-  WS("if (not ");
-  ADDINDENTVAR(ok_var);
-  WS(")\n");
   WINDENT(indent + 1);
-  WS("vim.err.propagate(state, ");
-  ADDINDENTVAR(err_var);
-  WS(")\n");
-  WINDENT(indent);
+  WS("if (not ok) then\n");
+  WINDENT(indent + 2);
+  WS("vim.err.propagate(state, err)\n");
+  WINDENT(indent + 1);
   WS("end\n");
 
-  WINDENT(indent);
-  WS("if (");
-  ADDINDENTVAR(ret_var);
-  WS(" ~= nil)\n");
   WINDENT(indent + 1);
-  WS("return ");
-  ADDINDENTVAR(ret_var);
-  WS("\n");
+  WS("if (ret ~= nil) then\n");
+  WINDENT(indent + 2);
+  WS("return ret\n");
+  WINDENT(indent + 1);
+  WS("end\n");
   WINDENT(indent);
   WS("end\n");
 #undef ADD_VAR_CALL
