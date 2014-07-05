@@ -2202,7 +2202,7 @@ static FDEC(translate_input, const CommandNode *const node)
   do {
     const TranslationOptions o = kTransUser;
 
-    WS("local state = vim.state\n");
+    WS("local state = vim.state.get_top()\n");
     F(translate_nodes, node, 0);
   } while (0);
   FUNCTION_END;

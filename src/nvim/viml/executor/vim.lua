@@ -50,6 +50,8 @@ local new_script_scope = function(state)
   return scope:new(state, 's')
 end
 
+local top
+
 state = {
   new = function()
     local state = {
@@ -76,6 +78,13 @@ state = {
     }
     state.current_scope = state.global.g
     return state
+  end,
+
+  get_top = function()
+    if top == nil then
+      top = state:new()
+    end
+    return top
   end,
 
   enter_try = function(old_state)
