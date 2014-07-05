@@ -53,7 +53,8 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
       return NULL;
     free(line);
   } else {
-    if ((node = parse_cmd_sequence(o, position, (VimlLineGetter) fgetline_string,
+    if ((node = parse_cmd_sequence(o, position,
+                                   (VimlLineGetter) fgetline_string,
                                    (void *) pp)) == NULL)
       return NULL;
   }

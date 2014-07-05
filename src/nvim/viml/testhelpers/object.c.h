@@ -49,8 +49,10 @@ static FDEC(dump_obj, const Object obj, size_t indent)
       break;
     }
     case kObjectTypeFloat: {
+      char buf[10];
       WS("float: ");
-      assert(false);  // Not implemented
+      snprintf(buf, 10, "%+.2e", obj.data.floating);
+      W_LEN(buf, 9);
       break;
     }
     case kObjectTypeString: {
@@ -64,14 +66,6 @@ static FDEC(dump_obj, const Object obj, size_t indent)
     case type: { \
       WS( #member ": "); \
       F_NOOPT(dump_unumber, (uintmax_t) obj.data.member); \
-      break; \
-    } \
-    case type##Array: { \
-      WS( #member "array: "); \
-      for (size_t i = 0; i < obj.data.member##array.size; i++) { \
-        F_NOOPT(dump_unumber, (uintmax_t) obj.data.member##array.items[i]); \
-        WS(", "); \
-      } \
       break; \
     }
     DUMP_ID_TYPE(kObjectTypeBuffer, buffer)
@@ -100,25 +94,6 @@ static FDEC(dump_obj, const Object obj, size_t indent)
       }
       WINDENT(indent);
       WS("}}}");
-      break;
-    }
-    case kObjectTypePosition: {
-      WS("position: row ");
-      F_NOOPT(dump_number, (intmax_t) obj.data.position.row);
-      WS(", column ");
-      F_NOOPT(dump_number, (intmax_t) obj.data.position.col);
-      break;
-    }
-    case kObjectTypeStringArray: {
-      WS("stringarray:\n");
-      for (size_t i = 0; i < obj.data.stringarray.size; i++) {
-        WINDENT(indent + 1);
-        WS("string: ");
-        F_NOOPT(dump_unumber, (uintmax_t) obj.data.string.size);
-        WS(": ");
-        W_LEN(obj.data.string.data, obj.data.string.size);
-        WS("\n");
-      }
       break;
     }
   }
