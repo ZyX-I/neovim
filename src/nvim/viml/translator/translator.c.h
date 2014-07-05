@@ -1968,11 +1968,52 @@ static CMD_FDEC(translate_let)
   if (node->args[ARG_LET_RHS].arg.expr != NULL) {
     const ExpressionNode *lval_expr = node->args[ARG_LET_LHS].arg.expr;
     const ExpressionNode *rval_expr = node->args[ARG_LET_RHS].arg.expr;
+    LetAssignmentType ass_type = node->args[ARG_LET_ASS_TYPE].arg.unumber;
     WINDENT(indent);
-    F(translate_assignment, lval_expr, indent, NULL,
-                               (FTYPE(AssignmentValueDump))
-                                  &FNAME(translate_rval_expr),
-                               (void *) rval_expr);
+    switch (ass_type) {
+      case VAL_LET_NO_ASS: {
+        assert(false);
+      }
+      case VAL_LET_ASSIGN: {
+        F(translate_assignment, lval_expr, indent, NULL,
+                                   (FTYPE(AssignmentValueDump))
+                                      &FNAME(translate_rval_expr),
+                                   (void *) rval_expr);
+        break;
+      }
+      case VAL_LET_ADD:
+      case VAL_LET_SUBTRACT:
+      case VAL_LET_APPEND: {
+        // FIXME Use STATIC_ASSERT
+        assert(VAL_LET_ADD < VAL_LET_SUBTRACT);
+        assert(VAL_LET_ADD < VAL_LET_APPEND);
+        static const ExpressionType op_types[] = {
+          [VAL_LET_ADD - VAL_LET_ADD] = kExprAdd,
+          [VAL_LET_SUBTRACT - VAL_LET_ADD] = kExprSubtract,
+          [VAL_LET_APPEND - VAL_LET_ADD] = kExprStringConcat,
+        };
+        const ExpressionNode rhs = {
+          .type = kExprExpression,
+          .next = NULL,
+          .children = (ExpressionNode *) rval_expr
+        };
+        const ExpressionNode lhs = {
+          .type = kExprExpression,
+          .next = (ExpressionNode *) &rhs,
+          .children = (ExpressionNode *) lval_expr
+        };
+        const ExpressionNode top = {
+          .type = op_types[ass_type - VAL_LET_ADD],
+          .next = NULL,
+          .children = (ExpressionNode *) &lhs
+        };
+        F(translate_assignment, lval_expr, indent, NULL,
+                                   (FTYPE(AssignmentValueDump))
+                                      &FNAME(translate_rval_expr),
+                                   (void *) &top);
+        break;
+      }
+    }
   } else {
     F(translate_node, node, indent);
   }
