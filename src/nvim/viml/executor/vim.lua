@@ -123,17 +123,17 @@ state = {
 
 -- {{{1 Functions returning specific types
 get_number = function(state, val, position)
-  local t = vim_type(state, val, position)
+  local t = vim_type(val)
   return t.as_number(state, val, position)
 end
 
 get_string = function(state, val, position)
-  local t = vim_type(state, val, position)
+  local t = vim_type(val)
   return t.as_string(state, val, position)
 end
 
 get_float = function(state, val, position)
-  local t = vim_type(state, val, position)
+  local t = vim_type(val)
   return (t.as_float or t.as_number)(state, val, position)
 end
 
@@ -709,13 +709,13 @@ err = {
 
 -- {{{1 Built-in function implementations
 local functions = f_scope:new(nil)
-functions.type = function(state, self, ...)
-  return vim_type(state, ...)['type_number']
+functions.type = function(state, self, val)
+  return vim_type(val)['type_number']
 end
 
 -- {{{1 Built-in commands implementations
 local string_echo = function(state, v, v_position, refs)
-  t = vim_type(state, v, v_position)
+  local t = vim_type(v)
   if t == nil then
     return nil
   end
@@ -768,13 +768,13 @@ end
 -- {{{1 Assign support
 assign = {
   dict = non_nil(function(state, val, dct, key)
-    local t = vim_type(state, dct, dct_position)
+    local t = vim_type(dct)
     return t.assign_subscript(state, dct, dct_position, key, key_position,
                                      val, val_position)
   end),
 
   dict_function = non_nil(function(state, unique, val, dct, key)
-    local t = vim_type(state, dct, dct_position)
+    local t = vim_type(dct)
     return t.assign_subscript_function(
       state, unique,
       dct, dct_position,
@@ -784,7 +784,7 @@ assign = {
   end),
 
   slice = non_nil(function(state, val, lst, idx1, idx2)
-    local t = vim_type(state, lst, lst_position)
+    local t = vim_type(lst)
     return t.assign_slice(
       state,
       lst, lst_position,
@@ -825,28 +825,14 @@ local range = {
 }
 
 -- {{{1 vim_type and is_* functions
-vim_type = function(state, val, position)
-  if (val == nil) then
-    return nil
-  end
-  t = type(val)
-  if (t == 'string') then
-    return string
-  elseif (t == 'number') then
-    return number
-  elseif (t == 'table') then
-    local typ = val[type_idx]
-    if typ == nil then
-      return err.err(state, position, true,
-                     'Internal error: table with unknown type')
-    end
-    return typ
-  elseif t == 'function' then
-    return func
-  else
-    return err.err(state, position, true, 'Internal error: unknown type')
-  end
-  return nil
+local type_table = {
+  ['string'] = string,
+  ['number'] = number,
+  ['function'] = func,
+}
+
+vim_type = function(val)
+  return val and (type_table[type(val)] or val[type_idx])
 end
 
 is_func = function(val)
@@ -855,8 +841,6 @@ end
 
 is_dict = function(val)
   return (type(val) == 'table'
-          and val[type_idx]
-          and type(val[type_idx]) == 'table'
           and val[type_idx].type_number == BASE_TYPE_DICTIONARY)
 end
 
@@ -938,8 +922,8 @@ end
 local less_greater_cmp = function(state, ic, cmp, string_icmp,
                                   arg1, arg1_position,
                                   arg2, arg2_position)
-  local t1 = vim_type(state, arg1, arg1_position)
-  local t2 = vim_type(state, arg2, arg2_position)
+  local t1 = vim_type(arg1)
+  local t2 = vim_type(arg2)
   if (same_complex_types(state, t1, t2, arg2_position) == nil) then
     return nil
   end
@@ -1025,8 +1009,8 @@ local op = {
   end,
 
   equals = function(state, ic, arg1, arg2)
-    local t1 = vim_type(state, arg1, arg1_position)
-    local t2 = vim_type(state, arg2, arg2_position)
+    local t1 = vim_type(arg1)
+    local t2 = vim_type(arg2)
     if (same_complex_types(state, t1, t2, arg2_position) == nil) then
       return nil
     end
@@ -1046,8 +1030,8 @@ local op = {
   end,
 
   identical = non_nil(function(state, ic, arg1, arg2)
-    local t1 = vim_type(state, arg1, arg1_position)
-    local t2 = vim_type(state, arg2, arg2_position)
+    local t1 = vim_type(arg1)
+    local t2 = vim_type(arg2)
     if (t1 ~= t2) then
       return vim_false
     elseif simple_identical[t1.type_number] then
@@ -1106,7 +1090,7 @@ local subscript = {
   end),
 
   subscript = function(state, val, idx)
-    local t = vim_type(state, val, val_position)
+    local t = vim_type(val)
     return t.subscript(state, val, val_position, idx, idx_position)
   end,
 
@@ -1114,7 +1098,7 @@ local subscript = {
     if not (val and idx1 and idx2) then
       return nil
     end
-    local t = vim_type(state, val, val_position)
+    local t = vim_type(val)
     return t.slice(state, val, val_position, idx1 or  0, idx1_position,
                                              idx2 or -1, idx2_position)
   end,
