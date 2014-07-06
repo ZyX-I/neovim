@@ -1,5 +1,6 @@
 -- {{{1 Global declarations
 local err
+local op
 local vim_type
 local is_func, is_dict, is_list, is_float
 local scalar
@@ -238,11 +239,18 @@ number = join_tables(scalar, {
     return num
   end,
 -- {{{3 Operators support
-  less_greater_cmp_priority = 1,
-  less_greater_cmp_conv_priority = 1,
-  less_greater_cmp_conv = 'as_number',
-  equals_cmp_conv_priority = 1,
-  equals_cmp = 'as_number',
+  cmp_priority = 1,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+    local n1 = get_number(state, val1, val1_position)
+    if n1 == nil then
+      return nil
+    end
+    local n2 = get_number(state, val2, val2_position)
+    if n2 == nil then
+      return nil
+    end
+    return (n1 > n2 and 1) or ((n1 == n2 and 0) or -1)
+  end,
 -- }}}3
 })
 
@@ -264,12 +272,18 @@ string = join_tables(scalar, {
     return num
   end,
 -- {{{3 Operators support
-  less_greater_cmp_conv_priority = 0,
-  less_greater_cmp_conv = 'as_string',
-  equals_cmp_conv_priority = 0,
-  equals_cmp_conv = 'as_string',
-  equals_cmp = function(state, ic, str1, str1_position, str2, str2_position)
-    -- TODO
+  cmp_priority = 0,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+    -- TODO Handle ic
+    local s1 = get_string(state, val1, val1_position)
+    if s1 == nil then
+      return nil
+    end
+    local s2 = get_string(state, val2, val2_position)
+    if s2 == nil then
+      return nil
+    end
+    return (s1 > s2 and 1) or ((s1 == s2 and 0) or -1)
   end,
 -- }}}3
 })
@@ -417,17 +431,37 @@ list = {
   as_string = function(state, lst, lst_position)
     return err.err(state, lst_position, true, 'E730: Using List as a String')
   end,
-  as_list = function(state, lst, lst_position)
-    return lst
-  end,
 -- {{{3 Operators support
-  less_greater_cmp_conv_priority = 10,
-  less_greater_cmp_conv = nil,
-  less_greater_cmp_invalid_message = 'E692: Invalid operation for Lists',
-  equals_cmp_conv_priority = 10,
-  equals_cmp_conv = 'as_list',
-  equals_cmp = function(state, ic, lst1, lst1_position, lst2, lst2_position)
-    -- TODO
+  cmp_priority = 10,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+    -- TODO Handle ic
+    if not (is_list(val1) and is_list(val2)) then
+      return err.err(state, val2_position, true,
+                     'E691: Can only compare List with List')
+    elseif not eq then
+      return err.err(state, val1_position, true,
+                     'E692: Invalid operation for Lists')
+    end
+    local length = list.length(val1)
+    if length ~= list.length(val2) then
+      return 1
+    elseif length == 0 then
+      return 0
+    else
+      for i = 1,length do
+        local subv1 = val1[i]
+        local subv2 = val2[i]
+        local st1 = vim_type(subv1)
+        local st2 = vim_type(subv2)
+        if st1.type_number ~= st2.type_number then
+          return 1
+        elseif st1.cmp(state, ic, true, subv1, val1_position,
+                                        subv2, val2_position) ~= 0 then
+          return 1
+        end
+      end
+      return 0
+    end
   end,
 -- }}}3
 }
@@ -504,17 +538,41 @@ dict = {
     return err.err(state, dct_position, true,
                    'E731: Using Dictionary as a String')
   end,
-  as_dict = function(state, dct, dct_position)
-    return dct
-  end,
 -- {{{3 Operators support
-  less_greater_cmp_conv_priority = 10,
-  less_greater_cmp_conv = nil,
-  less_greater_cmp_invalid_message = 'E736: Invalid operation for Dictionaries',
-  equals_cmp_conv_priority = 10,
-  equals_cmp_conv = 'as_dict',
-  equals_cmp = function(state, ic, dct1, dct1_position, dct2, dct2_position)
-    -- TODO
+  cmp_priority = 10,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+    -- TODO Handle ic
+    if not (is_dict(val1) and is_dict(val2)) then
+      return err.err(state, val2_position, true,
+                     'E735: Can only compare Dictionary with Dictionary')
+    elseif not eq then
+      return err.err(state, val1_position, true,
+                     'E736: Invalid operation for Dictionaries')
+    end
+    for k, subv2 in pairs(val2) do
+      if type(k) == 'string' then
+        if val1[k] == nil then
+          return 1
+        end
+      end
+    end
+    for k, subv1 in pairs(val1) do
+      if type(k) == 'string' then
+        local subv2 = val2[k]
+        if subv2 == nil then
+          return 1
+        end
+        local st1 = vim_type(subv1)
+        local st2 = vim_type(subv2)
+        if st1.type_number ~= st2.type_number then
+          return 1
+        elseif st1.cmp(state, ic, true, subv1, val1_position,
+                                        subv2, val2_position) ~= 0 then
+          return 1
+        end
+      end
+    end
+    return 0
   end,
 -- }}}3
 }
@@ -541,10 +599,18 @@ float = join_tables(scalar, {
     return flt[val_idx]
   end,
 -- {{{3 Operators support
-  less_greater_cmp_conv_priority = 2,
-  less_greater_cmp_conv = 'as_float',
-  equals_cmp_conv_priority = 2,
-  equals_cmp_conv = 'as_float',
+  cmp_priority = 2,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+    local f1 = get_float(state, val1, val1_position)
+    if f1 == nil then
+      return nil
+    end
+    local f2 = get_float(state, val2, val2_position)
+    if f2 == nil then
+      return nil
+    end
+    return (f1 > f2 and 1) or ((f1 == f2 and 0) or -1)
+  end,
 -- }}}3
 })
 
@@ -565,15 +631,19 @@ func = join_tables(scalar, {
   as_string = function(state, fun, fun_position)
     return err.err(state, fun_position, true, 'E729: Using Funcref as a String')
   end,
-  as_func = function(state, fun, fun_position)
-    return fun
-  end,
 -- {{{3 Operators support
-  less_greater_cmp_conv_priority = 10,
-  less_greater_cmp_conv = nil,
-  less_greater_cmp_invalid_message = 'E694: Invalid operation for Funcrefs',
-  equals_cmp_conv_priority = 10,
-  equals_cmp_conv = 'as_func',
+  cmp_priority = 10,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+    -- TODO Handle ic
+    if not (is_func(val1) and is_func(val2)) then
+      return err.err(state, val2_position, true,
+                     'E693: Can only compare Funcref with Funcref')
+    elseif not eq then
+      return err.err(state, val1_position, true,
+                     'E694: Invalid operation for Funcrefs')
+    end
+    return val1 == val2 and 0 or 1
+  end,
 -- }}}3
 })
 
@@ -874,67 +944,20 @@ end
 local vim_true = 1
 local vim_false = 0
 
-local different_complex_type_messages = {
-  [BASE_TYPE_LIST] = 'E691: Can only compare List with List',
-  [BASE_TYPE_DICTIONARY] = 'E735: Can only compare Dictionary with Dictionary',
-  [BASE_TYPE_FUNCREF] = 'E693: Can only compare Funcref with Funcref',
-}
-
-local same_complex_types = function(state, t1, t2, arg2_position)
-  if (t1 == nil or t2 == nil) then
+local cmp = function(state, ic, eq, arg1, arg1_position, arg2, arg2_position)
+  if not (arg1 and arg2) then
     return nil
   end
-  local bt1 = t1.type_number
-  if different_complex_type_messages[bt1] then
-    if bt1 ~= t2.type_number then
-      return err.err(state, arg2_position, true,
-                     different_complex_type_messages[bt1])
-    end
-    return 1
-  end
-  return 2
-end
-
-local get_compared_values = function(state, t1, t2, key, arg1, arg1_position,
-                                                         arg2, arg2_position)
-  local conv, cmp
-  if t1[key .. '_conv_priority'] > t2[key .. '_conv_priority'] then
-    conv = t1[key .. '_conv']
-    cmp = t1[key]
-  else
-    conv = t2[key .. '_conv']
-    cmp = t2[key]
-  end
-  if conv == nil then
-    return err.err(state, position, true,
-                   (t1[key .. '_invalid_message'] or
-                    t2[key .. '_invalid_message'])), nil
-  end
-  local v1 =        t1[conv](state, arg1, arg1_position)
-  local v2 = v1 and t2[conv](state, arg2, arg2_position)
-  return v1, v2, conv, cmp
-end
-
-local less_greater_cmp = function(state, ic, cmp, string_icmp,
-                                  arg1, arg1_position,
-                                  arg2, arg2_position)
   local t1 = vim_type(arg1)
   local t2 = vim_type(arg2)
-  if (same_complex_types(state, t1, t2, arg2_position) == nil) then
-    return nil
-  end
-  local v1, v2, conv
-  v1, v2, conv = get_compared_values(state, t1, t2, 'less_greater_cmp',
-                                     arg1, arg1_position,
-                                     arg2, arg2_position)
-  if v1 == nil then
-    return nil
-  end
-  if conv == 'as_string' and ic then
-    return string_icmp(v1, v2) and vim_true or vim_false
+  local cmp
+  if t1.cmp_priority >= t2.cmp_priority then
+    cmp = t1.cmp
   else
-    return cmp(v1, v2) and vim_true or vim_false
+    cmp = t2.cmp
   end
+  return cmp(state, ic, eq, arg1, arg1_position,
+                            arg2, arg2_position)
 end
 
 local simple_identical = {
@@ -943,7 +966,7 @@ local simple_identical = {
   [BASE_TYPE_FUNCREF] = true,
 }
 
-local op = {
+op = {
   add = function(state, ...)
     return iterop(state, get_number, function(state, result, a2, a2_position)
       return result + a2
@@ -998,34 +1021,13 @@ local op = {
     return get_number(state, val, position)
   end,
 
-  equals = function(state, ic, arg1, arg2)
-    local t1 = vim_type(arg1)
-    local t2 = vim_type(arg2)
-    if (same_complex_types(state, t1, t2, arg2_position) == nil) then
-      return nil
-    end
-    local v1, v2
-    v1, v2, conv, cmp = get_compared_values(state, t1, t2, 'equals_cmp',
-                                            arg1, arg1_position,
-                                            arg2, arg2_position)
-    if v1 == nil then
-      return nil
-    end
-    if cmp then
-      return (cmp(state, ic, v1, arg1_position, v2, arg2_position)
-              and vim_true or vim_false)
-    else
-      return (v1 == v2) and vim_true or vim_false
-    end
-  end,
-
   identical = function(state, ic, arg1, arg2)
     if not (arg1 or arg2) then
       return nil
     end
     local t1 = vim_type(arg1)
     local t2 = vim_type(arg2)
-    if (t1 ~= t2) then
+    if (t1.type_number ~= t2.type_number) then
       return vim_false
     elseif simple_identical[t1.type_number] then
       return (arg1 == arg2) and vim_true or vim_false
@@ -1042,27 +1044,18 @@ local op = {
   end,
 
   less = function(state, ic, arg1, arg2)
-    return less_greater_cmp(state, ic,
-                            function(arg1, arg2)
-                              return arg1 < arg2
-                            end,
-                            function(arg1, arg2)
-                              -- TODO case-ignorant string comparison
-                            end,
-                            arg1, arg1_position,
-                            arg2, arg2_position)
+    return (cmp(state, ic, false, arg1, arg1_position, arg2, arg2_position)
+            == -1) and vim_true or vim_false
   end,
 
   greater = function(state, ic, arg1, arg2)
-    return less_greater_cmp(state, ic,
-                            function(arg1, arg2)
-                              return arg1 > arg2
-                            end,
-                            function(arg1, arg2)
-                              -- TODO case-ignorant string comparison
-                            end,
-                            arg1, arg1_position,
-                            arg2, arg2_position)
+    return (cmp(state, ic, false, arg1, arg1_position, arg2, arg2_position)
+            == 1) and vim_true or vim_false
+  end,
+
+  equals = function(state, ic, arg1, arg2)
+    return (cmp(state, ic, true, arg1, arg1_position, arg2, arg2_position)
+            == 0) and vim_true or vim_false
   end,
 }
 
