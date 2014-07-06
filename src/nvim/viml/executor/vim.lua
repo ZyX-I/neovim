@@ -730,20 +730,22 @@ local commands = {
   end,
   abclear = function(state, buffer)
   end,
-  echo = non_nil(function(state, ...)
-    mes = ''
-    for i, s in ipairs({...}) do
-      if (i > 1) then
-        mes = mes .. ' '
+  echo = function(state, ...)
+    local mes = ''
+    for i = 1,select('#', ...) do
+      s = select(i, ...)
+      if s == nil then
+        return nil
       end
-      chunk = string_echo(state, s, s_position, {})
+      mes = mes .. ' '
+      local chunk = string_echo(state, s, s_position, {})
       if chunk == nil then
         return nil
       end
       mes = mes .. chunk
     end
-    print (mes)
-  end),
+    print (mes:sub(2))
+  end,
 }
 
 -- {{{1 User commands implementation
@@ -767,13 +769,19 @@ end
 
 -- {{{1 Assign support
 assign = {
-  dict = non_nil(function(state, val, dct, key)
+  dict = function(state, val, dct, key)
+    if not (val and dct and key) then
+      return nil
+    end
     local t = vim_type(dct)
     return t.assign_subscript(state, dct, dct_position, key, key_position,
                                      val, val_position)
-  end),
+  end,
 
-  dict_function = non_nil(function(state, unique, val, dct, key)
+  dict_function = function(state, unique, val, dct, key)
+    if not (val and dct and key) then
+      return nil
+    end
     local t = vim_type(dct)
     return t.assign_subscript_function(
       state, unique,
@@ -781,9 +789,12 @@ assign = {
       key, key_position,
       val, val_position
     )
-  end),
+  end,
 
-  slice = non_nil(function(state, val, lst, idx1, idx2)
+  slice = function(state, val, lst, idx1, idx2)
+    if not (val and lst and idx1 and idx2) then
+      return nil
+    end
     local t = vim_type(lst)
     return t.assign_slice(
       state,
@@ -792,11 +803,11 @@ assign = {
       idx2, idx2_position,
       val, val_position
     )
-  end),
+  end,
 
-  slice_function = non_nil(function(state, unique, ...)
+  slice_function = function(state, unique, ...)
     return assign.slice(state, ...)
-  end),
+  end,
 }
 
 -- {{{1 Range handling
@@ -853,27 +864,19 @@ is_float = function(val)
 end
 
 -- {{{1 Operators
-local iterop = non_nil(function(state, converter, opfunc, ...)
-  local result
-  if select('#', ...) < 2 then
-    return nil
-  end
-  for i, v in ipairs({...}) do
-    local curarg = converter(state, v, position)
-    if (curarg == nil) then
+local iterop = function(state, converter, opfunc, ...)
+  local result = select(1, ...)
+  result = result and converter(state, result, nil)
+  for i = 2,select('#', ...) do
+    local v = select(i, ...)
+    local curarg = v and converter(state, v, nil)
+    result = curarg and opfunc(state, result, curarg, nil)
+    if result == nil then
       return nil
-    end
-    if (i == 1) then
-      result = curarg
-    else
-      result = opfunc(state, result, curarg, curarg_position)
-      if (result == nil) then
-        return nil
-      end
     end
   end
   return result
-end)
+end
 
 local vim_true = 1
 local vim_false = 0
@@ -993,16 +996,10 @@ local op = {
     end
   end,
 
-  negate_logical = non_nil(function(state, val)
-    val = get_number(state, val, position)
-    if (val == nil) then
-      return nil
-    elseif (val == 0) then
-      return vim_true
-    else
-      return vim_false
-    end
-  end),
+  negate_logical = function(state, val)
+    return val and (get_number(state, val, position) == 0
+                    and vim_true or vim_false)
+  end,
 
   promote_integer = function(state, val)
     return get_number(state, val, position)
@@ -1029,7 +1026,10 @@ local op = {
     end
   end,
 
-  identical = non_nil(function(state, ic, arg1, arg2)
+  identical = function(state, ic, arg1, arg2)
+    if not (arg1 or arg2) then
+      return nil
+    end
     local t1 = vim_type(arg1)
     local t2 = vim_type(arg2)
     if (t1 ~= t2) then
@@ -1039,11 +1039,14 @@ local op = {
     else
       return op.equals(state, ic, arg1, arg2)
     end
-  end),
+  end,
 
-  matches = non_nil(function(state, ic, arg1, arg2)
+  matches = function(state, ic, arg1, arg2)
+    if not (arg1 or arg2) then
+      return nil
+    end
     -- TODO
-  end),
+  end,
 
   less = function(state, ic, arg1, arg2)
     return less_greater_cmp(state, ic,
@@ -1072,7 +1075,10 @@ local op = {
 
 -- {{{1 Subscripting
 local subscript = {
-  func = non_nil(function(state, val, idx)
+  func = function(state, val, idx)
+    if not (val and idx) then
+      return nil
+    end
     local f = subscript.subscript(state, val, idx)
     if not is_func(f) then
       -- TODO echo error message
@@ -1087,9 +1093,12 @@ local subscript = {
         return f(state, nil, ...)
       end
     end
-  end),
+  end,
 
   subscript = function(state, val, idx)
+    if not (val and idx) then
+      return nil
+    end
     local t = vim_type(val)
     return t.subscript(state, val, val_position, idx, idx_position)
   end,
@@ -1108,7 +1117,10 @@ local subscript = {
   end),
 }
 
-local func_concat_or_subscript = non_nil(function(state, dct, key)
+local func_concat_or_subscript = function(state, dct, key)
+  if not (dct or key) then
+    return nil
+  end
   local f
   local dct_is_dict = is_dict(dct)
   local f_is_func
@@ -1136,19 +1148,22 @@ local func_concat_or_subscript = non_nil(function(state, dct, key)
   else
     return f
   end
-end)
+end
 
-local concat_or_subscript = non_nil(function(state, dct, key)
+local concat_or_subscript = function(state, dct, key)
   if is_dict(dct) then
     return dict.subscript(state, dct, dct_position, key, key_position)
   else
     return op.concat(state, dct, key)
   end
-end)
+end
 
-local get_scope_and_key = non_nil(function(state, key)
+local get_scope_and_key = function(state, key)
+  if not key then
+    return nil
+  end
   -- TODO
-end)
+end
 
 -- {{{1 return
 local zero = 0
