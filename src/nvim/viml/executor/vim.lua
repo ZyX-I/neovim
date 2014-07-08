@@ -221,14 +221,16 @@ scalar = {
   end,
 -- }}}3
 }
--- {{{2 Number
+
+-- {{{2 Basic types
+-- {{{3 Number
 number = join_tables(scalar, {
   type_number = BASE_TYPE_NUMBER,
--- {{{3 string()
+-- {{{4 string()
   to_string_echo = function(state, num, num_position)
     return tostring(num)
   end,
--- {{{3 Type conversions
+-- {{{4 Type conversions
   as_number = function(state, num, num_position)
     return num
   end,
@@ -238,7 +240,7 @@ number = join_tables(scalar, {
   as_float = function(state, num, num_position)
     return num
   end,
--- {{{3 Operators support
+-- {{{4 Operators support
   cmp_priority = 1,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     local n1 = get_number(state, val1, val1_position)
@@ -251,17 +253,17 @@ number = join_tables(scalar, {
     end
     return (n1 > n2 and 1) or ((n1 == n2 and 0) or -1)
   end,
--- }}}3
+-- }}}4
 })
 
--- {{{2 String
+-- {{{3 String
 string = join_tables(scalar, {
   type_number = BASE_TYPE_STRING,
--- {{{3 string()
+-- {{{4 string()
   to_string_echo = function(state, str, str_position)
     return str
   end,
--- {{{3 Type conversions
+-- {{{4 Type conversions
   as_number = function(state, str, str_position)
     return tonumber(str:match('^%d+')) or 0
   end,
@@ -271,7 +273,7 @@ string = join_tables(scalar, {
   as_float = function(state, num, num_position)
     return num
   end,
--- {{{3 Operators support
+-- {{{4 Operators support
   cmp_priority = 0,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     -- TODO Handle ic
@@ -285,12 +287,12 @@ string = join_tables(scalar, {
     end
     return (s1 > s2 and 1) or ((s1 == s2 and 0) or -1)
   end,
--- }}}3
+-- }}}4
 })
 
--- {{{2 List
+-- {{{3 List
 list = {
--- {{{3 New
+-- {{{4 New
   type_number = BASE_TYPE_LIST,
   new = add_type_table(function(state, ...)
     local ret = {...}
@@ -299,7 +301,7 @@ list = {
     ret.fixed = false
     return ret
   end),
--- {{{3 Locks support
+-- {{{4 Locks support
   can_modify = function(state, lst, lst_position)
     if (lst.fixed) then
       -- TODO error out
@@ -310,7 +312,7 @@ list = {
     end
     return true
   end,
--- {{{3 Modification support
+-- {{{4 Modification support
   insert = function(state, lst, lst_position, pos, pos_position,
                            val, val_position)
     if not list.can_modify(state, lst, lst_positioon) then
@@ -325,7 +327,7 @@ list = {
     end
     table.insert(self, val)
   end,
--- {{{3 Assignment support
+-- {{{4 Assignment support
   raw_assign_subscript = function(lst, idx, val)
     lst[idx + 1] = val
   end,
@@ -346,7 +348,7 @@ list = {
     -- TODO slice assignment
     return true
   end,
--- {{{3 Querying support
+-- {{{4 Querying support
   length = table.maxn,
   raw_subscript = function(lst, idx)
     return lst[idx + 1]
@@ -388,7 +390,7 @@ list = {
     end
     return ret
   end,
--- {{{3 Support for iterations
+-- {{{4 Support for iterations
   next = function(it_state, _)
     local i = it_state.i
     if i >= it_state.maxi then
@@ -406,7 +408,7 @@ list = {
     table.insert(lst.iterators, it_state)
     return list.next, it_state, lst
   end,
--- {{{3 string()
+-- {{{4 string()
   to_string_echo = function(state, lst, refs)
     local ret = '['
     local length = list.length(lst)
@@ -424,14 +426,14 @@ list = {
     ret = ret .. ']'
     return ret
   end,
--- {{{3 Type conversions
+-- {{{4 Type conversions
   as_number = function(state, lst, lst_position)
     return err.err(state, lst_position, true, 'E745: Using List as a Number')
   end,
   as_string = function(state, lst, lst_position)
     return err.err(state, lst_position, true, 'E730: Using List as a String')
   end,
--- {{{3 Operators support
+-- {{{4 Operators support
   cmp_priority = 10,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     -- TODO Handle ic
@@ -463,12 +465,12 @@ list = {
       return 0
     end
   end,
--- }}}3
+-- }}}4
 }
 
--- {{{2 Dictionary
+-- {{{3 Dictionary
 dict = {
--- {{{3 New
+-- {{{4 New
   type_number = BASE_TYPE_DICTIONARY,
   new = add_type_table(function(state, ...)
     local ret = {}
@@ -486,8 +488,8 @@ dict = {
     end
     return ret
   end),
--- {{{3 Modification support
--- {{{3 Assignment support
+-- {{{4 Modification support
+-- {{{4 Assignment support
   assign_subscript = function(state, dct, dct_position, key, key_position,
                                      val, val_position)
     if key == '' then
@@ -514,7 +516,7 @@ dict = {
     return err.err(state, dct_position, true,
                    'E719: Cannot use [:] with a Dictionary')
   end,
--- {{{3 Querying support
+-- {{{4 Querying support
   missing_key_message = 'E716: Key not present in Dictionary',
   subscript = function(state, dct, dct_position, key, key_position)
     key = get_string(state, key, key_position)
@@ -529,7 +531,7 @@ dict = {
     end
     return ret
   end,
--- {{{3 Type conversions
+-- {{{4 Type conversions
   as_number = function(state, dct, dct_position)
     return err.err(state, dct_position, true,
                    'E728: Using Dictionary as a Number')
@@ -538,7 +540,7 @@ dict = {
     return err.err(state, dct_position, true,
                    'E731: Using Dictionary as a String')
   end,
--- {{{3 Operators support
+-- {{{4 Operators support
   cmp_priority = 10,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     -- TODO Handle ic
@@ -574,21 +576,21 @@ dict = {
     end
     return 0
   end,
--- }}}3
+-- }}}4
 }
 
--- {{{2 Float
+-- {{{3 Float
 float = join_tables(scalar, {
--- {{{3 New
+-- {{{4 New
   type_number = BASE_TYPE_FLOAT,
   new = add_type_table(function(state, f)
     return {[val_idx] = f}
   end),
--- {{{3 string()
+-- {{{4 string()
   to_string_echo = function(state, flt, flt_position)
     return tostring(flt[val_idx])
   end,
--- {{{3 Type conversions
+-- {{{4 Type conversions
   as_number = function(state, flt, flt_position)
     return err.err(state, flt_position, true, 'E805: Using Float as a Number')
   end,
@@ -598,7 +600,7 @@ float = join_tables(scalar, {
   as_float = function(state, flt, flt_position)
     return flt[val_idx]
   end,
--- {{{3 Operators support
+-- {{{4 Operators support
   cmp_priority = 2,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     local f1 = get_float(state, val1, val1_position)
@@ -611,27 +613,27 @@ float = join_tables(scalar, {
     end
     return (f1 > f2 and 1) or ((f1 == f2 and 0) or -1)
   end,
--- }}}3
+-- }}}4
 })
 
--- {{{2 Function reference
+-- {{{3 Function reference
 func = join_tables(scalar, {
   type_number = BASE_TYPE_FUNCREF,
--- {{{3 Querying support
+-- {{{4 Querying support
   subscript = function(state, fun, fun_position, ...)
     return err.err(state, val_position, true, 'E695: Cannot index a Funcref')
   end,
   slice = function(...)
     return func.subscript(...)
   end,
--- {{{3 Type conversions
+-- {{{4 Type conversions
   as_number = function(state, fun, fun_position)
     return err.err(state, fun_position, true, 'E703: Using Funcref as a Number')
   end,
   as_string = function(state, fun, fun_position)
     return err.err(state, fun_position, true, 'E729: Using Funcref as a String')
   end,
--- {{{3 Operators support
+-- {{{4 Operators support
   cmp_priority = 10,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     -- TODO Handle ic
@@ -644,10 +646,11 @@ func = join_tables(scalar, {
     end
     return val1 == val2 and 0 or 1
   end,
--- }}}3
+-- }}}4
 })
 
--- {{{2 Scope dictionaries
+-- {{{2 Scopes
+-- {{{3 Base type for scope dictionaries
 scope = join_tables(dict, {
   new = add_type_table(function(state, scope_name, ...)
     local ret = dict:new(state, ...)
@@ -677,7 +680,7 @@ scope = join_tables(dict, {
                         'E122: Function %s already exists, add ! to replace it',
 })
 
--- {{{2 g: and l: dictionaries
+-- {{{3 g: and l: dictionaries
 def_scope = join_tables(scope, {
   assign_subscript = function(state, dct, dct_position, key, key_position,
                                      val, val_position)
@@ -694,21 +697,21 @@ def_scope = join_tables(scope, {
   end
 })
 
--- {{{2 b: scope dictionary
+-- {{{3 b: scope dictionary
 b_scope = join_tables(scope, {
   new = add_type_table(function(state, ...)
     return scope:new(state, 'b', ...)
   end),
 })
 
--- {{{2 a: scope dictionary
+-- {{{3 a: scope dictionary
 a_scope = join_tables(scope, {
   new = add_type_table(function(state, ...)
     return scope:new(state, 'a', ...)
   end),
 })
 
--- {{{2 v: scope dictionary
+-- {{{3 v: scope dictionary
 v_scope = join_tables(scope, {
   new = add_type_table(function(state, ...)
     return scope:new(state, 'v', ...)
@@ -723,22 +726,13 @@ v_scope = join_tables(scope, {
   },
 })
 
--- {{{2 Functions dictionary
+-- {{{3 Functions dictionary
 f_scope = join_tables(dict, {
   missing_key_message = 'E117: Unknown function',
   new = add_type_table(function(state, ...)
     return scope:new(state, nil, ...)
   end),
 })
-
--- {{{2 Define types table
-types = {
-  number = number,
-  string = string,
-  list = list,
-  dict = dict,
-  float = float,
-}
 
 -- {{{1 Error manipulation
 err = {
@@ -1178,7 +1172,13 @@ return {
   false_ = zero,
   true_ = 1,
   type = vim_type,
-  types = types,
+  types = {
+    number = number,
+    string = string,
+    list = list,
+    dict = dict,
+    float = float,
+  },
   is_func = is_func,
   is_dict = is_dict,
   is_list = is_list,
