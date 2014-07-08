@@ -153,4 +153,42 @@ describe(':try block', function()
     endtry
     echo 2
   ]], {1, 2})
+  ito(':catch shows correct v:exception', [[
+    try
+      echo a
+    catch
+      echo v:exception
+    endtry
+  ]], {'E121: Undefined variable: a'})
+  ito('v:exception is empty outside of the :catch if there was no exception', [[
+    try
+    catch
+    endtry
+    echo v:exception
+  ]], {''})
+  ito('v:exception is empty outside of the :catch if there was exception', [[
+    try
+      echo a
+    catch
+    endtry
+    echo v:exception
+  ]], {''})
+  ito('v:exception is empty before :try', [[
+    echo v:exception
+    try
+    catch
+    endtry
+  ]], {''})
+  ito('v:exception before :try, inside it, :catch, :finally and at the end', [[
+    echo v:exception
+    try
+      echo v:exception
+      echo a
+    catch
+      echo v:exception
+    finally
+      echo v:exception
+    endtry
+    echo v:exception
+  ]], {'', '', 'E121: Undefined variable: a', '', ''})
 end)
