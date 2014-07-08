@@ -3,7 +3,7 @@ local err
 local op
 local vim_type
 local is_func, is_dict, is_list, is_float
-local scalar
+local scalar, container
 local number, string, list, dict, float, func
 local scope, def_scope, b_scope, a_scope, v_scope, f_scope
 local state, assign
@@ -155,6 +155,20 @@ local add_type_table = function(func)
   end
 end
 
+local num_convert_2 = function(func, converter)
+  return function(state, val1, val1_position, val2, val2_position)
+    local n1 = converter(state, val1, val1_position)
+    if n1 == nil then
+      return nil
+    end
+    local n2 = converter(state, val2, val2_position)
+    if n2 == nil then
+      return nil
+    end
+    return func(n1, n2)
+  end
+end
+
 -- {{{2 Related constants
 -- Special values that cannot be assigned from VimL
 type_idx = true
@@ -195,7 +209,7 @@ scalar = {
     if idx < 0 then
       return ''
     end
-    return string.sub(str, idx + 1, idx + 1)
+    return str:sub(idx + 1, idx + 1)
   end,
   slice = function(state, val, val_position, idx1, idx1_position,
                                              idx2, idx2_position)
@@ -217,8 +231,51 @@ scalar = {
     if idx2 >= 0 then
       idx2 = idx2 + 1
     end
-    return string.sub(str, idx1, idx2)
+    return str:sub(str, idx1, idx2)
   end,
+-- {{{3 Operators support
+  num_op_priority = 1,
+  add = num_convert_2(function(n1, n2)
+    return n1 + n2
+  end, get_number),
+  subtract = num_convert_2(function(n1, n2)
+    return n1 - n2
+  end, get_number),
+  multiply = num_convert_2(function(n1, n2)
+    return n1 * n2
+  end, get_number),
+  divide = num_convert_2(function(n1, n2)
+    local ret = n1 / n2
+    return math.floor(math.abs(ret)) * ((ret >= 0) and 1 or -1)
+  end, get_number),
+  modulo = num_convert_2(function(n1, n2)
+    return n1 % n2
+  end, get_number),
+  negate = function(state, val, val_position)
+    local n = get_number(state, val, val_position)
+    return n and -n
+  end,
+  promote_integer = get_number,
+-- }}}3
+}
+
+-- {{{2 Container type base
+local numop = function(state, val1, val1_position, val2, val2_position)
+  -- One of the following calls must fail for container type
+  return (get_float(state, val1, val1_position)
+          and get_float(state, val2, val2_position))
+end
+
+container = {
+-- {{{3 Operators support
+  num_op_priority = 10,
+  add = numop,
+  subtract = numop,
+  multiply = numop,
+  divide = numop,
+  modulo = numop,
+  negate = numop,
+  promote_integer = numop,
 -- }}}3
 }
 
@@ -265,7 +322,7 @@ string = join_tables(scalar, {
   end,
 -- {{{4 Type conversions
   as_number = function(state, str, str_position)
-    return tonumber(str:match('^%d+')) or 0
+    return tonumber(str:match('^%-?%d+')) or 0
   end,
   as_string = function(state, str, str_position)
     return str
@@ -291,7 +348,7 @@ string = join_tables(scalar, {
 })
 
 -- {{{3 List
-list = {
+list = join_tables(container, {
 -- {{{4 New
   type_number = BASE_TYPE_LIST,
   new = add_type_table(function(state, ...)
@@ -471,11 +528,29 @@ list = {
       return 0
     end
   end,
+  num_op_priority = 3,
+  add = function(state, val1, val1_position, val2, val2_position)
+    if not (is_list(val1) and is_list(val2)) then
+      -- Error out
+      if is_list(val1) then
+        return list.as_number(state, val1, val1_position)
+      else
+        return list.as_number(state, val2, val2_position)
+      end
+    end
+    local length1 = list.length(val1)
+    local length2 = list.length(val2)
+    local ret = copy_table(val1)
+    for i, v in ipairs(val2) do
+      ret[length1 + i] = v
+    end
+    return ret
+  end,
 -- }}}4
-}
+})
 
 -- {{{3 Dictionary
-dict = {
+dict = join_tables(container, {
 -- {{{4 New
   type_number = BASE_TYPE_DICTIONARY,
   new = add_type_table(function(state, ...)
@@ -582,9 +657,16 @@ dict = {
     return 0
   end,
 -- }}}4
-}
+})
 
 -- {{{3 Float
+local return_float = function(func)
+  return function(state, ...)
+    local ret = func(state, ...)
+    return float:new(state, ret)
+  end
+end
+
 float = join_tables(scalar, {
 -- {{{4 New
   type_number = BASE_TYPE_FLOAT,
@@ -618,6 +700,28 @@ float = join_tables(scalar, {
     end
     return (f1 > f2 and 1) or ((f1 == f2 and 0) or -1)
   end,
+  num_op_priority = 2,
+  add = return_float(num_convert_2(function(f1, f2)
+    return f1 + f2
+  end, get_float)),
+  subtract = return_float(num_convert_2(function(f1, f2)
+    return f1 - f2
+  end, get_float)),
+  multiply = return_float(num_convert_2(function(f1, f2)
+    return f1 * f2
+  end, get_float)),
+  divide = return_float(num_convert_2(function(f1, f2)
+    return f1 / f2
+  end, get_float)),
+  modulo = return_float(num_convert_2(function(f1, f2)
+    return f1 % f2
+  end, get_float)),
+  negate = return_float(function(state, flt, flt_position)
+    return -flt[val_idx]
+  end),
+  promote_integer = function(state, flt, flt_position)
+    return flt
+  end,
 -- }}}4
 })
 
@@ -641,7 +745,6 @@ func = join_tables(scalar, {
 -- {{{4 Operators support
   cmp_priority = 10,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
-    -- TODO Handle ic
     if not (is_func(val1) and is_func(val2)) then
       return err.err(state, val2_position, true,
                      'E693: Can only compare Funcref with Funcref')
@@ -926,16 +1029,24 @@ is_float = function(val)
 end
 
 -- {{{1 Operators
-local iterop = function(state, converter, opfunc, ...)
+local iterop = function(state, op, ...)
   local result = select(1, ...)
-  result = result and converter(state, result, nil)
+  if result == nil then
+    return nil
+  end
+  local tr = vim_type(result)
   for i = 2,select('#', ...) do
     local v = select(i, ...)
-    local curarg = v and converter(state, v, nil)
-    result = curarg and opfunc(state, result, curarg, nil)
-    if result == nil then
+    if v == nil then
       return nil
     end
+    local ti = vim_type(v)
+    if tr.num_op_priority >= ti.num_op_priority then
+      result = tr[op](state, result, nil, v, nil)
+    else
+      result = ti[op](state, result, nil, v, nil)
+    end
+    tr = vim_type(result)
   end
   return result
 end
@@ -967,48 +1078,45 @@ local simple_identical = {
 
 op = {
   add = function(state, ...)
-    return iterop(state, get_number, function(state, result, a2, a2_position)
-      return result + a2
-    end, ...)
+    return iterop(state, 'add', ...)
   end,
 
   subtract = function(state, ...)
-    return iterop(state, get_number, function(state, result, a2, a2_position)
-      return result - a2
-    end, ...)
+    return iterop(state, 'subtract', ...)
   end,
 
   multiply = function(state, ...)
-    return iterop(state, get_number, function(state, result, a2, a2_position)
-      return result * a2
-    end, ...)
+    return iterop(state, 'multiply', ...)
   end,
 
   divide = function(state, ...)
-    return iterop(state, get_number, function(state, result, a2, a2_position)
-      return result / a2
-    end, ...)
+    return iterop(state, 'divide', ...)
   end,
 
   modulo = function(state, ...)
-    return iterop(state, get_number, function(state, result, a2, a2_position)
-      return result % a2
-    end, ...)
+    return iterop(state, 'modulo', ...)
   end,
 
   concat = function(state, ...)
-    return iterop(state, get_string, function(state, result, a2, a2_position)
-      return result .. a2
-    end, ...)
+    local result = select(1, ...)
+    result = result and get_string(state, result)
+    if result == nil then
+      return nil
+    end
+    for i = 2,select('#', ...) do
+      local v = select(i, ...)
+      v = v and get_string(state, v)
+      if v == nil then
+        return nil
+      end
+      result = result .. v
+    end
+    return result
   end,
 
   negate = function(state, val)
-    val = get_number(state, val, position)
-    if (val == nil) then
-      return nil
-    else
-      return -val
-    end
+    local t = vim_type(val)
+    return t.negate(state, val, position)
   end,
 
   negate_logical = function(state, val)
@@ -1017,7 +1125,8 @@ op = {
   end,
 
   promote_integer = function(state, val)
-    return get_number(state, val, position)
+    local t = vim_type(val)
+    return t.promote_integer(state, val, position)
   end,
 
   identical = function(state, ic, arg1, arg2)
