@@ -1277,31 +1277,46 @@ static FDEC(translate_varname, const ExpressionNode *const expr,
 ///
 /// @param[in]  expr         Translated expression.
 /// @param[in]  is_funccall  True if it translates :function definition.
-/// @param[in]  unique       True if assignment must be unique.
-/// @param[in]  dump         Function used to dump value that will be assigned.
+/// @param[in]  bang         True if function must not be unique when 
+///                          is_funccall is set and true if errors about missing 
+///                          values are to be ignored.
+/// @param[in]  dump         Function used to dump value that will be assigned. 
+///                          When NULL use commands for undefining variable and 
+///                          function definitions (backs :unlet and 
+///                          :delfunction).
 /// @param[in]  dump_cookie  First argument to the above function.
 static FDEC(translate_lval, const ExpressionNode *const expr,
-                            const bool is_funccall, const bool unique,
+                            const bool is_funccall, const bool bang,
                             const FTYPE(AssignmentValueDump) FNAME(dump),
                             const void *const dump_cookie)
 {
   FUNCTION_START;
-#define ADD_ASSIGN(what) \
+#define ADD_CALL(what) \
   do { \
-    if (is_funccall) { \
-      WS("vim.assign." what "_function(state, "); \
-      F(dump_bool, unique); \
+    if (FNAME(dump) == NULL) { \
+      if (is_funccall) { \
+        WS("vim.assign.del_" what "_function(state, "); \
+      } else { \
+        WS("vim.assign.del_" what "(state, "); \
+      } \
+      F(dump_bool, bang); \
       WS(", "); \
     } else { \
-      WS("vim.assign." what "(state, "); \
+      if (is_funccall) { \
+        WS("vim.assign.ass_" what "_function(state, "); \
+        F(dump_bool, bang); \
+        WS(", "); \
+      } else { \
+        WS("vim.assign.ass_" what "(state, "); \
+      } \
+      F(dump, dump_cookie); \
+      WS(", "); \
     } \
   } while (0)
   switch (expr->type) {
     case kExprSimpleVariableName: {
       const char_u *start;
-      ADD_ASSIGN("dict");
-      F(dump, dump_cookie);
-      WS(", ");
+      ADD_CALL("dict");
       F(translate_scope, &start, expr, TS_ONLY_SEGMENT|TS_LAST_SEGMENT
                                           |(is_funccall
                                             ? TS_FUNCASSIGN
@@ -1317,9 +1332,7 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
 
       assert(current_expr != NULL);
 
-      ADD_ASSIGN("dict");
-      F(dump, dump_cookie);
-      WS(", ");
+      ADD_CALL("dict");
 
       F(translate_varname, expr, is_funccall);
 
@@ -1327,9 +1340,7 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
       break;
     }
     case kExprConcatOrSubscript: {
-      ADD_ASSIGN("dict");
-      F(dump, dump_cookie);
-      WS(", ");
+      ADD_CALL("dict");
       F(translate_expr, expr->children, false);
       WS(", '");
       W_EXPR_POS(expr);
@@ -1338,12 +1349,10 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
     }
     case kExprSubscript: {
       if (expr->children->next->next == NULL) {
-        ADD_ASSIGN("dict");
+        ADD_CALL("dict");
       } else {
-        ADD_ASSIGN("slice");
+        ADD_CALL("slice");
       }
-      F(dump, dump_cookie);
-      WS(", ");
       F(translate_expr, expr->children, false);
       WS(", ");
       F(translate_expr, expr->children->next, false);
@@ -1358,7 +1367,7 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
       assert(false);
     }
   }
-#undef ADD_ASSIGN
+#undef ADD_CALL
   FUNCTION_END;
 }
 
@@ -1626,7 +1635,7 @@ static CMD_FDEC(translate_function)
   FUNCTION_START;
   const TranslateFuncArgs args = {node, indent};
   WINDENT(indent);
-  F(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, true, !node->bang,
+  F(translate_lval, node->args[ARG_FUNC_NAME].arg.expr, true, node->bang,
                     (FTYPE(AssignmentValueDump))
                       &FNAME(translate_function_definition),
                     (void *) &args);
@@ -1849,6 +1858,16 @@ static CMD_FDEC(translate_try_block)
   WS("end\n");
 #undef CHECK_NEW_RET
 
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_unlet)
+{
+  FUNCTION_START;
+  const ExpressionNode *lval_expr = node->args[ARG_EXPR_EXPR].arg.expr;
+  for (; lval_expr != NULL; lval_expr = lval_expr->next) {
+    F(translate_lval, lval_expr, false, node->bang, NULL, NULL);
+  }
   FUNCTION_END;
 }
 
@@ -2099,6 +2118,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdIf, translate_if_block)
       SET_HANDLER(kCmdTry, translate_try_block)
       SET_HANDLER(kCmdLet, translate_let)
+      SET_HANDLER(kCmdUnlet, translate_unlet)
 #undef SET_HANDLER
       default: {
         F(translate_node, current_node, indent);
