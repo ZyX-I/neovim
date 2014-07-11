@@ -245,8 +245,19 @@ scalar = {
     return n1 * n2
   end, get_number),
   divide = num_convert_2(function(n1, n2)
-    local ret = n1 / n2
-    return math.floor(math.abs(ret)) * ((ret >= 0) and 1 or -1)
+    if n2 == 0 then
+      -- According to :h expr-/
+      if n1 == 0 then
+        return -0x80000000
+      elseif n1 > 0 then
+        return  0x7fffffff
+      else
+        return -0x7fffffff
+      end
+    else
+      local ret = n1 / n2
+      return math.floor(math.abs(ret)) * ((ret >= 0) and 1 or -1)
+    end
   end, get_number),
   modulo = num_convert_2(function(n1, n2)
     return n1 % n2
