@@ -733,9 +733,10 @@ float = join_tables(scalar, {
   divide = return_float(num_convert_2(function(f1, f2)
     return f1 / f2
   end, get_float)),
-  modulo = return_float(num_convert_2(function(f1, f2)
-    return f1 % f2
-  end, get_float)),
+  modulo = function(state, flt1, flt1_position, ...)
+    return err.err(state, flt1_position, true,
+                   'E804: Cannot use \'%%\' with Float')
+  end,
   negate = return_float(function(state, flt, flt_position)
     return -flt[val_idx]
   end),
