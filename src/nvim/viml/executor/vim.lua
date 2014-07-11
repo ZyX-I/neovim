@@ -260,6 +260,9 @@ scalar = {
     end
   end, get_number),
   modulo = num_convert_2(function(n1, n2)
+    if n2 == 0 then
+      return 0
+    end
     return n1 % n2
   end, get_number),
   negate = function(state, val, val_position)
