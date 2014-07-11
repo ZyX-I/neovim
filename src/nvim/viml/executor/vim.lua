@@ -196,6 +196,12 @@ scalar = {
   assign_slice = function(state, val, val_position, ...)
     return scalar.assign_subscript(state, val, val_position, ...)
   end,
+  delete_subscript = function(state, val, val_position, ...)
+    return scalar.assign_subscript(state, val, val_position, ...)
+  end,
+  delete_slice = function(state, val, val_position, ...)
+    return scalar.assign_subscript(state, val, val_position, ...)
+  end,
 -- {{{3 Querying support
   subscript = function(state, val, val_position, idx, idx_position)
     local str = get_string(state, val, val_position)
@@ -603,6 +609,19 @@ dict = join_tables(container, {
     dct[key] = val
     return true
   end,
+  delete_subscript = function(state, mustexist, dct, dct_position,
+                                                key, key_position)
+    if mustexist and dct[key] == nil then
+      local t = vim_type(dct)
+      return err.err(state, key_position, true,
+                     ((t.missing_key_delete_message or t.missing_key_message) ..
+                      ": %s"),
+                     key)
+    end
+    local ret = dct[key] or true
+    dct[key] = nil
+    return ret
+  end,
   non_unique_function_message = 'E717: Dictionary entry already exists: %s',
   assign_subscript_function = function(state, unique, dct, dct_position,
                                                       key, key_position,
@@ -618,6 +637,9 @@ dict = join_tables(container, {
   assign_slice = function(state, dct,  dct_position, ...)
     return err.err(state, dct_position, true,
                    'E719: Cannot use [:] with a Dictionary')
+  end,
+  delete_slice = function(...)
+    return dict.assign_slice(...)
   end,
 -- {{{4 Querying support
   missing_key_message = 'E716: Key not present in Dictionary',
@@ -797,6 +819,7 @@ scope = join_tables(dict, {
       return dict.subscript(state, dct, dct_position, key, key_position)
     end
   end,
+  missing_key_delete_message = 'E108: No such variable',
   missing_key_message = 'E121: Undefined variable',
   assign_subscript = function(state, dct, dct_position, key, key_position,
                                      val, val_position)
@@ -957,7 +980,7 @@ end
 
 -- {{{1 Assign support
 assign = {
-  dict = function(state, val, dct, key)
+  ass_dict = function(state, val, dct, key)
     if not (val and dct and key) then
       return nil
     end
@@ -966,20 +989,20 @@ assign = {
                                      val, val_position)
   end,
 
-  dict_function = function(state, unique, val, dct, key)
+  ass_dict_function = function(state, bang, val, dct, key)
     if not (val and dct and key) then
       return nil
     end
     local t = vim_type(dct)
     return t.assign_subscript_function(
-      state, unique,
+      state, not bang,
       dct, dct_position,
       key, key_position,
       val, val_position
     )
   end,
 
-  slice = function(state, val, lst, idx1, idx2)
+  ass_slice = function(state, val, lst, idx1, idx2)
     if not (val and lst and idx1 and idx2) then
       return nil
     end
@@ -993,8 +1016,45 @@ assign = {
     )
   end,
 
-  slice_function = function(state, unique, ...)
-    return assign.slice(state, ...)
+  ass_slice_function = function(state, bang, ...)
+    return assign.ass_slice(state, ...)
+  end,
+
+  del_dict = function(state, bang, dct, key)
+    if not (dct and key) then
+      return nil
+    end
+    local t = vim_type(dct)
+    return (t.delete_subscript(state, not bang, dct, dct_position,
+                                                key, key_position)
+            and true or nil)
+  end,
+
+  del_dict_function = function(state, bang, dct, key)
+    if not (dct and key) then
+      return nil
+    end
+    local t = vim_type(dct)
+    local ret = t.delete_subscript(state, not bang, dct, dct_position,
+                                                    key, key_position)
+    if not ret then
+      return nil
+    elseif ret == true then
+      return true
+    elseif not is_func(ret) then
+      dct[key] = ret
+      return err.err(state, key_position, true, 'E130: Unknown function')
+    end
+    -- TODO Delete global function
+    return true
+  end,
+
+  del_slice = function(state, bang, lst, idx1, idx2)
+  end,
+
+  del_slice_function = function(state, bang, lst, idx1, idx2)
+    return err.err(state, lst_position, true,
+                   'E475: Expecting function reference, not List')
   end,
 }
 
