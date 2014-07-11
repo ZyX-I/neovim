@@ -263,7 +263,7 @@ scalar = {
     if n2 == 0 then
       return 0
     end
-    return n1 % n2
+    return (n1 % n2) * ((n1 < 0 and -1 or 1) * (n2 < 0 and -1 or 1))
   end, get_number),
   negate = function(state, val, val_position)
     local n = get_number(state, val, val_position)
