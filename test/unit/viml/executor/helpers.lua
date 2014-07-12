@@ -62,7 +62,16 @@ local ito = function(msg, str, exp)
   end)
 end
 
+local itoe = function(msg, strs, exp)
+  local str = ''
+  for _, v in ipairs(strs) do
+    str = str .. 'try\n' .. v .. '\ncatch\necho v:exception\nendtry\n'
+  end
+  return ito(msg, str, exp)
+end
+
 return {
   eqo=eqo,
   ito=ito,
+  itoe=itoe,
 }
