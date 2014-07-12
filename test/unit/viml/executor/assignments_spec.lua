@@ -88,3 +88,23 @@ describe(':let modifying assignments', function()
     unlet g:a
   ]], {1, 0})
 end)
+
+describe(':unlet support', function()
+  ito('Unlets a variable', [[
+    let a = 1
+    echo a
+    unlet a
+    try
+      echo a
+    catch
+      echo v:exception
+    endtry
+  ]], {1, 'E121: Undefined variable: a'})
+  ito('Fails to unlet unexisting variable', [[
+    try
+      unlet a
+    catch
+      echo v:exception
+    endtry
+  ]], {'E108: No such variable: a'})
+end)
