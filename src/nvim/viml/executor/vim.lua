@@ -310,6 +310,12 @@ number = join_tables(scalar, {
     end
     return (n1 > n2 and 1) or ((n1 == n2 and 0) or -1)
   end,
+  negate = function(state, num, num_position)
+    return -num
+  end,
+  promote_integer = function(state, num, num_position)
+    return num
+  end,
 -- }}}4
 })
 
