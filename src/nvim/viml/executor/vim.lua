@@ -924,6 +924,24 @@ functions.type = function(state, self, val)
   return vim_type(val)['type_number']
 end
 
+functions['function'] = function(state, self, val)
+  local s = val and get_string(state, val, position)
+  if not s then
+    return nil
+  end
+  local ret
+  if s:match('^[a-z]') then
+    ret = functions[s]
+  elseif s:match('^%d') then
+    return err.err(state, position, true,
+                   'E475: Function name cannot start with a digit')
+  else
+    -- TODO Replace leading s: and <SID>
+    ret = state.global.user_functions[s]
+  end
+  return ret or err.err(state, position, true, 'E700: Unknown function: %s', s)
+end
+
 -- {{{1 Built-in commands implementations
 local string_echo = function(state, v, v_position, refs)
   local t = vim_type(v)
