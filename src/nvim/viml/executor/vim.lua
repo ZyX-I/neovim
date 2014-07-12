@@ -342,7 +342,9 @@ string = join_tables(scalar, {
   end,
 -- {{{4 Type conversions
   as_number = function(state, str, str_position)
-    return tonumber(str:match('^%-?%d+')) or 0
+    return tonumber(str:match('^%-?0[xX]%x+')) or
+           tonumber(str:match('^%-?%d+')) or
+           0
   end,
   as_string = function(state, str, str_position)
     return str
