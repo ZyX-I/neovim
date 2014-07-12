@@ -282,6 +282,13 @@ describe('Number computations', function()
 end)
 
 describe('Floating-point computations', function()
+  local ito, itoe, f
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+    f = _obj_0.f
+  end
   local f = function(v)
     return {_t='float', _v=v}
   end
@@ -1075,5 +1082,89 @@ describe('Dictionary tests', function()
         unlet l g h
       ]], {0, 1, 1, 0, 1, 0, 0, 1})
     end)
+  end)
+end)
+
+describe('Type conversions', function()
+  local ito, itoe, f
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+    f = _obj_0.f
+  end
+  describe('Arithmetic operators', function()
+    ito('+ operator, numbers', [[
+      echo 1 + '1'
+      echo '1' + 1
+      echo 1 + 1.0
+      echo 1.0 + 1
+      echo '1' + 1.0
+      echo 1.0 + '1'
+    ]], {2, 2, f(2.0), f(2.0), f(2.0), f(2.0)})
+    for _, op in ipairs({'+', '-', '*', '/', '%'}) do
+      itoe(string.format('%s operator, containers', op), {
+        string.format('echo 0 %s []', op),
+        string.format('echo 0.0 %s []', op),
+        string.format('echo "0" %s []', op),
+        string.format('echo 0 %s {}', op),
+        string.format('echo 0.0 %s {}', op),
+        string.format('echo "0" %s {}', op),
+        string.format('echo [] %s 0', op),
+        string.format('echo [] %s 0.0', op),
+        string.format('echo [] %s "0"', op),
+        string.format('echo {} %s 0', op),
+        string.format('echo {} %s 0.0', op),
+        string.format('echo {} %s "0"', op),
+        string.format('echo [] %s {}', op),
+        string.format('echo {} %s []', op),
+      }, {
+        'E745: Using List as a Number',
+        'E745: Using List as a Number',
+        'E745: Using List as a Number',
+        'E728: Using Dictionary as a Number',
+        'E728: Using Dictionary as a Number',
+        'E728: Using Dictionary as a Number',
+        'E745: Using List as a Number',
+        'E745: Using List as a Number',
+        'E745: Using List as a Number',
+        'E728: Using Dictionary as a Number',
+        'E728: Using Dictionary as a Number',
+        'E728: Using Dictionary as a Number',
+        'E745: Using List as a Number',
+        'E728: Using Dictionary as a Number',
+      })
+    end
+    itoe('. operator, containers', {
+      'echo 0 . []',
+      'echo 0.0 . []',
+      'echo "0" . []',
+      'echo 0 . {}',
+      'echo 0.0 . {}',
+      'echo "0" . {}',
+      'echo [] . 0',
+      'echo [] . 0.0',
+      'echo [] . "0"',
+      'echo {} . 0',
+      'echo {} . 0.0',
+      'echo {} . "0"',
+      'echo [] . {}',
+      'echo {} . []',
+    }, {
+      'E730: Using List as a String',
+      'E806: Using Float as a String',
+      'E730: Using List as a String',
+      'E731: Using Dictionary as a String',
+      'E806: Using Float as a String',
+      'E731: Using Dictionary as a String',
+      'E730: Using List as a String',
+      'E730: Using List as a String',
+      'E730: Using List as a String',
+      'E731: Using Dictionary as a String',
+      'E731: Using Dictionary as a String',
+      'E731: Using Dictionary as a String',
+      'E730: Using List as a String',
+      'E731: Using Dictionary as a String',
+    })
   end)
 end)
