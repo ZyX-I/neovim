@@ -33,6 +33,7 @@
 #define IN_OPTION_C
 #include <assert.h>
 #include <errno.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -5679,10 +5680,10 @@ static void check_redraw(uint32_t flags)
 }
 
 /*
- * Find index for option 'arg'.
+ * Find index for option 'arg' that has given length.
  * Return -1 if not found.
  */
-static int findoption(char_u *arg)
+static int findoption_len(const char_u *const arg, const size_t len)
 {
   char            *s, *p;
   static short quick_tab[27] = {0, 0};          /* quick access table */
@@ -5706,6 +5707,8 @@ static int findoption(char_u *arg)
     }
   }
 
+  assert(len > 0);
+
   /*
    * Check for name starting with an illegal character.
    */
@@ -5713,20 +5716,22 @@ static int findoption(char_u *arg)
     return -1;
 
   int opt_idx;
-  is_term_opt = (arg[0] == 't' && arg[1] == '_');
+  is_term_opt = (len > 2 && arg[0] == 't' && arg[1] == '_');
   if (is_term_opt)
     opt_idx = quick_tab[26];
   else
     opt_idx = quick_tab[CharOrdLow(arg[0])];
+  // Match full name
   for (; (s = options[opt_idx].fullname) != NULL; opt_idx++) {
-    if (STRCMP(arg, s) == 0)                        /* match full name */
+    if (STRNCMP(arg, s, len) == 0 && s[len] == NUL)
       break;
   }
   if (s == NULL && !is_term_opt) {
     opt_idx = quick_tab[CharOrdLow(arg[0])];
+    // Match short name
     for (; options[opt_idx].fullname != NULL; opt_idx++) {
       s = options[opt_idx].shortname;
-      if (s != NULL && STRCMP(arg, s) == 0)         /* match short name */
+      if (s != NULL && STRNCMP(arg, s, len) == 0 && s[len] == NUL)
         break;
       s = NULL;
     }
@@ -5734,6 +5739,15 @@ static int findoption(char_u *arg)
   if (s == NULL)
     opt_idx = -1;
   return opt_idx;
+}
+
+/*
+ * Find index for option 'arg'.
+ * Return -1 if not found.
+ */
+static int findoption(char_u *arg)
+{
+  return findoption_len(arg, STRLEN(arg));
 }
 
 /*
