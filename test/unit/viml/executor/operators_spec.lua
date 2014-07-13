@@ -1085,6 +1085,73 @@ describe('Dictionary tests', function()
   end)
 end)
 
+describe('Funcref computations', function()
+  local ito, itoe, f
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+    f = _obj_0.f
+  end
+  describe('Arithmetic operators', function()
+    for _, op in ipairs({'+', '-', '*', '/', '%'}) do
+      itoe(string.format('%s operator', op), {
+        'let F = function("string")',
+        string.format('echo F %s F', op),
+        'unlet F'
+      }, {
+        'E703: Using Funcref as a Number',
+      })
+    end
+  end)
+  describe('Concatenation', function()
+    itoe('Concatenation', {
+      'let F = function("string")',
+      'echo F . F',
+      'unlet F'
+    }, {
+      'E729: Using Funcref as a String',
+    })
+  end)
+  describe('Comparison operators', function()
+    describe('Less/greater (or equal to)', function()
+      for _, ic in ipairs({'', '#', '?'}) do
+        for _, eq in ipairs({'', '='}) do
+          for _, op in ipairs({'<', '>'}) do
+            local real_op = op .. eq .. ic
+            itoe(string.format('%s operator', real_op), {
+              'let F = function("string")',
+              string.format('echo F %s F', real_op),
+              'unlet F'
+            }, {
+              'E694: Invalid operation for Funcrefs',
+            })
+          end
+        end
+      end
+    end)
+    describe('Equality and identity', function()
+      for _, op in ipairs({{eq='==', ne='!='}, {eq='is', ne='isnot'}}) do
+        for _, ic in ipairs({'', '#', '?'}) do
+          ito('EQ/NE', string.gsub(string.gsub([[
+            let F1 = function("string")
+            let F2 = function("function")
+            let F3 = function("string")
+            echo F1 {eq} F1
+            echo F1 {ne} F1
+            echo F1 {eq} F2
+            echo F1 {ne} F2
+            echo F1 {eq} F3
+            echo F1 {ne} F3
+            unlet F1 F2 F3
+          ]], '{eq}', op.eq .. ic), '{ne}', op.ne .. ic),
+          {1, 0, 0, 1, 1, 0})
+        end
+      end
+    end)
+  end)
+end)
+
 describe('Type conversions', function()
   local ito, itoe, f
   do
@@ -1134,7 +1201,37 @@ describe('Type conversions', function()
         'E745: Using List as a Number',
         'E728: Using Dictionary as a Number',
       })
+      itoe(string.format('%s operator, funcrefs', op), {
+        'let F = function("string")',
+        string.format('echo 0 %s F', op),
+        string.format('echo 0.0 %s F', op),
+        string.format('echo "0" %s F', op),
+        string.format('echo [] %s F', op),
+        string.format('echo {} %s F', op),
+        string.format('echo F %s 0', op),
+        string.format('echo F %s 0.0', op),
+        string.format('echo F %s "0"', op),
+        string.format('echo F %s []', op),
+        string.format('echo F %s {}', op),
+        'unlet F'
+      }, {
+        'E703: Using Funcref as a Number',
+        op == '%' and 'E804: Cannot use \'%\' with Float'
+                   or 'E703: Using Funcref as a Number',
+        'E703: Using Funcref as a Number',
+        'E745: Using List as a Number',
+        'E728: Using Dictionary as a Number',
+        'E703: Using Funcref as a Number',
+        op == '%' and 'E804: Cannot use \'%\' with Float'
+                   or 'E703: Using Funcref as a Number',
+        'E703: Using Funcref as a Number',
+        op == '+' and 'E745: Using List as a Number'
+                   or 'E703: Using Funcref as a Number',
+        'E703: Using Funcref as a Number',
+      })
     end
+  end)
+  describe('Concatenation', function()
     itoe('. operator, containers', {
       'echo 0 . []',
       'echo 0.0 . []',
@@ -1165,6 +1262,31 @@ describe('Type conversions', function()
       'E731: Using Dictionary as a String',
       'E730: Using List as a String',
       'E731: Using Dictionary as a String',
+    })
+    itoe(string.format('. operator, funcrefs', op), {
+      'let F = function("string")',
+      'echo 0 . F',
+      'echo 0.0 . F',
+      'echo "0" . F',
+      'echo [] . F',
+      'echo {} . F',
+      'echo F . 0',
+      'echo F . 0.0',
+      'echo F . "0"',
+      'echo F . []',
+      'echo F . {}',
+      'unlet F'
+    }, {
+      'E729: Using Funcref as a String',
+      'E806: Using Float as a String',
+      'E729: Using Funcref as a String',
+      'E730: Using List as a String',
+      'E731: Using Dictionary as a String',
+      'E729: Using Funcref as a String',
+      'E729: Using Funcref as a String',
+      'E729: Using Funcref as a String',
+      'E729: Using Funcref as a String',
+      'E729: Using Funcref as a String',
     })
   end)
 end)
