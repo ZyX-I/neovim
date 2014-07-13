@@ -3,6 +3,7 @@ local err
 local op
 local vim_type
 local is_func, is_dict, is_list, is_float
+local repr
 local scalar, container
 local number, string, list, dict, float, func
 local scope, def_scope, b_scope, a_scope, v_scope, f_scope
@@ -143,6 +144,28 @@ get_boolean = function(state, val, position)
   return num and num ~= 0
 end
 
+repr = function(state, val, val_position, for_echo, refs)
+  if not val then
+    return nil
+  end
+  local t = vim_type(val)
+  if t.container then
+    if refs[val] then
+      if for_echo then
+        return t.already_represented_container
+      else
+        err.err(state, val_position, true,
+                'E724: Recursive data type detected')
+        -- Despite the error Vim string() still returns something
+        return '{E724}'
+      end
+    else
+      refs[val] = true
+    end
+  end
+  return t.repr(state, val, val_position, for_echo, refs)
+end
+
 -- {{{1 Types
 -- {{{2 Utility functions
 local add_type_table = function(func)
@@ -239,6 +262,8 @@ scalar = {
     end
     return str:sub(str, idx1, idx2)
   end,
+-- {{{3 string()
+  container = false,
 -- {{{3 Operators support
   num_op_priority = 1,
   add = num_convert_2(function(n1, n2)
@@ -287,6 +312,8 @@ local numop = function(state, val1, val1_position, val2, val2_position)
 end
 
 container = {
+-- {{{3 string()
+  container = true,
 -- {{{3 Operators support
   num_op_priority = 10,
   add = numop,
@@ -304,8 +331,8 @@ container = {
 number = join_tables(scalar, {
   type_number = BASE_TYPE_NUMBER,
 -- {{{4 string()
-  to_string_echo = function(state, num, num_position)
-    return tostring(num)
+  repr = function(state, num, num_position, for_echo, refs)
+    return (('%i'):format(num))
   end,
 -- {{{4 Type conversions
   as_number = function(state, num, num_position)
@@ -343,8 +370,12 @@ number = join_tables(scalar, {
 string = join_tables(scalar, {
   type_number = BASE_TYPE_STRING,
 -- {{{4 string()
-  to_string_echo = function(state, str, str_position)
-    return str
+  repr = function(state, str, str_position, for_echo, refs)
+    if for_echo == true then
+      return str
+    else
+      return "'" .. str:gsub("'", "''") .. "'"
+    end
   end,
 -- {{{4 Type conversions
   as_number = function(state, str, str_position)
@@ -501,19 +532,24 @@ list = join_tables(container, {
     return list.next, it_state, lst
   end,
 -- {{{4 string()
-  to_string_echo = function(state, lst, refs)
+  already_represented_container = '[...]',
+  repr = function(state, lst, lst_position, for_echo, refs)
     local ret = '['
     local length = list.length(lst)
     local i
+    local add_comma = false
     for i = 0,length-1 do
-      chunk = string_echo(state, list.raw_subscript(lst, i), nil, refs)
+      if add_comma then
+        ret = ret .. ', '
+      else
+        add_comma = true
+      end
+      local chunk = repr(state, list.raw_subscript(lst, i), lst_position,
+                         for_echo and 'list', refs)
       if chunk == nil then
         return nil
       end
       ret = ret .. chunk
-      if i ~= length-1 then
-        ret = ret .. ', '
-      end
     end
     ret = ret .. ']'
     return ret
@@ -656,6 +692,33 @@ dict = join_tables(container, {
     end
     return ret
   end,
+-- {{{4 string()
+  already_represented_container = '{...}',
+  repr = function(state, dct, dct_position, for_echo, refs)
+    local ret = '{'
+    local add_comma = false
+    for k, v in pairs(dct) do
+      if type(k) == 'string' then
+        if add_comma then
+          ret = ret .. ', '
+        else
+          add_comma = true
+        end
+        local chunk = repr(state, k, dct_position, false, refs)
+        if chunk == nil then
+          return nil
+        end
+        ret = ret .. chunk .. ': '
+        local chunk = repr(state, v, dct_position, for_echo and 'dict', refs)
+        if chunk == nil then
+          return nil
+        end
+        ret = ret .. chunk
+      end
+    end
+    ret = ret .. '}'
+    return ret
+  end,
 -- {{{4 Type conversions
   as_number = function(state, dct, dct_position)
     return err.err(state, dct_position, true,
@@ -718,8 +781,8 @@ float = join_tables(scalar, {
     return {[val_idx] = f}
   end),
 -- {{{4 string()
-  to_string_echo = function(state, flt, flt_position)
-    return tostring(flt[val_idx])
+  repr = function(state, flt, flt_position, for_echo, refs)
+    return ('%e'):format(flt[val_idx])
   end,
 -- {{{4 Type conversions
   as_number = function(state, flt, flt_position)
@@ -942,18 +1005,11 @@ functions['function'] = function(state, self, val)
   return ret or err.err(state, position, true, 'E700: Unknown function: %s', s)
 end
 
--- {{{1 Built-in commands implementations
-local string_echo = function(state, v, v_position, refs)
-  local t = vim_type(v)
-  if t == nil then
-    return nil
-  end
-  if refs ~= nil then
-    -- TODO
-  end
-  return t.to_string_echo(state, v, refs)
+functions.string = function(state, self, val)
+  return repr(state, val, val_position, false, {})
 end
 
+-- {{{1 Built-in commands implementations
 local commands = {
   append = function(state, range, bang, lines)
   end,
@@ -962,12 +1018,12 @@ local commands = {
   echo = function(state, ...)
     local mes = ''
     for i = 1,select('#', ...) do
-      s = select(i, ...)
-      if s == nil then
+      local str = select(i, ...)
+      if str == nil then
         return nil
       end
       mes = mes .. ' '
-      local chunk = string_echo(state, s, s_position, {})
+      local chunk = repr(state, str, str_position, true, {})
       if chunk == nil then
         return nil
       end
