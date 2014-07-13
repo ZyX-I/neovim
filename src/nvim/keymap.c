@@ -495,7 +495,8 @@ char_u *get_special_key_name(int c, int modifiers)
  */
 unsigned int 
 trans_special (
-    char_u **srcp,
+    const char_u **srcp,
+    size_t src_len,
     char_u *dst,
     int keycode             /* prefer key code, e.g. K_DEL instead of DEL */
 )
@@ -504,7 +505,7 @@ trans_special (
   int key;
   unsigned int dlen = 0;
 
-  key = find_special_key(srcp, &modifiers, keycode, FALSE);
+  key = find_special_key(srcp, src_len, &modifiers, keycode, FALSE);
   if (key == 0)
     return 0;
 
@@ -539,21 +540,26 @@ trans_special (
  */
 int 
 find_special_key (
-    char_u **srcp,
+    const char_u **srcp,
+    size_t src_len,
     int *modp,
     int keycode,                 /* prefer key code, e.g. K_DEL instead of DEL */
     int keep_x_key              /* don't translate xHome to Home key */
 )
 {
-  char_u      *last_dash;
-  char_u      *end_of_name;
-  char_u      *src;
-  char_u      *bp;
+  const char_u *last_dash;
+  const char_u *end_of_name;
+  const char_u *src;
+  const char_u *bp;
+  const char_u *const end = *srcp + src_len - 1;
   int modifiers;
   int bit;
   int key;
   unsigned long n;
   int l;
+
+  if (src_len == 0)
+    return 0;
 
   src = *srcp;
   if (src[0] != '<')
@@ -561,28 +567,28 @@ find_special_key (
 
   /* Find end of modifier list */
   last_dash = src;
-  for (bp = src + 1; *bp == '-' || vim_isIDc(*bp); bp++) {
+  for (bp = src + 1; bp <= end && (*bp == '-' || vim_isIDc(*bp)); bp++) {
     if (*bp == '-') {
       last_dash = bp;
-      if (bp[1] != NUL) {
+      if (bp + 1 <= end) {
         if (has_mbyte)
-          l = mb_ptr2len(bp + 1);
+          l = mb_ptr2len_len(bp + 1, (int) (end - bp) + 1);
         else
           l = 1;
-        if (bp[l + 1] == '>')
+        if (end - bp > l && bp[l + 1] == '>')
           bp += l;              /* anything accepted, like <C-?> */
       }
     }
-    if (bp[0] == 't' && bp[1] == '_' && bp[2] && bp[3])
+    if (end - bp > 3 && bp[0] == 't' && bp[1] == '_')
       bp += 3;          /* skip t_xx, xx may be '-' or '>' */
-    else if (STRNICMP(bp, "char-", 5) == 0) {
+    else if (end - bp > 4 && STRNICMP(bp, "char-", 5) == 0) {
       vim_str2nr(bp + 5, NULL, &l, TRUE, TRUE, NULL, NULL);
       bp += l + 5;
       break;
     }
   }
 
-  if (*bp == '>') {     /* found matching '>' */
+  if (bp <= end && *bp == '>') {     /* found matching '>' */
     end_of_name = bp + 1;
 
     /* Which modifiers are given? */
@@ -711,7 +717,7 @@ int find_special_key_in_table(int c)
  * termcap name.
  * Return the key code, or 0 if not found.
  */
-int get_special_key_code(char_u *name)
+int get_special_key_code(const char_u *name)
 {
   char_u  *table_name;
   int i, j;
@@ -762,33 +768,37 @@ int get_mouse_button(int code, bool *is_click, bool *is_drag)
 // nothing).  When 'cpoptions' does not contain 'B', a backslash can be used
 // instead of a CTRL-V.
 char_u * replace_termcodes (
-    char_u *from,
+    const char_u *from,
+    size_t from_len,
     char_u **bufp,
     int from_part,
     int do_lt,                     // also translate <lt>
-    int special                    // always accept <key> notation
+    int special,                   // always accept <key> notation
+    int cpo_flags                  // relevant flags from p_cpo option
 )
 {
   ssize_t i;
   size_t slen;
   char_u key;
   size_t dlen = 0;
-  char_u      *src;
+  const char_u *src;
+  const char_u *const end = from + from_len - 1;
   int do_backslash;             // backslash is a special character
   int do_special;               // recognize <> key codes
   char_u      *result;          // buffer for resulting string
 
-  do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
-  do_special = (vim_strchr(p_cpo, CPO_SPECI) == NULL) || special;
+  do_backslash = !(cpo_flags&FLAG_CPO_BSLASH);
+  do_special = !(cpo_flags&FLAG_CPO_SPECI) || special;
 
   // Allocate space for the translation.  Worst case a single character is
   // replaced by 6 bytes (shifted special key), plus a NUL at the end.
-  result = xmalloc(STRLEN(from) * 6 + 1);
+  result = xmalloc(from_len * 6 + 1);
 
   src = from;
 
   // Check for #n at start only: function key n
-  if (from_part && src[0] == '#' && VIM_ISDIGIT(src[1])) {  // function key
+  if (from_part && from_len > 1 && src[0] == '#'
+      && VIM_ISDIGIT(src[1])) {                  // function key
     result[dlen++] = K_SPECIAL;
     result[dlen++] = 'k';
     if (src[1] == '0') {
@@ -800,13 +810,14 @@ char_u * replace_termcodes (
   }
 
   // Copy each byte from *from to result[dlen]
-  while (*src != NUL) {
+  while (src <= end) {
     // If 'cpoptions' does not contain '<', check for special key codes,
     // like "<C-S-LeftMouse>"
-    if (do_special && (do_lt || STRNCMP(src, "<lt>", 4) != 0)) {
+    if (do_special && (do_lt || (
+                (end - src) >= 3 && STRNCMP(src, "<lt>", 4) != 0))) {
       // Replace <SID> by K_SNR <script-nr> _.
       // (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14)
-      if (STRNICMP(src, "<SID>", 5) == 0) {
+      if (end - src >= 4 && STRNICMP(src, "<SID>", 5) == 0) {
         if (current_SID <= 0) {
           EMSG(_(e_usingsid));
         } else {
@@ -821,7 +832,7 @@ char_u * replace_termcodes (
         }
       }
 
-      slen = trans_special(&src, result + dlen, TRUE);
+      slen = trans_special(&src, (size_t) (end - src) + 1, result + dlen, TRUE);
       if (slen) {
         dlen += slen;
         continue;
@@ -834,10 +845,10 @@ char_u * replace_termcodes (
       // Replace <Leader> by the value of "mapleader".
       // Replace <LocalLeader> by the value of "maplocalleader".
       // If "mapleader" or "maplocalleader" isn't set use a backslash.
-      if (STRNICMP(src, "<Leader>", 8) == 0) {
+      if (end - src >= 7 && STRNICMP(src, "<Leader>", 8) == 0) {
         len = 8;
         p = get_var_value((char_u *)"g:mapleader");
-      } else if (STRNICMP(src, "<LocalLeader>", 13) == 0)   {
+      } else if (end - src >= 12 && STRNICMP(src, "<LocalLeader>", 13) == 0) {
         len = 13;
         p = get_var_value((char_u *)"g:maplocalleader");
       } else {
@@ -867,7 +878,7 @@ char_u * replace_termcodes (
     key = *src;
     if (key == Ctrl_V || (do_backslash && key == '\\')) {
       ++src;  // skip CTRL-V or backslash
-      if (*src == NUL) {
+      if (src > end) {
         if (from_part) {
           result[dlen++] = key;
         }
@@ -876,7 +887,7 @@ char_u * replace_termcodes (
     }
 
     // skip multibyte char correctly
-    for (i = (*mb_ptr2len)(src); i > 0; --i) {
+    for (i = (*mb_ptr2len_len)(src, (int) (end - src) + 1); i > 0; --i) {
       // If the character is K_SPECIAL, replace it with K_SPECIAL
       // KS_SPECIAL KE_FILLER.
       // If compiled with the GUI replace CSI with K_CSI.
