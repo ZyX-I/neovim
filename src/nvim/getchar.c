@@ -2739,13 +2739,15 @@ do_map (
    * replace_termcodes() also removes CTRL-Vs and sometimes backslashes.
    */
   if (haskey)
-    keys = replace_termcodes(keys, &keys_buf, TRUE, TRUE, special);
+    keys = replace_termcodes(keys, STRLEN(keys), &keys_buf, TRUE, TRUE, special,
+                             CPO_TO_CPO_FLAGS);
   orig_rhs = rhs;
   if (hasarg) {
     if (STRICMP(rhs, "<nop>") == 0)         /* "<Nop>" means nothing */
       rhs = (char_u *)"";
     else
-      rhs = replace_termcodes(rhs, &arg_buf, FALSE, TRUE, special);
+      rhs = replace_termcodes(rhs, STRLEN(rhs), &arg_buf, FALSE, TRUE, special,
+                              CPO_TO_CPO_FLAGS);
   }
 
   /*
@@ -3301,7 +3303,8 @@ int map_to_exists(char_u *str, char_u *modechars, int abbr)
   char_u      *buf;
   int retval;
 
-  rhs = replace_termcodes(str, &buf, FALSE, TRUE, FALSE);
+  rhs = replace_termcodes(str, STRLEN(str), &buf, FALSE, TRUE, FALSE,
+                          CPO_TO_CPO_FLAGS);
 
   if (vim_strchr(modechars, 'n') != NULL)
     mode |= NORMAL;
@@ -3496,7 +3499,7 @@ int ExpandMappings(regmatch_T *regmatch, int *num_file, char_u ***file)
         mp = maphash[hash];
       for (; mp; mp = mp->m_next) {
         if (mp->m_mode & expand_mapmodes) {
-          p = translate_mapping(mp->m_keys, TRUE);
+          p = translate_mapping(mp->m_keys, TRUE, CPO_TO_CPO_FLAGS);
           if (p != NULL && vim_regexec(regmatch, p, (colnr_T)0)) {
             if (round == 1)
               ++count;

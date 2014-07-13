@@ -221,7 +221,8 @@ ex_menu (
     } else if (modes & MENU_TIP_MODE)
       map_buf = NULL;           /* Menu tips are plain text. */
     else
-      map_to = replace_termcodes(map_to, &map_buf, FALSE, TRUE, special);
+      map_to = replace_termcodes(map_to, STRLEN(map_to), &map_buf, FALSE, TRUE,
+                                 special, CPO_TO_CPO_FLAGS);
     menuarg.modes = modes;
     menuarg.noremap[0] = noremap;
     menuarg.silent[0] = silent;

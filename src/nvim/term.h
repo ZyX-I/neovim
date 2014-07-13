@@ -1,6 +1,8 @@
 #ifndef NVIM_TERM_H
 #define NVIM_TERM_H
 
+#include "nvim/strings.h"
+
 /* Size of the buffer used for tgetent().  Unfortunately this is largely
  * undocumented, some systems use 1024.  Using a buffer that is too small
  * causes a buffer overrun and a crash.  Use the maximum known value to stay
@@ -51,6 +53,19 @@
  * window by simulating a click on its status line.  We could use up to 128 *
  * 128 = 16384 columns, now it's reduced to 10000. */
 #define MOUSE_COLOFF 10000
+
+#define FLAG_CPO_BSLASH    0x01
+#define FLAG_CPO_SPECI     0x02
+#define FLAG_CPO_KEYCODE   0x04
+#define CPO_TO_CPO_FLAGS   (((vim_strchr(p_cpo, CPO_BSLASH) == NULL) \
+                             ? 0 \
+                             : FLAG_CPO_BSLASH)| \
+                            (vim_strchr(p_cpo, CPO_SPECI) == NULL \
+                             ? 0 \
+                             : FLAG_CPO_SPECI)| \
+                            (vim_strchr(p_cpo, CPO_KEYCODE) == NULL \
+                             ? 0 \
+                             : FLAG_CPO_KEYCODE))
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "term.h.generated.h"
