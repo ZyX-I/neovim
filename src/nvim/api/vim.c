@@ -63,18 +63,16 @@ void vim_feedkeys(String keys, Boolean replace_tcodes, Boolean remap,
                 Boolean typed, Error *err)
 {
   char *ptr = NULL;
-  char *cpo_save = (char *)p_cpo;
 
   if (replace_tcodes) {
     // Set 'cpoptions' the way we want it.
-    //    B set - backslashes are *not* treated specially
-    //    k set - keycodes are *not* reverse-engineered
-    //    < unset - <Key> sequences *are* interpreted
-    //  The last but one parameter of replace_termcodes() is TRUE so that the
+    //    FLAG_CPO_BSLASH  set - backslashes are *not* treated specially
+    //    FLAG_CPO_KEYCODE set - keycodes are *not* reverse-engineered
+    //    FLAG_CPO_SPECI unset - <Key> sequences *are* interpreted
+    //  The third from end parameter of replace_termcodes() is true so that the
     //  <lt> sequence is recognised - needed for a real backslash.
-    p_cpo = (char_u *)"Bk";
-    replace_termcodes((char_u *)keys.data, (char_u **)&ptr, false, true, true);
-    p_cpo = (char_u *)cpo_save;
+    replace_termcodes((char_u *)keys.data, keys.size, (char_u **)&ptr,
+                      false, true, true, FLAG_CPO_BSLASH|FLAG_CPO_KEYCODE);
   } else {
     ptr = keys.data;
   }
