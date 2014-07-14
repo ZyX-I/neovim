@@ -1,9 +1,11 @@
 #include <stddef.h>
 #include <assert.h>
+#include <stdio.h>
 #include "nvim/types.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/memory.h"
 #include "nvim/os/msgpack_rpc_helpers.h"
+#include "nvim/os/os.h"
 
 #include "nvim/viml/viml.h"
 #include "nvim/viml/parser/ex_commands.h"
@@ -63,6 +65,12 @@ char *execute_viml_test(const char *const s)
   assert(p - lua_str.data <= (ptrdiff_t) lua_str.size);
   memcpy(p, TEST_RET, sizeof(TEST_RET));
   lua_str.size = (p - lua_str.data + sizeof(TEST_RET) - 1);
+
+  if (os_getenv("NEOVIM_SHOW_TRANSLATED_LUA") != NULL) {
+    fputs("\n-------- Lua --------\n", stderr);
+    fwrite(lua_str.data, 1, lua_str.size, stderr);
+    fputs("\n---------------------\n", stderr);
+  }
 #undef TEST_RET
 
   Object lua_ret = eval_lua(lua_str, &err);
