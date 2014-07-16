@@ -214,4 +214,40 @@ describe(':function definition', function()
   ]], {
     'E121: Undefined variable: self'
   })
+  ito('Function accepts arguments', [[
+    function Abc(a, b, c)
+      echo a:a
+      echo a:b
+      echo a:c
+    endfunction
+    echo Abc(1, 2, 3)
+    delfunction Abc
+  ]], {1, 2, 3, 0})
+  ito('Varargs function', [[
+    function Abc(...)
+      echo a:0
+      echo a:000
+    endfunction
+    echo Abc(1, 2, 3)
+    echo Abc()
+    delfunction Abc
+  ]], {
+    3, {1, 2, 3}, 0,
+    0, {_t='list'}, 0,
+  })
+  ito('Normal args + varargs function', [[
+    function Abc(a, b, c, ...)
+      echo a:a
+      echo a:b
+      echo a:c
+      echo a:0
+      echo a:000
+    endfunction
+    echo Abc(1, 2, 3)
+    echo Abc(1, 2, 3, 4, 5)
+    delfunction Abc
+  ]], {
+    1, 2, 3, 0, {_t='list'}, 0,
+    1, 2, 3, 2, {4, 5}, 0,
+  })
 end)
