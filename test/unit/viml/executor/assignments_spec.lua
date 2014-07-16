@@ -107,4 +107,11 @@ describe(':unlet support', function()
       echo v:exception
     endtry
   ]], {'E108: No such variable: a'})
+  ito('Succeeds to unlet unexisting variable with bang', [[
+    try
+      unlet! a
+    catch
+      echo v:exception
+    endtry
+  ]], {})
 end)
