@@ -192,3 +192,26 @@ describe(':try block', function()
     echo v:exception
   ]], {'', '', 'E121: Undefined variable: a', '', ''})
 end)
+
+describe(':function definition', function()
+  ito('Calls user-defined function with default return value', [[
+    function Abc()
+      echo 'Abc'
+    endfunction
+    echo Abc()
+    delfunction Abc
+  ]], {'Abc', 0})
+  ito('Does not add `self` for regular call', [[
+    function Abc()
+      echo self
+    endfunction
+    try
+      echo Abc()
+    catch
+      echo v:exception
+    endtry
+    delfunction Abc
+  ]], {
+    'E121: Undefined variable: self'
+  })
+end)
