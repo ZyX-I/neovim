@@ -6,6 +6,7 @@ local is_func, is_dict, is_list, is_float
 local repr
 local scalar, container
 local number, string, list, dict, float, func
+local bound_func
 local scope, def_scope, b_scope, a_scope, v_scope, f_scope
 local state, assign
 local scope_name_idx, type_idx, locks_idx, val_idx
@@ -105,10 +106,11 @@ state = {
     return state
   end,
 
-  enter_function = function(old_state, fcall)
+  enter_function = function(old_state, self, fcall)
     local state = copy_table(old_state)
     state.a = a_scope:new(state)
     state.l = def_scope:new(state, 'l')
+    state.l.self = self
     state.current_scope = state.l
     state.call_stack = copy_table(state.call_stack)
     table.insert(state.call_stack, fcall)
@@ -617,6 +619,7 @@ list = join_tables(container, {
 dict = join_tables(container, {
 -- {{{4 New
   type_number = BASE_TYPE_DICTIONARY,
+  can_be_self = true,
   new = add_type_table(function(state, ...)
     local ret = {}
     if select('#', ...) % 2 ~= 0 then
@@ -843,12 +846,18 @@ func = join_tables(scalar, {
   slice = function(...)
     return func.subscript(...)
   end,
+  call = function(state, fun, fun_position, ...)
+    return fun(state, nil, ...)
+  end,
 -- {{{4 Type conversions
   as_number = function(state, fun, fun_position)
     return err.err(state, fun_position, true, 'E703: Using Funcref as a Number')
   end,
   as_string = function(state, fun, fun_position)
     return err.err(state, fun_position, true, 'E729: Using Funcref as a String')
+  end,
+  as_func = function(state, fun, fun_position)
+    return fun
   end,
 -- {{{4 Operators support
   cmp_priority = 10,
@@ -860,11 +869,33 @@ func = join_tables(scalar, {
       return err.err(state, val1_position, true,
                      'E694: Invalid operation for Funcrefs')
     end
-    return val1 == val2 and 0 or 1
+    local t1 = vim_type(val1)
+    local t2 = vim_type(val2)
+    return (t1.as_func(state, val1, val1_position) ==
+            t2.as_func(state, val2, val2_position)) and 0 or 1
   end,
 -- }}}4
 })
 
+-- {{{2 dict.func(): bound function
+bound_func = join_tables(func, {
+-- {{{3 New
+  new = add_type_table(function(state, fun, self)
+    return {
+      func=fun,
+      self=self,
+    }
+  end),
+-- {{{3 Querying support
+  call = function(state, fun, fun_position, ...)
+    return fun.func(state, fun.self, ...)
+  end,
+-- {{{3 Type conversions
+  as_func = function(state, fun, fun_position)
+    return fun and fun.func
+  end,
+-- }}}3
+})
 -- {{{2 Scopes
 -- {{{3 Base type for scope dictionaries
 scope = join_tables(dict, {
@@ -946,6 +977,7 @@ f_scope = join_tables(dict, {
   missing_key_message = 'E117: Unknown function',
   non_unique_function_message =
                         'E122: Function %s already exists, add ! to replace it',
+  can_be_self = false,
   new = add_type_table(function(state, ...)
     return scope:new(state, nil, ...)
   end),
@@ -1168,8 +1200,13 @@ vim_type = function(val)
   return val and (type_table[type(val)] or val[type_idx])
 end
 
+local func_table = {
+  [func] = true,
+  [bound_func] = true,
+}
+
 is_func = function(val)
-  return type(val) == 'function'
+  return func_table[vim_type(val)]
 end
 
 is_dict = function(val)
@@ -1326,32 +1363,17 @@ op = {
 
 -- {{{1 Subscripting
 local subscript = {
-  func = function(state, val, idx)
-    if not (val and idx) then
-      return nil
-    end
-    local f = subscript.subscript(state, val, idx)
-    if not is_func(f) then
-      -- TODO echo error message
-      return nil
-    end
-    if is_dict(val) then
-      return function(state, self, ...)
-        return f(state, val, ...)
-      end
-    else
-      return function(state, self, ...)
-        return f(state, nil, ...)
-      end
-    end
-  end,
-
-  subscript = function(state, val, idx)
+  subscript = function(state, bind, val, idx)
     if not (val and idx) then
       return nil
     end
     local t = vim_type(val)
-    return t.subscript(state, val, val_position, idx, idx_position)
+    local ret = t.subscript(state, val, val_position, idx, idx_position)
+    if bind and is_func(ret) and t.can_be_self then
+      return bound_func:new(state, ret, val)
+    else
+      return ret
+    end
   end,
 
   slice = function(state, val, idx1, idx2)
@@ -1364,7 +1386,8 @@ local subscript = {
   end,
 
   call = non_nil(function(state, callee, ...)
-    return callee(state, ...)
+    local t = vim_type(callee)
+    return t.call(state, callee, callee_position, ...)
   end),
 }
 
@@ -1376,13 +1399,13 @@ local func_concat_or_subscript = function(state, dct, key)
   local dct_is_dict = is_dict(dct)
   local f_is_func
   if dct_is_dict then
-    f = dict.subscript(state, dct, dct_position, key, key_position)
+    f = subscript.subscript(state, dct, key)
     f_is_func = is_func(f)
   else
     local real_f
     local scope
     scope, key = get_scope_and_key(state, key)
-    real_f = dict.subscript(state, scope, key_position, key, key_position)
+    real_f = subscript.subscript(state, dct, key)
     f_is_func = is_func(real_f)
     f = function(state, self, ...)
       return op.concat(state, dct, f(state, nil, ...))
@@ -1430,6 +1453,7 @@ return {
   subscript = subscript,
   list = list,
   dict = dict,
+  func_concat_or_subscript = func_concat_or_subscript,
   concat_or_subscript = concat_or_subscript,
   get_scope_and_key = get_scope_and_key,
   op = op,
