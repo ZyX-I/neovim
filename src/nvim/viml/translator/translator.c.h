@@ -1187,12 +1187,13 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
   const char_u **data =
       (const char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
   size_t size = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
+  bool varargs = args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS;
   WS("function(state, self");
   for (i = 0; i < size; i++) {
     WS(", ");
     W(data[i]);
   }
-  if (args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS) {
+  if (varargs) {
     WS(", ...");
   }
   WS(")\n");
@@ -1200,6 +1201,29 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
     WINDENT(args->indent + 1);
     // TODO; dump information about function call
     WS("state = vim.state.enter_function(state, self, {})\n");
+    for (i = 0; i < size; i++) {
+      WINDENT(args->indent + 1);
+      WS("state.a['");
+      W(data[i]);
+      WS("'] = ");
+      W(data[i]);
+      WS("\n");
+    }
+    if (varargs) {
+      WINDENT(args->indent + 1);
+      WS("state.a['000'] = vim.list:new(state, ...)\n");
+      WINDENT(args->indent + 1);
+      WS("state.a['0'] = select('#', ...)\n");
+      WINDENT(args->indent + 1);
+      WS("for i = 1,select('#', ...) do\n");
+      WINDENT(args->indent + 2);
+      WS("state.a[tostring(i)] = select(i, ...)\n");
+      WINDENT(args->indent + 1);
+      WS("end\n");
+    }
+    // TODO Assign a:firstline and a:lastline
+    // These variables are always present even if function is defined without 
+    // range modifier.
     F_FUNC(translate_nodes, args->node->children, args->indent + 1);
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
