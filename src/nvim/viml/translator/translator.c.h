@@ -6,12 +6,12 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <assert.h>
+#include <string.h>
 #undef __STDC_LIMIT_MACROS
 #undef __STDC_FORMAT_MACROS
 
 #include "nvim/types.h"
 #include "nvim/vim.h"
-#include "nvim/strings.h"
 #include "nvim/mbyte.h"
 #include "nvim/charset.h"
 #include "nvim/keymap.h"
@@ -124,7 +124,6 @@ FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
 #define get_option_properties(a, ...) \
     get_option_properties((const char_u *) a, __VA_ARGS__)
 #define mb_ptr2len(s) mb_ptr2len((char_u *) s)
-#define vim_strchr(hs, n) vim_strchr((char_u *) hs, n)
 #define mb_char2bytes(n, b) mb_char2bytes(n, (char_u *) b)
 
 #endif  // NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H_MACROS
@@ -819,7 +818,7 @@ static FDEC(translate_scope, const char **start,
          (expr->type == kExprIdentifier && !(flags&TS_ONLY_SEGMENT)));
   if (expr->end_position == expr->position) {
     if (!(flags & (TS_LAST_SEGMENT|TS_ONLY_SEGMENT))
-        && vim_strchr("svalgtwb", *(expr->position)) != NULL) {
+        && strchr("svalgtwb", *(expr->position)) != NULL) {
       *start = NULL;
     } else {
       *start = expr->position;
