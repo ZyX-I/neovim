@@ -6,7 +6,6 @@
 #include <assert.h>
 
 #include "nvim/memory.h"
-#include "nvim/strings.h"
 
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/printer/expressions.h"
