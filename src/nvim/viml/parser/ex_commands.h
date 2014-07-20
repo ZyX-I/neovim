@@ -27,15 +27,15 @@ typedef int CmdCompleteType;
 
 /// Regular expression
 typedef struct {
-  regprog_T *prog;   ///< Compiled pattern
-  char_u string[1];  ///< Original string
+  regprog_T *prog;  ///< Compiled pattern
+  char string[1];   ///< Original string
 } Regex;
 
 typedef enum {
   kPatMissing = 0,
-  kPatLiteral,      ///< Literal string (char_u *str)
+  kPatLiteral,      ///< Literal string (char *str)
   kPatHome,         ///< Tilde expansion (no data)
-  kPatEnviron,      ///< Environment variable (char_u *str)
+  kPatEnviron,      ///< Environment variable (char *str)
   kPatCurrent,      ///< Current file name (no data)
   kPatAlternate,    ///< Alternate file name (no data)
   kPatBufname,      ///< Buffer name ("#N") expansion (int number)
@@ -44,10 +44,10 @@ typedef enum {
   kPatCharacter,    ///< "?" expansion (no data)
   kPatAnything,     ///< "*" expansion (no data)
   kPatAnyRecurse,   ///< "**" expansion (no data)
-  kPatCollection,   ///< [abc] expansion (char_u *str)
+  kPatCollection,   ///< [abc] expansion (char *str)
   kPatBranch,       ///< {a,b} expansion (Glob *glob)
   // The following arguments are only valid for Glob and not for Pattern
-  kGlobShell,       ///< Shell backtick expansion (char_u *str)
+  kGlobShell,       ///< Shell backtick expansion (char *str)
   kGlobExpression,  ///< "`=expr`" expansion (Expression *expr)
 } GlobType;
 
@@ -55,7 +55,7 @@ typedef enum {
 typedef struct glob {
   GlobType type;           ///< Type of the glob
   union {
-    char_u *str;           ///< String argument (for most types)
+    char *str;             ///< String argument (for most types)
     ExpressionNode *expr;  ///< Expression (for "`=expr`")
     int number;            ///< Buffer name or old file number
     struct glob *glob;     ///< Glob(s)
@@ -109,7 +109,7 @@ typedef struct {
   union {
     Regex *regex;              ///< Regular expression (for kAddrForwardSearch 
                                ///< and kAddrBackwardSearch address types)
-    char_u mark;               ///< Address mark (for kAddrMark type)
+    char mark;                 ///< Address mark (for kAddrMark type)
     linenr_T lnr;              ///< Exact line (for kAddrFixed type)
   } data;                      ///< Address data (not for kAddrMissing, 
                                ///< kAddrEnd, kAddrCurrent, 
@@ -130,13 +130,13 @@ typedef struct range {
 
 /// A structure to represent GUI menu item
 typedef struct menu_item {
-  char_u *name;               ///< Menu name
+  char *name;                 ///< Menu name
   struct menu_item *subitem;  ///< Sub menu name
 } MenuItem;
 
 typedef struct {
   CmdCompleteType type;
-  char_u *arg;
+  char *arg;
 } CmdComplete;
 
 /// A structure for holding command position
@@ -145,7 +145,7 @@ typedef struct {
 typedef struct {
   linenr_T lnr;
   colnr_T col;
-  const char_u *fname;
+  const char *fname;
 } CommandPosition;
 
 /// Counter type: type of a simple additional argument
@@ -165,7 +165,7 @@ typedef enum {
 typedef struct command_node {
   CommandType type;               ///< Command type. For built-in commands it 
                                   ///< replaces name
-  char_u *name;                   ///< Name of the user command, unresolved
+  char *name;                     ///< Name of the user command, unresolved
   struct command_node *prev;      ///< Previous command of the same level
   struct command_node *next;      ///< Next command of the same level
   struct command_node *children;  ///< Block (if/while/for/try/function), 
@@ -179,14 +179,14 @@ typedef struct command_node {
   union {
     int count;                    ///< Count (for kCntCount)
     int bufnr;
-    char_u reg;
+    char reg;
     ExpressionNode *expr;
   } cnt;                          ///< First simple argument
   uint_least8_t exflags;          ///< Ex flags (for :print command and like)
   uint_least32_t optflags;        ///< ++opt flags
-  char_u *enc;                    ///< Encoding from ++enc
+  char *enc;                      ///< Encoding from ++enc
   Glob *glob;                     ///< File name(s)
-  char_u *expr;                   ///< Saved expression used in "`=expr`"
+  char *expr;                     ///< Saved expression used in "`=expr`"
   bool bang;                      ///< true if command was used with a bang
   struct command_argument {
     union {
@@ -197,8 +197,8 @@ typedef struct command_node {
       colnr_T col;                ///< Column number (for syntax error)
       int number;                 ///< Signed integer
       int *numbers;               ///< A sequence of numbers in allocated memory
-      char_u ch;                  ///< A single character
-      char_u *str;                ///< String in allocated memory
+      char ch;                    ///< A single character
+      char *str;                  ///< String in allocated memory
       garray_T strs;              ///< Growarray
       Pattern *pat;               ///< Pattern (like in :au)
       Glob *glob;                 ///< Glob (like in :e)
@@ -230,13 +230,13 @@ typedef struct {
 } CommandParserOptions;
 
 typedef struct {
-  const char_u *position;
+  const char *position;
   const char *message;
 } CommandParserError;
 
-typedef char_u *(*VimlLineGetter)(int, void *, int);
+typedef char *(*VimlLineGetter)(int, void *, int);
 
-typedef int (*CommandArgsParser)(const char_u **,
+typedef int (*CommandArgsParser)(const char **,
                                  CommandNode *,
                                  CommandParserError *,
                                  CommandParserOptions,
@@ -261,7 +261,7 @@ typedef int (*CommandArgsParser)(const char_u **,
 
 /// Structure that represents one built-in command
 typedef struct {
-  char_u      *name;          ///< name of the command
+  char      *name;            ///< name of the command
   uint_least32_t flags;       ///< flags declared above
   size_t num_args;            ///< number of arguments
   CommandArgType *arg_types;  ///< argument types

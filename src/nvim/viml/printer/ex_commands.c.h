@@ -156,9 +156,9 @@ static FDEC(print_address_followup, const AddressFollowup *const followup)
     case kAddressFollowupForwardPattern:
     case kAddressFollowupBackwardPattern: {
 #ifndef CH_MACROS_DEFINE_LENGTH
-      char_u ch = followup->type == kAddressFollowupForwardPattern
-                  ? '/'
-                  : '?';
+      char ch = (followup->type == kAddressFollowupForwardPattern
+                 ? '/'
+                 : '?');
 #endif
       WC(ch);
       F(print_regex, followup->data.regex);
@@ -203,9 +203,9 @@ static FDEC(print_address, const Address *const address)
     case kAddrForwardSearch:
     case kAddrBackwardSearch: {
 #ifndef CH_MACROS_DEFINE_LENGTH
-      char_u ch = address->type == kAddrForwardSearch
-                  ? '/'
-                  : '?';
+      char ch = (address->type == kAddrForwardSearch
+                 ? '/'
+                 : '?');
 #endif
       WC(ch);
       F(print_regex, address->data.regex);
@@ -247,16 +247,16 @@ static FDEC(print_range, const Range *const range)
 }
 
 static FDEC(print_node_name, const CommandType node_type,
-                            const char_u *const node_name,
-                            const bool node_bang)
+                             const char *const node_name,
+                             const bool node_bang)
 {
   FUNCTION_START;
-  const char_u *name;
+  const char *name;
 
   if (node_name != NULL)
     name = node_name;
   else if (CMDDEF(node_type).name == NULL)
-    name = (const char_u *) "";
+    name = "";
   else
     name = CMDDEF(node_type).name;
 
@@ -269,7 +269,7 @@ static FDEC(print_node_name, const CommandType node_type,
 }
 
 static FDEC(print_optflags, const uint_least32_t optflags,
-                           const char_u *const enc)
+                            const char *const enc)
 {
   FUNCTION_START;
 
@@ -469,8 +469,8 @@ static FDEC(print_block_children, const CommandNode *const node,
 static CMD_FDEC(print_syntax_error)
 {
   FUNCTION_START;
-  const char_u *line = node->args[ARG_ERROR_LINESTR].arg.str;
-  const char_u *message = node->args[ARG_ERROR_MESSAGE].arg.str;
+  const char *line = node->args[ARG_ERROR_LINESTR].arg.str;
+  const char *message = node->args[ARG_ERROR_MESSAGE].arg.str;
   const size_t offset = node->args[ARG_ERROR_OFFSET].arg.flags;
   size_t line_len;
 
@@ -509,7 +509,7 @@ static CMD_FDEC(print_append)
 
   for (i = 0; i < ga_len ; i++) {
     WC('\n');
-    W(((char_u **)ga->ga_data)[i]);
+    W(((char **)ga->ga_data)[i]);
   }
   WC('\n');
   WC('.');
@@ -699,7 +699,7 @@ static CMD_FDEC(print_function)
         WC('(');
         SPACES_AFTER_START3(command, function, call);
         for (int i = 0; i < ga->ga_len; i++) {
-          W(((char_u **)ga->ga_data)[i]);
+          W(((char **)ga->ga_data)[i]);
           if (i < ga->ga_len - 1 || flags&FLAG_FUNC_VARARGS) {
             SPACES_BEFORE3(command, function, argument);
             WC(',');

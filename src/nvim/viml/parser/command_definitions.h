@@ -94,7 +94,7 @@
 #endif
 #ifdef DO_DECLARE_EXCMD
 # define EX(idx, name, func, last_arg, args, flags) \
-    {(char_u *)name, \
+    {(char *)name, \
      (uint_least32_t) (flags), \
      last_arg + 1, \
      (CommandArgType[]) args, \

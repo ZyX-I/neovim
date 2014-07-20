@@ -118,6 +118,15 @@ typedef enum {
 } OptionType;
 
 FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
+
+#define trans_special(a, b, c, d) \
+    trans_special((const char_u **) a, b, (char_u *) c, d)
+#define get_option_properties(a, ...) \
+    get_option_properties((const char_u *) a, __VA_ARGS__)
+#define mb_ptr2len(s) mb_ptr2len((char_u *) s)
+#define vim_strchr(hs, n) vim_strchr((char_u *) hs, n)
+#define mb_char2bytes(n, b) mb_char2bytes(n, (char_u *) b)
+
 #endif  // NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H_MACROS
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
@@ -127,7 +136,7 @@ FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
 /// Dump one character
 ///
 /// @param[in]  c  Dumped character
-static FDEC(dump_char, char_u c)
+static FDEC(dump_char, uint8_t c)
 {
   FUNCTION_START;
   switch (c) {
@@ -315,13 +324,13 @@ static FDEC(dump_char, char_u c)
 ///
 /// @param[in]  s     String that will be written.
 /// @param[in]  size  Length of this string.
-static FDEC(dump_string_length, const char_u *s, size_t size)
+static FDEC(dump_string_length, const char *s, size_t size)
 {
   FUNCTION_START;
-  const char_u *const e = s + size;
+  const char *const e = s + size;
   WS("'");
   for (; s < e; s++) {
-    size_t charlen = mb_ptr2len((char_u *) s);
+    size_t charlen = mb_ptr2len(s);
     if (charlen == 1) {
       F(dump_char, *s);;
     } else {
@@ -338,7 +347,7 @@ static FDEC(dump_string_length, const char_u *s, size_t size)
 /// Use translate_string to dump vim String (kExpr*String)
 ///
 /// @param[in]  s  NUL-terminated string that will be written.
-static FDEC(dump_string, const char_u *const s)
+static FDEC(dump_string, const char *const s)
 {
   FUNCTION_START;
   F(dump_string_length, s, STRLEN(s));
@@ -449,10 +458,8 @@ static FDEC(translate_range, const Range *const range)
         break;
       }
       case kAddrMark: {
-        const char_u mark[2] = {current_range->address.data.mark, NUL};
-
         WS("vim.range.mark(state, '");
-        F(dump_string, mark);
+        WC(current_range->address.data.mark);
         WS("')");
         break;
       }
@@ -529,8 +536,8 @@ static FDEC(translate_ex_flags, uint_least8_t exflags)
 /// @param[in]  type  Type of the number node being dumped.
 /// @param[in]  s     Pointer to first character in dumped number.
 /// @param[in]  e     Pointer to last character in dumped number.
-static FDEC(translate_number, ExpressionType type, const char_u *s,
-                              const char_u *const e)
+static FDEC(translate_number, ExpressionType type, const char *s,
+                              const char *const e)
 {
   FUNCTION_START;
   switch (type) {
@@ -586,14 +593,14 @@ static FDEC(translate_number, ExpressionType type, const char_u *s,
 /// @param[in]  type  Type of the string node being dumped.
 /// @param[in]  s     Pointer to first character in dumped string.
 /// @param[in]  e     Pointer to last character in dumped string.
-static FDEC(translate_string, ExpressionType type, const char_u *const s,
-                              const char_u *const e)
+static FDEC(translate_string, ExpressionType type, const char *const s,
+                              const char *const e)
 {
   FUNCTION_START;
   bool can_dump_as_is = true;
   switch (type) {
     case kExprSingleQuotedString: {
-      for (const char_u *curp = s + 1; curp < e; curp++) {
+      for (const char *curp = s + 1; curp < e; curp++) {
         if (*curp == '\'' || *curp < 0x20 || *curp == '\\') {
           can_dump_as_is = false;
           break;
@@ -605,7 +612,7 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
         assert(e > s);
 
         WS("'");
-        for (const char_u *curp = s + 1; curp < e; curp++) {
+        for (const char *curp = s + 1; curp < e; curp++) {
           switch (*curp) {
             case '\'': {
               WS("\\'");
@@ -624,7 +631,7 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
       break;
     }
     case kExprDoubleQuotedString: {
-      for (const char_u *curp = s + 1; curp < e; curp++) {
+      for (const char *curp = s + 1; curp < e; curp++) {
         if (*curp < 0x20) {
           can_dump_as_is = false;
           break;
@@ -661,7 +668,7 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
         assert(e > s);
 
         WS("\"");
-        for (const char_u *curp = s + 1; curp < e; curp++) {
+        for (const char *curp = s + 1; curp < e; curp++) {
           switch (*curp) {
             case '\\': {
               curp++;
@@ -701,10 +708,10 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
                     if (isx || nr < 0x7F) {
                       F(dump_char, nr);
                     } else {
-                      char_u buf[MAX_CHAR_LEN];
+                      char buf[MAX_CHAR_LEN];
                       size_t size;
 
-                      size = (*mb_char2bytes)(nr, buf);
+                      size = mb_char2bytes(nr, buf);
                       W_LEN(buf, size);
                     }
                   } else {
@@ -720,7 +727,7 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
                 case '5':
                 case '6':
                 case '7': {
-                  char_u c;
+                  char c;
                   c = *curp - '0';
                   if ('0' <= curp[1] && curp[1] <= '7') {
                     curp++;
@@ -734,7 +741,7 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
                   break;
                 }
                 case '<': {
-                  char_u buf[MAX_CHAR_LEN * 6];
+                  char buf[MAX_CHAR_LEN * 6];
                   size_t size;
 
                   size = trans_special(&curp, STRLEN(curp), buf, false);
@@ -803,7 +810,7 @@ static FDEC(translate_string, ExpressionType type, const char_u *const s,
 ///   :   Use "state.global.user_functions" in place of "state.current_scope" in 
 ///       some cases.
 /// @endparblock
-static FDEC(translate_scope, const char_u **start,
+static FDEC(translate_scope, const char **start,
                              const ExpressionNode *const expr,
                              const uint_least8_t flags)
 {
@@ -812,7 +819,7 @@ static FDEC(translate_scope, const char_u **start,
          (expr->type == kExprIdentifier && !(flags&TS_ONLY_SEGMENT)));
   if (expr->end_position == expr->position) {
     if (!(flags & (TS_LAST_SEGMENT|TS_ONLY_SEGMENT))
-        && vim_strchr((char_u *) "svalgtwb", *(expr->position)) != NULL) {
+        && vim_strchr("svalgtwb", *(expr->position)) != NULL) {
       *start = NULL;
     } else {
       *start = expr->position;
@@ -870,7 +877,7 @@ static FDEC(translate_scope, const char_u **start,
     *start = expr->position;
     if ((flags & TS_FUNCCALL) && ASCII_ISLOWER(*expr->position)) {
       isfunc = true;
-      const char_u *s;
+      const char *s;
       for (s = expr->position + 1; s != expr->end_position; s++) {
         if (!(ASCII_ISLOWER(*s) || VIM_ISDIGIT(*s))) {
           isfunc = false;
@@ -920,11 +927,11 @@ static FDEC(translate_expr, const ExpressionNode *const expr,
       break;
     }
     case kExprOption: {
-      const char_u *name_start;
+      const char *name_start;
       OptionType type;
       uint_least8_t option_properties;
-      const char_u *s = expr->position;
-      const char_u *e = expr->end_position;
+      const char *s = expr->position;
+      const char *e = expr->end_position;
 
       if (e - s > 2 && s[1] == ':') {
         assert(*s == 'g' || *s == 'l');
@@ -1013,7 +1020,7 @@ static FDEC(translate_expr, const ExpressionNode *const expr,
       break;
     }
     case kExprSimpleVariableName: {
-      const char_u *start;
+      const char *start;
       WS("vim.subscript.subscript(state, false, ");
       F(translate_scope, &start, expr, TS_ONLY_SEGMENT | (is_funccall
                                                              ? TS_FUNCCALL
@@ -1184,8 +1191,8 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 {
   FUNCTION_START;
   size_t i;
-  const char_u **data =
-      (const char_u **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
+  const char **data =
+      (const char **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
   size_t size = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
   bool varargs = args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS;
   WS("function(state, self");
@@ -1257,10 +1264,10 @@ static FDEC(translate_varname, const ExpressionNode *const expr,
   assert(current_expr != NULL);
 
   if (current_expr->type == kExprIdentifier) {
-    const char_u *start;
+    const char *start;
     F(translate_scope, &start, current_expr, (is_funccall
-                                                 ? TS_FUNCASSIGN
-                                                 : 0));
+                                              ? TS_FUNCASSIGN
+                                              : 0));
     if (start == NULL) {
 
       WS("vim.get_scope_and_key(state, vim.concat(state, '");
@@ -1356,7 +1363,7 @@ static FDEC(translate_lval, const ExpressionNode *const expr,
   } while (0)
   switch (expr->type) {
     case kExprSimpleVariableName: {
-      const char_u *start;
+      const char *start;
       ADD_CALL("dict");
       F(translate_scope, &start, expr, TS_ONLY_SEGMENT|TS_LAST_SEGMENT
                                           |(is_funccall
@@ -1990,7 +1997,7 @@ static FDEC(translate_node, const CommandNode *const node,
                             const size_t indent)
 {
   FUNCTION_START;
-  const char_u *name;
+  const char *name;
   size_t start_from_arg = 0;
   bool do_arg_dump = true;
   bool add_comma = false;
