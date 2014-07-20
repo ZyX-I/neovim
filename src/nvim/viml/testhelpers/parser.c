@@ -34,7 +34,7 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   CommandNode *node = NULL;
-  CommandPosition position = {1, 1, (char_u *) "<test input>"};
+  CommandPosition position = {1, 1, "<test input>"};
   CommandParserOptions o = {flags, false};
   char *repr;
   char *r;
@@ -44,11 +44,11 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
   pp = (char **) &arg;
 
   if (one) {
-    char_u *p;
-    char_u *line;
-    line = (char_u *) fgetline_string(0, pp, 0);
+    char *p;
+    char *line;
+    line = fgetline_string(0, pp, 0);
     p = line;
-    if (parse_one_cmd((const char_u **) &p, &node, o, position,
+    if (parse_one_cmd((const char **) &p, &node, o, position,
                       (VimlLineGetter) fgetline_string, (void *) pp) == FAIL)
       return NULL;
     free(line);
@@ -99,7 +99,7 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
 
   memset(&po, 0, sizeof(PrinterOptions));
 
-  if ((expr = parse0_err((const char_u **) &e, &error)) == NULL)
+  if ((expr = parse0_err((const char **) &e, &error)) == NULL)
     if (error.message == NULL)
       return NULL;
 
@@ -159,7 +159,7 @@ int represent_parse0(const char *arg, const bool print_as_expr)
   memset(&po, 0, sizeof(PrinterOptions));
 
   const char *e = arg;
-  const ExpressionNode *expr = parse0_err((const char_u **) &e, &error);
+  const ExpressionNode *expr = parse0_err(&e, &error);
   if (expr == NULL) {
     if (error.message == NULL) {
       return FAIL;

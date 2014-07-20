@@ -27,14 +27,19 @@
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
 
-#define vim_strsave(arg) vim_strsave((char_u *) (arg))
-#define vim_strnsave(a1, a2) vim_strnsave((char_u *) (a1), a2)
+#define vim_strsave(arg) (char *) vim_strsave((char_u *) (arg))
+#define vim_strnsave(a1, a2) (char *) vim_strnsave((char_u *) (a1), a2)
+#define vim_strchr(hs, n) (char *) vim_strchr((char_u *) hs, n)
 #define getdigits(arg) getdigits((char_u **) (arg))
-#define skipwhite(arg) skipwhite((char_u *) (arg))
-#define skipdigits(arg) skipdigits((char_u *) (arg))
+#define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
+#define skipdigits(arg) (char *) skipdigits((char_u *) (arg))
 #define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((char_u *) p) : 1
-#define enc_canonize(p) enc_canonize((char_u *) (p))
+#define enc_canonize(p) (char *) enc_canonize((char_u *) (p))
 #define check_ff_value(p) check_ff_value((char_u *) (p))
+#define replace_termcodes(a, b, c, d, e, f, g) \
+    (char *) replace_termcodes((const char_u *) a, b, (char_u **) c, d, e, f, g)
+#define lrswap(s) lrswap((char_u *) s)
+#define del_trailing_spaces(s) del_trailing_spaces((char_u *) s)
 
 typedef struct {
   CommandType find_in_stack;
@@ -77,7 +82,7 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition position)
     size += sizeof(CommandArg) * CMDDEF(type).num_args;
 
   node = (CommandNode *) xcalloc(1, size);
-  char_u *fname;
+  char *fname;
   if ((fname = vim_strsave(position.fname)) == NULL) {
     free(node);
     return NULL;
@@ -96,7 +101,7 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition position)
 ///                     a NUL byte.
 ///
 /// @return Pointer to allocated block of memory.
-static Regex *regex_alloc(const char_u *string, size_t len)
+static Regex *regex_alloc(const char *string, size_t len)
 {
   Regex *regex;
 
@@ -374,15 +379,15 @@ void free_cmd(CommandNode *node)
   free(node);
 }
 
-static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
-                    char_u **expr, bool is_branch, bool is_glob)
+static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
+                    char **expr, bool is_branch, bool is_glob)
 {
-  const char_u *p = *pp;
+  const char *p = *pp;
   Glob **next = glob;
-  const char_u *real_expr_start;
-  const char_u *e;
+  const char *real_expr_start;
+  const char *e;
   size_t literal_length = 0;
-  const char_u *literal_start = NULL;
+  const char *literal_start = NULL;
   int ret = FAIL;
 
   *glob = NULL;
@@ -494,7 +499,7 @@ static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
       if (literal_start == NULL)
         literal_start = p;
       literal_length++;
-#define GLOB_SPECIAL_CHARS ((char_u *) "`#*?%\\[{}]$")
+#define GLOB_SPECIAL_CHARS "`#*?%\\[{}]$"
 #define IS_GLOB_SPECIAL(c) (vim_strchr(GLOB_SPECIAL_CHARS, c) != NULL)
       // TODO Compare with vim
       if (*p == '\\' && IS_GLOB_SPECIAL(p[1]))
@@ -503,10 +508,10 @@ static int get_glob(const char_u **pp, CommandParserError *error, Glob **glob,
         p++;
     } else {
       if (literal_start != NULL) {
-        char_u *s;
-        const char_u *t;
+        char *s;
+        const char *t;
         *next = glob_alloc(kPatLiteral);
-        (*next)->data.str = xcalloc(literal_length + 1, sizeof(char_u));
+        (*next)->data.str = xcalloc(literal_length + 1, sizeof(char));
         s = (*next)->data.str;
 
         for (t = literal_start; t < p; t++) {
@@ -630,15 +635,15 @@ get_glob_error_return:
 ///
 /// @return FAIL when out of memory, OK otherwise.
 static int create_error_node(CommandNode **node, CommandParserError *error,
-                             CommandPosition position, const char_u *s)
+                             CommandPosition position, const char *s)
 {
   if (error->message != NULL) {
-    char_u *line;
-    char_u *message;
+    char *line;
+    char *message;
 
-    if ((line = (char_u *) vim_strsave(s)) == NULL)
+    if ((line = vim_strsave(s)) == NULL)
       return FAIL;
-    if ((message = (char_u *) vim_strsave((char_u *) error->message))
+    if ((message = vim_strsave(error->message))
         == NULL) {
       free(line);
       return FAIL;
@@ -664,11 +669,11 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
 ///                     advanced to the first non-white character.
 ///
 /// @return Offset of the first non-white character.
-static int get_vcol(const char_u **pp)
+static int get_vcol(const char **pp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int vcol = 0;
-  const char_u *p = *pp;
+  const char *p = *pp;
 
   for (;;) {
     switch (*p++) {
@@ -708,12 +713,12 @@ static int get_vcol(const char_u **pp)
 ///                        end).
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int get_regex(const char_u **pp, CommandParserError *error,
-                     Regex **regex, const char_u endch)
+static int get_regex(const char **pp, CommandParserError *error,
+                     Regex **regex, const char endch)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  const char_u *p = *pp;
-  const char_u *s = p;
+  const char *p = *pp;
+  const char *s = p;
 
   if (endch == NUL) {
     p += STRLEN(p);
@@ -736,7 +741,7 @@ static int get_regex(const char_u **pp, CommandParserError *error,
   return OK;
 }
 
-static int parse_append(const char_u **pp,
+static int parse_append(const char **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
@@ -746,12 +751,12 @@ static int parse_append(const char_u **pp,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   garray_T *strs = &(node->args[ARG_APPEND_LINES].arg.strs);
-  char_u *next_line;
-  const char_u *first_nonblank;
+  char *next_line;
+  const char *first_nonblank;
   int vcol = -1;
   int cur_vcol = -1;
 
-  ga_init(strs, (int) sizeof(char_u *), 3);
+  ga_init(strs, (int) sizeof(char *), 3);
 
   while ((next_line = fgetline(':', cookie, vcol == -1 ? 0 : vcol)) != NULL) {
     first_nonblank = next_line;
@@ -772,7 +777,7 @@ static int parse_append(const char_u **pp,
       return FAIL;
     }
 #endif
-    ((char_u **)(strs->ga_data))[strs->ga_len++] = (char_u *) next_line;
+    ((char **)(strs->ga_data))[strs->ga_len++] = (char *) next_line;
   }
 
   return OK;
@@ -798,12 +803,12 @@ static int parse_append(const char_u **pp,
 /// @param[in]      position  Position of input.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
+static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
                         bool special, bool expr, CommandParserOptions o,
                         CommandPosition position)
 {
-  char_u *rhs_buf;
-  char_u *new_rhs;
+  char *rhs_buf;
+  char *new_rhs;
 
   new_rhs = replace_termcodes(rhs, STRLEN(rhs), &rhs_buf, false, true, special,
                               FLAG_POC_TO_FLAG_CPO(o.flags));
@@ -816,7 +821,7 @@ static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
   if (expr) {
     ExpressionParserError expr_error;
     ExpressionNode *expr = NULL;
-    const char_u *rhs_end = new_rhs;
+    const char *rhs_end = new_rhs;
 
     expr_error.position = NULL;
     expr_error.message = NULL;
@@ -870,7 +875,7 @@ static int set_node_rhs(const char_u *rhs, size_t rhs_idx, CommandNode *node,
 ///                           :*unmap/:*unabbrev command is being parsed.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int do_parse_map(const char_u **pp,
+static int do_parse_map(const char **pp,
                         CommandNode *node,
                         CommandParserError *error,
                         CommandParserOptions o,
@@ -880,11 +885,11 @@ static int do_parse_map(const char_u **pp,
                         bool unmap)
 {
   uint_least32_t map_flags = 0;
-  const char_u *p = *pp;
-  const char_u *lhs;
-  const char_u *lhs_end;
-  const char_u *rhs;
-  char_u *lhs_buf;
+  const char *p = *pp;
+  const char *lhs;
+  const char *lhs_end;
+  const char *rhs;
+  char *lhs_buf;
   // do_backslash = (vim_strchr(p_cpo, CPO_BSLASH) == NULL);
   bool do_backslash = !(o.flags&FLAG_POC_CPO_BSLASH);
 
@@ -985,14 +990,14 @@ static int do_parse_map(const char_u **pp,
                             FLAG_POC_TO_FLAG_CPO(o.flags));
     if (lhs_buf == NULL)
       return FAIL;
-    node->args[ARG_MAP_LHS].arg.str = (char_u *) lhs;
+    node->args[ARG_MAP_LHS].arg.str = (char *) lhs;
   }
 
   if (*rhs != NUL) {
     assert(!unmap);
     if (STRICMP(rhs, "<nop>") == 0) {
       // Empty string
-      rhs = xcalloc(1, sizeof(char_u));
+      rhs = xcalloc(1, sizeof(char));
     } else {
       if (set_node_rhs(rhs, ARG_MAP_RHS, node, map_flags&FLAG_MAP_SPECIAL,
                        map_flags&FLAG_MAP_EXPR, o, position)
@@ -1005,7 +1010,7 @@ static int do_parse_map(const char_u **pp,
   return OK;
 }
 
-static int parse_map(const char_u **pp,
+static int parse_map(const char **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
@@ -1016,7 +1021,7 @@ static int parse_map(const char_u **pp,
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, false);
 }
 
-static int parse_unmap(const char_u **pp,
+static int parse_unmap(const char **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
@@ -1027,7 +1032,7 @@ static int parse_unmap(const char_u **pp,
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, true);
 }
 
-static int parse_mapclear(const char_u **pp,
+static int parse_mapclear(const char **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
@@ -1053,7 +1058,7 @@ static int parse_mapclear(const char_u **pp,
 /// memory in-place.
 ///
 /// @param[in,out]  p  String being unescaped.
-static void menu_unescape(char_u *p)
+static void menu_unescape(char *p)
 {
   while (*p) {
     if (*p == '\\' && p[1] != NUL)
@@ -1062,7 +1067,7 @@ static void menu_unescape(char_u *p)
   }
 }
 
-static int parse_menu(const char_u **pp,
+static int parse_menu(const char **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
@@ -1072,12 +1077,12 @@ static int parse_menu(const char_u **pp,
 {
   // FIXME "menu *" parses to something weird
   uint_least32_t menu_flags = 0;
-  const char_u *p = *pp;
+  const char *p = *pp;
   size_t i;
-  const char_u *s;
-  const char_u *menu_path;
-  const char_u *menu_path_end;
-  const char_u *map_to;
+  const char *s;
+  const char *menu_path;
+  const char *menu_path_end;
+  const char *map_to;
   MenuItem *sub = NULL;
   MenuItem *cur = NULL;
 
@@ -1102,7 +1107,7 @@ static int parse_menu(const char_u **pp,
 
   // Locate an optional "icon=filename" argument.
   if (STRNCMP(p, "icon=", 5) == 0) {
-    char_u *icon;
+    char *icon;
 
     p += 5;
     s = p;
@@ -1214,7 +1219,7 @@ static int parse_menu(const char_u **pp,
   }
 
   if (s != NULL) {
-    char_u *text;
+    char *text;
     if (node->args[ARG_MENU_NAME].arg.menu_item == NULL) {
       error->message = N_("E792: Empty menu name");
       error->position = s;
@@ -1269,7 +1274,7 @@ static int parse_menu(const char_u **pp,
 ///                        a sequence of expressions.
 ///
 /// @return FAIL if out of memory, NOTDONE in case of error, OK otherwise.
-static int do_parse_expr(const char_u **pp,
+static int do_parse_expr(const char **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
@@ -1277,18 +1282,17 @@ static int do_parse_expr(const char_u **pp,
 {
   ExpressionNode *expr;
   ExpressionParserError expr_error;
-  const char_u *expr_str_start;
-  const char_u *expr_str;
+  const char *expr_str_start;
+  const char *expr_str;
 
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_EXPR_STR].arg.str = (char_u *) expr_str;
+  node->args[ARG_EXPR_STR].arg.str = (char *) expr_str;
   expr_str_start = expr_str;
 
   if (multi)
-    expr = parse_mult(&expr_str, &expr_error, &parse0_err, false,
-                      (char_u *) "\n|");
+    expr = parse_mult(&expr_str, &expr_error, &parse0_err, false, "\n|");
   else
     expr = parse0_err(&expr_str, &expr_error);
 
@@ -1307,7 +1311,7 @@ static int do_parse_expr(const char_u **pp,
   return OK;
 }
 
-static int parse_expr(const char_u **pp,
+static int parse_expr(const char **pp,
                       CommandNode *node,
                       CommandParserError *error,
                       CommandParserOptions o,
@@ -1320,7 +1324,7 @@ static int parse_expr(const char_u **pp,
   return do_parse_expr(pp, node, error, o, false);
 }
 
-static int parse_exprs(const char_u **pp,
+static int parse_exprs(const char **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
@@ -1333,7 +1337,7 @@ static int parse_exprs(const char_u **pp,
   return do_parse_expr(pp, node, error, o, true);
 }
 
-static int parse_rest_line(const char_u **pp,
+static int parse_rest_line(const char **pp,
                            CommandNode *node,
                            CommandParserError *error,
                            CommandParserOptions o,
@@ -1356,7 +1360,7 @@ static int parse_rest_line(const char_u **pp,
   return OK;
 }
 
-static int parse_rest_allow_empty(const char_u **pp,
+static int parse_rest_allow_empty(const char **pp,
                                   CommandNode *node,
                                   CommandParserError *error,
                                   CommandParserOptions o,
@@ -1370,10 +1374,10 @@ static int parse_rest_allow_empty(const char_u **pp,
   return parse_rest_line(pp, node, error, o, position, fgetline, cookie);
 }
 
-static const char_u *do_fgetline(int c, const char_u **arg, int indent)
+static const char *do_fgetline(int c, const char **arg, int indent)
 {
   if (*arg) {
-    const char_u *result;
+    const char *result;
     result = vim_strsave(*arg);
     *arg = NULL;
     return result;
@@ -1382,7 +1386,7 @@ static const char_u *do_fgetline(int c, const char_u **arg, int indent)
   }
 }
 
-static int parse_do(const char_u **pp,
+static int parse_do(const char **pp,
                     CommandNode *node,
                     CommandParserError *error,
                     CommandParserOptions o,
@@ -1391,11 +1395,11 @@ static int parse_do(const char_u **pp,
                     void *cookie)
 {
   CommandNode *cmd;
-  const char_u *arg = *pp;
+  const char *arg = *pp;
   CommandPosition new_position = {
     1,
     1,
-    (const char_u *) "<*do argument>",
+    (const char *) "<*do argument>",
   };
 
   if ((cmd = parse_cmd_sequence(o, new_position, (VimlLineGetter) &do_fgetline,
@@ -1555,7 +1559,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 ///
 /// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when 
 ///         out of memory.
-static int parse_lval(const char_u **pp,
+static int parse_lval(const char **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
                       ExpressionNode **expr,
@@ -1563,13 +1567,13 @@ static int parse_lval(const char_u **pp,
 {
   ExpressionParserError expr_error;
   ExpressionNode *next;
-  const char_u *expr_start = *pp;
+  const char *expr_start = *pp;
   bool allow_list = (bool) (flags&FLAG_PLVAL_LISTMULT);
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
   if (flags&FLAG_PLVAL_SPACEMULT)
     *expr = parse_mult(pp, &expr_error, &parse7_nofunc, true,
-                       (char_u *) "\n\"|-.+=");
+                       (char *) "\n\"|-.+=");
   else
     *expr = parse7_nofunc(pp, &expr_error);
 
@@ -1604,7 +1608,7 @@ static int parse_lval(const char_u **pp,
   return OK;
 }
 
-static int parse_lvals(const char_u **pp,
+static int parse_lvals(const char **pp,
                        CommandNode *node,
                        CommandParserError *error,
                        CommandParserOptions o,
@@ -1613,14 +1617,14 @@ static int parse_lvals(const char_u **pp,
                        void *cookie)
 {
   ExpressionNode *expr;
-  const char_u *expr_str;
-  const char_u *expr_str_start;
+  const char *expr_str;
+  const char *expr_str_start;
   int ret;
 
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_EXPRS_STR].arg.str = (char_u *) expr_str;
+  node->args[ARG_EXPRS_STR].arg.str = (char *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1633,7 +1637,7 @@ static int parse_lvals(const char_u **pp,
   node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char_u *) error->position)
+    error->position = *pp + (((const char *) error->position)
                              - expr_str_start);
     return NOTDONE;
   }
@@ -1645,7 +1649,7 @@ static int parse_lvals(const char_u **pp,
   return OK;
 }
 
-static int parse_lockvar(const char_u **pp,
+static int parse_lockvar(const char **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
@@ -1659,7 +1663,7 @@ static int parse_lockvar(const char_u **pp,
   return parse_lvals(pp, node, error, o, position, fgetline, cookie);
 }
 
-static int parse_for(const char_u **pp,
+static int parse_for(const char **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
@@ -1670,14 +1674,14 @@ static int parse_for(const char_u **pp,
   ExpressionNode *expr;
   ExpressionNode *list_expr;
   ExpressionParserError expr_error;
-  const char_u *expr_str;
-  const char_u *expr_str_start;
+  const char *expr_str;
+  const char *expr_str_start;
   int ret;
 
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_FOR_STR].arg.str = (char_u *) expr_str;
+  node->args[ARG_FOR_STR].arg.str = (char *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1688,7 +1692,7 @@ static int parse_for(const char_u **pp,
   node->args[ARG_FOR_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char_u *) error->position)
+    error->position = *pp + (((const char *) error->position)
                              - expr_str_start);
     return NOTDONE;
   }
@@ -1707,7 +1711,7 @@ static int parse_for(const char_u **pp,
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
-    error->position = *pp + (((const char_u *) expr_error.position)
+    error->position = *pp + (((const char *) expr_error.position)
                              - expr_str_start);
     return NOTDONE;
   }
@@ -1719,7 +1723,7 @@ static int parse_for(const char_u **pp,
   return OK;
 }
 
-static int parse_function(const char_u **pp,
+static int parse_function(const char **pp,
                           CommandNode *node,
                           CommandParserError *error,
                           CommandParserOptions o,
@@ -1727,11 +1731,11 @@ static int parse_function(const char_u **pp,
                           VimlLineGetter fgetline,
                           void *cookie)
 {
-  const char_u *p = *pp;
+  const char *p = *pp;
   ExpressionNode *expr;
   int ret;
-  const char_u *expr_str;
-  const char_u *expr_str_start;
+  const char *expr_str;
+  const char *expr_str_start;
   garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.strs);
   uint_least32_t flags = 0;
   bool mustend = false;
@@ -1745,7 +1749,7 @@ static int parse_function(const char_u **pp,
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_FUNC_STR].arg.str = (char_u *) expr_str;
+  node->args[ARG_FUNC_STR].arg.str = (char *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1756,7 +1760,7 @@ static int parse_function(const char_u **pp,
   node->args[ARG_FUNC_NAME].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char_u *) error->position)
+    error->position = *pp + (((const char *) error->position)
                              - expr_str_start);
     return NOTDONE;
   }
@@ -1775,7 +1779,7 @@ static int parse_function(const char_u **pp,
 
   p = skipwhite(p + 1);
 
-  ga_init(args, (int) sizeof(char_u *), 3);
+  ga_init(args, (int) sizeof(char *), 3);
 
   while (*p != ')') {
     char *notend_message = N_("E475: Expected end of arguments list");
@@ -1784,8 +1788,8 @@ static int parse_function(const char_u **pp,
       p += 3;
       mustend = true;
     } else {
-      const char_u *arg_start = p;
-      const char_u *arg;
+      const char *arg_start = p;
+      const char *arg;
       int i;
 
       while (ASCII_ISALNUM(*p) || *p == '_')
@@ -1813,7 +1817,7 @@ static int parse_function(const char_u **pp,
         return FAIL;
 
       for (i = 0; i < args->ga_len; i++)
-        if (STRCMP(((char_u **)(args->ga_data))[i], arg) == 0) {
+        if (STRCMP(((char **)(args->ga_data))[i], arg) == 0) {
           error->message = N_("E853: Duplicate argument name: %s");
           error->position = arg_start;
           return FAIL;
@@ -1828,7 +1832,7 @@ static int parse_function(const char_u **pp,
       }
 #endif
 
-      ((char_u **)(args->ga_data))[args->ga_len++] = (char_u *) arg;
+      ((char **)(args->ga_data))[args->ga_len++] = (char *) arg;
     }
     if (*p == ',') {
       p++;
@@ -1868,7 +1872,7 @@ static int parse_function(const char_u **pp,
   return OK;
 }
 
-static int parse_let(const char_u **pp,
+static int parse_let(const char **pp,
                      CommandNode *node,
                      CommandParserError *error,
                      CommandParserOptions o,
@@ -1879,8 +1883,8 @@ static int parse_let(const char_u **pp,
   ExpressionNode *expr;
   ExpressionParserError expr_error;
   int ret;
-  const char_u *expr_str;
-  const char_u *expr_str_start;
+  const char *expr_str;
+  const char *expr_str_start;
   ExpressionNode *rval_expr;
   LetAssignmentType ass_type = 0;
 
@@ -1890,7 +1894,7 @@ static int parse_let(const char_u **pp,
   if ((expr_str = vim_strsave(*pp)) == NULL)
     return FAIL;
 
-  node->args[ARG_LET_STR].arg.str = (char_u *) expr_str;
+  node->args[ARG_LET_STR].arg.str = (char *) expr_str;
 
   expr_str_start = expr_str;
 
@@ -1903,7 +1907,7 @@ static int parse_let(const char_u **pp,
   node->args[ARG_LET_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char_u *) error->position)
+    error->position = *pp + (((const char *) error->position)
                              - expr_str_start);
     return NOTDONE;
   }
@@ -1975,7 +1979,7 @@ static int parse_let(const char_u **pp,
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
-    error->position = *pp + (((const char_u *) expr_error.position)
+    error->position = *pp + (((const char *) expr_error.position)
                              - expr_str_start);
     return NOTDONE;
   }
@@ -1986,7 +1990,7 @@ static int parse_let(const char_u **pp,
   return OK;
 }
 
-static int parse_scriptencoding(const char_u **pp,
+static int parse_scriptencoding(const char **pp,
                                 CommandNode *node,
                                 CommandParserError *error,
                                 CommandParserOptions o,
@@ -2011,13 +2015,13 @@ static int parse_scriptencoding(const char_u **pp,
 /// @param[in]      len  Minimal length required to accept a match.
 ///
 /// @return true if requested command was found, false otherwise.
-static int checkforcmd(const char_u **pp, const char_u *cmd, int len)
+static int checkforcmd(const char **pp, const char *cmd, int len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int i;
 
   for (i = 0; cmd[i] != NUL; i++)
-    if (((const char_u *)cmd)[i] != (*pp)[i])
+    if (cmd[i] != (*pp)[i])
       break;
 
   if ((i >= len) && !isalpha((*pp)[i])) {
@@ -2035,11 +2039,11 @@ static int checkforcmd(const char_u **pp, const char_u *cmd, int len)
 /// @param[out]     error    Structure where errors are saved.
 ///
 /// @return OK when parsing was successfull, FAIL otherwise.
-static int get_address(const char_u **pp, Address *address,
+static int get_address(const char **pp, Address *address,
                        CommandParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  const char_u *p;
+  const char *p;
 
   p = skipwhite(*pp);
   switch (*p) {
@@ -2063,7 +2067,7 @@ static int get_address(const char_u **pp, Address *address,
     }
     case '/':
     case '?': {
-      const char_u c = *p;
+      const char c = *p;
       p++;
       if (c == '/')
         address->type = kAddrForwardSearch;
@@ -2120,13 +2124,13 @@ static int get_address(const char_u **pp, Address *address,
   return OK;
 }
 
-static int get_address_followups(const char_u **pp, CommandParserError *error,
+static int get_address_followups(const char **pp, CommandParserError *error,
                                  AddressFollowup **followup)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   AddressFollowup *fw;
   AddressFollowupType type = kAddressFollowupMissing;
-  const char_u *p;
+  const char *p;
 
   p = skipwhite(*pp);
   switch (*p) {
@@ -2183,7 +2187,7 @@ static int get_address_followups(const char_u **pp, CommandParserError *error,
 ///
 /// @return First character of next command (last character after command 
 ///         separator), NULL if no separator was found.
-static const char_u *check_nextcmd(const char_u *p)
+static const char *check_nextcmd(const char *p)
   FUNC_ATTR_CONST
 {
   p = skipwhite(p);
@@ -2238,12 +2242,12 @@ static CommandType cmdidxs[27] =
 ///
 /// @return OK if parsing was successfull, FAIL otherwise. Use error->message 
 ///         value to distinguish out-of-memory and failing parsing cases.
-static int find_command(const char_u **pp, CommandType *type,
-                        const char_u **name, CommandParserError *error)
+static int find_command(const char **pp, CommandType *type,
+                        const char **name, CommandParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   size_t len;
-  const char_u *p;
+  const char *p;
   size_t i;
   CommandType cmdidx = kCmdUnknown;
 
@@ -2282,14 +2286,14 @@ static int find_command(const char_u **pp, CommandType *type,
         p++;
 
     // check for non-alpha command
-    if (p == *pp && vim_strchr((char_u *)"@*!=><&~#", *p) != NULL)
+    if (p == *pp && vim_strchr("@*!=><&~#", *p) != NULL)
       p++;
     len = (size_t)(p - *pp);
     if (**pp == 'd' && (p[-1] == 'l' || p[-1] == 'p')) {
       // Check for ":dl", ":dell", etc. to ":deletel": that's
       // :delete with the 'l' flag.  Same for 'p'.
       for (i = 0; i < len; i++)
-        if ((*pp)[i] != ((const char_u *)"delete")[i])
+        if ((*pp)[i] != "delete"[i])
           break;
       if (i == len - 1)
         --len;
@@ -2348,10 +2352,10 @@ static int find_command(const char_u **pp, CommandType *type,
 ///
 /// @return FAIL when out of memory, OK otherwise.
 static int get_cmd_arg(CommandType type, CommandParserOptions o,
-                       const char_u *start, char_u **arg,
+                       const char *start, char **arg,
                        size_t *next_cmd_offset)
 {
-  char_u *p;
+  char *p;
 
   *next_cmd_offset = 0;
 
@@ -2360,7 +2364,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
 
   p = *arg;
 
-  for (; *p; mb_ptr_adv(p)) {
+  for (; *p; mb_ptr_adv_(p)) {
     if (*p == Ctrl_V) {
       if (CMDDEF(type).flags & (USECTRLV)) {
         p++;                // skip CTRL-V and next char
@@ -2387,7 +2391,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
         STRMOVE(p - 1, p);              // remove the '\'
         p--;
       } else {
-        const char_u *nextcmd = check_nextcmd(p);
+        const char *nextcmd = check_nextcmd(p);
         if (nextcmd != NULL)
           *next_cmd_offset += (nextcmd - p);
         *p = NUL;
@@ -2410,10 +2414,10 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
 ///
 /// @param[in,out]  arg  Pointer to pointer to the start of string which will be 
 ///                      returned. This string must live in an allocated memory.
-const char_u *do_fgetline_allocated(int c, const char_u **arg, int indent)
+const char *do_fgetline_allocated(int c, const char **arg, int indent)
 {
   if (*arg) {
-    const char_u *saved_arg = *arg;
+    const char *saved_arg = *arg;
     *arg = NULL;
     return saved_arg;
   } else {
@@ -2433,13 +2437,13 @@ const char_u *do_fgetline_allocated(int c, const char_u **arg, int indent)
 /// @return OK if everything was parsed correctly, FAIL if out of memory.
 ///
 /// @note Syntax errors in parsed command only happen *after* opening buffer.
-static int parse_argcmd(const char_u **pp,
+static int parse_argcmd(const char **pp,
                         CommandNode **next_node,
                         CommandParserOptions o,
                         CommandPosition position,
-                        const char_u *s)
+                        const char *s)
 {
-  const char_u *p = *pp;
+  const char *p = *pp;
 
   if (*p == '+') {
     p++;
@@ -2449,9 +2453,9 @@ static int parse_argcmd(const char_u **pp,
       (*next_node)->range.address.type = kAddrEnd;
       (*next_node)->end_col = position.col + (p - s);
     } else {
-      const char_u *cmd_start = p;
-      char_u *arg;
-      char_u *arg_start;
+      const char *cmd_start = p;
+      char *arg;
+      char *arg_start;
       CommandPosition new_position = {
         position.lnr,
         position.col + (p - s),
@@ -2498,16 +2502,16 @@ static int parse_argcmd(const char_u **pp,
 ///
 /// @return OK if everything was parsed correctly, NOTDONE in case of error, 
 ///         FAIL if out of memory.
-static int parse_argopt(const char_u **pp,
+static int parse_argopt(const char **pp,
                         uint_least32_t *optflags,
-                        char_u **enc,
+                        char **enc,
                         CommandParserOptions o,
                         CommandParserError *error)
 {
   bool do_ff = false;
   bool do_enc = false;
   bool do_bad = false;
-  const char_u *arg_start;
+  const char *arg_start;
 
   *pp += 2;
   if (STRNCMP(*pp, "bin", 3) == 0 || STRNCMP(*pp, "nobin", 5) == 0) {
@@ -2517,7 +2521,7 @@ static int parse_argopt(const char_u **pp,
     } else {
       *optflags |= FLAG_OPT_BIN_USE_FLAG|FLAG_OPT_BIN;
     }
-    if (!checkforcmd(pp, (const char_u *) "binary", 3)) {
+    if (!checkforcmd(pp, "binary", 3)) {
       error->message = N_("E474: Expected ++[no]bin or ++[no]binary");
       error->position = *pp + 3;
       return NOTDONE;
@@ -2606,8 +2610,8 @@ static int parse_argopt(const char_u **pp,
       }
     }
   } else if (do_enc) {
-    char_u *e;
-    if ((*enc = vim_strnsave(arg_start, *pp - arg_start)) == NULL)
+    char *e;
+    if ((*enc = (char *) vim_strnsave(arg_start, *pp - arg_start)) == NULL)
       return FAIL;
     for (e = *enc; *e != NUL; e++)
       *e = TOLOWER_ASC(*e);
@@ -2617,7 +2621,7 @@ static int parse_argopt(const char_u **pp,
       *optflags |= VAL_OPT_BAD_KEEP;
     } else if (STRNICMP(arg_start, "drop", len) == 0) {
       *optflags |= VAL_OPT_BAD_DROP;
-    } else if (MB_BYTE2LEN(*arg_start) == 1 && *pp == arg_start + 1) {
+    } else if (MB_BYTE2LEN((size_t) *arg_start) == 1 && *pp == arg_start + 1) {
       *optflags |= CHAR_TO_VAL_OPT_BAD(*arg_start);
     } else {
       error->message = N_("E474: Invalid ++bad argument: use "
@@ -2671,12 +2675,12 @@ parse_argopt_ff_error:
 ///
 /// @return OK if everything was parsed correctly, NOTDONE in case of error, 
 ///         FAIL otherwise.
-int parse_range(const char_u **pp, CommandNode **node, CommandParserOptions o,
+int parse_range(const char **pp, CommandNode **node, CommandParserOptions o,
                 CommandPosition position, Range *range,
-                const char_u **range_start)
+                const char **range_start)
 {
-  const char_u *p = *pp;
-  const char_u *s = p;
+  const char *p = *pp;
+  const char *s = p;
   Range current_range;
 
   *range_start = NULL;
@@ -2766,13 +2770,13 @@ int parse_range(const char_u **pp, CommandNode **node, CommandParserOptions o,
 ///
 /// @return OK if everything was parsed correctly, NOTDONE in case of error, 
 ///         FAIL otherwise.
-int parse_modifiers(const char_u **pp, CommandNode ***node,
+int parse_modifiers(const char **pp, CommandNode ***node,
                     CommandParserOptions o, CommandPosition position,
-                    const char_u *const pstart, CommandType *type)
+                    const char *const pstart, CommandType *type)
 {
-  const char_u *p = *pp;
-  const char_u *mod_start = p;
-  const char_u *s = p;
+  const char *p = *pp;
+  const char *mod_start = p;
+  const char *s = p;
 
   // FIXME (genex_cmds.lua): Iterate over precomputed table with only modifier 
   //                         commands
@@ -2780,8 +2784,8 @@ int parse_modifiers(const char_u **pp, CommandNode ***node,
     if (CMDDEF(i).flags & ISMODIFIER) {
       size_t common_len = 0;
       if (i > 0) {
-        const char_u *name = CMDDEF(i).name;
-        const char_u *prev_name = CMDDEF(i - 1).name;
+        const char *name = CMDDEF(i).name;
+        const char *prev_name = CMDDEF(i - 1).name;
         common_len++;
         // FIXME (genex_cmds.lua): Precompute and record this in cmddefs
         while (name[common_len] == prev_name[common_len])
@@ -2857,7 +2861,7 @@ int parse_modifiers(const char_u **pp, CommandNode ***node,
 ///
 /// @return OK if everything was parsed correctly, FAIL if out of memory, 
 ///         NOTDONE for parser error.
-int parse_one_cmd(const char_u **pp,
+int parse_one_cmd(const char **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition position,
@@ -2870,21 +2874,21 @@ int parse_one_cmd(const char_u **pp,
   CommandParserError error;
   CommandType type = kCmdUnknown;
   Range range;
-  const char_u *p;
-  const char_u *s = *pp;
-  const char_u *nextcmd = NULL;
-  const char_u *name = NULL;
-  const char_u *range_start = NULL;
+  const char *p;
+  const char *s = *pp;
+  const char *nextcmd = NULL;
+  const char *name = NULL;
+  const char *range_start = NULL;
   bool bang = false;
   uint_least8_t exflags = 0;
   uint_least32_t optflags = 0;
-  char_u *enc = NULL;
+  char *enc = NULL;
   size_t len;
   CommandArgsParser parse = NULL;
   CountType cnt_type = kCntMissing;
   int count = 0;
   Glob *glob = NULL;
-  char_u *expr = NULL;
+  char *expr = NULL;
 
   memset(&error, 0, sizeof(CommandParserError));
 
@@ -2904,7 +2908,7 @@ int parse_one_cmd(const char_u **pp,
 
   p = *pp;
   for (;;) {
-    const char_u *pstart;
+    const char *pstart;
     // 1. skip comment lines and leading white space and colons
     while (*p == ' ' || *p == TAB || *p == ':')
       p++;
@@ -2958,7 +2962,7 @@ int parse_one_cmd(const char_u **pp,
     }
   }
 
-  const char_u *modifiers_end = p;
+  const char *modifiers_end = p;
   // 3. parse a range specifier
   {
     CommandPosition new_position = position;
@@ -3157,7 +3161,7 @@ int parse_one_cmd(const char_u **pp,
   }
   (*next_node)->bang = bang;
   (*next_node)->range = range;
-  (*next_node)->name = (char_u *) name;
+  (*next_node)->name = (char *) name;
   (*next_node)->exflags = exflags;
   (*next_node)->cnt_type = cnt_type;
   (*next_node)->cnt.count = count;
@@ -3172,8 +3176,8 @@ int parse_one_cmd(const char_u **pp,
   if (parse != NULL) {
     int ret;
     bool used_get_cmd_arg = false;
-    const char_u *cmd_arg = p;
-    char_u *cmd_arg_start = (char_u *) p;
+    const char *cmd_arg = p;
+    char *cmd_arg_start = (char *) p;
     size_t next_cmd_offset = 0;
     // XFILE commands may have bars inside `=…`
     // ISGREP commands may have bars inside patterns
@@ -3466,8 +3470,8 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 VimlLineGetter fgetline,
                                 void *cookie)
 {
-  char_u *line_start;
-  char_u *line;
+  char *line_start;
+  char *line;
   struct {
     CommandType type;
     CommandNode *node;
@@ -3481,7 +3485,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   while ((line_start = fgetline(':', cookie, 0)) != NULL) {
     line = line_start;
     while (*line) {
-      const char_u *parse_start = line;
+      const char *parse_start = line;
       CommandBlockOptions bo;
       int ret;
       CommandType block_type = kCmdMissing;
@@ -3489,7 +3493,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
 
       position.col = line - line_start + 1;
       assert(!NODE_IS_ALLOCATED(*next_node));
-      if ((ret = parse_one_cmd((const char_u **) &line, next_node, o, position,
+      if ((ret = parse_one_cmd((const char **) &line, next_node, o, position,
                                fgetline, cookie))
           == FAIL) {
         free_cmd(result);
@@ -3623,7 +3627,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   while (blockstack_len) {
     char *missing_message =
         get_missing_message(blockstack[blockstack_len - 1].type);
-    char_u *empty = (char_u *) "";
+    char *empty = "";
     NEW_ERROR_NODE(blockstack[blockstack_len - 1].node,
                    missing_message, empty, empty)
     blockstack_len--;
