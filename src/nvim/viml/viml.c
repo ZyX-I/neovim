@@ -27,7 +27,7 @@ Object execute_viml(const char *const s)
   CommandPosition position = {
     .lnr = 1,
     .col = 1,
-    .fname = (const char_u *) "<:execute string>"
+    .fname = "<:execute string>"
   };
   char *const dup = xstrdup(s);
 
