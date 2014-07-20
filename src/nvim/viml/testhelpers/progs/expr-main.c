@@ -5,6 +5,7 @@
 #include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/types.h"
+#include "nvim/ascii.h"
 #include "nvim/charset.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
@@ -259,13 +260,9 @@ char *xstpcpy(char *restrict dst, const char *restrict src)
   return (char *)memcpy(dst, src, len + 1) + len;
 }
 
-char_u *vim_strnsave(char_u *string, int len)
+char *xstrndup(char *string, int len)
 {
-  char_u      *p;
-
-  p = xmallocz((unsigned)(len + 1));
-  STRNCPY(p, string, len);
-  return p;
+  return strndup(string, len);
 }
 
 int parse_one_cmd(const char **pp,
@@ -328,6 +325,19 @@ char_u *skipdigits(char_u *q)
   while (VIM_ISDIGIT(*p))       /* skip to next non-digit */
     ++p;
   return p;
+}
+
+/// Duplicates a chunk of memory using xmalloc
+///
+/// @see {xmalloc}
+/// @param data pointer to the chunk
+/// @param len size of the chunk
+/// @return a pointer
+void *xmemdup(const void *data, size_t len)
+  FUNC_ATTR_MALLOC FUNC_ATTR_ALLOC_SIZE(2) FUNC_ATTR_NONNULL_RET
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  return memcpy(malloc(len), data, len);
 }
 
 _Bool do_log(int log_level, const char *func_name, int line_num, const char *fmt, ...)
