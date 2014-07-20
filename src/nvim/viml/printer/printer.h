@@ -16,21 +16,8 @@ typedef struct {
 // XXX Never defined: not needed: it should crash in case branch with 
 //     _error_spaces is reached.
 const _BeforeAfterSpaces _error_spaces;
-
-#define _OPERATOR_SPACES(po, op) \
-    (LOGICAL_START <= op && op <= LOGICAL_END \
-     ? po->expression.operators.logical[op - LOGICAL_START] \
-     : (COMPARISON_START <= op && op <= COMPARISON_END \
-        ? po->expression.operators.comparison[op - COMPARISON_START] \
-        : (ARITHMETIC_START <= op && op <= ARITHMETIC_END \
-           ? po->expression.operators.arithmetic[op - ARITHMETIC_START] \
-           : (op == kExprStringConcat \
-              ? po->expression.operators.string.concat \
-              : (UNARY_START <= op && op <= UNARY_END \
-                 ? po->expression.operators.unary[op - UNARY_START] \
-                 : (assert(false), _error_spaces))))))
 typedef struct {
-  struct {
+  struct expression_options {
     struct {
       _BeforeAfterSpaces logical[LOGICAL_LENGTH];
       _BeforeAfterSpaces comparison[COMPARISON_LENGTH];
@@ -85,8 +72,9 @@ typedef struct {
       size_t before_text;
     } comment;
   } command;
-} PrinterOptions;
+} StyleOptions;
 
-const PrinterOptions default_po;
+typedef struct expression_options ExprStyleOptions;
+const StyleOptions default_po;
 
 #endif  // NVIM_VIML_PRINTER_PRINTER_H

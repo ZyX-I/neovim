@@ -27,7 +27,7 @@
 #define NVIM_VIML_PRINTER_EX_COMMANDS_C_H
 
 #ifndef NVIM_VIML_DUMPERS_CH_MACROS
-# define CH_MACROS_OPTIONS_TYPE const PrinterOptions *const
+# define CH_MACROS_OPTIONS_TYPE const StyleOptions *const
 # define CH_MACROS_INDENT_STR o->command.indent
 #endif
 #include "nvim/viml/dumpers/ch_macros.h"
@@ -48,7 +48,7 @@ static FDEC(print_glob, const Glob *const glob)
     switch (cur_glob->type) {
       case kGlobExpression: {
         WS("`=");
-        F(print_expr_node, cur_glob->data.expr);
+        F(print_expr, cur_glob->data.expr);
         WC('`');
         break;
       }
@@ -408,7 +408,7 @@ static FDEC(print_args, const CommandType type,
       case kArgExpression: {
         if (arg->arg.expr != NULL) {
           WC(' ');
-          F(print_expr_node, arg->arg.expr);
+          F(print_expr, arg->arg.expr);
         }
         break;
       }
@@ -556,7 +556,7 @@ static CMD_FDEC(print_map)
     if (unmap) {
     } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
       WC(' ');
-      F(print_expr_node, node->args[ARG_MAP_EXPR].arg.expr);
+      F(print_expr, node->args[ARG_MAP_EXPR].arg.expr);
     } else if (node->children != NULL) {
       WC('\n');
       // FIXME untranslate mappings
@@ -655,9 +655,9 @@ static CMD_FDEC(print_for)
 {
   FUNCTION_START;
   WC(' ');
-  F(print_expr_node, node->args[ARG_FOR_LHS].arg.expr);
+  F(print_expr, node->args[ARG_FOR_LHS].arg.expr);
   WS(" in ");
-  F(print_expr_node, node->args[ARG_FOR_RHS].arg.expr);
+  F(print_expr, node->args[ARG_FOR_RHS].arg.expr);
   F(print_block_children, node->children, indent + 1, barnext);
   FUNCTION_END;
 }
@@ -666,7 +666,7 @@ static CMD_FDEC(print_for)
 static CMD_FDEC(print_expr_cmd)
 {
   FUNCTION_START;
-  PRINT_FROM_ARG(node, 1);
+  PRINT_FROM_ARG(node, 0);
   F(print_block_children, node->children, indent + 1, barnext);
   FUNCTION_END;
 }
@@ -680,7 +680,7 @@ static CMD_FDEC(print_lockvar)
     F_NOOPT(dump_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.number);
   }
   WC(' ');
-  F(print_expr_node, node->args[ARG_EXPRS_EXPRS].arg.expr);
+  F(print_expr, node->args[ARG_EXPRS_EXPRS].arg.expr);
   FUNCTION_END;
 }
 
@@ -690,7 +690,7 @@ static CMD_FDEC(print_function)
   if (node->args[ARG_FUNC_REG].arg.reg == NULL) {
     if (node->args[ARG_FUNC_NAME].arg.expr != NULL) {
       WC(' ');
-      F(print_expr_node, node->args[ARG_FUNC_NAME].arg.expr);
+      F(print_expr, node->args[ARG_FUNC_NAME].arg.expr);
       if (node->args[ARG_FUNC_ARGS].arg.strs.ga_itemsize != 0) {
         const uint_least32_t flags = node->args[ARG_FUNC_FLAGS].arg.flags;
         const garray_T *ga = &(node->args[ARG_FUNC_ARGS].arg.strs);
@@ -742,7 +742,7 @@ static CMD_FDEC(print_let)
     bool add_rval = true;
 
     WC(' ');
-    F(print_expr_node, node->args[ARG_LET_LHS].arg.expr);
+    F(print_expr, node->args[ARG_LET_LHS].arg.expr);
     switch (ass_type) {
       case VAL_LET_NO_ASS: {
         add_rval = false;
@@ -774,7 +774,7 @@ static CMD_FDEC(print_let)
       }
     }
     if (add_rval) {
-      F(print_expr_node, node->args[ARG_LET_RHS].arg.expr);
+      F(print_expr, node->args[ARG_LET_RHS].arg.expr);
     }
   }
   FUNCTION_END;

@@ -142,8 +142,10 @@
 /// @def W_EXPR_POS
 /// @brief Write ExpressionNode, propagate FAIL
 ///
-/// Data written is string between expr->position and expr->end_position, 
-/// inclusive.
+/// @param  s     Pointer to the start of the string.
+/// @param  node  Expression node which is being dumped.
+///
+/// Data written is string between node->start and node->end, inclusive.
 
 #if defined(CH_MACROS_DEFINE_LENGTH) && defined(CH_MACROS_DEFINE_FWRITE)
 # error Trying to use both CH_MACROS_DEFINE_LENGTH and CH_MACROS_DEFINE_FWRITE.
@@ -235,8 +237,9 @@
 # ifdef CH_MACROS_DEFINE_FWRITE
 #  define _WRITE(s, length) \
     do { \
-      if (write_string_len((const char *) s, length, write, cookie) == FAIL) \
+      if (write_string_len((const char *) s, length, write, cookie) == FAIL) { \
         return FAIL; \
+      } \
     } while (0)
 #  define FNAME(f) f
 #  define F_NOOPT(f, ...) \
@@ -309,7 +312,7 @@
     *p++ = c
 #  define WS(s) \
     do { \
-      memcpy(p, s, sizeof(s) - 1); \
+      memcpy(p, (const char *) s, sizeof(s) - 1); \
       p += sizeof(s) - 1; \
     } while (0)
 #  define W(s) \
@@ -365,16 +368,14 @@
     typedef int (*t)(CH_MACROS_OPTIONS_TYPE, __VA_ARGS__, Writer, void *)
 # define W_END(s, e) \
     W_LEN(s, e - s + 1)
-# define W_EXPR_POS(expr) \
-    W_END(expr->position, expr->end_position)
+# define W_EXPR_POS(s, node) \
+    W_LEN(s + node->start, node->end - node->start + 1)
 # define SPACES(length) \
     do { \
       if (length) { \
         FILL(' ', length); \
       } \
     } while (0)
-# define OPERATOR_SPACES(op) \
-     _OPERATOR_SPACES(o, op)
 # define CALL_LEN(f, ...) s##f##_len(o, __VA_ARGS__)
 
 # define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(o->a1.a2.before_subscript)
