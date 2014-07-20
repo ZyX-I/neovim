@@ -45,7 +45,7 @@
 #define COMMENT_INLINE_SPACES 2
 #define COMMENT_SPACES 0
 
-const PrinterOptions default_po = {
+const StyleOptions default_po = {
   {
     {
       {
@@ -182,45 +182,46 @@ static char *case_compare_strategy_string[] = {
 
 #include "nvim/viml/printer/expressions.c.h"
 
-size_t sprint_expr_node_len(const PrinterOptions *const po,
-                            const ExpressionNode *const node)
+size_t sprint_expr_len(const StyleOptions *const po,
+                       const Expression *const expr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
-  size_t len = sprint_node_len(po, (ExpressionNode *) node);
-  ExpressionNode *next = node->next;
+  ExprPrinterOptions epo = {po->expression, expr->string};
+  size_t len = sprint_node_len(&epo, expr->string, expr->node);
+  ExpressionNode *next = expr->node->next;
 
   while (next != NULL) {
     len++;
-    len += sprint_node_len(po, next);
+    len += sprint_node_len(&epo, expr->string, next);
     next = next->next;
   }
 
   return len;
 }
 
-void sprint_expr_node(const PrinterOptions *const po,
-                      const ExpressionNode *const node,
-                      char **pp)
+void sprint_expr(const StyleOptions *const po, const Expression *const expr,
+                 char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
-  ExpressionNode *next = node->next;
+  ExpressionNode *next = expr->node->next;
+  ExprPrinterOptions epo = {po->expression, expr->string};
 
-  sprint_node(po, (ExpressionNode *) node, pp);
+  sprint_node(&epo, expr->string, expr->node, pp);
 
   while (next != NULL) {
     *(*pp)++ = ' ';
-    sprint_node(po, next, pp);
+    sprint_node(&epo, expr->string, next, pp);
     next = next->next;
   }
 }
 
-int print_expr_node(const PrinterOptions *const po,
-                    const ExpressionNode *const node,
-                    Writer write, void *cookie)
+int print_expr(const StyleOptions *const po, const Expression *const expr,
+               Writer write, void *cookie)
 {
-  ExpressionNode *next = node->next;
+  ExpressionNode *next = expr->node->next;
+  ExprPrinterOptions epo = {po->expression, expr->string};
 
-  if (print_node(po, (ExpressionNode *) node, write, cookie) == FAIL) {
+  if (print_node(&epo, expr->string, expr->node, write, cookie) == FAIL) {
     return FAIL;
   }
 
@@ -228,7 +229,7 @@ int print_expr_node(const PrinterOptions *const po,
     if (write(" ", 1, 1, cookie) != 1) {
       return FAIL;
     }
-    if (print_node(po, next, write, cookie) == FAIL) {
+    if (print_node(&epo, expr->string, next, write, cookie) == FAIL) {
       return FAIL;
     }
     next = next->next;
@@ -236,24 +237,25 @@ int print_expr_node(const PrinterOptions *const po,
   return OK;
 }
 
-size_t srepresent_expr_node_len(const PrinterOptions *const po,
-                                const ExpressionNode *const node)
+size_t srepresent_expr_len(const StyleOptions *const po,
+                           const Expression *const expr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
-  return srepresent_node_len(po, node);
+  ExprPrinterOptions epo = {po->expression, expr->string};
+  return srepresent_node_len(&epo, expr->string, expr->node);
 }
 
-void srepresent_expr_node(const PrinterOptions *const po,
-                          const ExpressionNode *const node,
-                          char **pp)
+void srepresent_expr(const StyleOptions *const po, const Expression *const expr,
+                     char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
-  srepresent_node(po, node, pp);
+  ExprPrinterOptions epo = {po->expression, expr->string};
+  srepresent_node(&epo, expr->string, expr->node, pp);
 }
 
-int represent_expr_node(const PrinterOptions *const po,
-                        const ExpressionNode *const node,
-                        Writer write, void *cookie)
+int represent_expr(const StyleOptions *const po, const Expression *const expr,
+                   Writer write, void *cookie)
 {
-  return represent_node(po, node, write, cookie);
+  ExprPrinterOptions epo = {po->expression, expr->string};
+  return represent_node(&epo, expr->string, expr->node, write, cookie);
 }

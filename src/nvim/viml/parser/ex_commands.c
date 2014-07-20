@@ -368,25 +368,20 @@ void free_cmd(CommandNode *node)
   free_cmd(node->children);
   free_glob(node->glob);
   free_range_data(&(node->range));
-  free(node->expr);
   free(node->name);
   free(node);
 }
 
 static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
-                    char **expr, bool is_branch, bool is_glob)
+                    bool is_branch, bool is_glob)
 {
   const char *p = *pp;
   Glob **next = glob;
-  const char *real_expr_start;
-  const char *e;
   size_t literal_length = 0;
   const char *literal_start = NULL;
   int ret = FAIL;
 
   *glob = NULL;
-  if (!is_branch)
-    *expr = NULL;
 
   for (;;) {
     GlobType type = kPatMissing;
@@ -527,22 +522,15 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
         case kGlobExpression: {
           ExpressionParserError expr_error;
           p += 2;
-          if (*expr == NULL) {
-            *expr = xstrdup(p);
-            real_expr_start = p;
-            e = *expr;
-          } else {
-            e = *expr + (p - real_expr_start);
-          }
-          if (((*next)->data.expr = parse0_err(&e, &expr_error)) == NULL) {
+          if (((*next)->data.expr = parse_one(&p, &expr_error, &parse0_err))
+              == NULL) {
             if (expr_error.message == NULL)
               goto get_glob_error_return;
             error->message = expr_error.message;
-            error->position = real_expr_start + (expr_error.position - *expr);
+            error->position = expr_error.position;
             ret = NOTDONE;
             goto get_glob_error_return;
           }
-          p = real_expr_start + (e - *expr);
           break;
         }
         case kGlobShell: {
@@ -588,7 +576,7 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
           do {
             int cret;
             p++;
-            if ((cret = get_glob(&p, error, cnext, expr, true, is_glob))
+            if ((cret = get_glob(&p, error, cnext, true, is_glob))
                 == FAIL)
               return FAIL;
             if (cret == NOTDONE) {
@@ -613,7 +601,6 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
 
 get_glob_error_return:
   free_glob(*glob);
-  free(*expr);
   return ret;
 }
 
@@ -772,7 +759,7 @@ static int parse_append(const char **pp,
 /// @endparblock
 /// @param[in,out]  node     Node whose argument rhs should be saved to.
 /// @param[in]      special  true if explicit <special> was supplied.
-/// @param[in]      expr     true if it is <expr>-type mapping.
+/// @param[in]      is_expr  true if it is <expr>-type mapping.
 /// @parblock
 ///   @note If this argument is always false then you do not need to care about 
 ///         rhs_idx + 1 and node->children.
@@ -782,7 +769,7 @@ static int parse_append(const char **pp,
 ///
 /// @return FAIL when out of memory, OK otherwise.
 static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
-                        bool special, bool expr, CommandParserOptions o,
+                        bool special, bool is_expr, CommandParserOptions o,
                         CommandPosition position)
 {
   char *rhs_buf;
@@ -796,15 +783,15 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
   if ((o.flags&FLAG_POC_ALTKEYMAP) && (o.flags&FLAG_POC_RL))
     lrswap(new_rhs);
 
-  if (expr) {
+  if (is_expr) {
     ExpressionParserError expr_error;
-    ExpressionNode *expr = NULL;
+    Expression *expr = NULL;
     const char *rhs_end = new_rhs;
 
     expr_error.position = NULL;
     expr_error.message = NULL;
 
-    if ((expr = parse0_err(&rhs_end, &expr_error)) == NULL) {
+    if ((expr = parse_one(&rhs_end, &expr_error, &parse0_err)) == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
         free(new_rhs);
@@ -833,8 +820,11 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
     } else {
       node->args[rhs_idx + 1].arg.expr = expr;
     }
+
+    free(new_rhs);
+  } else {
+    node->args[rhs_idx].arg.str = new_rhs;
   }
-  node->args[rhs_idx].arg.str = new_rhs;
   return OK;
 }
 
@@ -1254,32 +1244,25 @@ static int do_parse_expr(const char **pp,
                          CommandParserOptions o,
                          bool multi)
 {
-  ExpressionNode *expr;
+  Expression *expr;
   ExpressionParserError expr_error;
-  const char *expr_str_start;
-  const char *expr_str;
 
-  expr_str = xstrdup(*pp);
-
-  node->args[ARG_EXPR_STR].arg.str = (char *) expr_str;
-  expr_str_start = expr_str;
-
-  if (multi)
-    expr = parse_mult(&expr_str, &expr_error, &parse0_err, false, "\n|");
-  else
-    expr = parse0_err(&expr_str, &expr_error);
+  if (multi) {
+    expr = parse_mult(pp, &expr_error, &parse0_err, false, "\n|");
+  } else {
+    expr = parse_one(pp, &expr_error, &parse0_err);
+  }
 
   if (expr == NULL) {
-    if (expr_error.message == NULL)
+    if (expr_error.message == NULL) {
       return FAIL;
+    }
     error->message = expr_error.message;
-    error->position = *pp + (expr_error.position - expr_str_start);
+    error->position = expr_error.position;
     return NOTDONE;
   }
 
   node->args[ARG_EXPR_EXPR].arg.expr = expr;
-
-  *pp += expr_str - expr_str_start;
 
   return OK;
 }
@@ -1292,8 +1275,9 @@ static int parse_expr(const char **pp,
                       VimlLineGetter fgetline,
                       void *cookie)
 {
-  if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp))
+  if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
+  }
   return do_parse_expr(pp, node, error, o, false);
 }
 
@@ -1305,8 +1289,9 @@ static int parse_exprs(const char **pp,
                        VimlLineGetter fgetline,
                        void *cookie)
 {
-  if (ENDS_EXCMD_NOCOMMENT(**pp))
+  if (ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
+  }
   return do_parse_expr(pp, node, error, o, true);
 }
 
@@ -1388,7 +1373,9 @@ static int parse_do(const char **pp,
 
 /// Check whether given expression node is a valid lvalue
 ///
-/// @param[in]   expr         Checked expression.
+/// @param[in]   s            String that holds original representation of 
+///                           parsed expression.
+/// @param[in]   node         Checked expression.
 /// @param[out]  error        Structure where error information is saved.
 /// @param[in]   allow_list   Determines whether list nodes are allowed.
 /// @param[in]   allow_lower  Determines whether simple variable names are 
@@ -1398,36 +1385,37 @@ static int parse_do(const char **pp,
 ///                           kExprEnvironmentVariable nodes.
 ///
 /// @return true if check failed, false otherwise.
-static bool check_lval(ExpressionNode *expr, CommandParserError *error,
-                       bool allow_list, bool allow_lower, bool allow_env)
+static bool check_lval(const char *const s, ExpressionNode *node,
+                       CommandParserError *error, bool allow_list,
+                       bool allow_lower, bool allow_env)
 {
-  switch (expr->type) {
+  switch (node->type) {
     case kExprSimpleVariableName: {
       if (!allow_lower
-          && ASCII_ISLOWER(*expr->position)
-          && expr->position[1] != ':'  // Fast check: most functions 
-                                       // containing colon contain it in the 
-                                       // second character
-          && memchr((void *) expr->position, '#',
-                    expr->end_position - expr->position + 1) == NULL
+          && ASCII_ISLOWER(s[node->start])
+          && s[node->start + 1] != ':'  // Fast check: most functions 
+                                        // containing colon contain it in the 
+                                        // second character
+          && memchr((void *) (s + node->start), '#',
+                    node->end - node->start + 1) == NULL
           // FIXME? Though foo:bar works in Vim Bram said it was never 
           //        intended to work.
-          && memchr((void *) expr->position, ':',
-                    expr->end_position - expr->position + 1) == NULL) {
+          && memchr((void *) (s + node->start), ':',
+                    node->end - node->start + 1) == NULL) {
         error->message =
             N_("E128: Function name must start with a capital "
                "or contain a colon or a hash");
-        error->position = expr->position;
+        error->position = s + node->start;
         return true;
       }
       break;
     }
     case kExprEnvironmentVariable: {
       if (allow_env) {
-        if (expr->position > expr->end_position) {
+        if (node->start > node->end) {
           error->message = N_("E475: Cannot assign to environment variable "
                               "with an empty name");
-          error->position = expr->end_position;
+          error->position = s + node->end;
           return true;
         }
       }
@@ -1437,7 +1425,7 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
     case kExprRegister: {
       if (!allow_env) {
         error->message = N_("E15: Only variable names are allowed");
-        error->position = expr->position;
+        error->position = s + node->start;
         return true;
       }
       break;
@@ -1450,53 +1438,59 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
     }
     case kExprConcatOrSubscript:
     case kExprSubscript: {
-      ExpressionNode *root = expr;
-      while (root->children != NULL)
-        root = root->children;
-
-      if (root->type != kExprVariableName
-          && root->type != kExprSimpleVariableName) {
-        error->message =
-            N_("E475: Expected variable name or a list of variable names");
-        error->position = root->position;
-        return true;
+      for (ExpressionNode *root = node; root->children != NULL;
+           root = root->children) {
+        switch (root->type) {
+          case kExprConcatOrSubscript:
+          case kExprSubscript: {
+            continue;
+          }
+          case kExprVariableName:
+          case kExprSimpleVariableName: {
+            break;
+          }
+          default: {
+            error->message =
+                N_("E475: Expected variable name or a list of variable names");
+            error->position = s + root->start;
+            return true;
+          }
+        }
+        break;
       }
       break;
     }
     case kExprList: {
       if (allow_list) {
-        ExpressionNode *item = expr->children;
+        ExpressionNode *item = node->children;
 
         if (item == NULL) {
           error->message =
               N_("E475: Expected non-empty list of variable names");
-          error->position = expr->position;
+          error->position = s + node->start;
           return true;
         }
 
         while (item != NULL) {
-          if (check_lval(item, error, false, allow_lower, allow_env))
+          if (check_lval(s, item, error, false, allow_lower, allow_env))
             return true;
           item = item->next;
         }
       } else {
         error->message = N_("E475: Expected variable name");
-        error->position = expr->position;
+        error->position = s + node->start;
         return true;
       }
       break;
     }
     default: {
-      ExpressionNode *root = expr;
-      while (root->children != NULL && root->position == NULL)
-        root = root->children;
-
-      if (allow_list)
+      if (allow_list) {
         error->message =
             N_("E475: Expected variable name or a list of variable names");
-      else
+      } else {
         error->message = N_("E475: Expected variable name");
-      error->position = root->position;
+      }
+      error->position = s + node->start;
       return true;
     }
   }
@@ -1534,47 +1528,48 @@ static bool check_lval(ExpressionNode *expr, CommandParserError *error,
 static int parse_lval(const char **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
-                      ExpressionNode **expr,
+                      Expression **expr,
                       int flags)
 {
   ExpressionParserError expr_error;
-  ExpressionNode *next;
-  const char *expr_start = *pp;
+  const char *s = *pp;
   bool allow_list = (bool) (flags&FLAG_PLVAL_LISTMULT);
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
-  if (flags&FLAG_PLVAL_SPACEMULT)
+  if (flags&FLAG_PLVAL_SPACEMULT) {
     *expr = parse_mult(pp, &expr_error, &parse7_nofunc, true,
                        (char *) "\n\"|-.+=");
-  else
-    *expr = parse7_nofunc(pp, &expr_error);
+  } else {
+    *expr = parse_one(pp, &expr_error, &parse7_nofunc);
+  }
 
   if (*expr == NULL) {
-    if (expr_error.message == NULL)
+    if (expr_error.message == NULL) {
       return FAIL;
+    }
     error->message = expr_error.message;
     error->position = expr_error.position;
     return NOTDONE;
   }
 
-  if ((*expr)->next != NULL) {
+  if ((*expr)->node->next != NULL) {
     allow_list = false;
     allow_env = false;
   }
 
-  next = *expr;
-  while (next != NULL) {
-    if (check_lval(next, error, allow_list, !(flags&FLAG_PLVAL_NOLOWER),
-                   allow_env)) {
+  for (ExpressionNode *next = (*expr)->node; next != NULL; next = next->next) {
+    if (check_lval((*expr)->string, next, error, allow_list,
+                   !(flags&FLAG_PLVAL_NOLOWER), allow_env)) {
       free_expr(*expr);
       *expr = NULL;
-      if (error->message == NULL)
+      if (error->message == NULL) {
         return FAIL;
-      if (error->position == NULL)
-        error->position = expr_start;
+      }
+      if (error->position == NULL) {
+        error->position = s;
+      }
       return NOTDONE;
     }
-    next = next->next;
   }
 
   return OK;
@@ -1588,18 +1583,10 @@ static int parse_lvals(const char **pp,
                        VimlLineGetter fgetline,
                        void *cookie)
 {
-  ExpressionNode *expr;
-  const char *expr_str;
-  const char *expr_str_start;
+  Expression *expr;
   int ret;
 
-  expr_str = xstrdup(*pp);
-
-  node->args[ARG_EXPRS_STR].arg.str = (char *) expr_str;
-
-  expr_str_start = expr_str;
-
-  if ((ret = parse_lval(&expr_str, error, o, &expr,
+  if ((ret = parse_lval(pp, error, o, &expr,
                         node->type == kCmdDelfunction
                         ? FLAG_PLVAL_NOLOWER
                         : FLAG_PLVAL_SPACEMULT)) == FAIL)
@@ -1608,14 +1595,8 @@ static int parse_lvals(const char **pp,
   node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char *) error->position)
-                             - expr_str_start);
     return NOTDONE;
   }
-
-  node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
-
-  *pp += expr_str - expr_str_start;
 
   return OK;
 }
@@ -1628,8 +1609,9 @@ static int parse_lockvar(const char **pp,
                          VimlLineGetter fgetline,
                          void *cookie)
 {
-  if (VIM_ISDIGIT(**pp))
+  if (VIM_ISDIGIT(**pp)) {
     node->args[ARG_LOCKVAR_DEPTH].arg.unumber = (unsigned) getdigits(pp);
+  }
 
   return parse_lvals(pp, node, error, o, position, fgetline, cookie);
 }
@@ -1642,53 +1624,41 @@ static int parse_for(const char **pp,
                      VimlLineGetter fgetline,
                      void *cookie)
 {
-  ExpressionNode *expr;
-  ExpressionNode *list_expr;
+  Expression *expr;
+  Expression *list_expr;
   ExpressionParserError expr_error;
-  const char *expr_str;
-  const char *expr_str_start;
   int ret;
 
-  expr_str = xstrdup(*pp);
-
-  node->args[ARG_FOR_STR].arg.str = (char *) expr_str;
-
-  expr_str_start = expr_str;
-
-  if ((ret = parse_lval(&expr_str, error, o, &expr, FLAG_PLVAL_LISTMULT))
+  if ((ret = parse_lval(pp, error, o, &expr, FLAG_PLVAL_LISTMULT))
       == FAIL)
     return FAIL;
 
   node->args[ARG_FOR_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char *) error->position)
-                             - expr_str_start);
     return NOTDONE;
   }
 
-  expr_str = skipwhite(expr_str);
+  *pp = skipwhite(*pp);
 
-  if (expr_str[0] != 'i' || expr_str[1] != 'n') {
+  if ((*pp)[0] != 'i' || (*pp)[1] != 'n') {
     error->message = N_("E690: Missing \"in\" after :for");
-    error->position = *pp + (expr_str - expr_str_start);
+    error->position = *pp;
     return NOTDONE;
   }
 
-  expr_str = skipwhite(expr_str + 2);
+  *pp = skipwhite(*pp + 2);
 
-  if ((list_expr = parse0_err(&expr_str, &expr_error)) == NULL) {
-    if (expr_error.message == NULL)
+  if ((list_expr = parse_one(pp, &expr_error, &parse0_err)) == NULL) {
+    if (expr_error.message == NULL) {
       return FAIL;
+    }
     error->message = expr_error.message;
-    error->position = *pp + (((const char *) expr_error.position)
-                             - expr_str_start);
+    error->position = expr_error.position;
     return NOTDONE;
   }
 
   node->args[ARG_FOR_RHS].arg.expr = list_expr;
-
-  *pp += expr_str - expr_str_start;
 
   return OK;
 }
@@ -1702,10 +1672,8 @@ static int parse_function(const char **pp,
                           void *cookie)
 {
   const char *p = *pp;
-  ExpressionNode *expr;
+  Expression *expr;
   int ret;
-  const char *expr_str;
-  const char *expr_str_start;
   garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.strs);
   uint_least32_t flags = 0;
   bool mustend = false;
@@ -1716,25 +1684,18 @@ static int parse_function(const char **pp,
   if (*p == '/')
     return get_regex(&p, error, &(node->args[ARG_FUNC_REG].arg.reg), '/');
 
-  expr_str = xstrdup(*pp);
-
-  node->args[ARG_FUNC_STR].arg.str = (char *) expr_str;
-
-  expr_str_start = expr_str;
-
-  if ((ret = parse_lval(&expr_str, error, o, &expr, FLAG_PLVAL_NOLOWER))
-      == FAIL)
+  if ((ret = parse_lval(&p, error, o, &expr, FLAG_PLVAL_NOLOWER))
+      == FAIL) {
     return FAIL;
+  }
 
   node->args[ARG_FUNC_NAME].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char *) error->position)
-                             - expr_str_start);
     return NOTDONE;
   }
 
-  p = skipwhite(p + (expr_str - expr_str_start));
+  p = skipwhite(p);
 
   if (*p != '(') {
     if (!ENDS_EXCMD(*p)) {
@@ -1848,24 +1809,16 @@ static int parse_let(const char **pp,
                      VimlLineGetter fgetline,
                      void *cookie)
 {
-  ExpressionNode *expr;
+  Expression *expr;
   ExpressionParserError expr_error;
   int ret;
-  const char *expr_str;
-  const char *expr_str_start;
-  ExpressionNode *rval_expr;
+  Expression *rval_expr;
   LetAssignmentType ass_type = 0;
 
   if (ENDS_EXCMD(**pp))
     return OK;
 
-  expr_str = xstrdup(*pp);
-
-  node->args[ARG_LET_STR].arg.str = (char *) expr_str;
-
-  expr_str_start = expr_str;
-
-  if ((ret = parse_lval(&expr_str, error, o, &expr,
+  if ((ret = parse_lval(pp, error, o, &expr,
                         FLAG_PLVAL_LISTMULT|FLAG_PLVAL_SPACEMULT
                         |FLAG_PLVAL_ALLOW_ENV))
       == FAIL)
@@ -1874,41 +1827,38 @@ static int parse_let(const char **pp,
   node->args[ARG_LET_LHS].arg.expr = expr;
 
   if (ret == NOTDONE) {
-    error->position = *pp + (((const char *) error->position)
-                             - expr_str_start);
     return NOTDONE;
   }
 
-  expr_str = skipwhite(expr_str);
+  *pp = skipwhite(*pp);
 
-  if (ENDS_EXCMD(*expr_str)) {
-    if (expr->type == kExprList) {
+  if (ENDS_EXCMD(**pp)) {
+    if (expr->node->type == kExprList) {
       error->message =
           N_("E474: To list multiple variables use \":let var|let var2\", "
                    "not \":let [var, var2]\"");
-      error->position = *pp + (expr->position - expr_str_start);
+      error->position = *pp;
       return NOTDONE;
     }
-    *pp += expr_str - expr_str_start;
     return OK;
   } else {
-    if (expr->next != NULL) {
+    if (expr->node->next != NULL) {
       error->message = N_("E18: Expected end of command after last variable");
-      error->position = *pp + (expr_str - expr_str_start);
+      error->position = *pp;
       return NOTDONE;
     }
   }
 
-  switch (*expr_str) {
+  switch (**pp) {
     case '=': {
-      expr_str++;
+      (*pp)++;
       ass_type = VAL_LET_ASSIGN;
       break;
     }
     case '+':
     case '-':
     case '.': {
-      switch (*expr_str) {
+      switch (**pp) {
         case '+': {
           ass_type = VAL_LET_ADD;
           break;
@@ -1922,38 +1872,36 @@ static int parse_let(const char **pp,
           break;
         }
       }
-      if (expr_str[1] != '=') {
+      if ((*pp)[1] != '=') {
         error->message = N_("E18: '+', '-' and '.' must be followed by '='");
-        error->position = *pp + (expr_str + 1 - expr_str_start);
+        error->position = *pp;
         return NOTDONE;
       }
-      expr_str += 2;
+      *pp += 2;
       break;
     }
     default: {
       error->message =
           N_("E18: Expected assignment operation or end of command");
-      error->position = *pp + (expr_str + 1 - expr_str_start);
+      error->position = *pp;
       return NOTDONE;
     }
   }
 
   node->args[ARG_LET_ASS_TYPE].arg.flags = (uint_least32_t) ass_type;
 
-  expr_str = skipwhite(expr_str);
+  *pp = skipwhite(*pp);
 
-  if ((rval_expr = parse0_err(&expr_str, &expr_error)) == NULL) {
+  if ((rval_expr = parse_one(pp, &expr_error, &parse0_err)) == NULL) {
     if (expr_error.message == NULL)
       return FAIL;
     error->message = expr_error.message;
-    error->position = *pp + (((const char *) expr_error.position)
-                             - expr_str_start);
+    error->position = *pp;
     return NOTDONE;
   }
 
   node->args[ARG_LET_RHS].arg.expr = rval_expr;
 
-  *pp += expr_str - expr_str_start;
   return OK;
 }
 
@@ -2849,7 +2797,6 @@ int parse_one_cmd(const char **pp,
   CountType cnt_type = kCntMissing;
   int count = 0;
   Glob *glob = NULL;
-  char *expr = NULL;
 
   memset(&error, 0, sizeof(CommandParserError));
 
@@ -3076,7 +3023,7 @@ int parse_one_cmd(const char **pp,
 
   if (CMDDEF(type).flags & XFILE) {
     int ret;
-    if ((ret = get_glob(&p, &error, &glob, &expr, false, true)) == FAIL) {
+    if ((ret = get_glob(&p, &error, &glob, false, true)) == FAIL) {
       free_range_data(&range);
       return FAIL;
     }
@@ -3114,7 +3061,6 @@ int parse_one_cmd(const char **pp,
   (*next_node)->optflags = optflags;
   (*next_node)->enc = enc;
   (*next_node)->glob = glob;
-  (*next_node)->expr = expr;
 
   parse = CMDDEF(type).parse;
 
@@ -3336,7 +3282,6 @@ const CommandNode nocmd = {
   NULL,
   NULL,
   NULL,
-  false,
   {
     {{0}}
   }
