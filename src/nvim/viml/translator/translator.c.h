@@ -1514,7 +1514,7 @@ static FDEC(translate_modifying_assignment, const LetModAssArgs *args)
       assert(false);
     }
   }
-  WS("vim.op.");
+  WS("vim.op.mod_");
   W(op);
   WS("(state, ");
   F(translate_expr_node, TRANS_EXPR_ARGS(args->lval_expr), false);
