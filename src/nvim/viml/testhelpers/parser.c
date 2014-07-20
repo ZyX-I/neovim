@@ -87,7 +87,7 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionParserError error = {NULL, NULL};
-  ExpressionNode *expr;
+  Expression *expr;
   size_t len = 0;
   size_t shift = 0;
   size_t offset = 0;
@@ -95,11 +95,11 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
   char *result = NULL;
   char *p;
   const char *e = arg;
-  PrinterOptions po;
+  StyleOptions po;
 
-  memset(&po, 0, sizeof(PrinterOptions));
+  memset(&po, 0, sizeof(StyleOptions));
 
-  if ((expr = parse0_err((const char **) &e, &error)) == NULL)
+  if ((expr = parse_one((const char **) &e, &error, &parse0_err)) == NULL)
     if (error.message == NULL)
       return NULL;
 
@@ -107,8 +107,8 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
     len = 6 + STRLEN(error.message);
   else
     len = (print_as_expr
-           ? sprint_expr_node_len
-           : srepresent_expr_node_len)(&po, expr);
+           ? sprint_expr_len
+           : srepresent_expr_len)(&po, expr);
 
   offset = e - arg;
   i = offset;
@@ -136,7 +136,7 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
     p += 6;
     STRCPY(p, error.message);
   } else {
-    (print_as_expr ? sprint_expr_node : srepresent_expr_node)(&po, expr, &p);
+    (print_as_expr ? sprint_expr : srepresent_expr)(&po, expr, &p);
   }
 
   return result;
@@ -153,13 +153,13 @@ int represent_parse0(const char *arg, const bool print_as_expr)
 {
   ExpressionParserError error = {NULL, NULL};
   Writer write = (Writer) &fwrite;
-  PrinterOptions po;
+  StyleOptions po;
   void *const cookie = (void *)stdout;
 
-  memset(&po, 0, sizeof(PrinterOptions));
+  memset(&po, 0, sizeof(StyleOptions));
 
   const char *e = arg;
-  const ExpressionNode *expr = parse0_err(&e, &error);
+  const Expression *expr = parse_one(&e, &error, &parse0_err);
   if (expr == NULL) {
     if (error.message == NULL) {
       return FAIL;
@@ -189,9 +189,8 @@ int represent_parse0(const char *arg, const bool print_as_expr)
   }
 
   if (error.message == NULL) {
-    return (print_as_expr ? print_expr_node : represent_expr_node)(&po, expr,
-                                                                   write,
-                                                                   cookie);
+    return (print_as_expr ? print_expr : represent_expr)(&po, expr, write,
+                                                         cookie);
   } else {
     size_t msglen = STRLEN(error.message);
     if (write(error.message, 1, msglen, cookie) != msglen) {

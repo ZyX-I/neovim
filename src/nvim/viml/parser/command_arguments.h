@@ -42,7 +42,7 @@ typedef enum {
 #define ARGS_UNMAP    {kArgFlags, kArgString}
 #define ARGS_UNMENU   {kArgMenuName}
 #define ARGS_BREAK    {kArgFlags, kArgPattern}
-#define ARGS_EXPR     {kArgString, kArgExpression}
+#define ARGS_EXPR     {kArgExpression}
 #define ARGS_REG      {kArgRegex}
 #define ARGS_CENTER   {kArgNumber}
 #define ARGS_CLIST    {kArgNumber, kArgNumber}
@@ -52,14 +52,13 @@ typedef enum {
 #define ARGS_CSTAG    {kArgString}
 #define ARGS_DIG      {kArgStrings, kArgNumbers}
 #define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
-#define ARGS_EXPRS    {kArgString, kArgExpressions}
-#define ARGS_LOCKVAR  {kArgString, kArgExpressions, kArgUNumber}
+#define ARGS_EXPRS    {kArgExpressions}
+#define ARGS_LOCKVAR  {kArgExpressions, kArgUNumber}
 #define ARGS_EXIT     {kArgString, kArgGlob}
 #define ARGS_WN       {kArgString, kArgGlob}
 #define ARGS_FOR      {kArgString, kArgAssignLhs, kArgExpression}
-#define ARGS_LET      {kArgFlags, kArgString, kArgAssignLhs, kArgExpression}
-#define ARGS_FUNC     {kArgString, kArgRegex, kArgAssignLhs, kArgStrings, \
-                       kArgFlags}
+#define ARGS_LET      {kArgFlags, kArgAssignLhs, kArgExpression}
+#define ARGS_FUNC     {kArgRegex, kArgAssignLhs, kArgStrings, kArgFlags}
 #define ARGS_G        {kArgRegex}
 #define ARGS_SHELL    {kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
@@ -212,8 +211,7 @@ enum {
 
 // :caddexpr/:laddexpr/:call
 enum {
-  ARG_EXPR_STR      = 0,
-  ARG_EXPR_EXPR,
+  ARG_EXPR_EXPR     = 0,
 };
 
 // :catch/:djump
@@ -314,8 +312,7 @@ enum {
 
 // :echo*/:execute
 enum {
-  ARG_EXPRS_STR     = 0,
-  ARG_EXPRS_EXPRS,
+  ARG_EXPRS_EXPRS   = 0,
   // :lockvar
   ARG_LOCKVAR_DEPTH,
 };
@@ -342,13 +339,12 @@ enum {
 // :let
 enum {
   ARG_LET_ASS_TYPE  = 0,
-  ARG_LET_STR,
   ARG_LET_LHS,
   ARG_LET_RHS,
 };
 
 typedef enum {
-  VAL_LET_NO_ASS = 0,
+  VAL_LET_NO_ASS    = 0,
   VAL_LET_ASSIGN,
   VAL_LET_ADD,
   VAL_LET_SUBTRACT,
@@ -357,8 +353,7 @@ typedef enum {
 
 // :func
 enum {
-  ARG_FUNC_STR      = 0,
-  ARG_FUNC_REG,
+  ARG_FUNC_REG      = 0,
   ARG_FUNC_NAME,
   ARG_FUNC_ARGS,
   ARG_FUNC_FLAGS,
