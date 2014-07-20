@@ -4,7 +4,7 @@
 #include "nvim/types.h"
 #include "nvim/ascii.h"
 #include "nvim/garray.h"
-#include "nvim/strings.h"
+#include "nvim/memory.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/testhelpers/fgetline.c.generated.h"
@@ -61,7 +61,7 @@ char *fgetline_string(int c, char **arg, int indent)
   while ((*arg)[len] != '\n' && (*arg)[len] != '\0')
     len++;
 
-  result = (char *) vim_strnsave((char_u *) *arg, len);
+  result = xstrndup(*arg, len);
 
   if ((*arg)[len] == '\0')
     *arg += len;

@@ -13,10 +13,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <assert.h>
+#include <string.h>
 
 #include "nvim/vim.h"
 #include "nvim/memory.h"
-#include "nvim/strings.h"
 #include "nvim/misc2.h"
 #include "nvim/types.h"
 #include "nvim/charset.h"
@@ -94,7 +94,6 @@
 
 #define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
 #define skipdigits(arg) (char *) skipdigits((char_u *) (arg))
-#define vim_strchr(hs, n) vim_strchr((char_u *) hs, n)
 
 /// Allocate new expression node and assign its type property
 ///
@@ -1463,7 +1462,7 @@ ExpressionNode *parse_mult(const char **arg, ExpressionParserError *error,
   error->message = NULL;
   error->position = NULL;
 
-  while (**arg && vim_strchr(endwith, **arg) == NULL) {
+  while (**arg && strchr(endwith, **arg) == NULL) {
     *arg = skipwhite(*arg);
     if ((*next = parse(arg, error)) == NULL) {
       free_expr(result);
