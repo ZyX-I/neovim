@@ -259,23 +259,36 @@ typedef int (*CommandArgsParser)(const char_u **,
 #define MENU_DEFAULT_PRI_VALUE 500
 #define MENU_DEFAULT_PRI        -1
 
+/// Structure that represents one built-in command
 typedef struct {
-  char_u      *name;          // name of the command
-  uint_least32_t flags;       // flags declared above
-  size_t num_args;            // number of arguments
-  CommandArgType *arg_types;  // argument types
-  CommandArgsParser parse;    // argument parsing function
+  char_u      *name;          ///< name of the command
+  uint_least32_t flags;       ///< flags declared above
+  size_t num_args;            ///< number of arguments
+  CommandArgType *arg_types;  ///< argument types
+  CommandArgsParser parse;    ///< argument parsing function
 } VimlCommandDefinition;
 
+/// Array containing all built-in commands.
 extern VimlCommandDefinition cmddefs[kCmdREAL_SIZE];
 
+/// Macros that returns command definition
+///
+/// @param[in]  type  Command node type.
+///
+/// @return CommandDefinition structure with the definition of the given 
+///         command.
 #define CMDDEF(type) cmddefs[type - 1]
 
+/// Command node that is used to represent absense of command
 const CommandNode nocmd;
 
+/// Maximum nesting level for :for/:while/:if/:try blocks
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
+/// Macros that checks whether given character ends Ex command
 #define ENDS_EXCMD_NOCOMMENT(ch) ((ch) == NUL || (ch) == '|' || (ch) == '\n')
+
+/// Like #ENDS_EXCMD_NOCOMMENT above, but also includes comment character
 #define ENDS_EXCMD(ch) ((ch) == '"' || ENDS_EXCMD_NOCOMMENT(ch))
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
