@@ -96,16 +96,16 @@ typedef enum {
 
 /// Structure to represent VimL expressions
 typedef struct expression_node {
-  ExpressionType type;     ///< Node type.
-  const char_u *position;  ///< Position of expression token start inside 
-                           ///< a parsed string.
-  const char_u *end_position;  ///< Position of last character of expression 
-                               ///< token.
-  CaseCompareStrategy ignore_case;  ///< Determines whether case should be 
-                                    ///< ignored while comparing. Only valid 
-                                    ///< for comparison operators: 
-                                    ///< kExpr(Greater|Less)*, 
-                                    ///< kExpr[Not]Matches, kExpr[Not]Equals.
+  ExpressionType type;       ///< Node type.
+  const char *position;      ///< Position of expression token start inside 
+                             ///< a parsed string.
+  const char *end_position;  ///< Position of last character of expression 
+                             ///< token.
+  CaseCompareStrategy ignore_case;   ///< Determines whether case should be 
+                                     ///< ignored while comparing. Only valid 
+                                     ///< for comparison operators: 
+                                     ///< kExpr(Greater|Less)*, 
+                                     ///< kExpr[Not]Matches, kExpr[Not]Equals.
   struct expression_node *children;  ///< Subexpressions: valid for operators,
                                      ///< subscripts (including kExprCall), 
                                      ///< complex variable names.
@@ -115,7 +115,7 @@ typedef struct expression_node {
 
 typedef struct error {
   const char *message;
-  const char_u *position;
+  const char *position;
 } ExpressionParserError;
 
 /// Defines scope in which expressions are parsed
@@ -124,7 +124,7 @@ typedef enum {
   kExprLvalue,      ///< Lvalue: left side of an assignment
 } ExpressionOptions;
 
-typedef ExpressionNode *(*ExpressionParser)(const char_u **,
+typedef ExpressionNode *(*ExpressionParser)(const char **,
                                             ExpressionParserError *);
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS

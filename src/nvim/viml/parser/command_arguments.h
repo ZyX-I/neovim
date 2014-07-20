@@ -111,7 +111,7 @@ typedef enum {
 #define FLAG_OPT_W_APPEND     0x0800
 
 #define CHAR_TO_VAL_OPT_BAD(c) (((uint_least32_t) c) << SHIFT_OPT_BAD)
-#define VAL_OPT_BAD_TO_CHAR(f) ((char_u) ((f >> SHIFT_OPT_BAD) & 0xFF))
+#define VAL_OPT_BAD_TO_CHAR(f) ((char) ((f >> SHIFT_OPT_BAD) & 0xFF))
 
 // Constants to index arguments in CommandNode
 #define ARG_NO_ARGS -1

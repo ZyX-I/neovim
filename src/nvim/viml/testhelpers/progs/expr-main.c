@@ -184,7 +184,7 @@ int main(int argc, char **argv) {
   ExpressionNode *node;
   char *result;
   /*
-   * node = parse0((char_u *) argv[1]);
+   * node = parse0(argv[1]);
    * if (node != NULL)
    *   print_node(0, node);
    */
@@ -268,7 +268,7 @@ char_u *vim_strnsave(char_u *string, int len)
   return p;
 }
 
-int parse_one_cmd(const char_u **pp,
+int parse_one_cmd(const char **pp,
                   CommandNode **node,
                   CommandParserOptions o,
                   CommandPosition position,

@@ -30,7 +30,7 @@ int translate_script_std(void)
 {
   CommandNode *node;
   CommandParserOptions o = {0, false};
-  CommandPosition position = {1, 1, (char_u *) "<test input>"};
+  CommandPosition position = {1, 1, "<test input>"};
   int ret;
 
   if ((node = parse_cmd_sequence(o, position, (VimlLineGetter) &fgetline_file,
@@ -49,17 +49,17 @@ int translate_script_std(void)
 /// @param[in]  fname  Target filename.
 ///
 /// @return OK in case of success, FAIL otherwise.
-int translate_script_str_to_file(const char_u *const str,
+int translate_script_str_to_file(const char *str,
                                  const char *const fname)
 {
   CommandNode *node;
   CommandParserOptions o = {0, false};
-  CommandPosition position = {1, 1, (char_u *) "<test input>"};
+  CommandPosition position = {1, 1, "<test input>"};
   int ret;
-  char_u **pp;
+  const char **pp;
   FILE *f;
 
-  pp = (char_u **) &str;
+  pp = &str;
 
   if ((node = parse_cmd_sequence(o, position, (VimlLineGetter) &fgetline_string,
                                  pp)) == NULL)
