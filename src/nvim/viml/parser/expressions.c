@@ -30,6 +30,9 @@
 /// maximum number of function arguments
 #define MAX_FUNC_ARGS   20
 
+/// Position relative to the start of the expression
+#define POS(pos) (pos - eo.start)
+
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
     top_node = expr_alloc(type); \
@@ -48,8 +51,10 @@
 #define VALUE_NODE(type, error, node, pos, end_pos) \
   { \
     *node = expr_alloc(type); \
-    (*node)->position = pos; \
-    (*node)->end_position = end_pos; \
+    (*node)->start = POS(pos); \
+    if (end_pos != NULL) { \
+      (*node)->end = POS((char *) end_pos); \
+    } \
   }
 
 #define IS_SCOPE_CHAR(c)    ((c) == 'g' || (c) == 'b' || (c) == 'w' \
@@ -58,7 +63,7 @@
 
 /// Arguments common for parsing functions
 #define EDEC_ARGS \
-    const ExpressionOptions *const eo, \
+    const ExpressionOptions eo, \
     const char **arg, \
     ExpressionNode **node, \
     ExpressionParserError *error
@@ -86,7 +91,7 @@
       } \
     }
 /// True if parsing left side of an assignment
-#define IS_LVALUE (*eo == kExprLvalue)
+#define IS_LVALUE (eo.type == kExprLvalue)
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/expressions.c.generated.h"
@@ -100,7 +105,7 @@
 /// @param[in]  type   Node type.
 ///
 /// @return Pointer to allocated block of memory.
-static ExpressionNode *expr_alloc(ExpressionType type)
+static ExpressionNode *expr_alloc(ExpressionNodeType type)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *node;
@@ -112,14 +117,24 @@ static ExpressionNode *expr_alloc(ExpressionType type)
   return node;
 }
 
-void free_expr(ExpressionNode *node)
+void free_expr_node(ExpressionNode *node)
 {
   if (node == NULL)
     return;
 
-  free_expr(node->children);
-  free_expr(node->next);
+  free_expr_node(node->children);
+  free_expr_node(node->next);
   free(node);
+}
+
+void free_expr(Expression *expr)
+{
+  if (expr == NULL) {
+    return;
+  }
+
+  free(expr->string);
+  free_expr_node(expr->node);
 }
 
 /// Check whether given character is a valid name character
@@ -213,8 +228,8 @@ static EDEC(parse_name, ExpressionNode *parse1_node, const char *parse1_arg)
         return FAIL;
       }
       (*node)->type = kExprSimpleVariableName;
-      (*node)->position = s;
-      (*node)->end_position = p;
+      (*node)->start = POS(s);
+      (*node)->end = POS(p);
       return OK;
     }
 
@@ -237,8 +252,8 @@ static EDEC(parse_name, ExpressionNode *parse1_node, const char *parse1_arg)
         return FAIL;
       }
       (*node)->type = kExprSimpleVariableName;
-      (*node)->position = s;
-      (*node)->end_position = p;
+      (*node)->start = POS(s);
+      (*node)->end = POS(p);
       return OK;
     }
   } else {
@@ -301,7 +316,7 @@ static EDEC_NOARGS(parse_list)
 
   TOP_NODE(kExprList, error, node, top_node, next_node)
 
-  top_node->position = *arg;
+  top_node->start = POS(*arg);
 
   *arg = skipwhite(*arg + 1);
   while (**arg != ']' && **arg != NUL) {
@@ -316,7 +331,7 @@ static EDEC_NOARGS(parse_list)
     } else if (IS_LVALUE && **arg == ';') {
       mustend = true;
       TOP_NODE(kExprListRest, error, next_node, top_node, next_node)
-      top_node->position = *arg;
+      top_node->start = POS(*arg);
     } else if (**arg != ',') {
       error->message = N_("E696: Missing comma in List");
       error->position = *arg;
@@ -366,7 +381,7 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
   // But {} is an empty Dictionary.
   if (*start != '}') {
     *parse1_arg = start;
-    CALL_FAIL_RUN(free_expr, (*parse1_node),
+    CALL_FAIL_RUN(free_expr_node, (*parse1_node),
                   parse1, parse1_arg, parse1_node, error)
     if (**parse1_arg == '}')
       return NOTDONE;
@@ -376,7 +391,7 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
   next_node = &(top_node->children);
   *node = top_node;
 
-  top_node->position = s;
+  top_node->start = POS(s);
 
   *arg = start;
   while (**arg != '}' && **arg != NUL) {
@@ -559,8 +574,8 @@ static EDEC_NOARGS(parse_dot_subscript)
     return OK;
   top_node = expr_alloc(kExprConcatOrSubscript);
   top_node->children = *node;
-  top_node->position = s + 1;
-  top_node->end_position = e - 1;
+  top_node->start = POS(s + 1);
+  top_node->end = POS(e - 1);
   *node = top_node;
   *arg = skipwhite(e);
   return NOTDONE;
@@ -707,7 +722,7 @@ static EDEC(handle_subscript, bool parse_funccall)
 /// @param[in]      dooct  If true allow function to recognize octal numbers.
 /// @param[in]      dohex  If true allow function to recognize hexadecimal 
 ///                        numbers.
-static void find_nr_end(const char **arg, ExpressionType *type,
+static void find_nr_end(const char **arg, ExpressionNodeType *type,
                         bool dooct, bool dohex)
 {
   const char *ptr = *arg;
@@ -804,7 +819,7 @@ static void find_nr_end(const char **arg, ExpressionType *type,
 static EDEC(parse7, bool want_string, bool parse_funccall)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionType type = kExprUnknown;
+  ExpressionNodeType type = kExprUnknown;
   ExpressionNode *parse1_node = NULL;
   const char *parse1_arg;
   const char *s;
@@ -1045,7 +1060,7 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
 static EDEC(parse6, bool want_string)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionType type = kExprUnknown;
+  ExpressionNodeType type = kExprUnknown;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
@@ -1107,7 +1122,7 @@ static EDEC(parse6, bool want_string)
 static EDEC_NOARGS(parse5)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionType type = kExprUnknown;
+  ExpressionNodeType type = kExprUnknown;
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
 
@@ -1181,7 +1196,7 @@ static EDEC_NOARGS(parse4)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   const char *p;
-  ExpressionType type = kExprUnknown;
+  ExpressionNodeType type = kExprUnknown;
   size_t len = 2;
 
   // Get the first variable.
@@ -1281,7 +1296,7 @@ static EDEC(parse23, uint8_t level)
 {
   ExpressionNode *top_node = NULL;
   ExpressionNode **next_node = node;
-  ExpressionType type;
+  ExpressionNodeType type;
   char c;
   EDEC_NOARGS((*parse_next));
 
@@ -1387,6 +1402,7 @@ static EDEC_NOARGS(parse1)
 
 /// Parse expression
 ///
+/// @param[in]      s      Start of the parsed string.
 /// @param[in,out]  arg    Parsed string. May point to whitespace character. 
 ///                        Is advanced to the next non-white after the 
 ///                        recognized expression.
@@ -1394,18 +1410,22 @@ static EDEC_NOARGS(parse1)
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse0_err(const char **arg, ExpressionParserError *error)
+ExpressionNode *parse0_err(const char *const s, const char **arg,
+                           ExpressionParserError *error)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *result = NULL;
-  ExpressionOptions eo[] = {kExprRvalue};
+  ExpressionOptions eo = {
+    kExprRvalue,
+    s
+  };
 
   error->message = NULL;
   error->position = NULL;
 
   *arg = skipwhite(*arg);
   if (RAW_CALL(parse1, arg, &result, error) == FAIL) {
-    free_expr(result);
+    free_expr_node(result);
     return NULL;
   }
 
@@ -1414,6 +1434,7 @@ ExpressionNode *parse0_err(const char **arg, ExpressionParserError *error)
 
 /// Parse value (actually used for lvals)
 ///
+/// @param[in]      s      Start of the parsed string.
 /// @param[in,out]  arg    Parsed string. May point to whitespace character. 
 ///                        Is advanced to the next non-white after the 
 ///                        recognized expression.
@@ -1421,28 +1442,61 @@ ExpressionNode *parse0_err(const char **arg, ExpressionParserError *error)
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse7_nofunc(const char **arg, ExpressionParserError *error)
+ExpressionNode *parse7_nofunc(const char *const s, const char **arg,
+                              ExpressionParserError *error)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   ExpressionNode *result = NULL;
-  ExpressionOptions eo[] = {kExprLvalue};
+  ExpressionOptions eo = {
+    kExprLvalue,
+    s
+  };
 
   error->message = NULL;
   error->position = NULL;
 
   *arg = skipwhite(*arg);
   if (RAW_CALL(parse7, arg, &result, error, false, false) == FAIL) {
-    free_expr(result);
+    free_expr_node(result);
     return NULL;
   }
 
   return result;
 }
 
+/// Parse one expression and wrap result in Expression structure
+///
+/// @param[in,out]  arg    Parsed expression. May point to whitespace character. 
+///                        Is advanced to the next non-white after the 
+///                        recognized expression.
+/// @param[out]     error  Structure where errors are saved.
+/// @param[in]      parse  Parser used to parse one expression in sequence.
+///
+/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+///         allocated expression node otherwise.
+Expression *parse_one(const char **arg, ExpressionParserError *error,
+                      ExpressionParser parse)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  Expression *result = XCALLOC_NEW(Expression, 1);
+  const char *const s = *arg;
+
+  if ((result->node = parse(s, arg, error)) == NULL) {
+    free_expr(result);
+    return NULL;
+  }
+
+  result->size = *arg - s;
+  result->string = xmemdup(s, result->size);
+
+  return result;
+}
+
 /// Parse a whitespace-separated sequence of expressions
 ///
-/// @param[in,out]  arg       Parsed string. May point to whitespace 
-///                           character. Is advanced to the next non-white 
-///                           after the recognized expression.
+/// @param[in,out]  arg       Parsed string. May point to whitespace character. 
+///                           Is advanced to the next non-white after the 
+///                           recognized expression.
 /// @param[out]     error     Structure where errors are saved.
 /// @param[in]      parse     Parser used to parse one expression in sequence.
 /// @param[in]      listends  Determines whether list literal should end 
@@ -1452,19 +1506,21 @@ ExpressionNode *parse7_nofunc(const char **arg, ExpressionParserError *error)
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-ExpressionNode *parse_mult(const char **arg, ExpressionParserError *error,
-                           ExpressionParser parse, const bool listends,
-                           const char *endwith)
+Expression *parse_mult(const char **arg, ExpressionParserError *error,
+                       ExpressionParser parse, const bool listends,
+                       const char *endwith)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  ExpressionNode *result = NULL;
-  ExpressionNode **next = &result;
+  Expression *result = XCALLOC_NEW(Expression, 1);
+  ExpressionNode **next = &(result->node);
+  const char *const s = *arg;
 
   error->message = NULL;
   error->position = NULL;
 
   while (**arg && strchr(endwith, **arg) == NULL) {
     *arg = skipwhite(*arg);
-    if ((*next = parse(arg, error)) == NULL) {
+    if ((*next = parse(s, arg, error)) == NULL) {
       free_expr(result);
       return NULL;
     }
@@ -1472,6 +1528,9 @@ ExpressionNode *parse_mult(const char **arg, ExpressionParserError *error,
       break;
     next = &((*next)->next);
   }
+
+  result->size = *arg - s;
+  result->string = xmemdup(s, result->size);
 
   return result;
 }

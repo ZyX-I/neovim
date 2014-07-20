@@ -53,7 +53,7 @@ typedef struct glob {
   GlobType type;           ///< Type of the glob
   union {
     char *str;             ///< String argument (for most types)
-    ExpressionNode *expr;  ///< Expression (for "`=expr`")
+    Expression *expr;      ///< Expression (for "`=expr`")
     int number;            ///< Buffer name or old file number
     struct glob *glob;     ///< Glob(s)
   } data;                  ///< Glob data
@@ -177,13 +177,12 @@ typedef struct command_node {
     int count;                    ///< Count (for kCntCount)
     int bufnr;
     char reg;
-    ExpressionNode *expr;
+    Expression *expr;
   } cnt;                          ///< First simple argument
   uint_least8_t exflags;          ///< Ex flags (for :print command and like)
   uint_least32_t optflags;        ///< ++opt flags
   char *enc;                      ///< Encoding from ++enc
   Glob *glob;                     ///< File name(s)
-  char *expr;                     ///< Saved expression used in "`=expr`"
   bool bang;                      ///< true if command was used with a bang
   struct command_argument {
     union {
@@ -205,7 +204,7 @@ typedef struct command_node {
       MenuItem *menu_item;        ///< Menu item
       Address *address;           ///< Ex mode address
       CmdComplete *complete;
-      ExpressionNode *expr;       ///< Expression (:if) or a list of 
+      Expression *expr;           ///< Expression (:if) or a list of 
                                   ///< expressions (:echo) (uses expr->next to 
                                   ///< build a linked list)
       struct command_subargs {
