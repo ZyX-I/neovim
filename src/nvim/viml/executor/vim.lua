@@ -306,6 +306,8 @@ scalar = {
 -- }}}3
 }
 
+scalar.mod_add = scalar.add
+
 -- {{{2 Container type base
 local numop = function(state, val1, val1_position, val2, val2_position)
   -- One of the following calls must fail for container type
@@ -327,6 +329,8 @@ container = {
   promote_integer = numop,
 -- }}}3
 }
+
+container.mod_add = container.add
 
 -- {{{2 Basic types
 -- {{{3 Number
@@ -595,7 +599,7 @@ list = join_tables(container, {
     end
   end,
   num_op_priority = 3,
-  add = function(state, val1, val1_position, val2, val2_position)
+  do_add = function(state, copy_ret, val1, val1_position, val2, val2_position)
     if not (is_list(val1) and is_list(val2)) then
       -- Error out
       if is_list(val1) then
@@ -606,11 +610,17 @@ list = join_tables(container, {
     end
     local length1 = list.length(val1)
     local length2 = list.length(val2)
-    local ret = copy_table(val1)
+    local ret = copy_ret and copy_table(val1) or val1
     for i, v in ipairs(val2) do
       ret[length1 + i] = v
     end
     return ret
+  end,
+  add = function(state, ...)
+    return list.do_add(state, true, ...)
+  end,
+  mod_add = function(state, ...)
+    return list.do_add(state, false, ...)
   end,
 -- }}}4
 })
@@ -1275,6 +1285,10 @@ op = {
     return iterop(state, 'add', ...)
   end,
 
+  mod_add = function(state, ...)
+    return iterop(state, 'mod_add', ...)
+  end,
+
   subtract = function(state, ...)
     return iterop(state, 'subtract', ...)
   end,
@@ -1360,6 +1374,9 @@ op = {
             == 0) and vim_true or vim_false
   end,
 }
+
+op.mod_concat = op.concat
+op.mod_subtract = op.subtract
 
 -- {{{1 Subscripting
 local subscript = {
