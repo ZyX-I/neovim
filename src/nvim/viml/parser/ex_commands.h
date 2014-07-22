@@ -13,6 +13,9 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/viml/parser/command_definitions.h"
 #include "nvim/viml/parser/expressions.h"
+// FIXME Remove the two following includes: only regexp_defs is needed.
+#include "nvim/vim.h"
+#include "nvim/buffer_defs.h"
 #include "nvim/regexp_defs.h"
 
 // :argadd/:argd
