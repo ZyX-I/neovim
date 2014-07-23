@@ -227,6 +227,11 @@ F = io.open(static_fname, 'w')
 F:write(static)
 F:close()
 
+-- Support for *.c.h files
+if non_static_fname == 'none' then
+  os.exit(0)
+end
+
 -- Before generating the non-static headers, check if the current file(if
 -- exists) is different from the new one. If they are the same, we won't touch
 -- the current version to avoid triggering an unnecessary rebuilds of modules
