@@ -97,15 +97,42 @@ cstr = ffi.typeof 'char[?]'
 to_cstr = (string) ->
   cstr (string.len string) + 1, string
 
+-- cimport './src/os_unix.h'
+ffi.cdef('void mch_early_init(void);')
+-- cimport './src/eval.h'
+ffi.cdef('void eval_init(void);')
+-- cimport './src/window.h'
+ffi.cdef('int win_alloc_first(void);')
+-- cimport './src/ops.h'
+ffi.cdef('void init_yank(void);')
+-- cimport './src/misc1.h'
+ffi.cdef('void init_homedir(void);')
+-- cimport './src/option.h'
+ffi.cdef('void set_init_1(void);')
+-- cimport './src/ex_cmds2.h'
+ffi.cdef('void set_lang_var(void);')
+-- cimport './src/mbyte.h'
+ffi.cdef('char_u *mb_init(void);')
+-- cimport './src/normal.h'
+ffi.cdef('void init_normal_cmds(void);')
+
 export vim_init_called
+
 -- initialize some global variables, this is still necessary to unit test
 -- functions that rely on global state.
 vim_init = ->
   if vim_init_called ~= nil
     return
-  -- import os_unix.h for mch_early_init(), which initializes some globals
-  os = cimport './src/nvim/os_unix.h'
-  os.mch_early_init!
+  libnvim.mch_early_init()
+  libnvim.mb_init()
+  libnvim.eval_init()
+  libnvim.init_normal_cmds()
+  libnvim.win_alloc_first()
+  libnvim.init_yank()
+  libnvim.init_homedir()
+  libnvim.set_init_1()
+  libnvim.set_lang_var()
+
   vim_init_called = true
 
 -- C constants.
