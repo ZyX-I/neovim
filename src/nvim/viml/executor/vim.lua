@@ -4,6 +4,7 @@ local op
 local vim_type
 local is_func, is_dict, is_list, is_float
 local repr
+local iter
 local scalar, container
 local number, string, list, dict, float, func
 local bound_func
@@ -168,6 +169,11 @@ repr = function(state, val, val_position, for_echo, refs)
   return t.repr(state, val, val_position, for_echo, refs)
 end
 
+iter = function(state, lst, lst_position)
+  local t = vim_type(lst)
+  return t.next, t.new_it_state(state, lst, lst_position), lst
+end
+
 -- {{{1 Types
 -- {{{2 Utility functions
 local add_type_table = function(func)
@@ -208,8 +214,20 @@ BASE_TYPE_LIST       = 3
 BASE_TYPE_DICTIONARY = 4
 BASE_TYPE_FLOAT      = 5
 
+-- {{{2 Any type base
+local type_base = {
+-- {{{3 Support for iterations
+  next = function(_, _)
+    return nil
+  end,
+  new_it_state = function(state, lst, lst_position)
+    return err.err(state, lst_position, true, 'E714: List required')
+  end,
+-- }}}3
+}
+
 -- {{{2 Scalar type base
-scalar = {
+scalar = join_tables(type_base, {
 -- {{{3 Assignment support
   assign_subscript = function(state, val, val_position, ...)
     return err.err(state, val_position, true,
@@ -304,7 +322,7 @@ scalar = {
   end,
   promote_integer = get_number,
 -- }}}3
-}
+})
 
 scalar.mod_add = scalar.add
 
@@ -315,7 +333,7 @@ local numop = function(state, val1, val1_position, val2, val2_position)
           and get_float(state, val2, val2_position))
 end
 
-container = {
+container = join_tables(type_base, {
 -- {{{3 string()
   container = true,
 -- {{{3 Operators support
@@ -328,7 +346,7 @@ container = {
   negate = numop,
   promote_integer = numop,
 -- }}}3
-}
+})
 
 container.mod_add = container.add
 
@@ -528,14 +546,14 @@ list = join_tables(container, {
     it_state.i = it_state.i + 1
     return i, list.raw_subscript(it_state.lst, i)
   end,
-  iterator = function(state, lst)
+  new_it_state = function(state, lst, lst_position)
     local it_state = {
       i = 0,
       maxi = list.length(lst),
       lst = lst,
     }
     table.insert(lst.iterators, it_state)
-    return list.next, it_state, lst
+    return it_state
   end,
 -- {{{4 string()
   already_represented_container = '[...]',
@@ -1484,6 +1502,7 @@ return {
   false_ = zero,
   true_ = 1,
   type = vim_type,
+  iter = iter,
   types = {
     number = number,
     string = string,
