@@ -31,13 +31,13 @@
 #define getdigits(arg) getdigits((char_u **) (arg))
 #define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
 #define skipdigits(arg) (char *) skipdigits((char_u *) (arg))
-#define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((char_u *) p) : 1
+#define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((const char_u *) p) : 1
+#define mb_ptr2len(p) mb_ptr2len((const char_u *) p)
 #define enc_canonize(p) (char *) enc_canonize((char_u *) (p))
 #define check_ff_value(p) check_ff_value((char_u *) (p))
 #define replace_termcodes(a, b, c, d, e, f, g) \
     (char *) replace_termcodes((const char_u *) a, b, (char_u **) c, d, e, f, g)
 #define lrswap(s) lrswap((char_u *) s)
-#define del_trailing_spaces(s) del_trailing_spaces((char_u *) s)
 
 typedef struct {
   CommandType find_in_stack;
@@ -369,6 +369,7 @@ void free_cmd(CommandNode *node)
   free_glob(node->glob);
   free_range_data(&(node->range));
   free(node->name);
+  free(node->skips);
   free(node);
 }
 
@@ -2257,66 +2258,119 @@ static int find_command(const char **pp, CommandType *type,
 /// e.g. :echo (it allows things like "echo 'abc|def'") or :write 
 /// (":w`='abc|def'`").
 ///
-/// @param[in]   type            Command type.
-/// @param[in]   o               Parser options. See parse_one_cmd 
-///                              documentation.
-/// @param[in]   start           Start of the command-line arguments.
-/// @param[out]  arg             Resulting command-line argument.
-/// @param[out]  next_cmd_offset Offset of next command.
+/// @param[in]   type             Command type.
+/// @param[in]   o                Parser options. See parse_one_cmd 
+///                               documentation.
+/// @param[in]   start            Start of the command-line arguments.
+/// @param[in]   arg_start        Offset of the first character in start. Is 
+///                               added to each value in skips.
+/// @param[out]  arg              Resulting command-line argument.
+/// @param[out]  next_cmd_offset  Offset of next command.
+/// @param[out]  skips            List of the offsets used to compute real 
+///                               character positions after unescaping string. 
+///                               Is populated with offsets of characters which 
+///                               were omitted from output (namely <C-v> and 
+///                               backslashes, depending on options).
+/// @param[out]  skips_count      Number of items in the skips array.
 ///
-/// @return FAIL when out of memory, OK otherwise.
+/// @return OK.
 static int get_cmd_arg(CommandType type, CommandParserOptions o,
-                       const char *start, char **arg,
-                       size_t *next_cmd_offset)
+                       const char *start, const size_t arg_start,
+                       char **arg, size_t *next_cmd_offset,
+                       size_t **skips, size_t *skips_count)
 {
-  char *p;
-
-  *next_cmd_offset = 0;
-
-  *arg = xstrdup(start);
-
-  p = *arg;
-
+  size_t skcnt = 0;
+  const char *p = start;
+  bool did_set_next_cmd_offset = false;
   for (; *p; mb_ptr_adv_(p)) {
     if (*p == Ctrl_V) {
       if (CMDDEF(type).flags & (USECTRLV)) {
-        p++;                // skip CTRL-V and next char
       } else {
-        (*next_cmd_offset)++;
-        STRMOVE(p, p + 1);  // remove CTRL-V and skip next char
+        skcnt++;
       }
-      if (*p == NUL)        // stop at NUL after CTRL-V
+      if (*p == NUL) {  // stop at NUL after CTRL-V
         break;
-    // Check for '"': start of comment or '|': next command
-    // :@" and :*" do not start a comment!
-    // :redir @" doesn't either.
+      }
     } else if ((*p == '"' && !(CMDDEF(type).flags & NOTRLCOM)
                 && ((type != kCmdAt && type != kCmdStar)
                     || p != *arg)
                 && (type != kCmdRedir
                     || p != *arg + 1 || p[-1] != '@'))
                || *p == '|' || *p == '\n') {
-      // We remove the '\' before the '|', unless USECTRLV is used
-      // AND 'b' is present in 'cpoptions'.
       if (((o.flags & FLAG_POC_CPO_BAR)
            || !(CMDDEF(type).flags & USECTRLV)) && *(p - 1) == '\\') {
-        *next_cmd_offset += 1;
-        STRMOVE(p - 1, p);              // remove the '\'
-        p--;
+        skcnt++;
       } else {
         const char *nextcmd = check_nextcmd(p);
-        if (nextcmd != NULL)
-          *next_cmd_offset += (nextcmd - p);
-        *p = NUL;
+        if (nextcmd != NULL) {
+          did_set_next_cmd_offset = true;
+          *next_cmd_offset = (nextcmd - start);
+        }
         break;
       }
     }
   }
 
-  *next_cmd_offset += p - *arg;
+  *skips_count = skcnt;
 
-  if (!(CMDDEF(type).flags & NOTRLCOM))  // remove trailing spaces
-    del_trailing_spaces(p);
+  if (!did_set_next_cmd_offset) {
+    *next_cmd_offset = p - start;
+  }
+
+  // From del_trailing_spaces
+  if (!(CMDDEF(type).flags & NOTRLCOM)) {  // remove trailing spaces
+    while (--p > start && vim_iswhite(*p) && p[-1] != '\\' && p[-1] != Ctrl_V) {
+    }
+  }
+
+  const char *e = p;
+
+  *arg = XMALLOC_NEW(char, (p - start) - skcnt + 1);
+
+  if (skcnt) {
+    *skips = XMALLOC_NEW(size_t, skcnt);
+  } else {
+    *skips = NULL;
+  }
+
+  size_t *cur_move = *skips;
+
+  char *s = *arg;
+  for (p = start; p <= e;) {
+    if (*p == Ctrl_V && !(CMDDEF(type).flags&USECTRLV)) {
+      p++;
+      *cur_move++ = p - start;
+      if (*p == NUL) {  // stop at NUL after CTRL-V
+        break;
+      }
+    // Check for '"': start of comment or '|': next command
+    // :@" and :*" do not start a comment!
+    // :redir @" doesn't either.
+    } else if ((*p == '"'
+                && !(CMDDEF(type).flags & NOTRLCOM)
+                && ((type != kCmdAt && type != kCmdStar)
+                    || p != start)
+                && (type != kCmdRedir
+                    || p != start + 1
+                    || p[-1] != '@'))
+               || *p == '|'
+               || *p == '\n') {
+      // We remove the '\' before the '|', unless USECTRLV is used
+      // AND 'b' is present in 'cpoptions'.
+      if (((o.flags & FLAG_POC_CPO_BAR)
+           || !(CMDDEF(type).flags & USECTRLV)) && p[-1] == '\\') {
+        s--;  // remove the '\'
+        *cur_move++ = p - 1 - start;
+      } else {
+        break;
+      }
+    }
+    size_t ch_len = mb_ptr2len(p);
+    memcpy(s, p, ch_len);
+    s += ch_len;
+    p += ch_len;
+  }
+  *s = NUL;
 
   return OK;
 }
@@ -3075,7 +3129,9 @@ int parse_one_cmd(const char **pp,
     // ISEXPR commands may have bangs inside "" or as logical OR
     if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR|LITERAL))) {
       used_get_cmd_arg = true;
-      if (get_cmd_arg(type, o, p, &cmd_arg_start, &next_cmd_offset)
+      if (get_cmd_arg(type, o, p, position.col + (p - s), &cmd_arg_start,
+                      &next_cmd_offset, &((*next_node)->skips),
+                      &((*next_node)->skips_count))
           == FAIL) {
         free_cmd(*next_node);
         *next_node = NULL;
@@ -3269,6 +3325,8 @@ const CommandNode nocmd = {
     NULL,
     false
   },
+  NULL,
+  0,
   {
     0,
     0,
