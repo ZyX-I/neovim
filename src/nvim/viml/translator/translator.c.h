@@ -1754,7 +1754,7 @@ static CMD_FDEC(translate_for)
 {
   FUNCTION_START;
   WINDENT(indent);
-  WS("for _, i in vim.list.iterator(state, ");
+  WS("for _, i in vim.iter(state, ");
   F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_FOR_RHS), false);
   WS(") do\n");
 
