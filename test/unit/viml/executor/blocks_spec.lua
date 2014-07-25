@@ -274,6 +274,46 @@ describe(':function definition', function()
   })
 end)
 
+describe(':for loops', function()
+  ito('Iterates over a list', [[
+    for i in [1, 2, 3]
+      echo i
+    endfor
+    echo i
+    unlet i
+  ]], {1, 2, 3, 3})
+  ito('Iterates over a list of lists, using simple list unpacking', [[
+    for [i, j] in [ [1, 2], [3, 4], [5, 6] ]
+      echo j
+      echo i
+    endfor
+    unlet i j
+  ]], {2, 1, 4, 3, 6, 5})
+  ito('Iterates over a list of lists, using rest list unpacking', [[
+    for [i; j] in [ [1, 2], [3, 4], [5, 6] ]
+      echo j
+      echo i
+    endfor
+    unlet i j
+  ]], {{2}, 1, {4}, 3, {6}, 5})
+  for _, v in ipairs({{'dictionary', '{}'},
+                      {'string', '""'},
+                      {'number', '0'},
+                      {'funcref', 'function("string")'},
+                      {'float', '0.0'}}) do
+    ito('Fails to iterate over a ' .. v[1], string.format([[
+      try
+        for i in %s
+          echo i
+        endfor
+        echo i
+      catch
+        echo v:exception
+      endtry
+    ]], v[2]), {'Vim(for):E714: List required'})
+  end
+end)
+
 describe('Function calls', function()
   ito('Fails to call function: too many arguments (empty argument list)', [[
     function Abc()
