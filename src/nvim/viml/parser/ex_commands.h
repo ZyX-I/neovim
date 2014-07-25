@@ -170,6 +170,12 @@ typedef struct command_node {
                                   ///< iterator (tabdo/windo/bufdo/argdo etc)
                                   ///< subcommands
   Range range;                    ///< Ex address range, if any
+  size_t *skips;                  ///< Array of positions where characters from 
+                                  ///< “real” string were removed (shows the 
+                                  ///< former positions of <C-v> characters and 
+                                  ///< backslashes, useful for computing real 
+                                  ///< column number)
+  size_t skips_count;             ///< Number of items in the above array.
   CommandPosition position;       ///< Position of the start of the command
   colnr_T end_col;                ///< Last column occupied by this command
   CountType cnt_type;             ///< Type of the argument in the next union
