@@ -42,10 +42,7 @@ char *execute_viml_test(const char *const s)
   }
 
   String lua_str_test = {
-    .data = "vim.ret = vim.list:new(nil)\n"
-            "vim.commands.echo = function(state, ...)\n"
-            "  vim.ret[#vim.ret + 1] = ...\n"
-            "end"
+    .data = "vim.test.start()\n"
   };
   lua_str_test.size = STRLEN(lua_str_test.data);
   Object lua_test_ret = eval_lua(lua_str_test, &err);
@@ -55,7 +52,7 @@ char *execute_viml_test(const char *const s)
   msgpack_rpc_free_object(lua_test_ret);
 
   size_t len = stranslate_len(kTransUser, node);
-#define TEST_RET "return vim.ret"
+#define TEST_RET "return vim.test.finish()"
   String lua_str = {
     .size = len,
     .data = xcalloc(len + sizeof(TEST_RET), 1)
