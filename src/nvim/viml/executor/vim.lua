@@ -1474,6 +1474,22 @@ local get_scope_and_key = function(state, key)
   -- TODO
 end
 
+-- {{{1 Test helpers
+local ret
+local test_echo = function(state, ...)
+  ret[#ret + 1] = ...
+end
+local test = {
+  start = function()
+    ret = list:new(nil)
+    commands.echo = test_echo
+  end,
+  finish = function()
+    local old_ret = ret
+    ret = nil
+    return old_ret
+  end,
+}
 -- {{{1 return
 local zero = 0
 return {
@@ -1515,4 +1531,5 @@ return {
   is_list = is_list,
   is_float = is_float,
   get_local_option = get_local_option,
+  test = test,
 }
