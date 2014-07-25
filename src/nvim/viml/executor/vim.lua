@@ -1475,21 +1475,34 @@ local get_scope_and_key = function(state, key)
 end
 
 -- {{{1 Test helpers
-local ret
+local test_ret
 local test_echo = function(state, ...)
-  ret[#ret + 1] = ...
+  test_ret[#test_ret + 1] = ...
 end
+local globals_at_start
 local test = {
   start = function()
-    ret = list:new(nil)
+    test_ret = list:new(nil)
+    globals_at_start = copy_table(_G)
     commands.echo = test_echo
   end,
   finish = function()
-    local old_ret = ret
-    ret = nil
+    for k, v in pairs(globals_at_start) do
+      if _G[k] ~= v then
+        test_echo(nil, 'Found modified global: ' .. k)
+      end
+    end
+    for k, _ in pairs(_G) do
+      if globals_at_start[k] == nil then
+        test_echo(nil, 'Found new global: ' .. k)
+      end
+    end
+    local old_ret = test_ret
+    test_ret = nil
     return old_ret
   end,
 }
+
 -- {{{1 return
 local zero = 0
 return {
