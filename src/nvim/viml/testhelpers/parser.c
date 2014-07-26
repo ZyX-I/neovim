@@ -34,7 +34,7 @@ char *parse_cmd_test(const char *arg, const uint_least8_t flags,
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   CommandNode *node = NULL;
-  CommandPosition position = {1, 1, "<test input>"};
+  CommandPosition position = {1, 1};
   CommandParserOptions o = {flags, false};
   char *repr;
   char *r;

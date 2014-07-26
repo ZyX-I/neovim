@@ -140,9 +140,8 @@ typedef struct {
 ///
 /// Intended for debugging purposes later
 typedef struct {
-  linenr_T lnr;
-  colnr_T col;
-  const char *fname;
+  size_t lnr;
+  size_t col;
 } CommandPosition;
 
 /// Counter type: type of a simple additional argument
@@ -227,6 +226,7 @@ typedef struct {
   CommandNode *node;
   char **lines;
   size_t lines_size;
+  char *fname;
 } ParserResult;
 
 typedef struct command_argument CommandArg;
