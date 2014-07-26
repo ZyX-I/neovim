@@ -232,6 +232,10 @@ local type_base = {
   new_it_state = function(state, lst, lst_position)
     return err.err(state, lst_position, true, 'E714: List required')
   end,
+-- {{{3 Querying support
+  call = function(state, fun, fun_position, ...)
+    return err.err(state, fun_position, true, 'E15: Can only call a Funcref')
+  end,
 -- }}}3
 }
 
