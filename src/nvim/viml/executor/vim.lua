@@ -69,6 +69,8 @@ state = {
       call_stack = {},
       exception = '',
       throwpoint = '',
+      code = nil,
+      fname = nil,
     }
     -- Values that do not need to be altered when exiting scope.
     state.global = {
@@ -125,9 +127,10 @@ state = {
     return state
   end,
 
-  enter_code = function(old_state, code)
+  enter_code = function(old_state, code, fname)
     local state = copy_table(old_state)
     state.code = code
+    state.fname = fname
     return state
   end,
 }
@@ -725,7 +728,7 @@ dict = join_tables(container, {
     if (ret == nil) then
       local message
       message = dct[type_idx].missing_key_message
-      return err.err(state, val_position, true, message .. ': %s', key)
+      return err.err(state, key_position, true, message .. ': %s', key)
     end
     return ret
   end,
@@ -1034,11 +1037,18 @@ err = {
   err = function(state, position, vim_error, message, ...)
     local formatted_message
     formatted_message = (message):format(...)
+    local lnr, col, cmd = position:match('(%d+):(%d+):(.*)')
+    lnr = tonumber(lnr)
+    col = tonumber(col)
     -- TODO show context
     if state.is_trying then
       -- TODO if vim_error == true then prepend message with Vim(cmd):
       error(formatted_message, 0)
     else
+      io.stderr:write(('line %u, column %u:\n'):format(lnr, col))
+      io.stderr:write('> ' .. state.code[lnr] .. '\n')
+      -- TODO Use strdisplaywidth() to calculate offset
+      io.stderr:write('| ' .. (col > 1 and (' '):rep(col - 1) or '') .. '^\n')
       io.stderr:write(formatted_message .. '\n')
     end
   end,
@@ -1049,12 +1059,12 @@ err = {
 
 -- {{{1 Built-in function implementations
 local functions = f_scope:new(nil)
-functions.type = function(state, self, val)
+functions.type = function(state, self, val, val_position)
   return vim_type(val)['type_number']
 end
 
-functions['function'] = function(state, self, val)
-  local s = val and get_string(state, val, position)
+functions['function'] = function(state, self, val, val_position)
+  local s = val and get_string(state, val, val_position)
   if not s then
     return nil
   end
@@ -1062,16 +1072,17 @@ functions['function'] = function(state, self, val)
   if s:match('^[a-z]') then
     ret = functions[s]
   elseif s:match('^%d') then
-    return err.err(state, position, true,
+    return err.err(state, val_position, true,
                    'E475: Function name cannot start with a digit')
   else
     -- TODO Replace leading s: and <SID>
     ret = state.global.user_functions[s]
   end
-  return ret or err.err(state, position, true, 'E700: Unknown function: %s', s)
+  return ret or err.err(state, val_position, true,
+                        'E700: Unknown function: %s', s)
 end
 
-functions.string = function(state, self, val)
+functions.string = function(state, self, val, val_position)
   return repr(state, val, val_position, false, {})
 end
 
@@ -1120,7 +1131,8 @@ end
 
 -- {{{1 Assign support
 assign = {
-  ass_dict = function(state, val, dct, key)
+  ass_dict = function(state, val, dct, dct_position,
+                                  key, key_position)
     if not (val and dct and key) then
       return nil
     end
@@ -1129,7 +1141,9 @@ assign = {
                                      val, val_position)
   end,
 
-  ass_dict_function = function(state, bang, val, dct, key)
+  ass_dict_function = function(state, bang, val,
+                                            dct, dct_position,
+                                            key, key_position)
     if not (val and dct and key) then
       return nil
     end
@@ -1142,7 +1156,10 @@ assign = {
     )
   end,
 
-  ass_slice = function(state, val, lst, idx1, idx2)
+  ass_slice = function(state, val,
+                              lst, lst_position,
+                              idx1, idx1_position,
+                              idx2, idx2_position)
     if not (val and lst and idx1 and idx2) then
       return nil
     end
@@ -1160,7 +1177,7 @@ assign = {
     return assign.ass_slice(state, ...)
   end,
 
-  del_dict = function(state, bang, dct, key)
+  del_dict = function(state, bang, dct, dct_position, key, key_position)
     if not (dct and key) then
       return nil
     end
@@ -1170,7 +1187,8 @@ assign = {
             and true or nil)
   end,
 
-  del_dict_function = function(state, bang, dct, key)
+  del_dict_function = function(state, bang, dct, dct_position,
+                                            key, key_position)
     if not (dct and key) then
       return nil
     end
@@ -1189,10 +1207,14 @@ assign = {
     return true
   end,
 
-  del_slice = function(state, bang, lst, idx1, idx2)
+  del_slice = function(state, bang, lst, lst_position,
+                                    idx1, idx1_position,
+                                    idx2, idx2_position)
   end,
 
-  del_slice_function = function(state, bang, lst, idx1, idx2)
+  del_slice_function = function(state, bang, lst, lst_position,
+                                             idx1, idx1_position,
+                                             idx2, idx2_position)
     return err.err(state, lst_position, true,
                    'E475: Expecting function reference, not List')
   end,
@@ -1259,21 +1281,24 @@ end
 -- {{{1 Operators
 local iterop = function(state, op, ...)
   local result = select(1, ...)
+  local result_position = select(2, ...)
   if result == nil then
     return nil
   end
   local tr = vim_type(result)
-  for i = 2,select('#', ...) do
-    local v = select(i, ...)
+  for i = 2,select('#', ...)/2 do
+    local v = select(i*2 - 1, ...)
+    local v_position = select(i*2, ...)
     if v == nil then
       return nil
     end
     local ti = vim_type(v)
     if tr.num_op_priority >= ti.num_op_priority then
-      result = tr[op](state, result, nil, v, nil)
+      result = tr[op](state, result, result_position, v, v_position)
     else
-      result = ti[op](state, result, nil, v, nil)
+      result = ti[op](state, result, result_position, v, v_position)
     end
+    result_position = v_position
     tr = vim_type(result)
   end
   return result
@@ -1302,6 +1327,7 @@ local simple_identical = {
   [BASE_TYPE_LIST] = true,
   [BASE_TYPE_DICTIONARY] = true,
   [BASE_TYPE_FUNCREF] = true,
+  [BASE_TYPE_NUMBER] = true,
 }
 
 op = {
@@ -1331,13 +1357,15 @@ op = {
 
   concat = function(state, ...)
     local result = select(1, ...)
-    result = result and get_string(state, result)
+    local result_position = select(2, ...)
+    result = result and get_string(state, result, result_position)
     if result == nil then
       return nil
     end
-    for i = 2,select('#', ...) do
-      local v = select(i, ...)
-      v = v and get_string(state, v)
+    for i = 2,select('#', ...)/2 do
+      local v = select(i * 2 - 1, ...)
+      local v_position = select(i * 2, ...)
+      v = v and get_string(state, v, v_position)
       if v == nil then
         return nil
       end
@@ -1346,22 +1374,22 @@ op = {
     return result
   end,
 
-  negate = function(state, val)
+  negate = function(state, val, val_position)
     local t = vim_type(val)
-    return t.negate(state, val, position)
+    return t.negate(state, val, val_position)
   end,
 
-  negate_logical = function(state, val)
-    return val and (get_number(state, val, position) == 0
+  negate_logical = function(state, val, val_position)
+    return val and (get_number(state, val, val_position) == 0
                     and vim_true or vim_false)
   end,
 
-  promote_integer = function(state, val)
+  promote_integer = function(state, val, val_position)
     local t = vim_type(val)
-    return t.promote_integer(state, val, position)
+    return t.promote_integer(state, val, val_position)
   end,
 
-  identical = function(state, ic, arg1, arg2)
+  identical = function(state, ic, arg1, arg1_position, arg2, arg2_position)
     if not (arg1 or arg2) then
       return nil
     end
@@ -1372,28 +1400,28 @@ op = {
     elseif simple_identical[t1.type_number] then
       return (arg1 == arg2) and vim_true or vim_false
     else
-      return op.equals(state, ic, arg1, arg2)
+      return op.equals(state, ic, arg1, arg1_position, arg2, arg2_position)
     end
   end,
 
-  matches = function(state, ic, arg1, arg2)
+  matches = function(state, ic, arg1, arg1_position, arg2, arg2_position)
     if not (arg1 or arg2) then
       return nil
     end
     -- TODO
   end,
 
-  less = function(state, ic, arg1, arg2)
+  less = function(state, ic, arg1, arg1_position, arg2, arg2_position)
     return (cmp(state, ic, false, arg1, arg1_position, arg2, arg2_position)
             == -1) and vim_true or vim_false
   end,
 
-  greater = function(state, ic, arg1, arg2)
+  greater = function(state, ic, arg1, arg1_position, arg2, arg2_position)
     return (cmp(state, ic, false, arg1, arg1_position, arg2, arg2_position)
             == 1) and vim_true or vim_false
   end,
 
-  equals = function(state, ic, arg1, arg2)
+  equals = function(state, ic, arg1, arg1_position, arg2, arg2_position)
     return (cmp(state, ic, true, arg1, arg1_position, arg2, arg2_position)
             == 0) and vim_true or vim_false
   end,
@@ -1404,7 +1432,7 @@ op.mod_subtract = op.subtract
 
 -- {{{1 Subscripting
 local subscript = {
-  subscript = function(state, bind, val, idx)
+  subscript = function(state, bind, val, val_position, idx, idx_position)
     if not (val and idx) then
       return nil
     end
@@ -1417,7 +1445,8 @@ local subscript = {
     end
   end,
 
-  slice = function(state, val, idx1, idx2)
+  slice = function(state, val, val_position, idx1, idx1_position,
+                                             idx2, idx2_position)
     if not (val and idx1 and idx2) then
       return nil
     end
@@ -1426,46 +1455,14 @@ local subscript = {
                                              idx2 or -1, idx2_position)
   end,
 
-  call = non_nil(function(state, callee, ...)
+  call = non_nil(function(state, callee, callee_position, ...)
     local t = vim_type(callee)
     return t.call(state, callee, callee_position, ...)
   end),
 }
 
-local func_concat_or_subscript = function(state, dct, key)
-  if not (dct or key) then
-    return nil
-  end
-  local f
-  local dct_is_dict = is_dict(dct)
-  local f_is_func
-  if dct_is_dict then
-    f = subscript.subscript(state, dct, key)
-    f_is_func = is_func(f)
-  else
-    local real_f
-    local scope
-    scope, key = get_scope_and_key(state, key)
-    real_f = subscript.subscript(state, dct, key)
-    f_is_func = is_func(real_f)
-    f = function(state, self, ...)
-      return op.concat(state, dct, f(state, nil, ...))
-    end
-  end
-  if f_is_func then
-    -- TODO echo error message
-    return nil
-  end
-  if dct_is_dict then
-    return function(state, self, ...)
-      return f(state, dct, ...)
-    end
-  else
-    return f
-  end
-end
-
-local concat_or_subscript = function(state, dct, key)
+local concat_or_subscript = function(state, dct, dct_position,
+                                            key, key_position)
   if is_dict(dct) then
     return dict.subscript(state, dct, dct_position, key, key_position)
   else
@@ -1523,7 +1520,6 @@ return {
   subscript = subscript,
   list = list,
   dict = dict,
-  func_concat_or_subscript = func_concat_or_subscript,
   concat_or_subscript = concat_or_subscript,
   get_scope_and_key = get_scope_and_key,
   op = op,
