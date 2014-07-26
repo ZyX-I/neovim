@@ -99,14 +99,14 @@ describe(':unlet support', function()
     catch
       echo v:exception
     endtry
-  ]], {1, 'E121: Undefined variable: a'})
+  ]], {1, 'Vim(echo):E121: Undefined variable: a'})
   ito('Fails to unlet unexisting variable', [[
     try
       unlet a
     catch
       echo v:exception
     endtry
-  ]], {'E108: No such variable: a'})
+  ]], {'Vim(unlet):E108: No such variable: a'})
   ito('Succeeds to unlet unexisting variable with bang', [[
     try
       unlet! a
