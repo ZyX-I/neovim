@@ -100,7 +100,8 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
 
   memset(&po, 0, sizeof(StyleOptions));
 
-  if ((expr = parse_one((const char **) &e, &error, &parse0_err, 1)) == NULL) {
+  if ((expr = parse_one_expression((const char **) &e, &error, &parse0_err, 1))
+      == NULL) {
     if (error.message == NULL) {
       return NULL;
     }
@@ -162,7 +163,7 @@ int represent_parse0(const char *arg, const bool print_as_expr)
   memset(&po, 0, sizeof(StyleOptions));
 
   const char *e = arg;
-  const Expression *expr = parse_one(&e, &error, &parse0_err, 1);
+  const Expression *expr = parse_one_expression(&e, &error, &parse0_err, 1);
   if (expr == NULL) {
     if (error.message == NULL) {
       return FAIL;

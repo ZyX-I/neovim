@@ -529,8 +529,9 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
         case kGlobExpression: {
           ExpressionParserError expr_error;
           p += 2;
-          if (((*next)->data.expr = parse_one(&p, &expr_error, &parse0_err,
-                                              col + (p - s)))
+          if (((*next)->data.expr = parse_one_expression(&p, &expr_error,
+                                                         &parse0_err,
+                                                         col + (p - s)))
               == NULL) {
             if (expr_error.message == NULL)
               goto get_glob_error_return;
@@ -799,8 +800,8 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
     expr_error.position = NULL;
     expr_error.message = NULL;
 
-    if ((expr = parse_one(&rhs_end, &expr_error, &parse0_err, position.col))
-        == NULL) {
+    if ((expr = parse_one_expression(&rhs_end, &expr_error, &parse0_err,
+                                     position.col)) == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
         free(new_rhs);
@@ -1249,20 +1250,21 @@ static int parse_menu(const char **pp,
 ///                           a sequence of expressions.
 ///
 /// @return FAIL if out of memory, NOTDONE in case of error, OK otherwise.
-static int do_parse_expr(const char **pp,
-                         CommandNode *node,
-                         CommandParserError *error,
-                         CommandParserOptions o,
-                         CommandPosition position,
-                         bool multi)
+static int do_parse_expr_cmd(const char **pp,
+                             CommandNode *node,
+                             CommandParserError *error,
+                             CommandParserOptions o,
+                             CommandPosition position,
+                             bool multi)
 {
   Expression *expr;
   ExpressionParserError expr_error;
 
   if (multi) {
-    expr = parse_mult(pp, &expr_error, &parse0_err, position.col, false, "\n|");
+    expr = parse_many_expressions(pp, &expr_error, &parse0_err, position.col,
+                                  false, "\n|");
   } else {
-    expr = parse_one(pp, &expr_error, &parse0_err, position.col);
+    expr = parse_one_expression(pp, &expr_error, &parse0_err, position.col);
   }
 
   if (expr == NULL) {
@@ -1279,32 +1281,32 @@ static int do_parse_expr(const char **pp,
   return OK;
 }
 
-static int parse_expr(const char **pp,
-                      CommandNode *node,
-                      CommandParserError *error,
-                      CommandParserOptions o,
-                      CommandPosition position,
-                      VimlLineGetter fgetline,
-                      void *cookie)
+static int parse_expr_cmd(const char **pp,
+                          CommandNode *node,
+                          CommandParserError *error,
+                          CommandParserOptions o,
+                          CommandPosition position,
+                          VimlLineGetter fgetline,
+                          void *cookie)
 {
   if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
   }
-  return do_parse_expr(pp, node, error, o, position, false);
+  return do_parse_expr_cmd(pp, node, error, o, position, false);
 }
 
-static int parse_exprs(const char **pp,
-                       CommandNode *node,
-                       CommandParserError *error,
-                       CommandParserOptions o,
-                       CommandPosition position,
-                       VimlLineGetter fgetline,
-                       void *cookie)
+static int parse_expr_seq_cmd(const char **pp,
+                              CommandNode *node,
+                              CommandParserError *error,
+                              CommandParserOptions o,
+                              CommandPosition position,
+                              VimlLineGetter fgetline,
+                              void *cookie)
 {
   if (ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
   }
-  return do_parse_expr(pp, node, error, o, position, true);
+  return do_parse_expr_cmd(pp, node, error, o, position, true);
 }
 
 static int parse_rest_line(const char **pp,
@@ -1551,9 +1553,10 @@ static int parse_lval(const char **pp,
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
   if (flags&FLAG_PLVAL_SPACEMULT) {
-    *expr = parse_mult(pp, &expr_error, &parse7_nofunc, col, true, "\n\"|-.+=");
+    *expr = parse_many_expressions(pp, &expr_error, &parse7_nofunc, col, true,
+                                   "\n\"|-.+=");
   } else {
-    *expr = parse_one(pp, &expr_error, &parse7_nofunc, col);
+    *expr = parse_one_expression(pp, &expr_error, &parse7_nofunc, col);
   }
 
   if (*expr == NULL) {
@@ -1665,8 +1668,8 @@ static int parse_for(const char **pp,
 
   *pp = skipwhite(*pp + 2);
 
-  if ((list_expr = parse_one(pp, &expr_error, &parse0_err,
-                             position.col + (*pp - s))) == NULL) {
+  if ((list_expr = parse_one_expression(pp, &expr_error, &parse0_err,
+                                        position.col + (*pp - s))) == NULL) {
     if (expr_error.message == NULL) {
       return FAIL;
     }
@@ -1914,8 +1917,8 @@ static int parse_let(const char **pp,
 
   *pp = skipwhite(*pp);
 
-  if ((rval_expr = parse_one(pp, &expr_error, &parse0_err,
-                             position.col + (*pp - s))) == NULL) {
+  if ((rval_expr = parse_one_expression(pp, &expr_error, &parse0_err,
+                                        position.col + (*pp - s))) == NULL) {
     if (expr_error.message == NULL) {
       return FAIL;
     }

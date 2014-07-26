@@ -1476,8 +1476,8 @@ ExpressionNode *parse7_nofunc(const char *const s, const char **arg,
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-Expression *parse_one(const char **arg, ExpressionParserError *error,
-                      ExpressionParser parse, const size_t col)
+Expression *parse_one_expression(const char **arg, ExpressionParserError *error,
+                                 ExpressionParser parse, const size_t col)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   Expression *result = XCALLOC_NEW(Expression, 1);
@@ -1511,9 +1511,10 @@ Expression *parse_one(const char **arg, ExpressionParserError *error,
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
-Expression *parse_mult(const char **arg, ExpressionParserError *error,
-                       ExpressionParser parse, const size_t col,
-                       const bool listends, const char *endwith)
+Expression *parse_many_expressions(const char **arg,
+                                   ExpressionParserError *error,
+                                   ExpressionParser parse, const size_t col,
+                                   const bool listends, const char *endwith)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   Expression *result = XCALLOC_NEW(Expression, 1);
