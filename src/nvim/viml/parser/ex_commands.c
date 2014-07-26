@@ -379,13 +379,14 @@ void free_cmd(CommandNode *node)
 }
 
 static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
-                    bool is_branch, bool is_glob)
+                    bool is_branch, bool is_glob, const size_t col)
 {
   const char *p = *pp;
   Glob **next = glob;
   size_t literal_length = 0;
   const char *literal_start = NULL;
   int ret = FAIL;
+  const char *const s = p;
 
   *glob = NULL;
 
@@ -528,7 +529,8 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
         case kGlobExpression: {
           ExpressionParserError expr_error;
           p += 2;
-          if (((*next)->data.expr = parse_one(&p, &expr_error, &parse0_err))
+          if (((*next)->data.expr = parse_one(&p, &expr_error, &parse0_err,
+                                              col + (p - s)))
               == NULL) {
             if (expr_error.message == NULL)
               goto get_glob_error_return;
@@ -582,7 +584,7 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
           do {
             int cret;
             p++;
-            if ((cret = get_glob(&p, error, cnext, true, is_glob))
+            if ((cret = get_glob(&p, error, cnext, true, is_glob, col))
                 == FAIL)
               return FAIL;
             if (cret == NOTDONE) {
@@ -797,7 +799,8 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
     expr_error.position = NULL;
     expr_error.message = NULL;
 
-    if ((expr = parse_one(&rhs_end, &expr_error, &parse0_err)) == NULL) {
+    if ((expr = parse_one(&rhs_end, &expr_error, &parse0_err, position.col))
+        == NULL) {
       CommandParserError error;
       if (expr_error.message == NULL) {
         free(new_rhs);
@@ -1234,29 +1237,32 @@ static int parse_menu(const char **pp,
 ///
 /// Used for ":execute" and ":echo*"
 ///
-/// @param[in,out]  pp     Parsed string. Is advanced to the end of the last 
-///                        expression. Should point to the first character of 
-///                        the expression (may point to whitespace character).
-/// @param[out]     node   Location where parsing results are saved.
-/// @param[out]     error  Structure where errors are saved.
-/// @param[in]      o      Options that control parsing behavior.
-/// @param[in]      multi  Determines whether parsed expression is actually 
-///                        a sequence of expressions.
+/// @param[in,out]  pp        Parsed string. Is advanced to the end of the last 
+///                           expression. Should point to the first character of 
+///                           the expression (may point to whitespace 
+///                           character).
+/// @param[out]     node      Location where parsing results are saved.
+/// @param[out]     error     Structure where errors are saved.
+/// @param[in]      o         Options that control parsing behavior.
+/// @param[in]      position  Position of input.
+/// @param[in]      multi     Determines whether parsed expression is actually 
+///                           a sequence of expressions.
 ///
 /// @return FAIL if out of memory, NOTDONE in case of error, OK otherwise.
 static int do_parse_expr(const char **pp,
                          CommandNode *node,
                          CommandParserError *error,
                          CommandParserOptions o,
+                         CommandPosition position,
                          bool multi)
 {
   Expression *expr;
   ExpressionParserError expr_error;
 
   if (multi) {
-    expr = parse_mult(pp, &expr_error, &parse0_err, false, "\n|");
+    expr = parse_mult(pp, &expr_error, &parse0_err, position.col, false, "\n|");
   } else {
-    expr = parse_one(pp, &expr_error, &parse0_err);
+    expr = parse_one(pp, &expr_error, &parse0_err, position.col);
   }
 
   if (expr == NULL) {
@@ -1284,7 +1290,7 @@ static int parse_expr(const char **pp,
   if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
   }
-  return do_parse_expr(pp, node, error, o, false);
+  return do_parse_expr(pp, node, error, o, position, false);
 }
 
 static int parse_exprs(const char **pp,
@@ -1298,7 +1304,7 @@ static int parse_exprs(const char **pp,
   if (ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
   }
-  return do_parse_expr(pp, node, error, o, true);
+  return do_parse_expr(pp, node, error, o, position, true);
 }
 
 static int parse_rest_line(const char **pp,
@@ -1514,6 +1520,7 @@ static bool check_lval(const char *const s, ExpressionNode *node,
 ///                             character after parsed expression.
 /// @param[out]     error       Structure where errors are saved.
 /// @param[in]      o           Options that control parsing behavior.
+/// @param[in]      position    Position of input.
 /// @param[out]     expr        Location where result will be saved.
 /// @param[in]      flags       Flags:
 /// @parblock
@@ -1534,6 +1541,7 @@ static bool check_lval(const char *const s, ExpressionNode *node,
 static int parse_lval(const char **pp,
                       CommandParserError *error,
                       CommandParserOptions o,
+                      size_t col,
                       Expression **expr,
                       int flags)
 {
@@ -1543,10 +1551,9 @@ static int parse_lval(const char **pp,
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
   if (flags&FLAG_PLVAL_SPACEMULT) {
-    *expr = parse_mult(pp, &expr_error, &parse7_nofunc, true,
-                       (char *) "\n\"|-.+=");
+    *expr = parse_mult(pp, &expr_error, &parse7_nofunc, col, true, "\n\"|-.+=");
   } else {
-    *expr = parse_one(pp, &expr_error, &parse7_nofunc);
+    *expr = parse_one(pp, &expr_error, &parse7_nofunc, col);
   }
 
   if (*expr == NULL) {
@@ -1592,11 +1599,12 @@ static int parse_lvals(const char **pp,
   Expression *expr;
   int ret;
 
-  if ((ret = parse_lval(pp, error, o, &expr,
+  if ((ret = parse_lval(pp, error, o, position.col, &expr,
                         node->type == kCmdDelfunction
                         ? FLAG_PLVAL_NOLOWER
-                        : FLAG_PLVAL_SPACEMULT)) == FAIL)
+                        : FLAG_PLVAL_SPACEMULT)) == FAIL) {
     return FAIL;
+  }
 
   node->args[ARG_EXPRS_EXPRS].arg.expr = expr;
 
@@ -1630,14 +1638,16 @@ static int parse_for(const char **pp,
                      VimlLineGetter fgetline,
                      void *cookie)
 {
+  const char *const s = *pp;
   Expression *expr;
   Expression *list_expr;
   ExpressionParserError expr_error;
   int ret;
 
-  if ((ret = parse_lval(pp, error, o, &expr, FLAG_PLVAL_LISTMULT))
-      == FAIL)
+  if ((ret = parse_lval(pp, error, o, position.col, &expr, FLAG_PLVAL_LISTMULT))
+      == FAIL) {
     return FAIL;
+  }
 
   node->args[ARG_FOR_LHS].arg.expr = expr;
 
@@ -1655,7 +1665,8 @@ static int parse_for(const char **pp,
 
   *pp = skipwhite(*pp + 2);
 
-  if ((list_expr = parse_one(pp, &expr_error, &parse0_err)) == NULL) {
+  if ((list_expr = parse_one(pp, &expr_error, &parse0_err,
+                             position.col + (*pp - s))) == NULL) {
     if (expr_error.message == NULL) {
       return FAIL;
     }
@@ -1687,10 +1698,12 @@ static int parse_function(const char **pp,
   if (ENDS_EXCMD(*p))
     return OK;
 
-  if (*p == '/')
+  if (*p == '/') {
     return get_regex(&p, error, &(node->args[ARG_FUNC_REG].arg.reg), '/');
+  }
 
-  if ((ret = parse_lval(&p, error, o, &expr, FLAG_PLVAL_NOLOWER))
+  if ((ret = parse_lval(&p, error, o, position.col + (p - *pp), &expr,
+                        FLAG_PLVAL_NOLOWER))
       == FAIL) {
     return FAIL;
   }
@@ -1815,20 +1828,23 @@ static int parse_let(const char **pp,
                      VimlLineGetter fgetline,
                      void *cookie)
 {
+  const char *const s = *pp;
   Expression *expr;
   ExpressionParserError expr_error;
   int ret;
   Expression *rval_expr;
   LetAssignmentType ass_type = 0;
 
-  if (ENDS_EXCMD(**pp))
+  if (ENDS_EXCMD(**pp)) {
     return OK;
+  }
 
-  if ((ret = parse_lval(pp, error, o, &expr,
+  if ((ret = parse_lval(pp, error, o, position.col, &expr,
                         FLAG_PLVAL_LISTMULT|FLAG_PLVAL_SPACEMULT
                         |FLAG_PLVAL_ALLOW_ENV))
-      == FAIL)
+      == FAIL) {
     return FAIL;
+  }
 
   node->args[ARG_LET_LHS].arg.expr = expr;
 
@@ -1898,9 +1914,11 @@ static int parse_let(const char **pp,
 
   *pp = skipwhite(*pp);
 
-  if ((rval_expr = parse_one(pp, &expr_error, &parse0_err)) == NULL) {
-    if (expr_error.message == NULL)
+  if ((rval_expr = parse_one(pp, &expr_error, &parse0_err,
+                             position.col + (*pp - s))) == NULL) {
+    if (expr_error.message == NULL) {
       return FAIL;
+    }
     error->message = expr_error.message;
     error->position = *pp;
     return NOTDONE;
@@ -3083,7 +3101,8 @@ int parse_one_cmd(const char **pp,
 
   if (CMDDEF(type).flags & XFILE) {
     int ret;
-    if ((ret = get_glob(&p, &error, &glob, false, true)) == FAIL) {
+    if ((ret = get_glob(&p, &error, &glob, false, true, (p - s) + position.col))
+        == FAIL) {
       free_range_data(&range);
       return FAIL;
     }
@@ -3130,12 +3149,14 @@ int parse_one_cmd(const char **pp,
     const char *cmd_arg = p;
     char *cmd_arg_start = (char *) p;
     size_t next_cmd_offset = 0;
+    CommandPosition arg_position = position;
+    arg_position.col += cmd_arg_start - s;
     // XFILE commands may have bangs inside `=…`
     // ISGREP commands may have bangs inside patterns
     // ISEXPR commands may have bangs inside "" or as logical OR
     if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR|LITERAL))) {
       used_get_cmd_arg = true;
-      if (get_cmd_arg(type, o, p, position.col + (p - s), &cmd_arg_start,
+      if (get_cmd_arg(type, o, p, arg_position.col, &cmd_arg_start,
                       &next_cmd_offset, &((*next_node)->skips),
                       &((*next_node)->skips_count))
           == FAIL) {
@@ -3145,7 +3166,7 @@ int parse_one_cmd(const char **pp,
       }
       cmd_arg = cmd_arg_start;
     }
-    if ((ret = parse(&cmd_arg, *next_node, &error, o, position, fgetline,
+    if ((ret = parse(&cmd_arg, *next_node, &error, o, arg_position, fgetline,
                      cookie))
         == FAIL) {
       if (used_get_cmd_arg)
