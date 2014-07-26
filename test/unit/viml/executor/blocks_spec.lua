@@ -165,7 +165,7 @@ describe(':try block', function()
     catch
       echo v:exception
     endtry
-  ]], {'E121: Undefined variable: a'})
+  ]], {'Vim(echo):E121: Undefined variable: a'})
   ito('v:exception is empty outside of the :catch if there was no exception', [[
     try
     catch
@@ -196,7 +196,7 @@ describe(':try block', function()
       echo v:exception
     endtry
     echo v:exception
-  ]], {'', '', 'E121: Undefined variable: a', '', ''})
+  ]], {'', '', 'Vim(echo):E121: Undefined variable: a', '', ''})
 end)
 
 describe(':function definition', function()
@@ -224,7 +224,7 @@ describe(':function definition', function()
     endtry
     delfunction Abc
   ]], {
-    'E121: Undefined variable: self'
+    'Vim(echo):E121: Undefined variable: self'
   })
   ito('Function accepts arguments', [[
     function Abc(a, b, c)
