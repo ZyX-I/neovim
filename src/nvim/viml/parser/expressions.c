@@ -1471,11 +1471,13 @@ ExpressionNode *parse7_nofunc(const char *const s, const char **arg,
 ///                        recognized expression.
 /// @param[out]     error  Structure where errors are saved.
 /// @param[in]      parse  Parser used to parse one expression in sequence.
+/// @param[in]      col    Position of the start of the parsed string in the 
+///                        parsed line.
 ///
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
 Expression *parse_one(const char **arg, ExpressionParserError *error,
-                      ExpressionParser parse)
+                      ExpressionParser parse, const size_t col)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   Expression *result = XCALLOC_NEW(Expression, 1);
@@ -1488,6 +1490,7 @@ Expression *parse_one(const char **arg, ExpressionParserError *error,
 
   result->size = *arg - s;
   result->string = xmemdup(s, result->size);
+  result->col = col;
 
   return result;
 }
@@ -1499,6 +1502,8 @@ Expression *parse_one(const char **arg, ExpressionParserError *error,
 ///                           recognized expression.
 /// @param[out]     error     Structure where errors are saved.
 /// @param[in]      parse     Parser used to parse one expression in sequence.
+/// @param[in]      col       Position of the start of the parsed string in the 
+///                           parsed line.
 /// @param[in]      listends  Determines whether list literal should end 
 ///                           parsing process.
 /// @param[in]      endwith   Determines what characters are allowed to stop 
@@ -1507,8 +1512,8 @@ Expression *parse_one(const char **arg, ExpressionParserError *error,
 /// @return NULL if parsing failed or memory was exhausted, pointer to the 
 ///         allocated expression node otherwise.
 Expression *parse_mult(const char **arg, ExpressionParserError *error,
-                       ExpressionParser parse, const bool listends,
-                       const char *endwith)
+                       ExpressionParser parse, const size_t col,
+                       const bool listends, const char *endwith)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   Expression *result = XCALLOC_NEW(Expression, 1);
@@ -1531,6 +1536,7 @@ Expression *parse_mult(const char **arg, ExpressionParserError *error,
 
   result->size = *arg - s;
   result->string = xmemdup(s, result->size);
+  result->col = col;
 
   return result;
 }
