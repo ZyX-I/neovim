@@ -118,6 +118,7 @@ typedef struct {
   ExpressionNode *node;  ///< Top-level node.
   char *string;          ///< Expression string saved for debugging.
   size_t size;           ///< Above string length.
+  size_t col;            ///< Position of the first character in parsed string.
 } Expression;
 
 typedef struct error {

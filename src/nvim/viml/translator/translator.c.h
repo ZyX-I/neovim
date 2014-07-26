@@ -37,7 +37,7 @@
 #define NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
 
 #ifndef NVIM_VIML_DUMPERS_CH_MACROS
-# define CH_MACROS_OPTIONS_TYPE const TranslationOptions
+# define CH_MACROS_OPTIONS_TYPE const TranslationContext
 # define CH_MACROS_INDENT_STR "  "
 #endif
 #include "nvim/viml/dumpers/ch_macros.h"
@@ -65,26 +65,6 @@
 ///       minimum required size.
 #define SIZETBUFLEN  (sizeof(STRINGIFY(SIZE_MAX)) - 1)
 
-/// Same as CALL, but with different translation options
-///
-/// Translation options used define translated function as being :function 
-/// definition contents
-#define F_FUNC(f, ...) \
-    do { \
-      TranslationOptions o = kTransFunc; \
-      F(f, __VA_ARGS__); \
-    } while (0)
-
-/// Same as CALL, but with different translation options
-///
-/// Translation options used define translated function as being .vim file 
-/// contents
-#define F_SCRIPT(f, ...) \
-    do { \
-      TranslationOptions o = kTransScript; \
-      F(f, __VA_ARGS__); \
-    } while (0)
-
 /// Same as W_EXPR_POS, but written string is escaped
 #define W_EXPR_POS_ESCAPED(s, node) \
     F(dump_string_length, s + node->start, node->end - node->start + 1)
@@ -99,8 +79,49 @@
 
 /// Get translation context
 ///
-/// See documentation for TranslationOptions for more details.
-#define TRANSLATION_CONTEXT o
+/// See documentation for TranslationSource for more details.
+#define TRANSLATION_SOURCE (o.tsrc)
+
+/// Override one TranslationContext value for the given code
+#define OVERRIDE_CONTEXT(key, new_val, code) \
+    do { \
+      TranslationContext o_tmp = o; \
+      o_tmp.key = new_val; \
+      do { \
+        TranslationContext o = o_tmp; \
+        code \
+      } while (0); \
+    } while (0)
+
+/// Override position-related TranslationContext values for the given code
+#define OVERRIDE_CONTEXT_POS(new_lnr, new_start_col, new_name, code) \
+    do { \
+      TranslationContext o_tmp = o; \
+      o_tmp.lnr = new_lnr; \
+      o_tmp.start_col = new_start_col; \
+      o_tmp.name = new_name; \
+      do { \
+        TranslationContext o = o_tmp; \
+        code \
+      } while (0); \
+    } while (0)
+
+/// Dump position given CommandPosition and name
+#define DUMP_CMD_POS(position, name) \
+    F(dump_position, position.lnr, position.col, name)
+
+
+/// Dump vim.err.err call
+#define DUMP_ERR_ERR(lnr, col, name, msg) \
+    do { \
+      WS("vim.err.err(state, "); \
+      F(dump_position, lnr, col, name); \
+      WS(", true, " #msg ")\n"); \
+    } while (0)
+
+/// Dump vim.err.err call given CommandPosition
+#define DUMP_ERR_ERR_CMD_POS(position, name, msg) \
+    DUMP_ERR_ERR(position.lnr, position.col, name, msg)
 
 
 #define VIM_ZERO  "0"
@@ -129,6 +150,14 @@ typedef enum {
   kOptLocal,
   kOptGlobal,
 } OptionType;
+
+/// Structure passed to all translate_* functions
+typedef struct {
+  TranslationSource tsrc;  ///< Source of the translation string.
+  const char *name;        ///< Name of the command being translated.
+  size_t lnr;              ///< Number of the line that is being translated.
+  size_t start_col;        ///< Offset of “first” column in the line.
+} TranslationContext;
 
 FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
 
@@ -380,6 +409,25 @@ static FDEC(dump_bool, bool b)
     WS("false");
   }
 
+  FUNCTION_END;
+}
+
+/// Dump position for vim.err.err
+///
+/// @param[in]  position  Position of error in current file.
+/// @param[in]  name      Command name.
+static FDEC(dump_position, size_t lnr, size_t col, const char *name)
+{
+  FUNCTION_START;
+  WS("'");
+  F_NOOPT(dump_unumber, (uintmax_t) lnr);
+  WS(":");
+  F_NOOPT(dump_unumber, (uintmax_t) col);
+  WS(":");
+  if (name != NULL) {
+    W(name);
+  }
+  WS("'");
   FUNCTION_END;
 }
 
@@ -923,11 +971,6 @@ static FDEC(translate_expr_node, const char *const s,
 {
   FUNCTION_START;
   switch (node->type) {
-    case kExprListRest: {
-      // TODO Add this error in expr parser, not here
-      WS("vim.err.err(state, nil, true, \"E696: Missing comma in list\")");
-      break;
-    }
     case kExprFloat: {
       WS("vim.float:new(state, ");
       W_EXPR_POS(s, node);
@@ -1047,15 +1090,21 @@ static FDEC(translate_expr_node, const char *const s,
       F(translate_scope, s, node, &start, TS_ONLY_SEGMENT | (is_funccall
                                                              ? TS_FUNCCALL
                                                              : 0));
+      W(", ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
       assert(start != NULL);
       WS(", '");
       W_END(start, s + node->end);
-      WS("')");
+      W("', ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
+      WS(")");
       break;
     }
     case kExprVariableName: {
       WS("vim.subscript.subscript(state, false, ");
       F(translate_varname, s, node, FALSE);
+      W(", ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
       WS(")");
       break;
     }
@@ -1066,9 +1115,13 @@ static FDEC(translate_expr_node, const char *const s,
     }
     case kExprConcatOrSubscript: {
       WS("vim.concat_or_subscript(state, ");
+      F(translate_expr_node, s, node->children, false);
+      WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->children->start, o.name);
+      WS(", ");
       W_EXPR_POS_ESCAPED(s, node);
       WS(", ");
-      F(translate_expr_node, s, node->children, false);
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
       WS(")");
       break;
     }
@@ -1085,6 +1138,7 @@ static FDEC(translate_expr_node, const char *const s,
     default: {
       const ExpressionNode *current_node;
       bool reversed = false;
+      bool dump_positions = true;
 
       assert(node->children != NULL
              || node->type == kExprDictionary
@@ -1092,10 +1146,12 @@ static FDEC(translate_expr_node, const char *const s,
       switch (node->type) {
         case kExprDictionary: {
           WS("vim.dict:new(state");
+          dump_positions = false;
           break;
         }
         case kExprList: {
           WS("vim.list:new(state");
+          dump_positions = false;
           break;
         }
         case kExprSubscript: {
@@ -1166,11 +1222,19 @@ static FDEC(translate_expr_node, const char *const s,
       if (node->type == kExprCall) {
         WS(", ");
         F(translate_expr_node, s, current_node, true);
+        if (dump_positions) {
+          WS(", ");
+          F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
+        }
         current_node = current_node->next;
       }
       for (; current_node != NULL; current_node=current_node->next) {
         WS(", ");
         F(translate_expr_node, s, current_node, false);
+        if (dump_positions) {
+          WS(", ");
+          F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
+        }
       }
       WS(")");
 
@@ -1223,6 +1287,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
   for (i = 0; i < size; i++) {
     WS(", ");
     W(data[i]);
+    WS(", _");
   }
   if (varargs) {
     WS(", ...");
@@ -1242,20 +1307,25 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
     }
     if (varargs) {
       WINDENT(args->indent + 1);
-      WS("state.a['000'] = vim.list:new(state, ...)\n");
+      WS("state.a['000'] = vim.list:new(state)\n");
       WINDENT(args->indent + 1);
-      WS("state.a['0'] = select('#', ...)\n");
+      WS("state.a['0'] = select('#', ...)/2\n");
       WINDENT(args->indent + 1);
-      WS("for i = 1,select('#', ...) do\n");
+      WS("for i = 1,select('#', ...)/2 do\n");
       WINDENT(args->indent + 2);
-      WS("state.a[tostring(i)] = select(i, ...)\n");
+      WS("state.a[tostring(i)] = select(i*2 - 1, ...)\n");
+      WINDENT(args->indent + 2);
+      WS("state.a['000'][i] =  select(i*2 - 1, ...)\n");
       WINDENT(args->indent + 1);
       WS("end\n");
     }
     // TODO Assign a:firstline and a:lastline
     // These variables are always present even if function is defined without 
     // range modifier.
-    F_FUNC(translate_nodes, args->node->children, args->indent + 1);
+    OVERRIDE_CONTEXT(
+      tsrc, kTransFunc,
+      F(translate_nodes, args->node->children, args->indent + 1);
+    );
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
     // zero
@@ -1298,12 +1368,14 @@ static FDEC(translate_varname, const char *const s,
 
       WS("vim.get_scope_and_key(state, vim.concat(state, '");
       W_EXPR_POS(s, current_node);
-      WS("'");
+      WS("', ");
+      F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
       close_parenthesis = true;
     } else {
       WS(", vim.concat(state, '");
       W_END(start, s + current_node->end);
-      WS("'");
+      WS("', ");
+      F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
     }
     add_concat = true;
   } else {
@@ -1323,11 +1395,14 @@ static FDEC(translate_varname, const char *const s,
       case kExprIdentifier: {
         WS("'");
         W_EXPR_POS(s, current_node);
-        WS("'");
+        WS("', ");
+        F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
         break;
       }
       case kExprCurlyName: {
         F(translate_expr_node, s, current_node->children, false);
+        WS(", ");
+        F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
         break;
       }
       default: {
@@ -1398,9 +1473,13 @@ static FDEC(translate_lval, const char *const s,
                                                           ? TS_FUNCASSIGN
                                                           : 0));
       assert(start != NULL);
+      WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
       WS(", '");
       W_END(start, s + node->end);
-      WS("')");
+      WS("', ");
+      F(dump_position, o.lnr, o.start_col + (start - s), o.name);
+      WS(")");
       break;
     }
     case kExprVariableName: {
@@ -1409,6 +1488,8 @@ static FDEC(translate_lval, const char *const s,
       ADD_CALL("dict");
 
       F(translate_varname, s, node, is_funccall);
+      WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
 
       WS(")");
       break;
@@ -1416,9 +1497,13 @@ static FDEC(translate_lval, const char *const s,
     case kExprConcatOrSubscript: {
       ADD_CALL("dict");
       F(translate_expr_node, s, node->children, false);
+      WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->children->start, o.name);
       WS(", '");
       W_EXPR_POS(s, node);
-      WS("')");
+      WS("', ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
+      WS(")");
       break;
     }
     case kExprSubscript: {
@@ -1429,10 +1514,18 @@ static FDEC(translate_lval, const char *const s,
       }
       F(translate_expr_node, s, node->children, false);
       WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->children->start, o.name);
+      WS(", ");
       F(translate_expr_node, s, node->children->next, false);
+      WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->children->next->start,
+                       o.name);
       if (node->children->next->next != NULL) {
         WS(", ");
         F(translate_expr_node, s, node->children->next->next, false);
+        WS(", ");
+        F(dump_position, o.lnr, o.start_col + node->children->next->next->start,
+                         o.name);
       }
       WS(")");
       break;
@@ -1489,7 +1582,10 @@ static FDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
 static FDEC(translate_rval_expr, const Expression *const expr)
 {
   FUNCTION_START;
-  F(translate_expr_node, TRANS_EXPR_ARGS(expr), false);
+  OVERRIDE_CONTEXT(
+    start_col, expr->col,
+    F(translate_expr_node, TRANS_EXPR_ARGS(expr), false);
+  );
   FUNCTION_END;
 }
 
@@ -1517,9 +1613,19 @@ static FDEC(translate_modifying_assignment, const LetModAssArgs *args)
   WS("vim.op.mod_");
   W(op);
   WS("(state, ");
-  F(translate_expr_node, TRANS_EXPR_ARGS(args->lval_expr), false);
+  OVERRIDE_CONTEXT(
+    start_col, args->lval_expr->col,
+    F(translate_expr_node, TRANS_EXPR_ARGS(args->lval_expr), false);
+    WS(", ");
+    F(dump_position, o.lnr, o.start_col, o.name);
+  );
   WS(", ");
-  F(translate_expr_node, TRANS_EXPR_ARGS(args->rval_expr), false);
+  OVERRIDE_CONTEXT(
+    start_col, args->rval_expr->col,
+    F(translate_expr_node, TRANS_EXPR_ARGS(args->rval_expr), false);
+    WS(", ");
+    F(dump_position, o.lnr, o.start_col, o.name);
+  );
   WS(")");
   FUNCTION_END;
 }
@@ -1552,12 +1658,15 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
                                   const void *const dump_cookie)
 {
   FUNCTION_START;
-#define ADD_ASSIGN(s, node, err_line, indent, dump, dump_cookie) \
+#define ADD_ASSIGN(s, node, new_start_col, err_line, indent, dump, dump_cookie)\
   do { \
     if (err_line != NULL) {\
       WS("if "); \
     } \
-    F(translate_lval, s, node, false, false, dump, dump_cookie); \
+    OVERRIDE_CONTEXT( \
+      start_col, new_start_col, \
+      F(translate_lval, s, node, false, false, dump, dump_cookie); \
+    ); \
     if (err_line != NULL) { \
       WS(" == nil then\n"); \
       WINDENT(indent + 1); \
@@ -1611,7 +1720,8 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
         "rhs"
       };
       WINDENT(indent + 3);
-      ADD_ASSIGN(lval_expr->string, current_node, err_line, indent + 3,
+      ADD_ASSIGN(lval_expr->string, current_node, lval_expr->col, err_line,
+                 indent + 3,
                  (FTYPE(AssignmentValueDump)) (&FNAME(translate_let_list_item)),
                  &args);
       current_node = current_node->next;
@@ -1622,9 +1732,9 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
         "rhs"
       };
       WINDENT(indent + 3);
-      ADD_ASSIGN(lval_expr->string, current_node->children, err_line,
-                 indent + 3, (FTYPE(AssignmentValueDump))
-                                      (&FNAME(translate_let_list_rest)),
+      ADD_ASSIGN(lval_expr->string, current_node->children, lval_expr->col,
+                 err_line, indent + 3,
+                 (FTYPE(AssignmentValueDump)) (&FNAME(translate_let_list_rest)),
                  &args);
     }
 
@@ -1636,15 +1746,14 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
       F_NOOPT(dump_unumber, (uintmax_t) val_num);
       WS(") then\n");
       WINDENT(indent + 4);
-      WS("vim.err.err(state, nil, true, "
-          "\"E688: More targets than List items\")\n");
+      DUMP_ERR_ERR(o.lnr, lval_expr->node->start + o.start_col, o.name,
+                   "E688: More targets than List items");
       WINDENT(indent + 3);
       WS("else\n");
       WINDENT(indent + 4);
     }
-    // TODO Dump position
-    WS("vim.err.err(state, nil, true, "
-        "\"E687: Less targets than List items\")\n");
+    DUMP_ERR_ERR(o.lnr, lval_expr->node->start + o.start_col, o.name,
+                 "E687: Less targets than List items");
     if (!has_rest) {
       WINDENT(indent + 3);
       WS("end\n");
@@ -1660,7 +1769,9 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     WINDENT(indent + 1);
     WS("else\n");
     WINDENT(indent + 2);
-    WS("vim.err.err(state, nil, true, \"E714: List required\")\n");
+    // FIXME lval_expr is not appropriate here
+    DUMP_ERR_ERR(o.lnr, lval_expr->node->start + o.start_col, o.name,
+                 "E714: List required");
     if (err_line != NULL) {
       WINDENT(indent + 2);
       W(err_line);
@@ -1671,8 +1782,8 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     WINDENT(indent);
     WS("end\n");
   } else {
-    ADD_ASSIGN(lval_expr->string, lval_expr->node, err_line, indent,
-               FNAME(dump), dump_cookie);
+    ADD_ASSIGN(lval_expr->string, lval_expr->node, lval_expr->col, err_line,
+               indent, FNAME(dump), dump_cookie);
   }
 #undef ADD_ASSIGN
   FUNCTION_END;
@@ -1705,8 +1816,9 @@ static CMD_FDEC(translate_error)
 {
   FUNCTION_START;
   WINDENT(indent);
-  WS("vim.err.err(state, nil, true, ");
-  // FIXME Dump error position
+  WS("vim.err.err(state, ");
+  F(dump_position, node->position.lnr, node->position.col, NULL);
+  WS(", true, ");
   F(dump_string, node->args[ARG_ERROR_MESSAGE].arg.str);
   WS(")\n");
   FUNCTION_END;
@@ -1756,6 +1868,9 @@ static CMD_FDEC(translate_for)
   WINDENT(indent);
   WS("for _, i in vim.iter(state, ");
   F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_FOR_RHS), false);
+  WS(", ");
+  F(dump_position, o.lnr, o.start_col + node->args[ARG_FOR_RHS].arg.expr->col,
+                   o.name);
   WS(") do\n");
 
   WINDENT(indent + 1);
@@ -1974,8 +2089,12 @@ static CMD_FDEC(translate_unlet)
   const Expression *lval_expr = node->args[ARG_EXPR_EXPR].arg.expr;
   const ExpressionNode *current_node = lval_expr->node;
   for (; current_node != NULL; current_node = current_node->next) {
-    F(translate_lval, lval_expr->string, current_node, false, node->bang,
-                      NULL, NULL);
+    OVERRIDE_CONTEXT(
+      start_col, lval_expr->col,
+      F(translate_lval, lval_expr->string, current_node, false, node->bang,
+                        NULL, NULL);
+      WS("\n");
+    );
   }
   FUNCTION_END;
 }
@@ -1986,8 +2105,12 @@ static CMD_FDEC(translate_delfunction)
   const Expression *lval_expr = node->args[ARG_EXPR_EXPR].arg.expr;
   const ExpressionNode *current_node = lval_expr->node;
   for (; current_node != NULL; current_node = current_node->next) {
-    F(translate_lval, lval_expr->string, current_node, true, node->bang,
-                      NULL, NULL);
+    OVERRIDE_CONTEXT(
+      start_col, lval_expr->col,
+      F(translate_lval, lval_expr->string, current_node, true, node->bang,
+                        NULL, NULL);
+      WS("\n");
+    );
   }
   FUNCTION_END;
 }
@@ -2101,12 +2224,18 @@ static FDEC(translate_node, const CommandNode *const node,
       add_comma = false;
       switch (CMDDEF(node->type).arg_types[i]) {
         case kArgExpression: {
-          F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, i), false);
+          OVERRIDE_CONTEXT(
+            start_col, node->args[i].arg.expr->col,
+            F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, i), false);
+          );
           add_comma = true;
           break;
         }
         case kArgExpressions: {
-          F(translate_expr_nodes, TRANS_NODE_EXPR_ARGS(node, i));
+          OVERRIDE_CONTEXT(
+            start_col, node->args[i].arg.expr->col,
+            F(translate_expr_nodes, TRANS_NODE_EXPR_ARGS(node, i));
+          );
           add_comma = true;
           break;
         }
@@ -2139,18 +2268,23 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
 
   for (current_node = node; current_node != NULL;
        current_node = current_node->next) {
+    const char *name = (current_node->name == NULL
+                        ? CMDDEF(current_node->type).name
+                        : current_node->name);
 #define CMD_F(f) \
-  F(f, current_node, indent)
+    OVERRIDE_CONTEXT_POS( \
+     current_node->position.lnr, current_node->position.col, name, \
+     F(f, current_node, indent); \
+    )
     switch (current_node->type) {
       case kCmdFinish: {
-        switch (TRANSLATION_CONTEXT) {
+        switch (TRANSLATION_SOURCE) {
           case kTransFunc:
           case kTransUser: {
             WINDENT(indent);
-            // TODO dump error position
-            WS("vim.err.err(state, nil, true, "
-               "\"E168: :finish used outside of a sourced file\""
-               ")\n");
+            DUMP_ERR_ERR_CMD_POS(
+                current_node->position, name,
+                "E168: :finish used outside of a sourced file");
             continue;
           }
           case kTransScript: {
@@ -2162,20 +2296,23 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
         break;
       }
       case kCmdReturn: {
-        switch (TRANSLATION_CONTEXT) {
+        switch (TRANSLATION_SOURCE) {
           case kTransScript:
           case kTransUser: {
             WINDENT(indent);
-            // TODO dump error position
-            WS("vim.err.err(state, nil, true, "
-               "\"E133: :return not inside a function\""
-               ")\n");
+            DUMP_ERR_ERR_CMD_POS(current_node->position, name,
+                                 "E133: :return not inside a function");
             continue;
           }
           case kTransFunc: {
             WINDENT(indent);
             WS("return ");
-            F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_EXPR_EXPR), false);
+            OVERRIDE_CONTEXT_POS(
+              current_node->position.lnr,
+              node->args[ARG_EXPR_EXPR].arg.expr->col, name,
+              F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_EXPR_EXPR),
+                false);
+            );
             WS("\n");
             break;
           }
@@ -2217,7 +2354,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdDelfunction, translate_delfunction)
 #undef SET_HANDLER
       default: {
-        F(translate_node, current_node, indent);
+        CMD_F(translate_node);
         continue;
       }
     }
@@ -2225,7 +2362,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
 #undef CMD_F
   }
 
-  if (current_node == NULL && TRANSLATION_CONTEXT == kTransFunc) {
+  if (current_node == NULL && TRANSLATION_SOURCE == kTransFunc) {
     WINDENT(indent);
     WS("return " VIM_ZERO "\n");
   }
@@ -2244,7 +2381,9 @@ static FDEC(translate_parser_result, const ParserResult *const pres,
     WS(",\n");
   }
   WINDENT(indent);
-  WS("})\n");
+  WS("}, ");
+  F(dump_string, pres->fname);
+  WS(")\n");
   F(translate_nodes, pres->node, indent);
   FUNCTION_END;
 }
@@ -2257,8 +2396,8 @@ static FDEC(translate_parser_result, const ParserResult *const pres,
 static FDEC(translate_script, const ParserResult *const pres)
 {
   FUNCTION_START;
-  do {
-    const TranslationOptions o = kTransScript;
+  OVERRIDE_CONTEXT(
+    tsrc, kTransScript,
 
     // FIXME Add <SID>
     WS("vim = require 'vim'\n"
@@ -2270,8 +2409,8 @@ static FDEC(translate_script, const ParserResult *const pres)
     F(translate_parser_result, pres, 2);
 
     WS("  end\n"
-      "}\n");
-  } while (0);
+       "}\n");
+  );
   FUNCTION_END;
 }
 
@@ -2283,12 +2422,12 @@ static FDEC(translate_script, const ParserResult *const pres)
 static FDEC(translate_input, const ParserResult *const pres)
 {
   FUNCTION_START;
-  do {
-    const TranslationOptions o = kTransUser;
+  OVERRIDE_CONTEXT(
+    tsrc, kTransUser,
 
     WS("local state = vim.state.get_top()\n");
     F(translate_parser_result, pres, 0);
-  } while (0);
+  );
   FUNCTION_END;
 }
 #endif  // NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
