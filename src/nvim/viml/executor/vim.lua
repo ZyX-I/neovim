@@ -124,6 +124,12 @@ state = {
     state.sid = sid
     return state
   end,
+
+  enter_code = function(old_state, code)
+    local state = copy_table(old_state)
+    state.code = code
+    return state
+  end,
 }
 
 -- {{{1 Functions returning specific types

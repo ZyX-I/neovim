@@ -2233,6 +2233,22 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
   FUNCTION_END;
 }
 
+static FDEC(translate_parser_result, const ParserResult *const pres,
+                                     size_t indent)
+{
+  FUNCTION_START;
+  WS("state = vim.state.enter_code(state, {\n");
+  for (size_t i = 0; i < pres->lines_size; i++) {
+    WINDENT(indent + 1);
+    F(dump_string, pres->lines[i]);
+    WS(",\n");
+  }
+  WINDENT(indent);
+  WS("})\n");
+  F(translate_nodes, pres->node, indent);
+  FUNCTION_END;
+}
+
 /// Dump .vim script as lua module.
 ///
 /// @param[in]  pres    Parser output.
@@ -2251,7 +2267,7 @@ static FDEC(translate_script, const ParserResult *const pres)
        "  run=function(state)\n"
        "    state = vim.state.enter_script(state, s)\n");
 
-    F(translate_nodes, pres->node, 2);
+    F(translate_parser_result, pres, 2);
 
     WS("  end\n"
       "}\n");
@@ -2271,7 +2287,7 @@ static FDEC(translate_input, const ParserResult *const pres)
     const TranslationOptions o = kTransUser;
 
     WS("local state = vim.state.get_top()\n");
-    F(translate_nodes, pres->node, 0);
+    F(translate_parser_result, pres, 0);
   } while (0);
   FUNCTION_END;
 }
