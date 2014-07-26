@@ -24,35 +24,31 @@ Object execute_viml(const char *const s)
     .flags = 0,            // FIXME add CPO, RL and ALTKEYMAP options
     .early_return = false
   };
-  CommandPosition position = {
-    .lnr = 1,
-    .col = 1,
-    .fname = "<:execute string>"
-  };
   char *const dup = xstrdup(s);
 
-  CommandNode *node = parse_cmd_sequence(o, position,
-                                         (VimlLineGetter) &do_fgetline_allocated,
-                                         (void *) &dup);
-  if (node == NULL) {
+  ParserResult *pres = parse_string(o, "<:execute string>",
+                                    (VimlLineGetter) &do_fgetline_allocated,
+                                    (void *) &dup);
+  if (pres == NULL) {
     return (Object) {.type = kObjectTypeNil};
   }
 
-  size_t len = stranslate_len(kTransUser, node);
+  size_t len = stranslate_len(kTransUser, pres);
   String lua_str = {
     .size = len,
     .data = xcalloc(len, 1)
   };
   char *p = lua_str.data;
-  stranslate(kTransUser, node, &p);
+  stranslate(kTransUser, pres, &p);
+  free_parser_result(pres);
   assert(p - lua_str.data <= (ptrdiff_t) lua_str.size);
   lua_str.size = (p - lua_str.data);
 
   Error err = {
     .set = false
   };
-  // FIXME Propagate returns, breaks, continues, …
   Object lua_ret = eval_lua(lua_str, &err);
+  free(lua_str.data);
   if (err.set) {
     return (Object) {.type = kObjectTypeNil};
   }

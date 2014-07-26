@@ -18,7 +18,7 @@ static Writer write_file = (Writer) &fwrite;
 /// @param[in]  node  Pointer to the first command inside this script.
 ///
 /// @return OK in case of success, FAIL otherwise.
-static int translate_script_stdout(const CommandNode *const node)
+static int translate_script_stdout(const ParserResult *const node)
 {
   return translate(kTransScript, node, write_file, (void *) stdout);
 }
@@ -28,18 +28,19 @@ static int translate_script_stdout(const CommandNode *const node)
 /// @return OK in case of success, FAIL otherwise.
 int translate_script_std(void)
 {
-  CommandNode *node;
+  ParserResult *pres;
   CommandParserOptions o = {0, false};
-  CommandPosition position = {1, 1, "<test input>"};
   int ret;
 
-  if ((node = parse_cmd_sequence(o, position, (VimlLineGetter) &fgetline_file,
-                                 stdin)) == NULL)
+  if ((pres = parse_string(o, "<test input>", (VimlLineGetter) &fgetline_file,
+                           stdin)) == NULL) {
     return FAIL;
+  }
 
-  ret = translate_script_stdout(node);
+  ret = translate_script_stdout(pres);
 
-  free_cmd(node);
+  free_parser_result(pres);
+
   return ret;
 }
 
@@ -52,23 +53,27 @@ int translate_script_std(void)
 int translate_script_str_to_file(const char *str,
                                  const char *const fname)
 {
-  CommandNode *node;
+  ParserResult *pres;
   CommandParserOptions o = {0, false};
-  CommandPosition position = {1, 1, "<test input>"};
   int ret;
   const char **pp;
   FILE *f;
 
   pp = &str;
 
-  if ((node = parse_cmd_sequence(o, position, (VimlLineGetter) &fgetline_string,
-                                 pp)) == NULL)
+  if ((pres = parse_string(o, "<test input>", (VimlLineGetter) &fgetline_string,
+                           pp)) == NULL) {
     return FAIL;
+  }
 
-  if ((f = fopen(fname, "w")) == NULL)
+  if ((f = fopen(fname, "w")) == NULL) {
+    free_parser_result(pres);
     return FAIL;
+  }
 
-  ret = translate(kTransScript, node, write_file, (void *) f);
+  ret = translate(kTransScript, pres, write_file, (void *) f);
+
+  free_parser_result(pres);
 
   fclose(f);
 

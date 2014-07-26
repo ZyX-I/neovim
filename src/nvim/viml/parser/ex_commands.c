@@ -50,6 +50,12 @@ typedef struct {
   char *duplicate_message;
 } CommandBlockOptions;
 
+typedef struct {
+  VimlLineGetter fgetline;
+  void *cookie;
+  garray_T ga;
+} SavingFgetlineArgs;
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.c.generated.h"
 #endif
@@ -1361,9 +1367,10 @@ static int parse_do(const char **pp,
   };
 
   if ((cmd = parse_cmd_sequence(o, new_position, (VimlLineGetter) &do_fgetline,
-                                &arg))
-      == NULL)
+                                &arg, false))
+      == NULL) {
     return FAIL;
+  }
 
   node->children = cmd;
 
@@ -2438,6 +2445,7 @@ static int parse_argcmd(const char **pp,
 
       arg_start = arg;
 
+      // TODO Record skips and adjust positions
       while (*arg) {
         if (*arg == '\\' && arg[1] != NUL)
           STRMOVE(arg, arg + 1);
@@ -2446,9 +2454,10 @@ static int parse_argcmd(const char **pp,
 
       if ((*next_node = parse_cmd_sequence(o, new_position,
                                            (VimlLineGetter) &do_fgetline_allocated,
-                                           &arg_start))
-          == NULL)
+                                           &arg_start, true))
+          == NULL) {
         return FAIL;
+      }
 
       assert(arg_start == NULL);
     }
@@ -3406,17 +3415,13 @@ const CommandNode nocmd = {
 ///                           call fgetline once there is something to execute.
 /// @param[in]      position  Position of input. Only position.fname is used.
 /// @param[in]      fgetline  Function used to obtain the next line.
-/// @parblock
-///   This function should return NULL when there are no more lines.
-///
-///   @note This function must return string in allocated memory. Only parser 
-///         thread must have access to strings returned by fgetline.
-/// @endparblock
 /// @param[in,out]  cookie    Second argument to fgetline.
+/// @param[in]      can_free  True if strings returned by fgetline can be freed.
 CommandNode *parse_cmd_sequence(CommandParserOptions o,
                                 CommandPosition position,
                                 VimlLineGetter fgetline,
-                                void *cookie)
+                                void *cookie,
+                                bool can_free)
 {
   char *line_start;
   char *line;
@@ -3567,7 +3572,9 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
         line++;
     }
     position.lnr++;
-    free(line_start);
+    if (can_free) {
+      free(line_start);
+    }
     if (blockstack_len == 0 && o.early_return)
       break;
   }
@@ -3582,4 +3589,71 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
   }
 
   return result;
+}
+
+/// Fgetline implementation that calls another fgetline and saves the result
+static char *saving_fgetline(int c, SavingFgetlineArgs *args, int indent)
+{
+  char *line = args->fgetline(c, args->cookie, indent);
+  if (line != NULL) {
+    GA_APPEND(char *, &(args->ga), line);
+  }
+  return line;
+}
+
+void free_parser_result(ParserResult *pres)
+{
+  if (pres == NULL) {
+    return;
+  }
+  free_cmd(pres->node);
+  for (size_t i = 0; i < pres->lines_size; i++) {
+    free(pres->lines[i]);
+  }
+  free(pres->lines);
+  free(pres);
+}
+
+/// Return a pair (AST, lines that were parsed)
+///
+/// Parsed lines are supposed to be used for implementing `:function Func` 
+/// introspection and error reporting.
+///
+/// @param[in]  o         Parser options.
+/// @param[in]  fname     Path to the parsed file or a string enclosed in `<` to 
+///                       indicate that current input is not from any file.
+/// @param[in]  fgetline  Function used to obtain the next line.
+///
+///                       @par
+///                       This function should return NULL when there are no 
+///                       more lines.
+///
+///                       @note This function must return string in allocated 
+///                             memory. Only parser thread must have access to 
+///                             strings returned by fgetline.
+/// @param      cookie    Second argument to the above function.
+ParserResult *parse_string(CommandParserOptions o, const char *fname,
+                           VimlLineGetter fgetline, void *cookie)
+  FUNC_ATTR_NONNULL_ALL
+{
+  ParserResult *ret = xcalloc(1, sizeof(ParserResult));
+  SavingFgetlineArgs fgargs = {
+    .fgetline = fgetline,
+    .cookie = cookie
+  };
+  CommandPosition position = {
+    .lnr = 1,
+    .col = 1,
+    .fname = fname
+  };
+  ga_init(&(fgargs.ga), (int) sizeof(char *), 16);
+  ret->node = parse_cmd_sequence(o, position, (VimlLineGetter) &saving_fgetline,
+                                 &fgargs, false);
+  ret->lines = (char **) fgargs.ga.ga_data;
+  ret->lines_size = fgargs.ga.ga_len;
+  if (ret->node == NULL) {
+    free_parser_result(ret);
+    return NULL;
+  }
+  return ret;
 }

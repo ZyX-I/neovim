@@ -24,20 +24,15 @@ char *execute_viml_test(const char *const s)
     .flags = 0,            // FIXME add CPO, RL and ALTKEYMAP options
     .early_return = false
   };
-  CommandPosition position = {
-    .lnr = 1,
-    .col = 1,
-    .fname = "<:execute string>"
-  };
   Error err = {
     .set = false
   };
   char *const dup = xstrdup(s);
 
-  CommandNode *node = parse_cmd_sequence(o, position,
-                                         (VimlLineGetter) &fgetline_string,
-                                         (void *) &dup);
-  if (node == NULL) {
+  ParserResult *pres = parse_string(o, "<:execute string>",
+                                    (VimlLineGetter) &fgetline_string,
+                                    (void *) &dup);
+  if (pres == NULL) {
     return NULL;
   }
 
@@ -51,14 +46,15 @@ char *execute_viml_test(const char *const s)
   }
   api_free_object(lua_test_ret);
 
-  size_t len = stranslate_len(kTransUser, node);
+  size_t len = stranslate_len(kTransUser, pres);
 #define TEST_RET "return vim.test.finish()"
   String lua_str = {
     .size = len,
     .data = xcalloc(len + sizeof(TEST_RET), 1)
   };
   char *p = lua_str.data;
-  stranslate(kTransUser, node, &p);
+  stranslate(kTransUser, pres, &p);
+  free_parser_result(pres);
   assert(p - lua_str.data <= (ptrdiff_t) lua_str.size);
   memcpy(p, TEST_RET, sizeof(TEST_RET));
   lua_str.size = (p - lua_str.data + sizeof(TEST_RET) - 1);
@@ -71,7 +67,9 @@ char *execute_viml_test(const char *const s)
 #undef TEST_RET
 
   Object lua_ret = eval_lua(lua_str, &err);
+  free(lua_str.data);
   if (err.set) {
+    api_free_object(lua_ret);
     return NULL;
   }
 
