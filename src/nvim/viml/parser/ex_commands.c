@@ -89,7 +89,6 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition position)
   node = (CommandNode *) xcalloc(1, size);
   node->type = type;
   node->position = position;
-  node->position.fname = xstrdup(position.fname);
 
   return node;
 }
@@ -1362,8 +1361,7 @@ static int parse_do(const char **pp,
   const char *arg = *pp;
   CommandPosition new_position = {
     1,
-    1,
-    (const char *) "<*do argument>",
+    1
   };
 
   if ((cmd = parse_cmd_sequence(o, new_position, (VimlLineGetter) &do_fgetline,
@@ -2431,8 +2429,7 @@ static int parse_argcmd(const char **pp,
       char *arg_start;
       CommandPosition new_position = {
         position.lnr,
-        position.col + (p - s),
-        position.fname,
+        position.col + (p - s)
       };
 
       while (*p && !vim_isspace(*p)) {
@@ -3338,8 +3335,7 @@ const CommandNode nocmd = {
   0,
   {
     0,
-    0,
-    NULL
+    0
   },
   0,
   kCntMissing,
@@ -3413,7 +3409,7 @@ const CommandNode nocmd = {
 ///                           to flags documented in parse_one_cmd documentation 
 ///                           it accepts o.early_return option that makes in not 
 ///                           call fgetline once there is something to execute.
-/// @param[in]      position  Position of input. Only position.fname is used.
+/// @param[in]      position  Position of input.
 /// @param[in]      fgetline  Function used to obtain the next line.
 /// @param[in,out]  cookie    Second argument to fgetline.
 /// @param[in]      can_free  True if strings returned by fgetline can be freed.
@@ -3611,6 +3607,7 @@ void free_parser_result(ParserResult *pres)
     free(pres->lines[i]);
   }
   free(pres->lines);
+  free(pres->fname);
   free(pres);
 }
 
@@ -3643,14 +3640,14 @@ ParserResult *parse_string(CommandParserOptions o, const char *fname,
   };
   CommandPosition position = {
     .lnr = 1,
-    .col = 1,
-    .fname = fname
+    .col = 1
   };
   ga_init(&(fgargs.ga), (int) sizeof(char *), 16);
   ret->node = parse_cmd_sequence(o, position, (VimlLineGetter) &saving_fgetline,
                                  &fgargs, false);
   ret->lines = (char **) fgargs.ga.ga_data;
   ret->lines_size = fgargs.ga.ga_len;
+  ret->fname = xstrdup(fname);
   if (ret->node == NULL) {
     free_parser_result(ret);
     return NULL;
