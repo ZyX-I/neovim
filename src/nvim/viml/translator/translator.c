@@ -9,15 +9,15 @@
 
 /// Get amount of memory needed for translated VimL script
 ///
-/// @param[in]  node  Pointer to the first translated command.
+/// @param[in]  pres  Parsing result.
 /// @param[in]  o     Context in which command will be translated.
 ///
 /// @return Amount of memory that is greater then or equal to the minimum amount 
 ///         of memory needed to translate given script.
-size_t stranslate_len(TranslationOptions o, const CommandNode *const node)
+size_t stranslate_len(TranslationOptions o, const ParserResult *const pres)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  size_t (*stranslate_len_impl)(TranslationOptions, const CommandNode *const);
+  size_t (*stranslate_len_impl)(TranslationOptions, const ParserResult *const);
   switch (o) {
     case kTransUser: {
       stranslate_len_impl = &stranslate_input_len;
@@ -32,19 +32,19 @@ size_t stranslate_len(TranslationOptions o, const CommandNode *const node)
       assert(false);
     }
   }
-  return stranslate_len_impl(o, node);
+  return stranslate_len_impl(o, pres);
 }
 
 /// Translate VimL script to given location
 ///
-/// @param[in]   node  Pointer to the first translated command.
+/// @param[in]   pres  Parsing result.
 /// @param[in]   o     Context in which command will be translated.
 /// @param[out]  pp    Pointer to the memory where script should be translated 
 ///                    to.
-void stranslate(TranslationOptions o, const CommandNode *const node, char **pp)
+void stranslate(TranslationOptions o, const ParserResult *const pres, char **pp)
   FUNC_ATTR_NONNULL_ALL
 {
-  void (*stranslate_impl)(TranslationOptions, const CommandNode *const,
+  void (*stranslate_impl)(TranslationOptions, const ParserResult *const,
                           char **);
   switch (o) {
     case kTransUser: {
@@ -60,22 +60,22 @@ void stranslate(TranslationOptions o, const CommandNode *const node, char **pp)
       assert(false);
     }
   }
-  stranslate_impl(o, node, pp);
+  stranslate_impl(o, pres, pp);
 }
 
 /// Translate VimL script using given write
 ///
-/// @param[in]  node    Pointer to the first translated command.
+/// @param[in]  pres    Parsing result.
 /// @param[in]  o       Context in which command will be translated.
 /// @param[in]  write   Function used to write the result.
 /// @param[in]  cookie  Last argument to that function.
 ///
 /// @return OK in case of success, FAIL otherwise.
-int translate(TranslationOptions o, const CommandNode *const node,
+int translate(TranslationOptions o, const ParserResult *const pres,
               Writer write, void *cookie)
   FUNC_ATTR_NONNULL_ALL
 {
-  int (*translate_impl)(TranslationOptions, const CommandNode *const,
+  int (*translate_impl)(TranslationOptions, const ParserResult *const,
                         Writer, void *);
   switch (o) {
     case kTransUser: {
@@ -91,5 +91,5 @@ int translate(TranslationOptions o, const CommandNode *const node,
       assert(false);
     }
   }
-  return translate_impl(o, node, write, cookie);
+  return translate_impl(o, pres, write, cookie);
 }
