@@ -2235,10 +2235,10 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
 
 /// Dump .vim script as lua module.
 ///
-/// @param[in]  node    Pointer to the first command inside this script.
+/// @param[in]  pres    Parser output.
 /// @param[in]  write   Function that will be used to write the result.
 /// @param[in]  cookie  Last argument to the above function.
-static FDEC(translate_script, const CommandNode *const node)
+static FDEC(translate_script, const ParserResult *const pres)
 {
   FUNCTION_START;
   do {
@@ -2251,7 +2251,7 @@ static FDEC(translate_script, const CommandNode *const node)
        "  run=function(state)\n"
        "    state = vim.state.enter_script(state, s)\n");
 
-    F(translate_nodes, node, 2);
+    F(translate_nodes, pres->node, 2);
 
     WS("  end\n"
       "}\n");
@@ -2261,17 +2261,17 @@ static FDEC(translate_script, const CommandNode *const node)
 
 /// Dump command executed from user input as code that runs immediately
 ///
-/// @param[in]  node    Pointer to the first command inside this script.
+/// @param[in]  pres    Parser output.
 /// @param[in]  write   Function that will be used to write the result.
 /// @param[in]  cookie  Last argument to the above function.
-static FDEC(translate_input, const CommandNode *const node)
+static FDEC(translate_input, const ParserResult *const pres)
 {
   FUNCTION_START;
   do {
     const TranslationOptions o = kTransUser;
 
     WS("local state = vim.state.get_top()\n");
-    F(translate_nodes, node, 0);
+    F(translate_nodes, pres->node, 0);
   } while (0);
   FUNCTION_END;
 }

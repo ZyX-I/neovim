@@ -223,6 +223,12 @@ typedef struct command_node {
   } args[1];                      ///< Command arguments
 } CommandNode;
 
+typedef struct {
+  CommandNode *node;
+  char **lines;
+  size_t lines_size;
+} ParserResult;
+
 typedef struct command_argument CommandArg;
 typedef struct command_subargs  CommandSubArgs;
 
