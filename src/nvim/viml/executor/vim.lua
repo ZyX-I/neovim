@@ -1046,7 +1046,13 @@ err = {
     col = tonumber(col)
     -- TODO show context
     if state.is_trying then
-      -- TODO if vim_error == true then prepend message with Vim(cmd):
+      if vim_error then
+        if cmd ~= '' then
+          formatted_message = 'Vim(' .. cmd .. '):' .. formatted_message
+        else
+          formatted_message = 'Vim:' .. formatted_message
+        end
+      end
       error(formatted_message, 0)
     else
       io.stderr:write(('line %u, column %u:\n'):format(lnr, col))

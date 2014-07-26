@@ -336,7 +336,7 @@ describe('Floating-point computations', function()
       catch
         echo v:exception
       endtry
-    ]], {'E804: Cannot use \'%\' with Float'})
+    ]], {'Vim(echo):E804: Cannot use \'%\' with Float'})
   end)
   describe('Concatenation', function()
     ito('Floating-point concatenation', [[
@@ -345,7 +345,7 @@ describe('Floating-point computations', function()
       catch
         echo v:exception
       endtry
-    ]], {'E806: Using Float as a String'})
+    ]], {'Vim(echo):E806: Using Float as a String'})
   end)
   describe('Comparison operators', function()
     describe('Less/greater (or equal to)', function()
@@ -695,10 +695,10 @@ describe('List tests', function()
         echo v:exception
       endtry
     ]], {
-      'E745: Using List as a Number',
-      'E745: Using List as a Number',
-      'E745: Using List as a Number',
-      'E745: Using List as a Number',
+      'Vim(echo):E745: Using List as a Number',
+      'Vim(echo):E745: Using List as a Number',
+      'Vim(echo):E745: Using List as a Number',
+      'Vim(echo):E745: Using List as a Number',
     })
   end)
   describe('Concatenation', function()
@@ -708,7 +708,7 @@ describe('List tests', function()
       catch
         echo v:exception
       endtry
-    ]], {'E730: Using List as a String'})
+    ]], {'Vim(echo):E730: Using List as a String'})
   end)
   describe('List comparison', function()
     describe('Less/greater (or equal to)', function()
@@ -734,10 +734,10 @@ describe('List tests', function()
           echo v:exception
         endtry
       ]], {
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
       })
       ito('LT/GT/LE/GE (ic)', [[
         try
@@ -761,10 +761,10 @@ describe('List tests', function()
           echo v:exception
         endtry
       ]], {
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
       })
       ito('LT/GT/LE/GE (noic)', [[
         try
@@ -788,10 +788,10 @@ describe('List tests', function()
           echo v:exception
         endtry
       ]], {
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
-        'E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
+        'Vim(echo):E692: Invalid operation for Lists',
       })
     end)
     describe('Equality and identity', function()
@@ -884,11 +884,11 @@ describe('Dictionary tests', function()
         echo v:exception
       endtry
     ]], {
-      'E728: Using Dictionary as a Number',
-      'E728: Using Dictionary as a Number',
-      'E728: Using Dictionary as a Number',
-      'E728: Using Dictionary as a Number',
-      'E728: Using Dictionary as a Number',
+      'Vim(echo):E728: Using Dictionary as a Number',
+      'Vim(echo):E728: Using Dictionary as a Number',
+      'Vim(echo):E728: Using Dictionary as a Number',
+      'Vim(echo):E728: Using Dictionary as a Number',
+      'Vim(echo):E728: Using Dictionary as a Number',
     })
   end)
   describe('Concatenation', function()
@@ -898,7 +898,7 @@ describe('Dictionary tests', function()
       catch
         echo v:exception
       endtry
-    ]], {'E731: Using Dictionary as a String'})
+    ]], {'Vim(echo):E731: Using Dictionary as a String'})
   end)
   describe('Dictionary comparison', function()
     describe('Less/greater (or equal to)', function()
@@ -924,10 +924,10 @@ describe('Dictionary tests', function()
           echo v:exception
         endtry
       ]], {
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
       })
       ito('LT/GT/LE/GE (ic)', [[
         try
@@ -951,10 +951,10 @@ describe('Dictionary tests', function()
           echo v:exception
         endtry
       ]], {
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
       })
       ito('LT/GT/LE/GE (noic)', [[
         try
@@ -978,10 +978,10 @@ describe('Dictionary tests', function()
           echo v:exception
         endtry
       ]], {
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
-        'E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
+        'Vim(echo):E736: Invalid operation for Dictionaries',
       })
     end)
     describe('Equality and identity', function()
@@ -1059,7 +1059,7 @@ describe('Funcref computations', function()
         string.format('echo F %s F', op),
         'unlet F'
       }, {
-        'E703: Using Funcref as a Number',
+        'Vim(echo):E703: Using Funcref as a Number',
       })
     end
   end)
@@ -1069,7 +1069,7 @@ describe('Funcref computations', function()
       'echo F . F',
       'unlet F'
     }, {
-      'E729: Using Funcref as a String',
+      'Vim(echo):E729: Using Funcref as a String',
     })
   end)
   describe('Comparison operators', function()
@@ -1083,7 +1083,7 @@ describe('Funcref computations', function()
               string.format('echo F %s F', real_op),
               'unlet F'
             }, {
-              'E694: Invalid operation for Funcrefs',
+              'Vim(echo):E694: Invalid operation for Funcrefs',
             })
           end
         end
@@ -1138,20 +1138,20 @@ describe('Type conversions', function()
         string.format('echo [] %s {}', op),
         string.format('echo {} %s []', op),
       }, {
-        'E745: Using List as a Number',
-        'E745: Using List as a Number',
-        'E745: Using List as a Number',
-        'E728: Using Dictionary as a Number',
-        'E728: Using Dictionary as a Number',
-        'E728: Using Dictionary as a Number',
-        'E745: Using List as a Number',
-        'E745: Using List as a Number',
-        'E745: Using List as a Number',
-        'E728: Using Dictionary as a Number',
-        'E728: Using Dictionary as a Number',
-        'E728: Using Dictionary as a Number',
-        'E745: Using List as a Number',
-        'E728: Using Dictionary as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
       })
       itoe(string.format('%s operator, funcrefs', op), {
         'let F = function("string")',
@@ -1167,19 +1167,19 @@ describe('Type conversions', function()
         string.format('echo F %s {}', op),
         'unlet F'
       }, {
-        'E703: Using Funcref as a Number',
-        op == '%' and 'E804: Cannot use \'%\' with Float'
-                   or 'E703: Using Funcref as a Number',
-        'E703: Using Funcref as a Number',
-        'E745: Using List as a Number',
-        'E728: Using Dictionary as a Number',
-        'E703: Using Funcref as a Number',
-        op == '%' and 'E804: Cannot use \'%\' with Float'
-                   or 'E703: Using Funcref as a Number',
-        'E703: Using Funcref as a Number',
-        op == '+' and 'E745: Using List as a Number'
-                   or 'E703: Using Funcref as a Number',
-        'E703: Using Funcref as a Number',
+        'Vim(echo):E703: Using Funcref as a Number',
+        op == '%' and 'Vim(echo):E804: Cannot use \'%\' with Float'
+                   or 'Vim(echo):E703: Using Funcref as a Number',
+        'Vim(echo):E703: Using Funcref as a Number',
+        'Vim(echo):E745: Using List as a Number',
+        'Vim(echo):E728: Using Dictionary as a Number',
+        'Vim(echo):E703: Using Funcref as a Number',
+        op == '%' and 'Vim(echo):E804: Cannot use \'%\' with Float'
+                   or 'Vim(echo):E703: Using Funcref as a Number',
+        'Vim(echo):E703: Using Funcref as a Number',
+        op == '+' and 'Vim(echo):E745: Using List as a Number'
+                   or 'Vim(echo):E703: Using Funcref as a Number',
+        'Vim(echo):E703: Using Funcref as a Number',
       })
     end
   end)
@@ -1200,20 +1200,20 @@ describe('Type conversions', function()
       'echo [] . {}',
       'echo {} . []',
     }, {
-      'E730: Using List as a String',
-      'E806: Using Float as a String',
-      'E730: Using List as a String',
-      'E731: Using Dictionary as a String',
-      'E806: Using Float as a String',
-      'E731: Using Dictionary as a String',
-      'E730: Using List as a String',
-      'E730: Using List as a String',
-      'E730: Using List as a String',
-      'E731: Using Dictionary as a String',
-      'E731: Using Dictionary as a String',
-      'E731: Using Dictionary as a String',
-      'E730: Using List as a String',
-      'E731: Using Dictionary as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E806: Using Float as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
+      'Vim(echo):E806: Using Float as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
     })
     itoe(string.format('. operator, funcrefs', op), {
       'let F = function("string")',
@@ -1229,16 +1229,16 @@ describe('Type conversions', function()
       'echo F . {}',
       'unlet F'
     }, {
-      'E729: Using Funcref as a String',
-      'E806: Using Float as a String',
-      'E729: Using Funcref as a String',
-      'E730: Using List as a String',
-      'E731: Using Dictionary as a String',
-      'E729: Using Funcref as a String',
-      'E729: Using Funcref as a String',
-      'E729: Using Funcref as a String',
-      'E729: Using Funcref as a String',
-      'E729: Using Funcref as a String',
+      'Vim(echo):E729: Using Funcref as a String',
+      'Vim(echo):E806: Using Float as a String',
+      'Vim(echo):E729: Using Funcref as a String',
+      'Vim(echo):E730: Using List as a String',
+      'Vim(echo):E731: Using Dictionary as a String',
+      'Vim(echo):E729: Using Funcref as a String',
+      'Vim(echo):E729: Using Funcref as a String',
+      'Vim(echo):E729: Using Funcref as a String',
+      'Vim(echo):E729: Using Funcref as a String',
+      'Vim(echo):E729: Using Funcref as a String',
     })
   end)
 end)
