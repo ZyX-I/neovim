@@ -10,11 +10,14 @@ local number, string, list, dict, float, func
 local bound_func
 local scope, def_scope, b_scope, a_scope, v_scope, f_scope
 local state, assign
+local subscript
 local scope_name_idx, type_idx, locks_idx, val_idx
 local BASE_TYPE_NUMBER, BASE_TYPE_STRING, BASE_TYPE_FUNCREF, BASE_TYPE_LIST
 local BASE_TYPE_DICTIONARY, BASE_TYPE_FLOAT
 local get_number, get_float, get_string, get_boolean
 -- {{{1 Utility functions
+local unpack = unpack or table.unpack
+
 local get_local_option = function(state, other, name)
   return other.options[name] or state.options[name]
 end
@@ -1148,6 +1151,26 @@ functions.string = function(state, self, callee_position, val, val_position)
   return repr(state, val, val_position, false, {})
 end
 
+functions.call = function(state, self, callee_position, fun, fun_position,
+                                                        lst, lst_position,
+                                                        dct, dct_position)
+  if dct then
+    if not is_dict(dct) then
+      return err.err(state, dct_position, true, 'E715: Dictionary required')
+    end
+    fun = bound_func:new(state, fun, dct)
+  end
+  if not is_list(lst) then
+    return err.err(state, lst_position, true, 'E714: List required')
+  end
+  local args = {}
+  for i, v in ipairs(lst) do
+    args[i*2 - 1] = v
+    args[i*2] = lst_position
+  end
+  return subscript.call(state, fun, fun_position, unpack(args))
+end
+
 -- {{{1 Built-in commands implementations
 local commands = {
   append = function(state, range, bang, lines)
@@ -1493,7 +1516,7 @@ op.mod_concat = op.concat
 op.mod_subtract = op.subtract
 
 -- {{{1 Subscripting
-local subscript = {
+subscript = {
   subscript = function(state, bind, val, val_position, idx, idx_position)
     if not (val and idx) then
       return nil
