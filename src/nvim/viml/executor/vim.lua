@@ -491,16 +491,15 @@ list = join_tables(container, {
   raw_assign_subscript = function(lst, idx, val)
     lst[idx + 1] = val
   end,
-  assign_subscript = function(state, lst, lst_position, idx, idx_position,
-                                     val, val_position)
+  assign_subscript = function(state, lst, lst_position, idx, idx_position, val)
     -- TODO check for locks, check for out of range
     raw_assign_subscript(lst, idx, val)
     return true
   end,
-  assign_slice = function(state, dct,  dct_position,
+  assign_slice = function(state, lst,  lst_position,
                                  idx1, idx1_position,
                                  idx2, idx2_position,
-                                 val,  val_position)
+                                 val)
     if is_func(val) then
       return err.err(state, lst_position, true,
                      'E475: Cannot assign function to a slice')
@@ -686,8 +685,7 @@ dict = join_tables(container, {
   end),
 -- {{{4 Modification support
 -- {{{4 Assignment support
-  assign_subscript = function(state, dct, dct_position, key, key_position,
-                                     val, val_position)
+  assign_subscript = function(state, dct, dct_position, key, key_position, val)
     if key == '' then
       return err.err(state, key_position, true,
                      'E713: Cannot use empty key for dictionary')
@@ -712,16 +710,16 @@ dict = join_tables(container, {
   non_unique_function_message = 'E717: Dictionary entry already exists: %s',
   assign_subscript_function = function(state, unique, dct, dct_position,
                                                       key, key_position,
-                                                      val, val_position)
+                                                      val)
     if unique and dct[key] ~= nil then
       return err.err(state, key_position, true,
                      dct[type_idx].non_unique_function_message,
                      key)
     end
     return dict.assign_subscript(state, dct, dct_position, key, key_position,
-                                        val, val_position)
+                                        val)
   end,
-  assign_slice = function(state, dct,  dct_position, ...)
+  assign_slice = function(state, dct, dct_position, ...)
     return err.err(state, dct_position, true,
                    'E719: Cannot use [:] with a Dictionary')
   end,
@@ -991,21 +989,19 @@ scope = join_tables(dict, {
   end,
   missing_key_delete_message = 'E108: No such variable',
   missing_key_message = 'E121: Undefined variable',
-  assign_subscript = function(state, dct, dct_position, key, key_position,
-                                     val, val_position)
+  assign_subscript = function(state, dct, dct_position, key, key_position, val)
     if not key:match('^%a[%w_]*$') then
       return err.err(state, key_position, true,
                      'E461: Illegal variable name: %s', key)
     end
     return dict.assign_subscript(state, dct, dct_position, key, key_position,
-                                        val, val_position)
+                                        val)
   end,
 })
 
 -- {{{3 g: and l: dictionaries
 def_scope = join_tables(scope, {
-  assign_subscript = function(state, dct, dct_position, key, key_position,
-                                     val, val_position)
+  assign_subscript = function(state, dct, dct_position, key, key_position, val)
     if is_func(val) then
       if state.global.user_functions[key] then
         return err.err(
@@ -1015,7 +1011,7 @@ def_scope = join_tables(scope, {
       end
     end
     return scope.assign_subscript(state, dct, dct_position, key, key_position,
-                                         val, val_position)
+                                         val)
   end
 })
 
@@ -1222,8 +1218,7 @@ assign = {
       return nil
     end
     local t = vim_type(dct)
-    return t.assign_subscript(state, dct, dct_position, key, key_position,
-                                     val, val_position)
+    return t.assign_subscript(state, dct, dct_position, key, key_position, val)
   end,
 
   ass_dict_function = function(state, bang, val,
@@ -1237,7 +1232,7 @@ assign = {
       state, not bang,
       dct, dct_position,
       key, key_position,
-      val, val_position
+      val
     )
   end,
 
@@ -1254,7 +1249,7 @@ assign = {
       lst, lst_position,
       idx1, idx1_position,
       idx2, idx2_position,
-      val, val_position
+      val
     )
   end,
 
