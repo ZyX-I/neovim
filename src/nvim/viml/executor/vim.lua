@@ -882,8 +882,31 @@ float = join_tables(scalar, {
 })
 
 -- {{{3 Function reference
+local funcs = {}
+setmetatable(funcs, {__mode='k'})
+
 func = join_tables(scalar, {
   type_number = BASE_TYPE_FUNCREF,
+-- {{{4 New
+  new = function(self, state, fun, first_node_position, funcname, args, props,
+                              endfun_position)
+    local start_lnr, start_col = err.unpack_position(first_node_position)
+    local end_lnr, end_col = err.unpack_position(endfun_position)
+    funcs[fun] = {
+      start_lnr = start_lnr,
+      start_col = start_col,
+      end_lnr = end_lnr,
+      end_col = end_col,
+      code = state.code,
+      fname = state.fname,
+      funcname = funcname,
+      args = args,
+      dict = props[1],
+      abort = props[2],
+      range = props[3],
+    }
+    return fun
+  end,
 -- {{{4 Querying support
   subscript = function(state, fun, fun_position, ...)
     return err.err(state, fun_position, true, 'E695: Cannot index a Funcref')
@@ -1554,6 +1577,7 @@ return {
   subscript = subscript,
   list = list,
   dict = dict,
+  func = func,
   concat_or_subscript = concat_or_subscript,
   get_scope_and_key = get_scope_and_key,
   op = op,
