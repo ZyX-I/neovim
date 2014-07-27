@@ -901,6 +901,7 @@ func = join_tables(scalar, {
       code = state.code,
       fname = state.fname,
       funcname = funcname,
+      user_funcname = '1',
       args = args,
       dict = props[1],
       abort = props[2],
@@ -922,6 +923,13 @@ func = join_tables(scalar, {
                      funcs[fun].funcname)
     end
     return fun(state, nil, fun_position, ...)
+  end,
+-- {{{4 string()
+  repr = function(state, fun, fun_position, for_echo, refs)
+    local user_funcname = funcs[fun] and funcs[fun].user_funcname or '<nil>'
+    return (for_echo == true
+            and user_funcname
+            or ('function(\'%s\')'):format(user_funcname))
   end,
 -- {{{4 Type conversions
   as_number = function(state, fun, fun_position)
@@ -963,6 +971,10 @@ bound_func = join_tables(func, {
 -- {{{3 Querying support
   call = function(state, fun, fun_position, ...)
     return fun.func(state, fun.self, fun_position, ...)
+  end,
+-- {{{3 string()
+  repr = function(state, fun, fun_position, for_echo, refs)
+    return func.repr(state, fun.func, fun_position, for_echo, refs)
   end,
 -- {{{3 Type conversions
   as_func = function(state, fun, fun_position)
@@ -1167,6 +1179,14 @@ functions.call = function(state, self, callee_position, fun, fun_position,
   return subscript.call(state, fun, fun_position, unpack(args))
 end
 
+local funcnames = {}
+
+for k, v in pairs(functions) do
+  if type(v) == 'function' then
+    funcs[v] = {user_funcname = k}
+  end
+end
+
 -- {{{1 Built-in commands implementations
 local commands = {
   append = function(state, range, bang, lines)
@@ -1228,12 +1248,19 @@ assign = {
       return nil
     end
     local t = vim_type(dct)
-    return t.assign_subscript_function(
-      state, not bang,
-      dct, dct_position,
-      key, key_position,
-      val
-    )
+    if t.assign_subscript_function(state, not bang,
+                                   dct, dct_position,
+                                   key, key_position,
+                                   val) then
+      if funcs[val] then
+        if dct == state.global.user_functions then
+          funcs[val].user_funcname = key
+        end
+      end
+      return true
+    else
+      return nil
+    end
   end,
 
   ass_slice = function(state, val,
