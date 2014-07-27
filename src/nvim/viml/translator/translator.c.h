@@ -153,10 +153,11 @@ typedef enum {
 
 /// Structure passed to all translate_* functions
 typedef struct {
-  TranslationSource tsrc;  ///< Source of the translation string.
-  const char *name;        ///< Name of the command being translated.
-  size_t lnr;              ///< Number of the line that is being translated.
-  size_t start_col;        ///< Offset of “first” column in the line.
+  TranslationSource tsrc;    ///< Source of the translation string.
+  const char *name;          ///< Name of the command being translated.
+  size_t lnr;                ///< Number of the line that is being translated.
+  size_t start_col;          ///< Offset of “first” column in the line.
+  const char *const *lines;  ///< Dumped code lines.
 } TranslationContext;
 
 FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
@@ -1278,12 +1279,13 @@ static FDEC(translate_expr_nodes, const char *const s,
 static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 {
   FUNCTION_START;
-  const char **data =
+  const char **argnames =
       (const char **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
   size_t size = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
-  bool varargs = args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS;
+  uint_least32_t flags = args->node->args[ARG_FUNC_FLAGS].arg.flags;
+  bool varargs = flags & FLAG_FUNC_VARARGS;
   const Expression *funcname = args->node->args[ARG_FUNC_NAME].arg.expr;
-  WS("function(state, self, callee_position, ...)\n");
+  WS("vim.func:new(state, function(state, self, callee_position, ...)\n");
   if (size) {
     WINDENT(args->indent + 1);
     WS("if select('#', ...) < ");
@@ -1318,7 +1320,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
     for (size_t i = 0; i < size; i++) {
       WINDENT(args->indent + 1);
       WS("state.a['");
-      W(data[i]);
+      W(argnames[i]);
       WS("'] = select(");
       F_NOOPT(dump_unumber, (uintmax_t) (i*2 + 1));
       WS(", ...)\n");
@@ -1363,7 +1365,44 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
     WS("return " VIM_ZERO "\n");
   }
   WINDENT(args->indent);
-  WS("end");
+  WS("end, ");
+  size_t end_col = args->node->next->position.col;
+  size_t end_lnr = args->node->next->position.lnr;
+  if (end_col == 1) {
+    end_lnr--;
+    end_col = STRLEN(o.lines[end_lnr - 1]);
+  } else {
+    end_col--;
+  }
+  if (args->node->children != NULL) {
+    F(dump_position, args->node->children->position.lnr,
+                     args->node->children->position.col,
+                     NULL);
+  } else {
+    F(dump_position, end_lnr, end_col, NULL);
+  }
+  assert(args->node->next && args->node->next->type == kCmdEndfunction);
+  WS(", ");
+  F(dump_string_length, funcname->string, funcname->size);
+  WS(", '");
+  for (size_t i = 0; i < size; i++) {
+    W(argnames[i]);
+    if (i < size || varargs) {
+      WS(", ");
+    }
+  }
+  if (varargs) {
+    WS("...");
+  }
+  WS("', {");
+  F(dump_bool, (bool) flags&FLAG_FUNC_DICT);
+  WS(", ");
+  F(dump_bool, (bool) flags&FLAG_FUNC_ABORT);
+  WS(", ");
+  F(dump_bool, (bool) flags&FLAG_FUNC_RANGE);
+  WS("}, ");
+  F(dump_position, end_lnr, end_col, NULL);
+  WS(")\n");
   FUNCTION_END;
 }
 
@@ -2429,7 +2468,11 @@ static FDEC(translate_parser_result, const ParserResult *const pres,
   WS("}, ");
   F(dump_string, pres->fname);
   WS(")\n");
-  F(translate_nodes, pres->node, indent);
+  OVERRIDE_CONTEXT(
+    lines, (const char *const *) pres->lines,
+
+    F(translate_nodes, pres->node, indent);
+  );
   FUNCTION_END;
 }
 
