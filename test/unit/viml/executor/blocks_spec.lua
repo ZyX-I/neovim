@@ -273,3 +273,48 @@ describe(':function definition', function()
     1, 2, 3, 2, {4, 5}, 0,
   })
 end)
+
+describe('Function calls', function()
+  ito('Fails to call function: too many arguments (empty argument list)', [[
+    function Abc()
+    endfunction
+    try
+      echo Abc(1)
+    catch
+      echo v:exception
+    endtry
+    delfunction Abc
+  ]], {
+    'Vim(echo):E118: Too many arguments for function: Abc',
+  })
+  ito('Fails to call function: non-empty argument list', [[
+    function Abc(a, b)
+    endfunction
+    try
+      echo Abc(1)
+    catch
+      echo v:exception
+    endtry
+    try
+      echo Abc(1, 2, 3)
+    catch
+      echo v:exception
+    endtry
+    delfunction Abc
+  ]], {
+    'Vim(echo):E119: Not enough arguments for function: Abc',
+    'Vim(echo):E118: Too many arguments for function: Abc',
+  })
+  ito('Fails to call function: not enough arguments, with varargs', [[
+    function Abc(a, b, ...)
+    endfunction
+    try
+      echo Abc(1)
+    catch
+      echo v:exception
+    endtry
+    delfunction Abc
+  ]], {
+    'Vim(echo):E119: Not enough arguments for function: Abc',
+  })
+end)
