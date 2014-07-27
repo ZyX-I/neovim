@@ -1042,13 +1042,21 @@ err = {
     error(err)
   end,
 
-  err = function(state, position, vim_error, message, ...)
-    local formatted_message
-    formatted_message = (message):format(...)
+  unpack_position = function(position)
     local lnr, col, cmd = position:match('(%d+):(%d+):(.*)')
     lnr = tonumber(lnr)
     col = tonumber(col)
-    -- TODO show context
+    return lnr, col, cmd
+  end,
+
+  raise = function(fname, lnr, message)
+    error('\0' .. fname .. '\0' .. lnr .. '\0' .. message, 0)
+  end,
+
+  err = function(state, position, vim_error, message, ...)
+    local formatted_message
+    formatted_message = (message):format(...)
+    local lnr, col, cmd = err.unpack_position(position)
     if state.is_trying then
       if vim_error then
         if cmd ~= '' then
@@ -1057,7 +1065,7 @@ err = {
           formatted_message = 'Vim:' .. formatted_message
         end
       end
-      error('\0' .. state.fname .. '\0' .. lnr .. '\0' .. formatted_message, 0)
+      err.raise(state.fname, lnr, formatted_message)
     else
       io.stderr:write(('line %u, column %u:\n'):format(lnr, col))
       io.stderr:write('> ' .. state.code[lnr] .. '\n')
@@ -1065,9 +1073,20 @@ err = {
       io.stderr:write('| ' .. (col > 1 and (' '):rep(col - 1) or '') .. '^\n')
       io.stderr:write(formatted_message .. '\n')
     end
+    return nil
   end,
 
-  throw = function(...)
+  throw = function(state, message, message_position)
+    local vim_error = false
+    if message:sub(1, 3) == 'Vim' then
+      message = 'E608: Cannot :throw exceptions with \'Vim\' prefix'
+      vim_error = true
+    end
+    err.err(state, message_position, vim_error, message)
+    -- :throw always throws. If the above call did not raise the exception the 
+    -- below lines will.
+    local lnr, col, cmd = err.unpack_position(message_position)
+    err.raise(state.fname, lnr, message)
   end,
 }
 
