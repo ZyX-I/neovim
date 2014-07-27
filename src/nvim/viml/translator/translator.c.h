@@ -1792,6 +1792,20 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
 #define CMD_FDEC(f) \
     FDEC(f, const CommandNode *const node, const size_t indent)
 
+static CMD_FDEC(translate_throw)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("vim.err.throw(state, ");
+  F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_EXPR_EXPR), false);
+  WS(", ");
+  F(dump_position, o.lnr,
+                   o.start_col + node->args[ARG_EXPR_EXPR].arg.expr->col,
+                   o.name);
+  WS(")\n");
+  FUNCTION_END;
+}
+
 static CMD_FDEC(translate_comment)
 {
   FUNCTION_START;
@@ -2352,6 +2366,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdLet, translate_let)
       SET_HANDLER(kCmdUnlet, translate_unlet)
       SET_HANDLER(kCmdDelfunction, translate_delfunction)
+      SET_HANDLER(kCmdThrow, translate_throw)
 #undef SET_HANDLER
       default: {
         CMD_F(translate_node);
