@@ -103,9 +103,13 @@ state = {
 
   enter_catch = function(old_state, err)
     local state = copy_table(old_state)
-    state.exception = err
-    -- FIXME
-    state.throwpoint = nil
+    local fname, lnr, exception = err:match('^%z(.-)%z(.-)%z(.*)$')
+    state.exception = exception
+    if fname:sub(1, 1) == '<' then
+      state.throwpoint = ''
+    else
+      state.throwpoint = fname .. ', line ' .. lnr
+    end
     return state
   end,
 
@@ -1053,7 +1057,7 @@ err = {
           formatted_message = 'Vim:' .. formatted_message
         end
       end
-      error(formatted_message, 0)
+      error('\0' .. state.fname .. '\0' .. lnr .. '\0' .. formatted_message, 0)
     else
       io.stderr:write(('line %u, column %u:\n'):format(lnr, col))
       io.stderr:write('> ' .. state.code[lnr] .. '\n')
