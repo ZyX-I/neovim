@@ -335,3 +335,41 @@ describe('Function calls', function()
     'Vim(echo):E119: Not enough arguments for function: Abc',
   })
 end)
+
+describe('Dictionary functions', function()
+  local ito, itoe
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+  end
+  -- XXX Incompatible behavior
+  ito('Sets self only when calling regular function with a dictionary', [[
+    function Abc()
+      echo self.a
+    endfunction
+    let d = {'a': 10, 'f': function('Abc')}
+    echo d.f()
+    try
+      echo Abc()
+    catch
+      echo v:exception
+    endtry
+    delfunction Abc
+    unlet d
+  ]], {10, 0, 'Vim(echo):E121: Undefined variable: self'})
+  -- XXX Incompatible behavior
+  ito('Allows to define regular function inside a dictionary', [[
+    let d = {'a': 11}
+    function d.f()
+      echo self.a
+    endfunction
+    echo d.f()
+    try
+      echo call(d.f, [])
+    catch
+      echo v:exception
+    endtry
+    unlet d
+  ]], {11, 0, 'Vim(echo):E121: Undefined variable: self'})
+end)
