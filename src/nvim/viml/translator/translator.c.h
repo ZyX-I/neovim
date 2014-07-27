@@ -1116,6 +1116,8 @@ static FDEC(translate_expr_node, const char *const s,
     }
     case kExprConcatOrSubscript: {
       WS("vim.concat_or_subscript(state, ");
+      F(dump_bool, is_funccall);
+      WS(", ");
       F(translate_expr_node, s, node->children, false);
       WS(", ");
       F(dump_position, o.lnr, o.start_col + node->children->start, o.name);
@@ -1157,7 +1159,8 @@ static FDEC(translate_expr_node, const char *const s,
         }
         case kExprSubscript: {
           if (node->children->next->next == NULL) {
-            WS("vim.subscript.subscript(state, true");
+            WS("vim.subscript.subscript(state, ");
+            F(dump_bool, is_funccall);
           } else {
             WS("vim.subscript.slice(state");
           }
