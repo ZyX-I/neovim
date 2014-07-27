@@ -1278,44 +1278,74 @@ static FDEC(translate_expr_nodes, const char *const s,
 static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 {
   FUNCTION_START;
-  size_t i;
   const char **data =
       (const char **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
   size_t size = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
   bool varargs = args->node->args[ARG_FUNC_FLAGS].arg.flags & FLAG_FUNC_VARARGS;
-  WS("function(state, self");
-  for (i = 0; i < size; i++) {
-    WS(", ");
-    W(data[i]);
-    WS(", _");
-  }
-  if (varargs) {
-    WS(", ...");
-  }
-  WS(")\n");
-  if (args->node->children != NULL) {
+  const Expression *funcname = args->node->args[ARG_FUNC_NAME].arg.expr;
+  WS("function(state, self, callee_position, ...)\n");
+  if (size) {
     WINDENT(args->indent + 1);
+    WS("if select('#', ...) < ");
+    F_NOOPT(dump_unumber, (uintmax_t) (size * 2));
+    WS(" then\n");
+    WINDENT(args->indent + 2);
+    WS("return vim.err.err(state, callee_position, true, "
+                          "'E119: Not enough arguments for function: %s', ");
+    F(dump_string_length, funcname->string, funcname->size);
+    WS(")\n");
+    WINDENT(args->indent + 1);
+    WS("end\n");
+  }
+  if (!varargs) {
+    WINDENT(args->indent + 1);
+    WS("if select('#', ...) > ");
+    F_NOOPT(dump_unumber, (uintmax_t) (size * 2));
+    WS(" then\n");
+    WINDENT(args->indent + 2);
+    WS("return vim.err.err(state, select(");
+    F_NOOPT(dump_unumber, (uintmax_t) (size * 2 + 2));
+    WS(", ...), true, 'E118: Too many arguments for function: %s', ");
+    F(dump_string_length, funcname->string, funcname->size);
+    WS(")\n");
+    WINDENT(args->indent + 1);
+    WS("end\n");
+  }
+  if (args->node->children != NULL) {
     // TODO; dump information about function call
+    WINDENT(args->indent + 1);
     WS("state = vim.state.enter_function(state, self, {})\n");
-    for (i = 0; i < size; i++) {
+    for (size_t i = 0; i < size; i++) {
       WINDENT(args->indent + 1);
       WS("state.a['");
       W(data[i]);
-      WS("'] = ");
-      W(data[i]);
-      WS("\n");
+      WS("'] = select(");
+      F_NOOPT(dump_unumber, (uintmax_t) (i*2 + 1));
+      WS(", ...)\n");
     }
     if (varargs) {
       WINDENT(args->indent + 1);
       WS("state.a['000'] = vim.list:new(state)\n");
       WINDENT(args->indent + 1);
-      WS("state.a['0'] = select('#', ...)/2\n");
+      WS("state.a['0'] = select('#', ...)/2");
+      if (size) {
+        WS(" - ");
+        F_NOOPT(dump_unumber, (uintmax_t) size);
+      }
+      WS("\n");
       WINDENT(args->indent + 1);
-      WS("for i = 1,select('#', ...)/2 do\n");
+      WS("for i = 1,state.a['0'] do\n");
       WINDENT(args->indent + 2);
-      WS("state.a[tostring(i)] = select(i*2 - 1, ...)\n");
+      WS("state.a['000'][i] =  select(i*2");
+      if (size) {
+        WS(" + ");
+        F_NOOPT(dump_unumber, (uintmax_t) (size + 2));
+      } else {
+        WS(" - 1");
+      }
+      WS(", ...)\n");
       WINDENT(args->indent + 2);
-      WS("state.a['000'][i] =  select(i*2 - 1, ...)\n");
+      WS("state.a[tostring(i)] = state.a['000'][i]\n");
       WINDENT(args->indent + 1);
       WS("end\n");
     }
