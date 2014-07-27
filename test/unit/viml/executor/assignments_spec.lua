@@ -56,6 +56,14 @@ describe(':let assignments', function()
     'Vim(echo):E121: Undefined variable: a',
     'Vim(echo):E121: Undefined variable: b',
   })
+  -- XXX Incompatible behavior
+  ito('Allows changing type of the variable', [[
+    let a = 1
+    echo a
+    let a = []
+    echo a
+    unlet a
+  ]], {1, {_t='list'}})
 end)
 
 describe(':let modifying assignments', function()
