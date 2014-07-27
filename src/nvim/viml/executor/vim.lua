@@ -1518,10 +1518,16 @@ local subscript = {
   end),
 }
 
-local concat_or_subscript = function(state, dct, dct_position,
-                                            key, key_position)
+local concat_or_subscript = function(state, bind, dct, dct_position,
+                                                  key, key_position)
   if is_dict(dct) then
-    return dict.subscript(state, dct, dct_position, key, key_position)
+    local t = dct[type_idx]
+    local ret = t.subscript(state, dct, dct_position, key, key_position)
+    if bind and t.can_be_self and is_func(ret) then
+      return bound_func:new(state, ret, dct)
+    else
+      return ret
+    end
   else
     return op.concat(state, dct, key)
   end
