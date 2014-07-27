@@ -915,6 +915,11 @@ func = join_tables(scalar, {
     return func.subscript(...)
   end,
   call = function(state, fun, fun_position, ...)
+    if funcs[fun] and funcs[fun].dict then
+      return err.err(state, fun_position, true,
+                     'E725: Calling dict function without a Dictionary: %s',
+                     funcs[fun].funcname)
+    end
     return fun(state, nil, fun_position, ...)
   end,
 -- {{{4 Type conversions
