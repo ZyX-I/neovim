@@ -51,6 +51,7 @@ int main(int argc, char **argv, char **env)
       return 8;
 
     puts(r);
+    free(r);
 
     return 0;
   } else {
