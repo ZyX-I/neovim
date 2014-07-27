@@ -892,7 +892,7 @@ func = join_tables(scalar, {
     return func.subscript(...)
   end,
   call = function(state, fun, fun_position, ...)
-    return fun(state, nil, ...)
+    return fun(state, nil, fun_position, ...)
   end,
 -- {{{4 Type conversions
   as_number = function(state, fun, fun_position)
@@ -933,7 +933,7 @@ bound_func = join_tables(func, {
   end),
 -- {{{3 Querying support
   call = function(state, fun, fun_position, ...)
-    return fun.func(state, fun.self, ...)
+    return fun.func(state, fun.self, fun_position, ...)
   end,
 -- {{{3 Type conversions
   as_func = function(state, fun, fun_position)
@@ -1092,11 +1092,12 @@ err = {
 
 -- {{{1 Built-in function implementations
 local functions = f_scope:new(nil)
-functions.type = function(state, self, val, val_position)
+functions.type = function(state, self, callee_position, val, val_position)
   return vim_type(val)['type_number']
 end
 
-functions['function'] = function(state, self, val, val_position)
+functions['function'] = function(state, self, callee_position,
+                                              val, val_position)
   local s = val and get_string(state, val, val_position)
   if not s then
     return nil
@@ -1115,7 +1116,7 @@ functions['function'] = function(state, self, val, val_position)
                         'E700: Unknown function: %s', s)
 end
 
-functions.string = function(state, self, val, val_position)
+functions.string = function(state, self, callee_position, val, val_position)
   return repr(state, val, val_position, false, {})
 end
 
