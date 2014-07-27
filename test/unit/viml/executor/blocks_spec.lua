@@ -197,6 +197,27 @@ describe(':try block', function()
     endtry
     echo v:exception
   ]], {'', '', 'Vim(echo):E121: Undefined variable: a', '', ''})
+  ito('Sets v:throwpoint to the empty value', [[
+    echo v:throwpoint
+    try
+      echo a
+    catch
+      echo v:throwpoint
+    endtry
+    echo v:throwpoint
+  ]], {'', '', ''})
+  itoe('Does not throw Vim-prefixed messages', {
+    'throw "Vim"',
+    'throw "Vim(echo):E121: Undefined variable: a"',
+    'throw "Vimoentshu"',
+  }, {
+    'Vim(throw):E608: Cannot :throw exceptions with \'Vim\' prefix',
+    'Vim(throw):E608: Cannot :throw exceptions with \'Vim\' prefix',
+    'Vim(throw):E608: Cannot :throw exceptions with \'Vim\' prefix',
+  })
+  itoe('Catches exception raised by :throw', {
+    'throw "abc"'
+  }, {'abc'})
 end)
 
 describe(':function definition', function()
