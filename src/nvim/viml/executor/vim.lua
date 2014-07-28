@@ -56,6 +56,46 @@ local join_tables = function(tbl1, tbl2)
   return ret
 end
 
+local copy_table_recursive
+copy_table_recursive = function(tbl)
+  local ret = {}
+  for k, v in pairs(tbl) do
+    if type(v) == 'table' then
+      ret[k] = copy_table_recursive(v)
+    else
+      ret[k] = v
+    end
+  end
+  return ret
+end
+
+local compare_tables_recursive
+compare_tables_recursive = function(tbl1, tbl2)
+  for k, _ in pairs(tbl1) do
+    if tbl2[k] == nil then
+      return true, 'missing2', k
+    end
+  end
+  for k, v in pairs(tbl2) do
+    if tbl1[k] == nil then
+      return true, 'missing1', k
+    end
+    if type(v) == 'table' then
+      if type(tbl1[k]) ~= 'table' then
+        return true, 'differs', k
+      else
+        local differs, what, key = compare_tables_recursive(tbl1[k], v)
+        if differs then
+          return true, what, k .. '/' .. key
+        end
+      end
+    elseif tbl1[k] ~= v then
+      return true, 'differs', k
+    end
+  end
+  return false, nil, nil
+end
+
 -- {{{1 State manipulations
 local new_script_scope = function(state)
   return scope:new(state, 's')
@@ -1599,6 +1639,8 @@ local test_ret
 local test_echo = function(state, ...)
   test_ret[#test_ret + 1] = ...
 end
+local test_state
+local test_state_copy
 local test = {
   start = function()
     if not recorded_vim_global then
@@ -1607,8 +1649,29 @@ local test = {
     end
     test_ret = list:new(nil)
     commands.echo = test_echo
+    local old_enter_code = state.enter_code
+    state.enter_code = function(...)
+      local state = old_enter_code(...)
+      if not test_state then
+        test_state = state
+        test_state_copy = copy_table_recursive(state)
+      end
+      return state
+    end
   end,
-  finish = function()
+  finish = function(state)
+    if state ~= test_state then
+      test_echo(nil, 'State table is different')
+    else
+      local differs, what, key = compare_tables_recursive(test_state_copy,state)
+      if differs then
+        test_echo(nil, ({
+          missing1='New key found: %s',
+          missing2='Key not present in state: %s',
+          differs='Value differs: %s',
+        })[what]:format(key))
+      end
+    end
     for k, v in pairs(globals_at_start) do
       if _G[k] ~= v then
         test_echo(nil, 'Found modified global: ' .. k)
@@ -1621,6 +1684,7 @@ local test = {
     end
     local old_ret = test_ret
     test_ret = nil
+    test_state = nil
     return old_ret
   end,
 }
