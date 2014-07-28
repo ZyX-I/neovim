@@ -1,3 +1,15 @@
+-- {{{1 Record existing globals for testing
+local copy_table = function(tbl)
+  local new_tbl = {}
+  for k, v in pairs(tbl) do
+    new_tbl[k] = v
+  end
+  return new_tbl
+end
+
+local globals_at_start = copy_table(_G)
+local recorded_vim_global = nil
+
 -- {{{1 Global declarations
 local err
 local op
@@ -31,14 +43,6 @@ local non_nil = function(wrapped)
     end
     return wrapped(state, ...)
   end
-end
-
-local copy_table = function(tbl)
-  local new_tbl = {}
-  for k, v in pairs(tbl) do
-    new_tbl[k] = v
-  end
-  return new_tbl
 end
 
 local join_tables = function(tbl1, tbl2)
@@ -1595,11 +1599,13 @@ local test_ret
 local test_echo = function(state, ...)
   test_ret[#test_ret + 1] = ...
 end
-local globals_at_start
 local test = {
   start = function()
+    if not recorded_vim_global then
+      globals_at_start.vim = vim
+      recorded_vim_global = true
+    end
     test_ret = list:new(nil)
-    globals_at_start = copy_table(_G)
     commands.echo = test_echo
   end,
   finish = function()
