@@ -412,6 +412,7 @@ return describe('parse_one_cmd', function()
     itn('while 1', 'wh1')
     itn('call tr(1, 2, 3)', 'cal tr(1, 2, 3)')
     itn('call tr(1, 2, 3)', 'cal\ttr\t(1, 2, 3)')
+    itn('call (function(\'tr\'))(1, 2, 3)')
     itn('1,2call tr(1, 2, 3)', '1,2cal\ttr\t\t\t(1, 2, 3)')
     for trunc, full in pairs({
       cex = 'cexpr',
