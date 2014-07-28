@@ -1295,6 +1295,25 @@ static int parse_expr_cmd(const char **pp,
   return do_parse_expr_cmd(pp, node, error, o, position, false);
 }
 
+static int parse_call(const char **pp,
+                      CommandNode *node,
+                      CommandParserError *error,
+                      CommandParserOptions o,
+                      CommandPosition position,
+                      VimlLineGetter fgetline,
+                      void *cookie)
+{
+  const char *s = *pp;
+  int ret = do_parse_expr_cmd(pp, node, error, o, position, false);
+  if (ret == OK
+      && node->args[ARG_EXPR_EXPR].arg.expr->node->type != kExprCall) {
+    error->message = N_("E129: :call accepts only function calls");
+    error->position = s;
+    return NOTDONE;
+  }
+  return ret;
+}
+
 static int parse_expr_seq_cmd(const char **pp,
                               CommandNode *node,
                               CommandParserError *error,
