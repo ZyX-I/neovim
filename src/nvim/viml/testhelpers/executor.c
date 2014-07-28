@@ -47,7 +47,7 @@ char *execute_viml_test(const char *const s)
   msgpack_rpc_free_object(lua_test_ret);
 
   size_t len = stranslate_len(kTransUser, pres);
-#define TEST_RET "return vim.test.finish()"
+#define TEST_RET "return vim.test.finish(state)"
   String lua_str = {
     .size = len,
     .data = xcalloc(len + sizeof(TEST_RET), 1)
