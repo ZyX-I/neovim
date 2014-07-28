@@ -108,6 +108,7 @@ state = {
     local state = {
       -- values that need to be altered when entering/exiting some scopes
       is_trying = false,
+      abort = false,
       is_silent = false,
       a = nil,
       l = nil,
@@ -150,7 +151,8 @@ state = {
 
   enter_catch = function(old_state, err)
     local state = copy_table(old_state)
-    local fname, lnr, exception = err:match('^%z(.-)%z(.-)%z(.*)$')
+    local etype, fname, lnr, exception = err:match('^%z(.-)%z(.-)%z(.-)%z(.*)$')
+    assert(etype == 'exception')
     state.exception = exception
     if fname:sub(1, 1) == '<' then
       state.throwpoint = ''
@@ -160,13 +162,14 @@ state = {
     return state
   end,
 
-  enter_function = function(old_state, self, fcall)
+  enter_function = function(old_state, self, fcall, abort)
     local state = copy_table(old_state)
     state.a = a_scope:new(state)
     state.l = def_scope:new(state, 'l')
     state.l.self = self
     state.current_scope = state.l
     state.call_stack = copy_table(state.call_stack)
+    state.abort = abort
     table.insert(state.call_stack, fcall)
     return state
   end,
@@ -1133,11 +1136,13 @@ err = {
   end,
 
   raise = function(fname, lnr, message)
-    error('\0' .. fname .. '\0' .. lnr .. '\0' .. message, 0)
+    error('\0exception\0' .. fname .. '\0' .. lnr .. '\0' .. message, 0)
   end,
 
   err = function(state, position, vim_error, message, ...)
     local formatted_message
+    -- TODO: Translate message if vim_error is true, but do not translate 
+    --       message if state.abort is 'postproc'
     formatted_message = (message):format(...)
     local lnr, col, cmd = err.unpack_position(position)
     if state.is_trying then
@@ -1149,6 +1154,12 @@ err = {
         end
       end
       err.raise(state.fname, lnr, formatted_message)
+    -- state.abort may be either true, false or 'postproc'
+    elseif state.abort == true then
+      error('\0error' ..
+            '\0' .. position ..
+            '\0' .. tostring(vim_error) ..
+            '\0' .. formatted_message, 0)
     else
       io.stderr:write(('line %u, column %u:\n'):format(lnr, col))
       io.stderr:write('> ' .. state.code[lnr] .. '\n')
@@ -1170,6 +1181,20 @@ err = {
     -- below lines will.
     local lnr, col, cmd = err.unpack_position(message_position)
     err.raise(state.fname, lnr, message)
+  end,
+
+  process_abort = function(state, abort_err)
+    local etype, a2, a3, message = abort_err:match('^%z(.-)%z(.-)%z(.-)%z(.*)$')
+    -- Depending on etype (a2, a3) may be either (fname, lnr) or (position, 
+    -- vim_error)
+    if etype == 'error' then
+      state.abort = 'postproc'
+      err.err(state, a2, a3 == 'true', message)
+      -- XXX In Vim aborted function returns -1
+      return -1
+    else
+      return error(abort_err, 0)
+    end
   end,
 }
 

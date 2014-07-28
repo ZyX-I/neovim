@@ -1317,11 +1317,19 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
     WS("end\n");
   }
   if (args->node->children != NULL) {
+    size_t indent = args->indent + 1;
     // TODO; dump information about function call
-    WINDENT(args->indent + 1);
-    WS("state = vim.state.enter_function(state, self, {})\n");
+    WINDENT(indent);
+    WS("state = vim.state.enter_function(state, self, {}, ");
+    F(dump_bool, (bool) (flags & FLAG_FUNC_ABORT));
+    WS(")\n");
+    if (flags & FLAG_FUNC_ABORT) {
+      WINDENT(indent);
+      WS("local ok, ret = pcall(function()\n");
+      indent++;
+    }
     for (size_t i = 0; i < size; i++) {
-      WINDENT(args->indent + 1);
+      WINDENT(indent);
       WS("state.a['");
       W(argnames[i]);
       WS("'] = select(");
@@ -1329,18 +1337,18 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
       WS(", ...)\n");
     }
     if (varargs) {
-      WINDENT(args->indent + 1);
+      WINDENT(indent);
       WS("state.a['000'] = vim.list:new(state)\n");
-      WINDENT(args->indent + 1);
+      WINDENT(indent);
       WS("state.a['0'] = select('#', ...)/2");
       if (size) {
         WS(" - ");
         F_NOOPT(dump_unumber, (uintmax_t) size);
       }
       WS("\n");
-      WINDENT(args->indent + 1);
+      WINDENT(indent);
       WS("for i = 1,state.a['0'] do\n");
-      WINDENT(args->indent + 2);
+      WINDENT(indent + 1);
       WS("state.a['000'][i] =  select(i*2");
       if (size) {
         WS(" + ");
@@ -1349,9 +1357,9 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
         WS(" - 1");
       }
       WS(", ...)\n");
-      WINDENT(args->indent + 2);
+      WINDENT(indent + 1);
       WS("state.a[tostring(i)] = state.a['000'][i]\n");
-      WINDENT(args->indent + 1);
+      WINDENT(indent);
       WS("end\n");
     }
     // TODO Assign a:firstline and a:lastline
@@ -1359,8 +1367,21 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
     // range modifier.
     OVERRIDE_CONTEXT(
       tsrc, kTransFunc,
-      F(translate_nodes, args->node->children, args->indent + 1);
+      F(translate_nodes, args->node->children, indent);
     );
+    if (flags & FLAG_FUNC_ABORT) {
+      indent--;
+      WINDENT(indent);
+      WS("end)\n");
+      WINDENT(indent);
+      WS("if not ok then\n");
+      WINDENT(indent + 1);
+      WS("return vim.err.process_abort(state, ret)\n");
+      WINDENT(indent);
+      WS("end\n");
+      WINDENT(indent);
+      WS("return ret\n");
+    }
   } else {
     // Empty function: do not bother creating scope dictionaries, just return 
     // zero
