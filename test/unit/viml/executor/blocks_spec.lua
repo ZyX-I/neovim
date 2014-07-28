@@ -346,6 +346,58 @@ describe('Function calls', function()
     'echo 4',
     'delfunction Abc',
   }, {0, 1, 'Vim(echo):E121: Undefined variable: b', 4})
+  ito('Returns not specified zero value successfully', [[
+    function Abc()
+    endfunction
+    echo -1
+    echo Abc()
+    echo 1
+    delfunction Abc
+  ]], {-1, 0, 1})
+  ito('Returns not specified zero value successfully (with body)', [[
+    function Abc()
+      echo -1
+    endfunction
+    echo -2
+    echo Abc()
+    echo 1
+    delfunction Abc
+  ]], {-2, -1, 0, 1})
+  ito('Returns specified value successfully', [[
+    function Abc()
+      return 2
+    endfunction
+    echo 1
+    echo Abc()
+    echo 3
+    delfunction Abc
+  ]], {1, 2, 3})
+  ito('Returns not specified zero value successfully (with abort)', [[
+    function Abc() abort
+    endfunction
+    echo -1
+    echo Abc()
+    echo 1
+    delfunction Abc
+  ]], {-1, 0, 1})
+  ito('Returns not specified zero value successfully (with body and abort)', [[
+    function Abc() abort
+      echo -1
+    endfunction
+    echo -2
+    echo Abc()
+    echo 1
+    delfunction Abc
+  ]], {-2, -1, 0, 1})
+  ito('Returns specified value successfully (with abort)', [[
+    function Abc() abort
+      return 2
+    endfunction
+    echo 1
+    echo Abc()
+    echo 3
+    delfunction Abc
+  ]], {1, 2, 3})
 end)
 
 describe('Dictionary functions', function()
