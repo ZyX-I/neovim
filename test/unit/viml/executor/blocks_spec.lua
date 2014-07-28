@@ -317,6 +317,35 @@ describe('Function calls', function()
   ]], {
     'Vim(echo):E119: Not enough arguments for function: Abc',
   })
+  ito('Proceeds on error', [[
+    function Abc()
+      echo 1
+      echo b
+      echo 2
+    endfunction
+    echo 0
+    echo Abc()
+    echo 4
+    delfunction Abc
+  ]], {0, 1, 2, 0, 4})
+  ito('Does not proceed on error when using :function-abort', [[
+    function Abc() abort
+      echo 1
+      echo b
+      echo 2
+    endfunction
+    echo 0
+    echo Abc()
+    echo 4
+    delfunction Abc
+  ]], {0, 1, -1, 4})
+  itoe('Catches errors from aborted functions', {
+    'function Abc()|echo 1|echo b|echo 2|endfunction',
+    'echo 0',
+    'echo Abc()',
+    'echo 4',
+    'delfunction Abc',
+  }, {0, 1, 'Vim(echo):E121: Undefined variable: b', 4})
 end)
 
 describe('Dictionary functions', function()
