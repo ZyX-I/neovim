@@ -2048,15 +2048,6 @@ static CMD_FDEC(translate_if_block)
 static CMD_FDEC(translate_try_block)
 {
   FUNCTION_START;
-#define CHECK_NEW_RET(indent) \
-  do { \
-    WINDENT(indent); \
-    WS("if (new_ret ~= nil) then\n"); \
-    WINDENT(indent + 1); \
-    WS("ret = new_ret\n"); \
-    WINDENT(indent); \
-    WS("end\n"); \
-  } while (0)
   CommandNode *first_catch = NULL;
   CommandNode *finally = NULL;
   CommandNode *next = node->next;
@@ -2086,9 +2077,9 @@ static CMD_FDEC(translate_try_block)
   WS("do\n");
 
   WINDENT(indent + 1);
-  WS("local ok, err, ret\n");
+  WS("local ok, ret\n");
   WINDENT(indent + 1);
-  WS("ok, err, ret = pcall(function(state)\n");
+  WS("ok, ret = pcall(function(state)\n");
   F(translate_nodes, node->children, indent + 2);
   WINDENT(indent + 1);
   WS("end, vim.state.enter_try(state))\n");
@@ -2110,7 +2101,7 @@ static CMD_FDEC(translate_try_block)
     bool did_first_if = false;
 
     WINDENT(indent + 1);
-    WS("if (not ok) then\n");
+    WS("if not ok then\n");
 
     for (next = first_catch; next->type == kCmdCatch; next = next->next) {
       size_t current_indent;
@@ -2126,7 +2117,7 @@ static CMD_FDEC(translate_try_block)
         }
       } else {
         WINDENT(indent + 2);
-        WS("if (vim.err.matches(state, err, ");
+        WS("if (vim.err.matches(state, ret, ");
         F(translate_regex, next->args[ARG_REG_REG].arg.reg);
         WS(") then\n");
         did_first_if = true;
@@ -2156,24 +2147,22 @@ static CMD_FDEC(translate_try_block)
 
   if (first_catch != NULL) {
     WINDENT(indent + 1);
-    WS("if (catch) then\n");
+    WS("if catch then\n");
     WINDENT(indent + 2);
-    WS("local new_ret = catch(vim.state.enter_catch(state, err))\n");
-    CHECK_NEW_RET(indent + 2);
+    WS("ret = catch(vim.state.enter_catch(state, ret))\n");
     WINDENT(indent + 1);
     WS("end\n");
   }
 
   if (finally != NULL) {
     WINDENT(indent + 1);
-    WS("local new_ret = fin(state)\n");
-    CHECK_NEW_RET(indent + 1);
+    WS("ret = fin(state)\n");
   }
 
   WINDENT(indent + 1);
-  WS("if (not ok) then\n");
+  WS("if not ok then\n");
   WINDENT(indent + 2);
-  WS("vim.err.propagate(state, err)\n");
+  WS("error(ret, 0)\n");
   WINDENT(indent + 1);
   WS("end\n");
 
@@ -2185,7 +2174,6 @@ static CMD_FDEC(translate_try_block)
   WS("end\n");
   WINDENT(indent);
   WS("end\n");
-#undef CHECK_NEW_RET
 
   FUNCTION_END;
 }
