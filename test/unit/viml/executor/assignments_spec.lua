@@ -36,6 +36,21 @@ describe(':let assignments', function()
     echo c
     unlet a b c
   ]], {1, 2, {3, 4}, {_t='list'}, {3, 4, 5}, {3}})
+  itoe('Fails to do list assignments for lists of different length', {
+    'let [a, b] = [1, 2, 3]',
+    'let [a, b] = []',
+    'let [a, b] = [1]',
+    'let [a; b] = []',
+    'echo a',
+    'echo b',
+  }, {
+    'Vim(let):E688: More targets than List items',
+    'Vim(let):E687: Less targets than List items',
+    'Vim(let):E687: Less targets than List items',
+    'Vim(let):E687: Less targets than List items',
+    'Vim(echo):E121: Undefined variable: a',
+    'Vim(echo):E121: Undefined variable: b',
+  })
 end)
 
 describe(':let modifying assignments', function()
