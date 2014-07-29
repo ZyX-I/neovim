@@ -95,6 +95,37 @@ describe(':let modifying assignments', function()
     echo g:a
     unlet g:a
   ]], {1, 0})
+  ito('List :let modifying assignments', [[
+    let a = 1
+    let b = 2
+    let l = []
+    echo [a, b, string(l)]
+    let [a, b] += [3, 5]
+    echo [a, b, string(l)]
+    let [a; l] += [3, 7]
+    echo [a, b, string(l)]
+    unlet a b l
+  ]], {
+    {1, 2, '[]'},
+    {4, 7, '[]'},
+    {7, 7, '[7]'},
+  })
+  ito('List :let modifying assignment does not create new variables', [[
+    try
+      let [a, b] += [1, 2]
+    catch
+      echo v:exception
+    endtry
+    let [a, b] += [1, 2]
+    try
+      echo [a, b]
+    catch
+      echo v:exception
+    endtry
+  ]], {
+    'Vim(let):E121: Undefined variable: a',
+    'Vim(echo):E121: Undefined variable: a',
+  })
 end)
 
 describe(':unlet support', function()
