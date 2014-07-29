@@ -139,10 +139,15 @@ typedef struct {
   char *var;
 } LetListItemAssArgs;
 
+typedef void (*AnyFunction)(void);
+
 typedef struct {
   LetAssignmentType ass_type;
-  const Expression *lval_expr;
-  const Expression *rval_expr;
+  const char *lval_s;
+  const ExpressionNode *lval_node;
+  const size_t lval_start_col;
+  const AnyFunction rval_dump;
+  const void *rval_dump_cookie;
 } LetModAssArgs;
 
 typedef enum {
@@ -1682,44 +1687,43 @@ static FDEC(translate_rval_expr, const Expression *const expr)
   FUNCTION_END;
 }
 
-static FDEC(translate_modifying_assignment, const LetModAssArgs *args)
+static FDEC(dump_ass_op_name, LetAssignmentType ass_type)
 {
   FUNCTION_START;
-  const char *op;
-  switch (args->ass_type) {
+  switch (ass_type) {
     case VAL_LET_ADD: {
-      op = "add";
+      WS("add");
       break;
     }
     case VAL_LET_SUBTRACT: {
-      op = "subtract";
+      WS("subtract");
       break;
     }
     case VAL_LET_APPEND: {
-      op = "concat";
+      WS("concat");
       break;
     }
     default: {
       assert(false);
     }
   }
+  FUNCTION_END;
+}
+
+static FDEC(translate_modifying_assignment, const LetModAssArgs *args)
+{
+  FUNCTION_START;
   WS("vim.op.mod_");
-  W(op);
+  F(dump_ass_op_name, args->ass_type);
   WS("(state, ");
-  OVERRIDE_CONTEXT(
-    start_col, args->lval_expr->col,
-    F(translate_expr_node, TRANS_EXPR_ARGS(args->lval_expr), false);
-    WS(", ");
-    F(dump_position, o.lnr, o.start_col, o.name);
-  );
+  F(translate_expr_node, args->lval_s, args->lval_node, false);
   WS(", ");
-  OVERRIDE_CONTEXT(
-    start_col, args->rval_expr->col,
-    F(translate_expr_node, TRANS_EXPR_ARGS(args->rval_expr), false);
-    WS(", ");
-    F(dump_position, o.lnr, o.start_col, o.name);
-  );
-  WS(")");
+  F(dump_position, o.lnr, o.start_col, o.name);
+  WS(", ");
+  FTYPE(AssignmentValueDump) FNAME(dump) =
+      (FTYPE(AssignmentValueDump)) args->rval_dump;
+  F(dump, args->rval_dump_cookie);
+  WS(", nil)");
   FUNCTION_END;
 }
 
@@ -1744,22 +1748,54 @@ static FDEC(dump_raw_string, const char *const str)
 ///                          NULL.
 /// @param[in]  dump         Function used to dump value that will be assigned.
 /// @param[in]  dump_cookie  First argument to the above function.
+/// @param[in]  ass_type     Assignment type.
 static FDEC(translate_assignment, const Expression *const lval_expr,
                                   const size_t indent,
                                   const char *const err_line,
                                   FTYPE(AssignmentValueDump) FNAME(dump),
-                                  const void *const dump_cookie)
+                                  const void *const dump_cookie,
+                                  const LetAssignmentType ass_type)
 {
   FUNCTION_START;
-#define ADD_ASSIGN(s, node, new_start_col, err_line, indent, dump, dump_cookie)\
+#define ADD_ASSIGN(node, indent, dump, dump_cookie)\
   do { \
+    const char *s = lval_expr->string; \
+    const size_t new_start_col = lval_expr->col; \
     if (err_line != NULL) {\
       WS("if "); \
     } \
-    OVERRIDE_CONTEXT( \
-      start_col, new_start_col, \
-      F(translate_lval, s, node, false, false, dump, dump_cookie); \
-    ); \
+    switch (ass_type) { \
+      case VAL_LET_ASSIGN: { \
+        OVERRIDE_CONTEXT( \
+          start_col, new_start_col, \
+          F(translate_lval, s, node, false, false, dump, dump_cookie); \
+        ); \
+        break; \
+      } \
+      case VAL_LET_ADD: \
+      case VAL_LET_SUBTRACT: \
+      case VAL_LET_APPEND: { \
+        const LetModAssArgs new_args = { \
+          .ass_type = ass_type, \
+          .lval_s = s, \
+          .lval_node = node, \
+          .lval_start_col = new_start_col, \
+          .rval_dump = (AnyFunction) (dump), \
+          .rval_dump_cookie = dump_cookie \
+        }; \
+        OVERRIDE_CONTEXT( \
+          start_col, new_args.lval_start_col, \
+          F(translate_lval, new_args.lval_s, new_args.lval_node, false, false, \
+            ((FTYPE(AssignmentValueDump)) \
+                                      &FNAME(translate_modifying_assignment)), \
+            (void *) &new_args); \
+        ); \
+        break; \
+      } \
+      default: { \
+        assert(false); \
+      } \
+    } \
     if (err_line != NULL) { \
       WS(" == nil then\n"); \
       WINDENT(indent + 1); \
@@ -1813,8 +1849,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
         "rhs"
       };
       WINDENT(indent + 3);
-      ADD_ASSIGN(lval_expr->string, current_node, lval_expr->col, err_line,
-                 indent + 3,
+      ADD_ASSIGN(current_node, indent + 3,
                  (FTYPE(AssignmentValueDump)) (&FNAME(translate_let_list_item)),
                  &args);
       current_node = current_node->next;
@@ -1825,8 +1860,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
         "rhs"
       };
       WINDENT(indent + 3);
-      ADD_ASSIGN(lval_expr->string, current_node->children, lval_expr->col,
-                 err_line, indent + 3,
+      ADD_ASSIGN(current_node->children, indent + 3,
                  (FTYPE(AssignmentValueDump)) (&FNAME(translate_let_list_rest)),
                  &args);
     }
@@ -1875,8 +1909,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     WINDENT(indent);
     WS("end\n");
   } else {
-    ADD_ASSIGN(lval_expr->string, lval_expr->node, lval_expr->col, err_line,
-               indent, FNAME(dump), dump_cookie);
+    ADD_ASSIGN(lval_expr->node, indent, FNAME(dump), dump_cookie);
   }
 #undef ADD_ASSIGN
   FUNCTION_END;
@@ -2016,7 +2049,7 @@ static CMD_FDEC(translate_for)
                           "break",
                           (FTYPE(AssignmentValueDump))
                             (&FNAME(dump_raw_string)),
-                          (void *) "i");
+                          (void *) "i", VAL_LET_ASSIGN);
 
   F(translate_nodes, node->children, indent + 1);
 
@@ -2249,28 +2282,10 @@ static CMD_FDEC(translate_let)
     const Expression *rval_expr = node->args[ARG_LET_RHS].arg.expr;
     LetAssignmentType ass_type = node->args[ARG_LET_ASS_TYPE].arg.unumber;
     WINDENT(indent);
-    switch (ass_type) {
-      case VAL_LET_NO_ASS: {
-        assert(false);
-      }
-      case VAL_LET_ASSIGN: {
-        F(translate_assignment, lval_expr, indent, NULL,
-                                   (FTYPE(AssignmentValueDump))
-                                      &FNAME(translate_rval_expr),
-                                   (void *) rval_expr);
-        break;
-      }
-      case VAL_LET_ADD:
-      case VAL_LET_SUBTRACT:
-      case VAL_LET_APPEND: {
-        LetModAssArgs args = {ass_type, lval_expr, rval_expr};
-        F(translate_assignment, lval_expr, indent, NULL,
-                                   (FTYPE(AssignmentValueDump))
-                                      &FNAME(translate_modifying_assignment),
-                                   (void *) &args);
-        break;
-      }
-    }
+    F(translate_assignment, lval_expr, indent, NULL,
+                            (FTYPE(AssignmentValueDump))
+                               &FNAME(translate_rval_expr),
+                            (void *) rval_expr, ass_type);
   } else {
     F(translate_node, node, indent);
   }
