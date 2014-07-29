@@ -971,6 +971,9 @@ func = join_tables(scalar, {
     end
     return fun(state, nil, fun_position, ...)
   end,
+  fun_desc = function(fun)
+    return funcs[fun]
+  end,
 -- {{{4 string()
   repr = function(state, fun, fun_position, for_echo, refs)
     local user_funcname = funcs[fun] and funcs[fun].user_funcname or '<nil>'
@@ -1018,6 +1021,9 @@ bound_func = join_tables(func, {
 -- {{{3 Querying support
   call = function(state, fun, fun_position, ...)
     return fun.func(state, fun.self, fun_position, ...)
+  end,
+  fun_desc = function(fun)
+    return funcs[fun.func]
   end,
 -- {{{3 string()
   repr = function(state, fun, fun_position, for_echo, refs)
@@ -1274,6 +1280,32 @@ local commands = {
     end
     print (mes:sub(2))
   end,
+  call = function(state, range, callee, callee_position, ...)
+    if not callee then
+      return nil
+    end
+    if not is_func(callee) then
+      return vim.err.err(state, callee_position, true,
+                         'E117: Attempt to call a non-function')
+    end
+    if range then
+      if vim_type(callee).fun_desc(callee).range then
+        -- TODO: Record range in state
+        local new_state = state
+        return subscript.call(new_state, callee, callee_position, ...)
+      else
+        for line in range:iter() do
+          -- TODO: Move cursor
+          local ret = subscript.call(state, callee, callee_position, ...)
+          if not ret then
+            return ret
+          end
+        end
+      end
+    else
+      return subscript.call(state, callee, callee_position, ...)
+    end
+  end,
 }
 
 -- {{{1 User commands implementation
@@ -1393,10 +1425,17 @@ assign = {
 }
 
 -- {{{1 Range handling
-local range = {
+local range
+range = {
   compose = function(state, ...)
+    local ret = {
+      iter = range.iter,
+    }
   end,
   apply_followup = function(state, followup_type, followup_data, lnr)
+  end,
+
+  iter = function(range)
   end,
 
   mark = function(state, mark)
