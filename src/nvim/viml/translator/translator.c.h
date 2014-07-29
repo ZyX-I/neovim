@@ -1885,6 +1885,37 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
 #define CMD_FDEC(f) \
     FDEC(f, const CommandNode *const node, const size_t indent)
 
+static CMD_FDEC(translate_call)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  WS("vim.commands.call(state, ");
+  F(translate_range, &(node->range));
+  WS(", ");
+  const Expression *expr = node->args[ARG_EXPR_EXPR].arg.expr;
+  OVERRIDE_CONTEXT(
+    start_col, expr->col,
+
+    F(translate_expr_node, expr->string, expr->node->children, true);
+  );
+  WS(", ");
+  F(dump_position, o.lnr, expr->col + expr->node->children->start, o.name);
+  for (const ExpressionNode *arg_node = expr->node->children->next;
+       arg_node != NULL;
+       arg_node = arg_node->next) {
+    WS(", ");
+    OVERRIDE_CONTEXT(
+      start_col, expr->col,
+
+      F(translate_expr_node, expr->string, arg_node, true);
+    );
+    WS(", ");
+    F(dump_position, o.lnr, expr->col + arg_node->start, o.name);
+  }
+  WS(")\n");
+  FUNCTION_END;
+}
+
 static CMD_FDEC(translate_throw)
 {
   FUNCTION_START;
@@ -2448,6 +2479,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdUnlet, translate_unlet)
       SET_HANDLER(kCmdDelfunction, translate_delfunction)
       SET_HANDLER(kCmdThrow, translate_throw)
+      SET_HANDLER(kCmdCall, translate_call)
 #undef SET_HANDLER
       default: {
         CMD_F(translate_node);
