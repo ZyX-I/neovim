@@ -128,6 +128,61 @@ describe(':let modifying assignments', function()
   })
 end)
 
+describe('Slice assignment', function()
+  itoe('Fails to assign to non-List', {
+    'let [d, s, n, f, F] = [{}, "", 1, 1.0, function("string")]',
+    'let d[1:2] = [1, 2]',
+    'let s[1:2] = [1, 2]',
+    'let n[1:2] = [1, 2]',
+    'let f[1:2] = [1, 2]',
+    'let F[1:2] = [1, 2]',
+    'unlet d s n f F'
+  }, {
+    'Vim(let):E719: Cannot use [:] with a Dictionary',
+    'Vim(let):E689: Can only index a List or Dictionary',
+    'Vim(let):E689: Can only index a List or Dictionary',
+    'Vim(let):E689: Can only index a List or Dictionary',
+    'Vim(let):E689: Can only index a List or Dictionary',
+  })
+  itoe('Fails to assign non-List to List slice', {
+    'let l = [1, 2, 3]',
+    'let l[1:2] = 10',
+    'let l[1:2] = "ab"',
+    'let l[1:2] = 0.0',
+    'let l[1:2] = function("string")',
+    'let l[1:2] = {}',
+    'unlet l',
+  }, {
+    'Vim(let):E709: [:] requires a List value',
+    'Vim(let):E709: [:] requires a List value',
+    'Vim(let):E709: [:] requires a List value',
+    'Vim(let):E709: [:] requires a List value',
+    'Vim(let):E709: [:] requires a List value',
+  })
+  itoe('Fails to assign lists with different length', {
+    'let l = [1, 2, 3]',
+    'let l[1:2] = [2]',
+    'let l[1:2] = [2, 3, 4]',
+    'unlet l'
+  }, {
+    'Vim(let):E711: List value has not enough items',
+    'Vim(let):E710: List value has too many items',
+  })
+  ito('Performs slice assignment', [[
+    let l = [1, 2, 3, 4, 5]
+    echo l
+    let l[1:2] = ["2", "3"]
+    echo l
+    let l[-4:2] = ["-4", "-3"]
+    echo l
+    unlet l
+  ]], {
+    {1, 2, 3, 4, 5},
+    {1, '2', '3', 4, 5},
+    {1, '-4', '-3', 4, 5},
+  })
+end)
+
 describe(':unlet support', function()
   ito('Unlets a variable', [[
     let a = 1
