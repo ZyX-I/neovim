@@ -27,6 +27,7 @@ local scope_name_idx, type_idx, locks_idx, val_idx
 local BASE_TYPE_NUMBER, BASE_TYPE_STRING, BASE_TYPE_FUNCREF, BASE_TYPE_LIST
 local BASE_TYPE_DICTIONARY, BASE_TYPE_FLOAT
 local get_number, get_float, get_string, get_boolean
+local get_cmp_t
 -- {{{1 Utility functions
 local unpack = unpack or table.unpack
 
@@ -293,6 +294,83 @@ local num_convert_2 = function(func, converter)
   end
 end
 
+-- From https://mail.python.org/pipermail/python-dev/2003-October/039445.html
+local bisimilar_tables = function(ic, tbl1, tbl2, is_dict)
+  local bisim = {}
+  local pending_last = {}
+  local consider = function(val1, val2, is_dict)
+    if bisim[val1] then
+      if bisim[val1][val2] then
+        return nil
+      else
+        bisim[val1][val2] = true
+      end
+    else
+      bisim[val1] = {[val2]=true}
+    end
+    pending_last.next = {val1=val1, val2=val2, is_dict=is_dict, next=nil}
+    pending_last = pending_last.next
+  end
+  local consider_new = function(v1, v2)
+    if v1 == v2 then
+      -- Do not bother comparing same lists or dictionaries
+      return true
+    end
+    local t1 = vim_type(v1)
+    local t2 = vim_type(v2)
+    if t1.type_number ~= t2.type_number then
+      return false
+    elseif t1.container then
+      consider(v1, v2, t1.type_number == BASE_TYPE_DICTIONARY)
+      return true
+    else
+      return get_cmp_t(t1, t2).raw_cmp(ic, v1, v2) == 0
+    end
+  end
+  if tbl1 == tbl2 then
+    -- Do not bother comparing same lists or dictionaries
+    return true
+  end
+  consider(tbl1, tbl2, is_dict)
+  local pending = pending_last
+  while pending do
+    local val1 = pending.val1
+    local val2 = pending.val2
+    if pending.is_dict then
+      for k, _ in pairs(val2) do
+        if type(k) == 'string' then
+          if val1[k] == nil then
+            return false
+          end
+        end
+      end
+      for k, v1 in pairs(val1) do
+        if type(k) == 'string' then
+          local v2 = val2[k]
+          if v2 == nil then
+            return false
+          end
+          if not consider_new(v1, v2) then
+            return false
+          end
+        end
+      end
+    else
+      local length = list.length(val1)
+      if length ~= list.length(val2) then
+        return false
+      end
+      for i = 1,length do
+        if not consider_new(val1[i], val2[i]) then
+          return false
+        end
+      end
+    end
+    pending = pending.next
+  end
+  return true
+end
+
 -- {{{2 Related constants
 -- Special values that cannot be assigned from VimL
 type_idx = true
@@ -467,6 +545,9 @@ number = join_tables(scalar, {
   end,
 -- {{{4 Operators support
   cmp_priority = 1,
+  raw_cmp = function(ic, n1, n2)
+    return (n1 > n2 and 1) or ((n1 == n2 and 0) or -1)
+  end,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     local n1 = get_number(state, val1, val1_position)
     if n1 == nil then
@@ -476,7 +557,7 @@ number = join_tables(scalar, {
     if n2 == nil then
       return nil
     end
-    return (n1 > n2 and 1) or ((n1 == n2 and 0) or -1)
+    return number.raw_cmp(ic, n1, n2)
   end,
   negate = function(state, num, num_position)
     return -num
@@ -512,8 +593,11 @@ string = join_tables(scalar, {
   end,
 -- {{{4 Operators support
   cmp_priority = 0,
-  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
+  raw_cmp = function(ic, s1, s2)
     -- TODO Handle ic
+    return (s1 > s2 and 1) or ((s1 == s2 and 0) or -1)
+  end,
+  cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     local s1 = get_string(state, val1, val1_position)
     if s1 == nil then
       return nil
@@ -522,7 +606,7 @@ string = join_tables(scalar, {
     if s2 == nil then
       return nil
     end
-    return (s1 > s2 and 1) or ((s1 == s2 and 0) or -1)
+    return string.raw_cmp(ic, s1, s2)
   end,
 -- }}}4
 })
@@ -722,26 +806,7 @@ list = join_tables(container, {
       return err.err(state, val1_position, true,
                      'E692: Invalid operation for Lists')
     end
-    local length = list.length(val1)
-    if length ~= list.length(val2) then
-      return 1
-    elseif length == 0 then
-      return 0
-    else
-      for i = 1,length do
-        local subv1 = val1[i]
-        local subv2 = val2[i]
-        local st1 = vim_type(subv1)
-        local st2 = vim_type(subv2)
-        if st1.type_number ~= st2.type_number then
-          return 1
-        elseif st1.cmp(state, ic, true, subv1, val1_position,
-                                        subv2, val2_position) ~= 0 then
-          return 1
-        end
-      end
-      return 0
-    end
+    return bisimilar_tables(ic, val1, val2, false) and 0 or 1
   end,
   num_op_priority = 3,
   do_add = function(state, copy_ret, val1, val1_position, val2, val2_position)
@@ -895,30 +960,7 @@ dict = join_tables(container, {
       return err.err(state, val1_position, true,
                      'E736: Invalid operation for Dictionaries')
     end
-    for k, subv2 in pairs(val2) do
-      if type(k) == 'string' then
-        if val1[k] == nil then
-          return 1
-        end
-      end
-    end
-    for k, subv1 in pairs(val1) do
-      if type(k) == 'string' then
-        local subv2 = val2[k]
-        if subv2 == nil then
-          return 1
-        end
-        local st1 = vim_type(subv1)
-        local st2 = vim_type(subv2)
-        if st1.type_number ~= st2.type_number then
-          return 1
-        elseif st1.cmp(state, ic, true, subv1, val1_position,
-                                        subv2, val2_position) ~= 0 then
-          return 1
-        end
-      end
-    end
-    return 0
+    return bisimilar_tables(ic, val1, val2, true) and 0 or 1
   end,
 -- }}}4
 })
@@ -953,6 +995,11 @@ float = join_tables(scalar, {
   end,
 -- {{{4 Operators support
   cmp_priority = 2,
+  raw_cmp = function(ic, flt1, flt2)
+    local f1 = flt1[val_idx]
+    local f2 = flt2[val_idx]
+    return (f1 > f2 and 1) or ((f1 == f2 and 0) or -1)
+  end,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     local f1 = get_float(state, val1, val1_position)
     if f1 == nil then
@@ -1054,6 +1101,9 @@ func = join_tables(scalar, {
   end,
 -- {{{4 Operators support
   cmp_priority = 10,
+  raw_cmp = function(ic, fun1, fun2)
+    return fun1 == fun2 and 0 or 1
+  end,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     if not (is_func(val1) and is_func(val2)) then
       return err.err(state, val2_position, true,
@@ -1591,18 +1641,21 @@ end
 local vim_true = 1
 local vim_false = 0
 
+get_cmp_t = function(t1, t2)
+  if t1.cmp_priority >= t2.cmp_priority then
+    return t1
+  else
+    return t2
+  end
+end
+
 local cmp = function(state, ic, eq, arg1, arg1_position, arg2, arg2_position)
   if not (arg1 and arg2) then
     return nil
   end
   local t1 = vim_type(arg1)
   local t2 = vim_type(arg2)
-  local cmp
-  if t1.cmp_priority >= t2.cmp_priority then
-    cmp = t1.cmp
-  else
-    cmp = t2.cmp
-  end
+  local cmp = get_cmp_t(vim_type(arg1), vim_type(arg2)).cmp
   return cmp(state, ic, eq, arg1, arg1_position,
                             arg2, arg2_position)
 end
