@@ -966,6 +966,44 @@ static FDEC(translate_scope, const char *const s,
   FUNCTION_END;
 }
 
+/// Translate subscript child node
+///
+/// Dumps four or six function arguments: indexed value, its position, index, 
+/// its position, second index and its position as well. Second index with its 
+/// position may be absent.
+///
+/// @param[in]  s     String holding initial expression representation.
+/// @param[in]  node  Translated subscript.
+static FDEC(translate_subscript, const char *const s,
+                                 const ExpressionNode *const node)
+  FUNC_ATTR_NONNULL_ALL
+{
+  FUNCTION_START;
+  F(translate_expr_node, s, node, false);
+  WS(", ");
+  F(dump_position, o.lnr, o.start_col + node->start, o.name);
+  WS(", ");
+  if (node->next->type == kExprEmptySubscript) {
+    WS("0");
+  } else {
+    F(translate_expr_node, s, node->next, false);
+  }
+  WS(", ");
+  F(dump_position, o.lnr, o.start_col + node->next->start,
+                    o.name);
+  if (node->next->next != NULL) {
+    WS(", ");
+    if (node->next->next->type == kExprEmptySubscript) {
+      WS("-1");
+    } else {
+      F(translate_expr_node, s, node->next->next, false);
+    }
+    WS(", ");
+    F(dump_position, o.lnr, o.start_col + node->next->next->start, o.name);
+  }
+  FUNCTION_END;
+}
+
 /// Dump parsed VimL expression
 ///
 /// @param[in]  s            String holding initial expression representation.
@@ -1134,12 +1172,23 @@ static FDEC(translate_expr_node, const char *const s,
       break;
     }
     case kExprEmptySubscript: {
-      WS("nil");
-      break;
+      assert(false);
     }
     case kExprExpression: {
       WS("(");
       F(translate_expr_node, s, node->children, false);
+      WS(")");
+      break;
+    }
+    case kExprSubscript: {
+      if (node->children->next->next == NULL) {
+        WS("vim.subscript.subscript(state, ");
+        F(dump_bool, is_funccall);
+        WS(", ");
+      } else {
+        WS("vim.subscript.slice(state, ");
+      }
+      F(translate_subscript, s, node->children);
       WS(")");
       break;
     }
@@ -1160,15 +1209,6 @@ static FDEC(translate_expr_node, const char *const s,
         case kExprList: {
           WS("vim.list:new(state");
           dump_positions = false;
-          break;
-        }
-        case kExprSubscript: {
-          if (node->children->next->next == NULL) {
-            WS("vim.subscript.subscript(state, ");
-            F(dump_bool, is_funccall);
-          } else {
-            WS("vim.subscript.slice(state");
-          }
           break;
         }
 
@@ -1610,21 +1650,7 @@ static FDEC(translate_lval, const char *const s,
       } else {
         ADD_CALL("slice");
       }
-      F(translate_expr_node, s, node->children, false);
-      WS(", ");
-      F(dump_position, o.lnr, o.start_col + node->children->start, o.name);
-      WS(", ");
-      F(translate_expr_node, s, node->children->next, false);
-      WS(", ");
-      F(dump_position, o.lnr, o.start_col + node->children->next->start,
-                       o.name);
-      if (node->children->next->next != NULL) {
-        WS(", ");
-        F(translate_expr_node, s, node->children->next->next, false);
-        WS(", ");
-        F(dump_position, o.lnr, o.start_col + node->children->next->next->start,
-                         o.name);
-      }
+      F(translate_subscript, s, node->children);
       WS(")");
       break;
     }
