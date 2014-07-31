@@ -790,6 +790,67 @@ describe('List tests', function()
         'Vim(echo):E692: Invalid operation for Lists',
         'Vim(echo):E692: Invalid operation for Lists',
       })
+      ito('EQ/NE, different nested types', [[
+        try
+          echo [1] == ['1']
+          echo [1] == [1.0]
+          echo [1] == [ [] ]
+          echo [1] == [{}]
+          echo [1] == [function('function')]
+
+          echo ['1'] == [1.0]
+          echo ['1'] == [ [] ]
+          echo ['1'] == [{}]
+          echo ['1'] == [function('function')]
+
+          echo [1.0] == [ [] ]
+          echo [1.0] == [{}]
+          echo [1.0] == [function('function')]
+
+          echo [ [] ] == [{}]
+          echo [ [] ] == [function('function')]
+
+          echo [{}] == [function('function')]
+        catch
+          echo v:exception
+        endtry
+      ]], {0, 0, 0, 0, 0,
+           0, 0, 0, 0,
+           0, 0, 0,
+           0, 0,
+           0})
+      ito('EQ/NE, self-referencing lists', [[
+        let l = [0, 0]
+        let l[0] = l
+        let l2 = [0, 0]
+        let l2[0] = l2
+        let l3 = [[0, 0], 0]
+        let l3[0][0] = l3
+
+        echo l == l2
+        echo l == l3
+        echo l2 == l3
+
+        let l3[0][1] = 1
+        echo l == l3
+        echo l2 == l3
+
+        unlet l l2 l3
+      ]], {1, 1, 1, 0, 0})
+      ito('EQ/NE, self-referencing lists with dictionaries', [[
+        let l = [{}, 0]
+        let l[0].d = l[0]
+        let l2 = [{}, 0]
+        let l2[0].d = l2[0]
+        let l3 = [{'d': {}}, 0]
+        let l3[0].d.d = l3[0]
+
+        echo l == l2
+        echo l == l3
+        echo l2 == l3
+
+        unlet l l2 l3
+      ]], {1, 1, 1})
     end)
     describe('Equality and identity', function()
       ito('EQ/NE (noic)', [[
@@ -1044,6 +1105,79 @@ describe('Dictionary tests', function()
         echo l isnot# h
         unlet l g h
       ]], {0, 1, 1, 0, 1, 0, 0, 1})
+      ito('EQ/NE, different nested types', [[
+        try
+          echo {'v': 1} == {'v': '1'}
+          echo {'v': 1} == {'v': 1.0}
+          echo {'v': 1} == {'v':  [] }
+          echo {'v': 1} == {'v': {}}
+          echo {'v': 1} == {'v': function('function')}
+
+          echo {'v': '1'} == {'v': 1.0}
+          echo {'v': '1'} == {'v':  [] }
+          echo {'v': '1'} == {'v': {}}
+          echo {'v': '1'} == {'v': function('function')}
+
+          echo {'v': 1.0} == {'v':  [] }
+          echo {'v': 1.0} == {'v': {}}
+          echo {'v': 1.0} == {'v': function('function')}
+
+          echo {'v': [] } == {'v': {}}
+          echo {'v': [] } == {'v': function('function')}
+
+          echo {'v': {}} == {'v': function('function')}
+        catch
+          echo v:exception
+        endtry
+      ]], {0, 0, 0, 0, 0,
+           0, 0, 0, 0,
+           0, 0, 0,
+           0, 0,
+           0})
+      ito('EQ/NE, self-referencing dictionaries', [[
+        let d = {'v': 0}
+        let d.d = d
+        let d2 = {'v': 0}
+        let d2.d = d2
+        let d3 = {'d': {'v': 0}, 'v': 0}
+        let d3.d.d = d3
+
+        echo d == d2
+        echo d == d3
+        echo d2 == d3
+
+        let d3.d.v = 1
+        echo d == d3
+        echo d2 == d3
+
+        unlet d d2 d3
+      ]], {1, 1, 1, 0, 0})
+      ito('EQ/NE, self-referencing dictionaries with lists', [[
+        let d = {'l': [0, 0], 'v': 0}
+        let d.l[0] = d.l
+        let d.l[1] = d
+        let d.d = d
+        let d2 = {'l': [0, 0], 'v': 0}
+        let d2.l[0] = d2.l
+        let d2.l[1] = d2
+        let d2.d = d2
+        let d3 = {'l': [[0, 1], {'l': [[0, 0], 0], 'd': {'v': 0}, 'v':0}],'v':0}
+        let d3.l[1].l[0][0] = d3.l
+        let d3.l[0][0] = d3.l
+        let d3.l[0][1] = d3.l[1]
+        let d3.l[1].d.d = d3.l[1]
+        let d3.l[1].l[0][0] = d3.l[1].l
+        let d3.l[1].l[1] = d3.l[1]
+        let d3.d = d3.l[1].d.d
+        let d3.d.d.l = d3.l
+        let d3.d.l[0][1] = d3.d.d.d
+
+        echo d == d2
+        echo d == d3
+        echo d2 == d3
+
+        unlet d d2 d3
+      ]], {1, 1, 1})
     end)
   end)
 end)
