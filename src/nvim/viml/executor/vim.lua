@@ -535,64 +535,100 @@ list = join_tables(container, {
     table.insert(self, val)
   end,
 -- {{{4 Assignment support
-  raw_assign_subscript = function(lst, idx, val)
-    lst[idx + 1] = val
-  end,
   assign_subscript = function(state, lst, lst_position, idx, idx_position, val)
-    -- TODO check for locks, check for out of range
-    raw_assign_subscript(lst, idx, val)
+    -- TODO check for locks
+    local length = list.length(lst)
+    local idx = list.get_index(state, length, idx, idx_position, false)
+    if idx == nil then
+      return nil
+    end
+    lst[idx] = val
     return true
   end,
   assign_slice = function(state, lst,  lst_position,
                                  idx1, idx1_position,
                                  idx2, idx2_position,
                                  val)
-    if is_func(val) then
-      return err.err(state, lst_position, true,
-                     'E475: Cannot assign function to a slice')
+    -- FIXME Use val position in error messages
+    if not is_list(val) then
+      if is_func(val) and lst_position:sub(-9) == ':function' then
+        return err.err(state, lst_position, true,
+                       'E475: Cannot assign function to a slice')
+      else
+        return err.err(state, lst_position, true,
+                       'E709: [:] requires a List value')
+      end
     end
-    -- TODO slice assignment
+    local length = list.length(lst)
+    local idx1, idx2 = list.get_slice_indicies(
+      state, length, false,
+      idx1, idx1_position,
+      idx2, idx2_position
+    )
+    if idx1 == nil then
+      return nil
+    end
+    local val_length = list.length(val)
+    local tgt_length = idx2 - idx1 + 1
+    -- FIXME Use val position in error messages
+    if val_length < tgt_length then
+      return err.err(state, lst_position, true,
+                     'E711: List value has not enough items')
+    elseif val_length > tgt_length then
+      return err.err(state, lst_position, true,
+                     'E710: List value has too many items')
+    end
+    for i = idx1,idx2 do
+      lst[i] = val[i - idx1 + 1]
+    end
     return true
   end,
 -- {{{4 Querying support
   length = table.maxn,
+  get_index = function(state, length, idx, idx_position, slice)
+    local ret = get_number(state, idx, idx_position)
+    ret = ret < 0 and ret + length + 1 or ret + 1
+    if not slice and (ret > length or ret <= 0) then
+      return err.err(state, idx_position, true,
+                     'E684: List index out of range: %i', idx)
+    end
+    return ret
+  end,
+  get_slice_indicies = function(state, length, slice,
+                                idx1, idx1_position,
+                                idx2, idx2_position)
+    idx1 = list.get_index(state, length, idx1, idx1_position, slice)
+    if idx1 == nil then
+      return nil, nil
+    end
+    idx2 = list.get_index(state, length, idx2, idx2_position, slice)
+    if idx2 == nil then
+      return nil, nil
+    end
+    return idx1, idx2
+  end,
   raw_subscript = function(lst, idx)
     return lst[idx + 1]
   end,
   subscript = function(state, lst, lst_position, idx, idx_position)
-    idx = get_number(idx)
-    if idx == nil then
-      return nil
-    end
     local length = list.length(lst)
-    if (idx < 0) then
-      idx = length + idx
-    end
-    if (idx >= length) then
-      return err.err(state, lst_position, true,
-                     'E684: list index out of range: %i', idx)
-    end
-    return list.raw_subscript(lst, idx)
+    local idx = list.get_index(state, length, idx, idx_position, false)
+    return lst[idx]
   end,
-  slice = function(state, lst, lst_position, idx1, idx1_position,
-                                             idx2, idx2_position)
-    idx1 =          get_number(idx1)
-    idx2 = idx1 and get_number(idx2)
+  slice = function(state, lst, lst_position, ...)
+    local length = list.length(lst)
+    local idx1, idx2 = list.get_slice_indicies(state, length, true, ...)
     if idx1 == nil then
       return nil
     end
-    local length = list.length(lst)
-    if idx1 < 0 then
-      idx1 = idx1 + length
-    end
-    idx1 = idx1 + 1
-    if idx2 < 0 then
-      idx2 = idx2 + length
-    end
-    idx2 = idx2 + 1
     local ret = list:new(state)
+    if idx1 > idx2 or idx1 > length or idx1 <= 0 then
+      return ret
+    elseif idx2 > length then
+      idx2 = length
+    end
     for i = idx1,idx2 do
-      list.raw_assign_subscript(ret, i - idx1, list.raw_subscript(lst, i))
+      ret[i - idx1 + 1] = lst[i]
     end
     return ret
   end,
