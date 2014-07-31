@@ -1316,6 +1316,18 @@ functions.call = function(state, self, callee_position, fun, fun_position,
   return subscript.call(state, fun, fun_position, unpack(args))
 end
 
+functions.copy = function(state, self, callee_position, val, val_position)
+  if type(val) == 'table' then
+    return copy_table(val)
+  else
+    return val
+  end
+end
+
+functions.deepcopy = function(state, self, callee_position, val, val_position)
+  return copy_value(val)
+end
+
 local funcnames = {}
 
 for k, v in pairs(functions) do
