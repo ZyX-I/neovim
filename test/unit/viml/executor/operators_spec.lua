@@ -561,6 +561,52 @@ describe('String computations', function()
   end)
   describe('Comparison operators', function()
     describe('Less/greater (or equal to)', function()
+      ito('EQ/NE (noic)', [[
+        echo 'b'  ==# 'c'
+        echo 'b'  !=# 'c'
+        echo 'b'  ==# 'a'
+        echo 'b'  !=# 'a'
+        echo 'bb' ==# 'b'
+        echo 'bb' !=# 'b'
+        echo 'bb' ==# 'bb'
+        echo 'bb' !=# 'bb'
+        echo 'b'  ==# 'bb'
+        echo 'b'  !=# 'bb'
+        echo 'ba' ==# 'bb'
+        echo 'ba' !=# 'bb'
+        echo 'b'  ==# 'b'
+        echo 'b'  !=# 'b'
+      ]], {0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0})
+      ito('is/isnot (noic)', [[
+        echo 'b'  is#    'c'
+        echo 'b'  isnot# 'c'
+        echo 'b'  is#    'a'
+        echo 'b'  isnot# 'a'
+        echo 'bb' is#    'b'
+        echo 'bb' isnot# 'b'
+        echo 'bb' is#    'bb'
+        echo 'bb' isnot# 'bb'
+        echo 'b'  is#    'bb'
+        echo 'b'  isnot# 'bb'
+        echo 'ba' is#    'bb'
+        echo 'ba' isnot# 'bb'
+        echo 'b'  is#    'b'
+        echo 'b'  isnot# 'b'
+      ]], {0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0})
+      ito('EQ/NE/is/isnot (noic), with different case', [[
+        echo 'b'  ==#    'B'
+        echo 'b'  !=#    'B'
+        echo 'b'  is#    'B'
+        echo 'b'  isnot# 'B'
+        echo 'ab' ==#    'aB'
+        echo 'ab' !=#    'aB'
+        echo 'ab' is#    'aB'
+        echo 'ab' isnot# 'aB'
+        echo 'ba' ==#    'Ba'
+        echo 'ba' !=#    'Ba'
+        echo 'ba' is#    'Ba'
+        echo 'ba' isnot# 'Ba'
+      ]], {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1})
       ito('LT/GT (noic)', [[
         echo 'b'  ># 'c'
         echo 'b'  <# 'c'
@@ -607,6 +653,52 @@ describe('String computations', function()
         echo 'ba' >=# 'Ba'
         echo 'ba' <=# 'Ba'
       ]], {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0})
+      ito('LT/GT (ic)', [[
+        echo 'b'  >? 'c'
+        echo 'b'  <? 'c'
+        echo 'b'  >? 'a'
+        echo 'b'  <? 'a'
+        echo 'bb' >? 'b'
+        echo 'bb' <? 'b'
+        echo 'bb' >? 'bb'
+        echo 'bb' <? 'bb'
+        echo 'b'  >? 'bb'
+        echo 'b'  <? 'bb'
+        echo 'ba' >? 'bb'
+        echo 'ba' <? 'bb'
+        echo 'b'  >? 'b'
+        echo 'b'  <? 'b'
+      ]], {0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0})
+      ito('LE/GE (ic)', [[
+        echo 'b'  >=? 'c'
+        echo 'b'  <=? 'c'
+        echo 'b'  >=? 'a'
+        echo 'b'  <=? 'a'
+        echo 'bb' >=? 'b'
+        echo 'bb' <=? 'b'
+        echo 'bb' >=? 'bb'
+        echo 'bb' <=? 'bb'
+        echo 'b'  >=? 'bb'
+        echo 'b'  <=? 'bb'
+        echo 'ba' >=? 'bb'
+        echo 'ba' <=? 'bb'
+        echo 'b'  >=? 'b'
+        echo 'b'  <=? 'b'
+      ]], {0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1})
+      ito('LT/GT/LE/GE (ic), with different case', [[
+        echo 'b'  >?  'B'
+        echo 'b'  <?  'B'
+        echo 'b'  >=? 'B'
+        echo 'b'  <=? 'B'
+        echo 'ab' >?  'aB'
+        echo 'ab' <?  'aB'
+        echo 'ab' >=? 'aB'
+        echo 'ab' <=? 'aB'
+        echo 'ba' >?  'Ba'
+        echo 'ba' <?  'Ba'
+        echo 'ba' >=? 'Ba'
+        echo 'ba' <=? 'Ba'
+      ]], {0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1})
     end)
     describe('Equality and identity', function()
       ito('EQ/NE (noic)', [[
@@ -655,6 +747,52 @@ describe('String computations', function()
         echo 'ba' is#    'Ba'
         echo 'ba' isnot# 'Ba'
       ]], {0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1})
+      ito('EQ/NE (ic)', [[
+        echo 'b'  ==? 'c'
+        echo 'b'  !=? 'c'
+        echo 'b'  ==? 'a'
+        echo 'b'  !=? 'a'
+        echo 'bb' ==? 'b'
+        echo 'bb' !=? 'b'
+        echo 'bb' ==? 'bb'
+        echo 'bb' !=? 'bb'
+        echo 'b'  ==? 'bb'
+        echo 'b'  !=? 'bb'
+        echo 'ba' ==? 'bb'
+        echo 'ba' !=? 'bb'
+        echo 'b'  ==? 'b'
+        echo 'b'  !=? 'b'
+      ]], {0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0})
+      ito('is/isnot (ic)', [[
+        echo 'b'  is?    'c'
+        echo 'b'  isnot? 'c'
+        echo 'b'  is?    'a'
+        echo 'b'  isnot? 'a'
+        echo 'bb' is?    'b'
+        echo 'bb' isnot? 'b'
+        echo 'bb' is?    'bb'
+        echo 'bb' isnot? 'bb'
+        echo 'b'  is?    'bb'
+        echo 'b'  isnot? 'bb'
+        echo 'ba' is?    'bb'
+        echo 'ba' isnot? 'bb'
+        echo 'b'  is?    'b'
+        echo 'b'  isnot? 'b'
+      ]], {0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0})
+      ito('EQ/NE/is/isnot (ic), with different case', [[
+        echo 'b'  ==?    'B'
+        echo 'b'  !=?    'B'
+        echo 'b'  is?    'B'
+        echo 'b'  isnot? 'B'
+        echo 'ab' ==?    'aB'
+        echo 'ab' !=?    'aB'
+        echo 'ab' is?    'aB'
+        echo 'ab' isnot? 'aB'
+        echo 'ba' ==?    'Ba'
+        echo 'ba' !=?    'Ba'
+        echo 'ba' is?    'Ba'
+        echo 'ba' isnot? 'Ba'
+      ]], {1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0})
     end)
   end)
 end)
@@ -860,13 +998,31 @@ describe('List tests', function()
         echo ['a', 2] !=# ['a', 3]
         echo ['a', 2] ==# ['A', 3]
         echo ['a', 2] !=# ['A', 3]
+        echo ['a', 2] ==# ['A', 2]
+        echo ['a', 2] !=# ['A', 2]
         echo [] ==# []
         echo [] !=# []
         echo [1] ==# []
         echo [1] !=# []
         echo [] ==# [1]
         echo [] !=# [1]
-      ]], {1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1})
+      ]], {1, 0, 0, 1, 0, 1, 0, 1, 1, 0, 0, 1, 0, 1})
+      ito('EQ/NE (ic)', [[
+        echo ['a', 2] ==? ['a', 2]
+        echo ['a', 2] !=? ['a', 2]
+        echo ['a', 2] ==? ['a', 3]
+        echo ['a', 2] !=? ['a', 3]
+        echo ['a', 2] ==? ['A', 3]
+        echo ['a', 2] !=? ['A', 3]
+        echo ['a', 2] ==? ['A', 2]
+        echo ['a', 2] !=? ['A', 2]
+        echo [] ==? []
+        echo [] !=? []
+        echo [1] ==? []
+        echo [1] !=? []
+        echo [] ==? [1]
+        echo [] !=? [1]
+      ]], {1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1})
       ito('is/isnot', [[
         let l = ['a']
         let g = l
@@ -1052,7 +1208,9 @@ describe('Dictionary tests', function()
         echo {'a': 1} ==# {}
         echo {'a': 1, 'b': 2} ==# {'b': 2}
         echo {'a': 1, 'b': 2} ==# {'a': 1}
-      ]], {1, 1, 1, 0, 0, 0, 0, 0})
+        echo {'a': 'A'} ==# {'a': 'a'}
+        echo {'A': 'a'} ==# {'a': 'a'}
+      ]], {1, 1, 1, 0, 0, 0, 0, 0, 0, 0})
       ito('NE (noic)', [[
         echo {1 : 'v'} !=# {'1' : 'v'}
         echo {'a': 2} !=# {'a': 2}
@@ -1062,7 +1220,33 @@ describe('Dictionary tests', function()
         echo {'a': 1} !=# {}
         echo {'a': 1, 'b': 2} !=# {'b': 2}
         echo {'a': 1, 'b': 2} !=# {'a': 1}
-      ]], {0, 0, 0, 1, 1, 1, 1, 1})
+        echo {'a': 'A'} !=# {'a': 'a'}
+        echo {'A': 'a'} !=# {'a': 'a'}
+      ]], {0, 0, 0, 1, 1, 1, 1, 1, 1, 1})
+      ito('EQ (ic)', [[
+        echo {1 : 'v'} ==? {'1' : 'v'}
+        echo {'a': 2} ==? {'a': 2}
+        echo {'a': 2, 'b': 3} ==? {'a': 2, 'b': 3}
+        echo {'a': 2} ==? {'A': 2}
+        echo {} ==? {'a': 2}
+        echo {'a': 1} ==? {}
+        echo {'a': 1, 'b': 2} ==? {'b': 2}
+        echo {'a': 1, 'b': 2} ==? {'a': 1}
+        echo {'a': 'A'} ==? {'a': 'a'}
+        echo {'A': 'a'} ==? {'a': 'a'}
+      ]], {1, 1, 1, 0, 0, 0, 0, 0, 1, 0})
+      ito('NE (ic)', [[
+        echo {1 : 'v'} !=? {'1' : 'v'}
+        echo {'a': 2} !=? {'a': 2}
+        echo {'a': 2, 'b': 3} !=? {'a': 2, 'b': 3}
+        echo {'a': 2} !=? {'A': 2}
+        echo {} !=? {'a': 2}
+        echo {'a': 1} !=? {}
+        echo {'a': 1, 'b': 2} !=? {'b': 2}
+        echo {'a': 1, 'b': 2} !=? {'a': 1}
+        echo {'a': 'A'} !=? {'a': 'a'}
+        echo {'A': 'a'} !=? {'a': 'a'}
+      ]], {0, 0, 0, 1, 1, 1, 1, 1, 0, 1})
       ito('is/isnot', [[
         let l = {'1': 'a'}
         let g = l
