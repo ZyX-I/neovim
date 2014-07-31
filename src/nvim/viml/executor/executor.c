@@ -7,6 +7,7 @@
 #include "nvim/func_attr.h"
 #include "nvim/api/private/helpers.h"
 #include "nvim/api/vim.h"
+#include "nvim/vim.h"
 
 #include "nvim/viml/executor/executor.h"
 #include "nvim/viml/executor/converter.h"
@@ -53,6 +54,23 @@ static void set_lua_error(lua_State *lstate, Error *err) FUNC_ATTR_NONNULL_ALL
   fputs(str, stderr);
 }
 
+/// Compare two strings, ignoring case
+///
+/// Expects two values on the stack: compared strings. Returns one of the 
+/// following numbers: 0, -1 or 1.
+///
+/// Does no error handling: never call it with non-string or with some arguments 
+/// omitted.
+static int nlua_stricmp(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
+{
+  const char *s1 = luaL_checklstring(lstate, 1, NULL);
+  const char *s2 = luaL_checklstring(lstate, 2, NULL);
+  const int ret = MB_STRICMP(s1, s2);
+  lua_pop(lstate, 2);
+  lua_pushnumber(lstate, (lua_Number) ((ret > 0) - (ret < 0)));
+  return 1;
+}
+
 /// Evaluate lua string
 ///
 /// Expects three values on the stack: string to evaluate, pointer to the 
@@ -82,6 +100,8 @@ static int nlua_eval_lua_string(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 /// Called by lua interpreter itself to initialize state.
 static int nlua_state_init(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 {
+  lua_pushcfunction(lstate, &nlua_stricmp);
+  lua_setglobal(lstate, "stricmp");
   if (luaL_dostring(lstate, ((char *) &(vim_module[0])))) {
     Error err;
     set_lua_error(lstate, &err);
