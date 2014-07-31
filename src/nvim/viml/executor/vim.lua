@@ -637,9 +637,6 @@ list = join_tables(container, {
     end
     return idx1, idx2
   end,
-  raw_subscript = function(lst, idx)
-    return lst[idx + 1]
-  end,
   subscript = function(state, lst, lst_position, idx, idx_position)
     local length = list.length(lst)
     local idx = list.get_index(state, length, idx, idx_position, false)
@@ -676,7 +673,7 @@ list = join_tables(container, {
       return nil
     end
     it_state.i = it_state.i + 1
-    return i, list.raw_subscript(it_state.lst, i)
+    return i, it_state.lst[i + 1]
   end,
   new_it_state = function(state, lst, lst_position)
     local it_state = {
@@ -692,16 +689,14 @@ list = join_tables(container, {
   repr = function(state, lst, lst_position, for_echo, refs)
     local ret = '['
     local length = list.length(lst)
-    local i
     local add_comma = false
-    for i = 0,length-1 do
+    for i = 1,length do
       if add_comma then
         ret = ret .. ', '
       else
         add_comma = true
       end
-      local chunk = repr(state, list.raw_subscript(lst, i), lst_position,
-                         for_echo and 'list', refs)
+      local chunk = repr(state, lst[i], lst_position, for_echo and 'list', refs)
       if chunk == nil then
         return nil
       end

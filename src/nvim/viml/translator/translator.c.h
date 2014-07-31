@@ -1644,11 +1644,10 @@ static FDEC(translate_lval, const char *const s,
 static FDEC(translate_let_list_item, const LetListItemAssArgs *const args)
 {
   FUNCTION_START;
-  WS("vim.list.raw_subscript(");
   W(args->var);
-  WS(", ");
+  WS("[");
   F_NOOPT(dump_number, (intmax_t) args->idx);
-  WS(")");
+  WS(" + 1]");
   FUNCTION_END;
 }
 
