@@ -56,15 +56,43 @@ local join_tables = function(tbl1, tbl2)
   return ret
 end
 
-local copy_table_recursive
-copy_table_recursive = function(tbl)
-  local ret = {}
+local print_table
+print_table = function(tbl, indent, printed)
   for k, v in pairs(tbl) do
-    if type(v) == 'table' then
-      ret[k] = copy_table_recursive(v)
-    else
-      ret[k] = v
+    print(('%s%-20s: %s'):format(indent, tostring(k), tostring(v)))
+    if type(v) == 'table' and not printed[v] then
+      printed[v] = true
+      print_table(v, indent .. '  ', printed)
     end
+  end
+end
+
+-- WARNING: Setting copy_type to true crashes luajit for unknown reason
+local copy_value = function(val, copy_type)
+  if type(val) ~= 'table' then
+    return val
+  end
+  local ret = {}
+  local copied = {[val]=ret}
+  local tocopy = {table=val, ret=ret, next=nil}
+  local tocopy_last = tocopy
+  while tocopy do
+    local cur_tbl = tocopy.table
+    local cur_ret = tocopy.ret
+    for k, v in pairs(cur_tbl) do
+      if type(v) ~= 'table' or (k == type_idx and not copy_type) then
+        cur_ret[k] = v
+      elseif copied[v] then
+        cur_ret[k] = copied[v]
+      else
+        local new_ret = {}
+        cur_ret[k] = new_ret
+        copied[v] = new_ret
+        tocopy_last.next = {table=v, ret=new_ret, next=nil}
+        tocopy_last = tocopy_last.next
+      end
+    end
+    tocopy = tocopy.next
   end
   return ret
 end
@@ -80,17 +108,19 @@ compare_tables_recursive = function(tbl1, tbl2)
     if tbl1[k] == nil then
       return true, 'missing1', k
     end
-    if type(v) == 'table' then
-      if type(tbl1[k]) ~= 'table' then
-        return true, 'differs', k
-      else
-        local differs, what, key = compare_tables_recursive(tbl1[k], v)
-        if differs then
-          return true, what, k .. '/' .. key
+    if tbl1[k] ~= v then
+      if type(v) == 'table' then
+        if type(tbl1[k]) ~= 'table' then
+          return true, 'differs', k
+        else
+          local differs, what, key = compare_tables_recursive(tbl1[k], v)
+          if differs then
+            return true, what, tostring(k) .. '/' .. key
+          end
         end
+      else
+        return true, 'differs', k
       end
-    elseif tbl1[k] ~= v then
-      return true, 'differs', k
     end
   end
   return false, nil, nil
@@ -1733,7 +1763,7 @@ end
 -- {{{1 Test helpers
 local test_ret
 local test_echo = function(state, ...)
-  test_ret[#test_ret + 1] = ...
+  test_ret[#test_ret + 1] = copy_value(select(1, ...))
 end
 local test_state
 local test_state_copy
@@ -1750,7 +1780,7 @@ local test = {
       local state = old_enter_code(...)
       if not test_state then
         test_state = state
-        test_state_copy = copy_table_recursive(state)
+        test_state_copy = copy_value(state)
       end
       return state
     end
