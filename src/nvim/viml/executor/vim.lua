@@ -594,8 +594,11 @@ string = join_tables(scalar, {
 -- {{{4 Operators support
   cmp_priority = 0,
   raw_cmp = function(ic, s1, s2)
-    -- TODO Handle ic
-    return (s1 > s2 and 1) or ((s1 == s2 and 0) or -1)
+    if ic then
+      return stricmp(s1, s2)
+    else
+      return (s1 > s2 and 1) or ((s1 == s2 and 0) or -1)
+    end
   end,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
     local s1 = get_string(state, val1, val1_position)
