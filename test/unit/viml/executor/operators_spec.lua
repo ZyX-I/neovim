@@ -1,12 +1,9 @@
-local ito, itoe
+local ito, itoe, f
 do
   local _obj_0 = require('test.unit.viml.executor.helpers')
   ito = _obj_0.ito
   itoe = _obj_0.itoe
-end
-
-local f = function(v)
-  return {_t='float', _v=v}
+  f = _obj_0.f
 end
 
 describe('Operator priority', function()

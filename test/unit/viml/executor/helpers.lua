@@ -70,8 +70,13 @@ local itoe = function(msg, strs, exp)
   return ito(msg, str, exp)
 end
 
+local f = function(v)
+  return {_t='float', _v=v}
+end
+
 return {
   eqo=eqo,
   ito=ito,
   itoe=itoe,
+  f=f,
 }
