@@ -917,6 +917,9 @@ dict = join_tables(container, {
     end
     return ret
   end,
+  slice = function(...)
+    return dict.assign_slice(...)
+  end,
 -- {{{4 string()
   already_represented_container = '{...}',
   repr = function(state, dct, dct_position, for_echo, refs)
