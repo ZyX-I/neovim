@@ -398,6 +398,19 @@ local type_base = {
   call = function(state, fun, fun_position, ...)
     return err.err(state, fun_position, true, 'E15: Can only call a Funcref')
   end,
+  get_slice_indicies = function(state, length, slice, get_index,
+                                idx1, idx1_position,
+                                idx2, idx2_position)
+    idx1 = get_index(state, length, idx1, idx1_position, slice)
+    if idx1 == nil then
+      return nil, nil
+    end
+    idx2 = get_index(state, length, idx2, idx2_position, slice)
+    if idx2 == nil then
+      return nil, nil
+    end
+    return idx1, idx2
+  end,
 -- }}}3
 }
 
@@ -426,36 +439,43 @@ scalar = join_tables(type_base, {
     if str == nil then
       return nil
     end
-    idx = get_number(idx)
+    local idx = scalar.get_index(state, #str, idx, idx_position, false)
     if idx == nil then
       return nil
     end
-    if idx < 0 then
-      return ''
-    end
-    return str:sub(idx + 1, idx + 1)
+    return str:sub(idx, idx)
   end,
-  slice = function(state, val, val_position, idx1, idx1_position,
-                                             idx2, idx2_position)
+  get_index = function(state, length, idx, idx_position, slice)
+    local ret = get_number(state, idx, idx_position)
+    if slice then
+      ret = ret < 0 and ret + length + 1 or ret + 1
+      if ret <= 0 then
+        return false
+      end
+      return ret
+    else
+      if ret < 0 then
+        -- When string.sub receives (0, 0) as argument it returns empty string
+        return 0
+      else
+        return ret + 1
+      end
+    end
+  end,
+  slice = function(state, val, val_position, ...)
     local str = get_string(state, val, val_position)
     if str == nil then
       return nil
     end
-    idx1 = get_number(idx1)
+    local idx1, idx2 = scalar.get_slice_indicies(state, #str, true,
+                                                 scalar.get_index, ...)
     if idx1 == nil then
       return nil
+    elseif idx1 == false or idx2 == false then
+      return ''
+    else
+      return str:sub(idx1, idx2)
     end
-    idx2 = get_number(idx2)
-    if idx2 == nil then
-      return nil
-    end
-    if idx1 >= 0 then
-      idx1 = idx1 + 1
-    end
-    if idx2 >= 0 then
-      idx2 = idx2 + 1
-    end
-    return str:sub(str, idx1, idx2)
   end,
 -- {{{3 string()
   container = false,
@@ -678,7 +698,7 @@ list = join_tables(container, {
     end
     local length = list.length(lst)
     local idx1, idx2 = list.get_slice_indicies(
-      state, length, false,
+      state, length, false, list.get_index,
       idx1, idx1_position,
       idx2, idx2_position
     )
@@ -711,19 +731,6 @@ list = join_tables(container, {
     end
     return ret
   end,
-  get_slice_indicies = function(state, length, slice,
-                                idx1, idx1_position,
-                                idx2, idx2_position)
-    idx1 = list.get_index(state, length, idx1, idx1_position, slice)
-    if idx1 == nil then
-      return nil, nil
-    end
-    idx2 = list.get_index(state, length, idx2, idx2_position, slice)
-    if idx2 == nil then
-      return nil, nil
-    end
-    return idx1, idx2
-  end,
   subscript = function(state, lst, lst_position, idx, idx_position)
     local length = list.length(lst)
     local idx = list.get_index(state, length, idx, idx_position, false)
@@ -731,7 +738,8 @@ list = join_tables(container, {
   end,
   slice = function(state, lst, lst_position, ...)
     local length = list.length(lst)
-    local idx1, idx2 = list.get_slice_indicies(state, length, true, ...)
+    local idx1, idx2 = list.get_slice_indicies(state, length, true,
+                                               list.get_index, ...)
     if idx1 == nil then
       return nil
     end
