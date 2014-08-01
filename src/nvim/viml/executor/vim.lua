@@ -23,7 +23,7 @@ local bound_func
 local scope, def_scope, b_scope, a_scope, v_scope, f_scope
 local state, assign
 local subscript
-local scope_name_idx, type_idx, locks_idx, val_idx
+local scope_name_idx, length_idx, type_idx, locks_idx, val_idx
 local BASE_TYPE_NUMBER, BASE_TYPE_STRING, BASE_TYPE_FUNCREF, BASE_TYPE_LIST
 local BASE_TYPE_DICTIONARY, BASE_TYPE_FLOAT
 local get_number, get_float, get_string, get_boolean
@@ -68,36 +68,6 @@ print_table = function(tbl, indent, printed)
   end
 end
 
--- WARNING: Setting copy_type to true crashes luajit for unknown reason
-local copy_value = function(val, copy_type)
-  if type(val) ~= 'table' then
-    return val
-  end
-  local ret = {}
-  local copied = {[val]=ret}
-  local tocopy = {table=val, ret=ret, next=nil}
-  local tocopy_last = tocopy
-  while tocopy do
-    local cur_tbl = tocopy.table
-    local cur_ret = tocopy.ret
-    for k, v in pairs(cur_tbl) do
-      if type(v) ~= 'table' or (k == type_idx and not copy_type) then
-        cur_ret[k] = v
-      elseif copied[v] then
-        cur_ret[k] = copied[v]
-      else
-        local new_ret = {}
-        cur_ret[k] = new_ret
-        copied[v] = new_ret
-        tocopy_last.next = {table=v, ret=new_ret, next=nil}
-        tocopy_last = tocopy_last.next
-      end
-    end
-    tocopy = tocopy.next
-  end
-  return ret
-end
-
 local compare_tables_recursive
 compare_tables_recursive = function(tbl1, tbl2)
   for k, _ in pairs(tbl1) do
@@ -114,13 +84,13 @@ compare_tables_recursive = function(tbl1, tbl2)
         if type(tbl1[k]) ~= 'table' then
           return true, 'differs', k
         else
-          local differs, what, key = compare_tables_recursive(tbl1[k], v)
+          local differs, what, key, diff = compare_tables_recursive(tbl1[k], v)
           if differs then
-            return true, what, tostring(k) .. '/' .. key
+            return true, what, tostring(k) .. '/' .. key, diff
           end
         end
       else
-        return true, 'differs', k
+        return true, 'differs', k, (tostring(tbl1[k]) .. '~=' .. tostring(v))
       end
     end
   end
@@ -269,6 +239,24 @@ iter = function(state, lst, lst_position)
 end
 
 -- {{{1 Types
+-- {{{2 Related constants
+-- Special values that cannot be assigned from VimL
+type_idx = true
+locks_idx = false
+val_idx = 0
+scope_name_idx = -1
+length_idx = -2
+
+BASE_TYPE_NUMBER     = 0
+BASE_TYPE_STRING     = 1
+BASE_TYPE_FUNCREF    = 2
+BASE_TYPE_LIST       = 3
+BASE_TYPE_DICTIONARY = 4
+BASE_TYPE_FLOAT      = 5
+
+local VAR_LOCKED = 1
+local VAR_FIXED = 2
+
 -- {{{2 Utility functions
 local add_type_table = function(func)
   return function(self, ...)
@@ -356,11 +344,10 @@ local bisimilar_tables = function(ic, tbl1, tbl2, is_dict)
         end
       end
     else
-      local length = list.length(val1)
-      if length ~= list.length(val2) then
+      if val1.length ~= val2.length then
         return false
       end
-      for i = 1,length do
+      for i = 1,val1.length do
         if not consider_new(val1[i], val2[i]) then
           return false
         end
@@ -371,19 +358,45 @@ local bisimilar_tables = function(ic, tbl1, tbl2, is_dict)
   return true
 end
 
--- {{{2 Related constants
--- Special values that cannot be assigned from VimL
-type_idx = true
-locks_idx = false
-val_idx = 0
-scope_name_idx = -1
+local copymethods = {
+  [type_idx] = function(v)
+    return v
+  end,
+  [locks_idx] = function(v)
+    return {}
+  end,
+}
 
-BASE_TYPE_NUMBER     = 0
-BASE_TYPE_STRING     = 1
-BASE_TYPE_FUNCREF    = 2
-BASE_TYPE_LIST       = 3
-BASE_TYPE_DICTIONARY = 4
-BASE_TYPE_FLOAT      = 5
+local copy_value = function(val, copymethods)
+  if type(val) ~= 'table' then
+    return val
+  end
+  local ret = {}
+  local copied = {[val]=ret}
+  local tocopy = {table=val, ret=ret, next=nil}
+  local tocopy_last = tocopy
+  while tocopy do
+    local cur_tbl = tocopy.table
+    local cur_ret = tocopy.ret
+    for k, v in pairs(cur_tbl) do
+      if type(v) ~= 'table' then
+        cur_ret[k] = v
+      elseif copymethods[k] then
+        cur_ret[k] = copymethods[k](v)
+      elseif copied[v] then
+        cur_ret[k] = copied[v]
+      else
+        local new_ret = {}
+        cur_ret[k] = new_ret
+        copied[v] = new_ret
+        tocopy_last.next = {table=v, ret=new_ret, next=nil}
+        tocopy_last = tocopy_last.next
+      end
+    end
+    tocopy = tocopy.next
+  end
+  return ret
+end
 
 -- {{{2 Any type base
 local type_base = {
@@ -531,6 +544,45 @@ end
 container = join_tables(type_base, {
 -- {{{3 string()
   container = true,
+-- {{{3 Locks support
+  check_container_lock = function(state, t, val, val_position, key)
+    if val[locks_idx][locks_idx] then
+      local message
+      if val[locks_idx][locks_idx] == VAR_FIXED then
+        -- Note: only scope dictionaries may have fixed keys or be fixed 
+        -- themselves. Thus container does not have "fixed_message" or 
+        -- "fixed_dict_message" keys.
+        message = t.fixed_dict_message
+      else
+        message = 'E741: Value is locked: %s'
+      end
+      return  err.err(state, val_position, true, message, key)
+    end
+    return true
+  end,
+  check_key_lock = function(state, t, val, key, key_position)
+    if val[locks_idx][key] then
+      local message
+      if val[locks_idx][key] == VAR_FIXED then
+        message = t.fixed_message
+      else
+        message = 'E741: Value is locked: %s'
+      end
+      return  err.err(state, key_position, true, message, key)
+    end
+    return true
+  end,
+  check_locks = function(state, t, val, val_position, key, key_position)
+    local is_locked, new_key
+    if val[key] then
+      -- When trying to overwrite existing value check whether specific value is 
+      -- locked.
+      return t.check_container_lock(state, t, val, val_position, key), false
+    else
+      -- When trying to add a new key check whether container itself is locked.
+      return t.check_key_lock(state, t, val, key, key_position), true
+    end
+  end,
 -- {{{3 Operators support
   num_op_priority = 10,
   add = numop,
@@ -639,44 +691,37 @@ list = join_tables(container, {
 -- {{{4 New
   type_number = BASE_TYPE_LIST,
   new = add_type_table(function(state, ...)
-    local ret = {...}
-    ret.iterators = {}
-    ret.locked = false
-    ret.fixed = false
-    return ret
+    return {[locks_idx]={}, length=select('#', ...), iterators={}, ...}
   end),
--- {{{4 Locks support
-  can_modify = function(state, lst, lst_position)
-    if (lst.fixed) then
-      -- TODO error out
-      return nil
-    elseif (lst.locked) then
-      -- TODO error out
-      return nil
-    end
-    return true
-  end,
 -- {{{4 Modification support
-  insert = function(state, lst, lst_position, pos, pos_position,
+  insert = function(state, lst, lst_position, idx, idx_position,
                            val, val_position)
-    if not list.can_modify(state, lst, lst_positioon) then
+    local idx = list.get_index(state, lst.length, idx, idx_position, false)
+    if idx == nil then
       return nil
     end
-    table.insert(self, pos, val)
+    local t = vim_type(lst)
+    if not t.check_container_lock(state, t, lst, lst_position, idx) then
+      return nil
+    end
+    table.insert(self, idx, val)
     return lst
   end,
-  append = function(state, lst, lst_position, pos, pos_position)
-    if not list.can_modify(state, lst, lst_positioon) then
+  append = function(state, lst, lst_position, val, val_position)
+    local t = vim_type(lst)
+    if not t.check_container_lock(state, t, lst, lst_position, -1) then
       return nil
     end
     table.insert(self, val)
   end,
 -- {{{4 Assignment support
   assign_subscript = function(state, lst, lst_position, idx, idx_position, val)
-    -- TODO check for locks
-    local length = list.length(lst)
-    local idx = list.get_index(state, length, idx, idx_position, false)
+    local idx = list.get_index(state, lst.length, idx, idx_position, false)
     if idx == nil then
+      return nil
+    end
+    local t = vim_type(lst)
+    if not t.check_container_lock(state, t, lst, lst_position, idx) then
       return nil
     end
     lst[idx] = val
@@ -696,22 +741,24 @@ list = join_tables(container, {
                        'E709: [:] requires a List value')
       end
     end
-    local length = list.length(lst)
     local idx1, idx2 = list.get_slice_indicies(
-      state, length, false, list.get_index,
+      state, lst.length, false, list.get_index,
       idx1, idx1_position,
       idx2, idx2_position
     )
     if idx1 == nil then
       return nil
     end
-    local val_length = list.length(val)
+    local t = vim_type(lst)
+    if not t.check_container_lock(state, t, lst, lst_position, idx1) then
+      return nil
+    end
     local tgt_length = idx2 - idx1 + 1
     -- FIXME Use val position in error messages
-    if val_length < tgt_length then
+    if val.length < tgt_length then
       return err.err(state, lst_position, true,
                      'E711: List value has not enough items')
-    elseif val_length > tgt_length then
+    elseif val.length > tgt_length then
       return err.err(state, lst_position, true,
                      'E710: List value has too many items')
     end
@@ -721,7 +768,6 @@ list = join_tables(container, {
     return true
   end,
 -- {{{4 Querying support
-  length = table.maxn,
   get_index = function(state, length, idx, idx_position, slice)
     local ret = get_number(state, idx, idx_position)
     ret = ret < 0 and ret + length + 1 or ret + 1
@@ -732,12 +778,12 @@ list = join_tables(container, {
     return ret
   end,
   subscript = function(state, lst, lst_position, idx, idx_position)
-    local length = list.length(lst)
+    local length = lst.length
     local idx = list.get_index(state, length, idx, idx_position, false)
     return lst[idx]
   end,
   slice = function(state, lst, lst_position, ...)
-    local length = list.length(lst)
+    local length = lst.length
     local idx1, idx2 = list.get_slice_indicies(state, length, true,
                                                list.get_index, ...)
     if idx1 == nil then
@@ -756,9 +802,10 @@ list = join_tables(container, {
   end,
   raw_slice_to_end = function(lst, idx)
     local ret = list:new(state)
-    for i = idx,list.length(lst) do
+    for i = idx,lst.length do
       ret[i - idx + 1] = lst[i]
     end
+    ret.length = lst.length - idx + 1
     return ret
   end,
 -- {{{4 Support for iterations
@@ -773,7 +820,7 @@ list = join_tables(container, {
   new_it_state = function(state, lst, lst_position)
     local it_state = {
       i = 0,
-      maxi = list.length(lst),
+      maxi = lst.length,
       lst = lst,
     }
     table.insert(lst.iterators, it_state)
@@ -783,7 +830,7 @@ list = join_tables(container, {
   already_represented_container = '[...]',
   repr = function(state, lst, lst_position, for_echo, refs)
     local ret = '['
-    local length = list.length(lst)
+    local length = lst.length
     local add_comma = false
     for i = 1,length do
       if add_comma then
@@ -829,12 +876,12 @@ list = join_tables(container, {
         return list.as_number(state, val2, val2_position)
       end
     end
-    local length1 = list.length(val1)
-    local length2 = list.length(val2)
+    local length1 = val1.length
     local ret = copy_ret and copy_table(val1) or val1
     for i, v in ipairs(val2) do
       ret[length1 + i] = v
     end
+    ret.length = length1 + val2.length
     return ret
   end,
   add = function(state, ...)
@@ -852,12 +899,12 @@ dict = join_tables(container, {
   type_number = BASE_TYPE_DICTIONARY,
   can_be_self = true,
   new = add_type_table(function(state, ...)
-    local ret = {}
     if select('#', ...) % 2 ~= 0 then
       return err.err(state, position, true,
                      'Internal error: odd number of arguments to dict:new')
     end
-    for i = 1,(select('#', ...)/2) do
+    local ret = {[length_idx]=select('#', ...)/2, [locks_idx]={}}
+    for i = 1,ret[length_idx] do
       local key = select(2*i - 1, ...)
       local val = select(2*i, ...)
       if not (key and val) then
@@ -874,22 +921,41 @@ dict = join_tables(container, {
       return err.err(state, key_position, true,
                      'E713: Cannot use empty key for dictionary')
     end
-    -- TODO check for locks
+    local t = vim_type(dct)
+    local can_edit, new_key = t.check_locks(state, t, dct, dct_position,
+                                                      key, key_position)
+    if not can_edit then
+      return nil
+    elseif new_key then
+      dct[length_idx] = dct[length_idx] + 1
+    end
     dct[key] = val
     return true
   end,
   delete_subscript = function(state, mustexist, dct, dct_position,
                                                 key, key_position)
-    if mustexist and dct[key] == nil then
-      local t = vim_type(dct)
-      return err.err(state, key_position, true,
-                     ((t.missing_key_delete_message or t.missing_key_message) ..
-                      ": %s"),
-                     key)
+    local t = vim_type(dct)
+    local old_key = dct[key]
+    if old_key == nil then
+      if mustexist then
+        return err.err(
+          state, key_position, true,
+          ((t.missing_key_delete_message or t.missing_key_message) .. ": %s"),
+          key
+        )
+      else
+        return true
+      end
     end
-    local ret = dct[key] or true
-    dct[key] = nil
-    return ret
+    if t.check_locks(state, t, dct, dct_position, key, key_position) then
+      if old_key then
+        dct[key] = nil
+        dct[length_idx] = dct[length_idx] - 1
+      end
+      return old_key or true
+    else
+      return nil
+    end
   end,
   non_unique_function_message = 'E717: Dictionary entry already exists: %s',
   assign_subscript_function = function(state, unique, dct, dct_position,
@@ -1217,6 +1283,7 @@ a_scope = join_tables(scope, {
   new = add_type_table(function(state, ...)
     return scope:new(state, 'a', ...)
   end),
+  fixed_message = 'E46: Cannot change read-only variable a:%s',
 })
 
 -- {{{3 v: scope dictionary
@@ -1224,6 +1291,8 @@ v_scope = join_tables(scope, {
   new = add_type_table(function(state, ...)
     return scope:new(state, 'v', ...)
   end),
+  fixed_message = 'E46: Cannot change read-only variable v:%s',
+  fixed_dict_message = 'E461: Illegal variable name: v:%s',
   special_keys = {
     exception = function(state)
       return state.exception
@@ -1384,7 +1453,7 @@ functions.copy = function(state, self, callee_position, val, val_position)
 end
 
 functions.deepcopy = function(state, self, callee_position, val, val_position)
-  return copy_value(val)
+  return copy_value(val, copymethods)
 end
 
 local funcnames = {}
@@ -1836,8 +1905,14 @@ end
 
 -- {{{1 Test helpers
 local test_ret
+-- WARNING: When type dictionary is copied luajit crashes
+local test_copy_methods = {
+  [type_idx] = function(v)
+    return v
+  end,
+}
 local test_echo = function(state, ...)
-  test_ret[#test_ret + 1] = copy_value(select(1, ...))
+  test_ret[#test_ret + 1] = copy_value(select(1, ...), test_copy_methods)
 end
 local test_state
 local test_state_copy
@@ -1854,7 +1929,7 @@ local test = {
       local state = old_enter_code(...)
       if not test_state then
         test_state = state
-        test_state_copy = copy_value(state)
+        test_state_copy = copy_value(state, test_copy_methods)
       end
       return state
     end
@@ -1863,13 +1938,14 @@ local test = {
     if state ~= test_state then
       test_echo(nil, 'State table is different')
     else
-      local differs, what, key = compare_tables_recursive(test_state_copy,state)
+      local differs, what, key, diff = compare_tables_recursive(
+        test_state_copy,state)
       if differs then
         test_echo(nil, ({
           missing1='New key found: %s',
           missing2='Key not present in state: %s',
-          differs='Value differs: %s',
-        })[what]:format(key))
+          differs='Value differs: %s (%s)',
+        })[what]:format(key, diff))
       end
     end
     for k, v in pairs(globals_at_start) do
