@@ -1858,14 +1858,14 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     WS("if vim.is_list(rhs) then\n");
 
     WINDENT(indent + 2);
-    WS("if (vim.list.length(rhs)");
+    WS("if rhs.length");
     if (has_rest) {
       WS(" >= ");
     } else {
       WS(" == ");
     }
     F_NOOPT(dump_unumber, (uintmax_t) val_num);
-    WS(") then\n");
+    WS(" then\n");
 
     current_node = lval_expr->node->children;
     for (size_t i = 0; i < val_num; i++) {
@@ -1894,9 +1894,9 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     WS("else\n");
     WINDENT(indent + 3);
     if (!has_rest) {
-      WS("if (vim.list.length(rhs) > ");
+      WS("if rhs.length > ");
       F_NOOPT(dump_unumber, (uintmax_t) val_num);
-      WS(") then\n");
+      WS(" then\n");
       WINDENT(indent + 4);
       DUMP_ERR_ERR(o.lnr, lval_expr->node->start + o.start_col, o.name,
                    "E688: More targets than List items");
