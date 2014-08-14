@@ -1234,11 +1234,15 @@ scope = join_tables(dict, {
     ret[scope_name_idx] = scope_name
     return ret
   end),
-  special_keys = {},
+  special_keys = {
+    [''] = function(state, dct)
+      return dct
+    end
+  },
   subscript = function(state, dct, dct_position, key, key_position)
     local special = dct[type_idx].special_keys[key]
     if special then
-      return special(state)
+      return special(state, dct)
     else
       return dict.subscript(state, dct, dct_position, key, key_position)
     end
@@ -1293,14 +1297,14 @@ v_scope = join_tables(scope, {
   end),
   fixed_message = 'E46: Cannot change read-only variable v:%s',
   fixed_dict_message = 'E461: Illegal variable name: v:%s',
-  special_keys = {
-    exception = function(state)
+  special_keys = join_tables(scope.special_keys, {
+    exception = function(state, dct)
       return state.exception
     end,
-    throwpoint = function(state)
+    throwpoint = function(state, dct)
       return state.throwpoint
     end,
-  },
+  }),
 })
 
 -- {{{3 Functions dictionary
