@@ -1568,6 +1568,11 @@ static FDEC(translate_varname, const char *const s,
 /// @param[in]  bang         True if function must not be unique when 
 ///                          is_funccall is set and true if errors about missing 
 ///                          values are to be ignored.
+/// @param[in]  dump_bang    True if the above value should be dumped. Ignored 
+///                          if is_funccall is true: in this case it is also 
+///                          considered true.
+/// @param[in]  prefix       Function prefix (check out functions in 
+///                          `vim.assign` table).
 /// @param[in]  dump         Function used to dump value that will be assigned. 
 ///                          When NULL use commands for undefining variable and 
 ///                          function definitions (backs :unlet and 
@@ -1576,28 +1581,25 @@ static FDEC(translate_varname, const char *const s,
 static FDEC(translate_lval, const char *const s,
                             const ExpressionNode *const node,
                             const bool is_funccall, const bool bang,
+                            const bool dump_bang, const char *const prefix,
                             const FTYPE(AssignmentValueDump) FNAME(dump),
                             const void *const dump_cookie)
 {
   FUNCTION_START;
 #define ADD_CALL(what) \
   do { \
-    if (FNAME(dump) == NULL) { \
-      if (is_funccall) { \
-        WS("vim.assign.del_" what "_function(state, "); \
-      } else { \
-        WS("vim.assign.del_" what "(state, "); \
-      } \
+    WS("vim.assign."); \
+    W(prefix); \
+    if (is_funccall) { \
+      WS(what "_function(state, "); \
+    } else { \
+      WS(what "(state, "); \
+    } \
+    if (dump_bang || is_funccall) { \
       F(dump_bool, bang); \
       WS(", "); \
-    } else { \
-      if (is_funccall) { \
-        WS("vim.assign.ass_" what "_function(state, "); \
-        F(dump_bool, bang); \
-        WS(", "); \
-      } else { \
-        WS("vim.assign.ass_" what "(state, "); \
-      } \
+    } \
+    if (FNAME(dump) != NULL) { \
       F(dump, dump_cookie); \
       WS(", "); \
     } \
@@ -1793,7 +1795,8 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
       case VAL_LET_ASSIGN: { \
         OVERRIDE_CONTEXT( \
           start_col, new_start_col, \
-          F(translate_lval, s, node, false, false, dump, dump_cookie); \
+          F(translate_lval, s, node, false, false, false, "ass_", dump, \
+                            dump_cookie); \
         ); \
         break; \
       } \
@@ -1811,6 +1814,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
         OVERRIDE_CONTEXT( \
           start_col, new_args.lval_start_col, \
           F(translate_lval, new_args.lval_s, new_args.lval_node, false, false, \
+            false, "ass_", \
             ((FTYPE(AssignmentValueDump)) \
                                       &FNAME(translate_modifying_assignment)), \
             (void *) &new_args); \
@@ -2051,6 +2055,7 @@ static CMD_FDEC(translate_function)
   const TranslateFuncArgs args = {node, indent};
   WINDENT(indent);
   F(translate_lval, TRANS_NODE_EXPR_ARGS(node, ARG_FUNC_NAME), true, node->bang,
+                    true, "ass_",
                     (FTYPE(AssignmentValueDump))
                       &FNAME(translate_function_definition),
                     (void *) &args);
@@ -2276,7 +2281,7 @@ static CMD_FDEC(translate_unlet)
     OVERRIDE_CONTEXT(
       start_col, lval_expr->col,
       F(translate_lval, lval_expr->string, current_node, false, node->bang,
-                        NULL, NULL);
+                        true, "del_", NULL, NULL);
       WS("\n");
     );
   }
@@ -2292,7 +2297,7 @@ static CMD_FDEC(translate_delfunction)
     OVERRIDE_CONTEXT(
       start_col, lval_expr->col,
       F(translate_lval, lval_expr->string, current_node, true, node->bang,
-                        NULL, NULL);
+                        true, "del_", NULL, NULL);
       WS("\n");
     );
   }
