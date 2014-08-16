@@ -86,7 +86,7 @@ compare_tables_recursive = function(tbl1, tbl2)
         else
           local differs, what, key, diff = compare_tables_recursive(tbl1[k], v)
           if differs then
-            return true, what, tostring(k) .. '/' .. key, diff
+            return true, what, tostring(k) .. '/' .. tostring(key), diff
           end
         end
       else
@@ -492,6 +492,18 @@ scalar = join_tables(type_base, {
   end,
 -- {{{3 string()
   container = false,
+-- {{{3 Locks support
+  set_container_lock = function(...)
+  end,
+  set_key_lock = function(state, depth, t, val, val_position, key, key_position,
+                          lock)
+    return scalar.assign_subscript(state, val, val_position)
+  end,
+  set_slice_lock = function(state, depth, t, val, val_position,
+                                             idx1, idx1_position,
+                                             idx2, idx1_position)
+    return scalar.assign_subscript(state, val, val_position)
+  end,
 -- {{{3 Operators support
   num_op_priority = 1,
   add = num_convert_2(function(n1, n2)
@@ -556,6 +568,9 @@ container = join_tables(type_base, {
       else
         message = 'E741: Value is locked: %s'
       end
+      if type(key) == 'number' then
+        key = key - 1
+      end
       return  err.err(state, val_position, true, message, key)
     end
     return true
@@ -568,20 +583,34 @@ container = join_tables(type_base, {
       else
         message = 'E741: Value is locked: %s'
       end
-      return  err.err(state, key_position, true, message, key)
+      if type(key) == 'number' then
+        key = key - 1
+      end
+      return err.err(state, key_position, true, message, key)
     end
     return true
   end,
   check_locks = function(state, t, val, val_position, key, key_position)
     local is_locked, new_key
     if val[key] then
+      -- When trying to add a new key check whether container itself is locked.
+      return t.check_key_lock(state, t, val, key, key_position), false
+    else
       -- When trying to overwrite existing value check whether specific value is 
       -- locked.
-      return t.check_container_lock(state, t, val, val_position, key), false
-    else
-      -- When trying to add a new key check whether container itself is locked.
-      return t.check_key_lock(state, t, val, key, key_position), true
+      return t.check_container_lock(state, t, val, val_position, key), true
     end
+  end,
+  set_key_lock = function(state, depth, t, val, val_position, key, key_position,
+                          lock)
+    if not val[key] then
+      return true
+    end
+    if val[locks_idx][key] ~= VAR_FIXED then
+      val[locks_idx][key] = lock
+    end
+    vim_type(val[key]).set_container_lock(state, depth, val[key], lock, {})
+    return true
   end,
 -- {{{3 Operators support
   num_op_priority = 10,
@@ -704,15 +733,21 @@ list = join_tables(container, {
     if not t.check_container_lock(state, t, lst, lst_position, idx) then
       return nil
     end
-    table.insert(self, idx, val)
-    return lst
+    local locks = lst[locks_idx]
+    for i = lst.length,idx,-1 do
+      lst[i + 1] = lst[i]
+      locks[i + 1] = locks[i]
+    end
+    lst[idx] = val
+    locks[idx] = nil
   end,
   append = function(state, lst, lst_position, val, val_position)
     local t = vim_type(lst)
     if not t.check_container_lock(state, t, lst, lst_position, -1) then
       return nil
     end
-    table.insert(self, val)
+    lst[lst.length + 1] = val
+    lst.length = lst.length + 1
   end,
 -- {{{4 Assignment support
   assign_subscript = function(state, lst, lst_position, idx, idx_position, val)
@@ -721,7 +756,8 @@ list = join_tables(container, {
       return nil
     end
     local t = vim_type(lst)
-    if not t.check_container_lock(state, t, lst, lst_position, idx) then
+    -- When performing regular assignment lock on specific item is not ignored.
+    if not t.check_locks(state, t, lst, lst_position, idx, idx_position) then
       return nil
     end
     lst[idx] = val
@@ -762,8 +798,12 @@ list = join_tables(container, {
       return err.err(state, lst_position, true,
                      'E710: List value has too many items')
     end
+    local locks = lst[locks_idx]
     for i = idx1,idx2 do
       lst[i] = val[i - idx1 + 1]
+      -- When performing slice assignment locks on specific items are ignored 
+      -- (may be a bug though). Lock on the whole list is not.
+      locks[i] = nil
     end
     return true
   end,
@@ -854,6 +894,47 @@ list = join_tables(container, {
   as_string = function(state, lst, lst_position)
     return err.err(state, lst_position, true, 'E730: Using List as a String')
   end,
+-- {{{4 Locks support
+  set_container_lock = function(state, depth, lst, lock, already_set)
+    -- lock may be either nil or VAR_LOCKED
+    if already_set[lst] then
+      return
+    end
+    already_set[lst] = true
+    local locks = lst[locks_idx]
+    if not depth or depth > 1 then
+      for i = 1,lst.length do
+        local v = lst[i]
+        if locks[i] ~= VAR_FIXED then
+          locks[i] = lock
+        end
+        local t = vim_type(v)
+        t.set_container_lock(state, depth and depth - 1, v, lock, already_set)
+      end
+    end
+    if locks[locks_idx] ~= VAR_FIXED then
+      locks[locks_idx] = lock
+    end
+  end,
+  set_slice_lock = function(state, depth, t, lst, lst_position,
+                                             idx1, idx1_position,
+                                             idx2, idx2_position, lock)
+    local idx1, idx2 = list.get_slice_indicies(
+      state, lst.length, false, list.get_index,
+      idx1, idx1_position,
+      idx2, idx2_position
+    )
+    if idx1 == nil then
+      return nil
+    end
+    local already_set = {}
+    for i = idx1,idx2 do
+      lst[locks_idx][i] = lock
+      local v = lst[i]
+      vim_type(v).set_container_lock(state, depth, v, lock, already_set)
+    end
+    return true
+  end,
 -- {{{4 Operators support
   cmp_priority = 10,
   cmp = function(state, ic, eq, val1, val1_position, val2, val2_position)
@@ -874,6 +955,12 @@ list = join_tables(container, {
         return list.as_number(state, val1, val1_position)
       else
         return list.as_number(state, val2, val2_position)
+      end
+    end
+    if not copy_ret then
+      local t = vim_type(val1)
+      if not list.check_container_lock(state, t, val1, val1_position, nil) then
+        return nil
       end
     end
     local length1 = val1.length
@@ -1029,6 +1116,34 @@ dict = join_tables(container, {
   as_string = function(state, dct, dct_position)
     return err.err(state, dct_position, true,
                    'E731: Using Dictionary as a String')
+  end,
+-- {{{4 Locks support
+  set_container_lock = function(state, depth, dct, lock, already_set)
+    -- lock may be either nil or VAR_LOCKED
+    if already_set[dct] then
+      return
+    end
+    already_set[dct] = true
+    local locks = dct[locks_idx]
+    if not depth or depth > 1 then
+      for k, v in pairs(dct) do
+        if type(k) == 'string' then
+          if locks[k] ~= VAR_FIXED then
+            locks[k] = lock
+          end
+          local t = vim_type(v)
+          t.set_container_lock(state, depth and depth - 1, v, lock, already_set)
+        end
+      end
+    end
+    if locks[locks_idx] ~= VAR_FIXED then
+      locks[locks_idx] = lock
+    end
+  end,
+  set_slice_lock = function(state, depth, t, dct, dct_position,
+                                             idx1, idx1_position,
+                                             idx2, idx1_position, lock)
+    return scalar.assign_slice(state, dct, dct_position)
   end,
 -- {{{4 Operators support
   cmp_priority = 10,
@@ -1256,6 +1371,16 @@ scope = join_tables(dict, {
     end
     return dict.assign_subscript(state, dct, dct_position, key, key_position,
                                         val)
+  end,
+  set_key_lock = function(state, depth, t, dct, dct_position, key, key_position,
+                          lock)
+    if key == '' then
+      t.set_container_lock(state, depth, dct, lock, {})
+      return true
+    else
+      return dict.set_key_lock(state, depth, t, dct, dct_position,
+                                                key, key_position, lock)
+    end
   end,
 })
 
@@ -1538,6 +1663,35 @@ local run_user_command = function(state, command, range, bang, args)
 end
 
 -- {{{1 Assign support
+local set_dict_lock = function(lock, state, bang, depth, dct, dct_position,
+                                                         key, key_position)
+  if not (dct and key) then
+    return nil
+  end
+  local t = vim_type(dct)
+  if bang then
+    depth = nil
+  end
+  return t.set_key_lock(state, depth, t, dct, dct_position, key, key_position,
+                        lock)
+end
+
+local set_slice_lock = function(lock, state, bang, depth, lst, lst_position,
+                                                          idx1, idx1_position,
+                                                          idx2, idx2_position)
+  if not (lst and idx1 and idx2) then
+    return nil
+  end
+  local t = vim_type(lst)
+  if bang then
+    depth = nil
+  end
+  return t.set_slice_lock(state, depth, t, lst, lst_position,
+                                           idx1, idx1_position,
+                                           idx2, idx2_position,
+                                           lock)
+end
+
 assign = {
   ass_dict = function(state, val, dct, dct_position,
                                   key, key_position)
@@ -1631,6 +1785,22 @@ assign = {
                                              idx2, idx2_position)
     return err.err(state, lst_position, true,
                    'E475: Expecting function reference, not List')
+  end,
+
+  lock_dict = function(...)
+    return set_dict_lock(VAR_LOCKED, ...)
+  end,
+
+  lock_slice = function(...)
+    return set_slice_lock(VAR_LOCKED, ...)
+  end,
+
+  unlock_dict = function(...)
+    return set_dict_lock(nil, ...)
+  end,
+
+  unlock_slice = function(...)
+    return set_slice_lock(nil, ...)
   end,
 }
 

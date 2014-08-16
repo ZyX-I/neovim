@@ -1679,6 +1679,16 @@ static FDEC(translate_let_list_item, const LetListItemAssArgs *const args)
   FUNCTION_END;
 }
 
+/// Helper function that dumps one integer
+///
+/// @param[in]  unumber  Translated number.
+static FDEC(translate_unumber, const void *const unumber)
+{
+  FUNCTION_START;
+  F_NOOPT(dump_unumber, (const uintmax_t) (const uintptr_t) unumber);
+  FUNCTION_END;
+}
+
 /// Helper function that dumps tail of the list
 ///
 /// List is located in indentvar described in args.
@@ -2288,6 +2298,48 @@ static CMD_FDEC(translate_unlet)
   FUNCTION_END;
 }
 
+static CMD_FDEC(translate_lockvar)
+{
+  FUNCTION_START;
+  const Expression *lval_expr = node->args[ARG_EXPR_EXPR].arg.expr;
+  const ExpressionNode *current_node = lval_expr->node;
+  uintptr_t unumber = (uintptr_t) node->args[ARG_LOCKVAR_DEPTH].arg.unumber;
+  if (unumber == 0) {
+    unumber = 2;
+  }
+  for (; current_node != NULL; current_node = current_node->next) {
+    OVERRIDE_CONTEXT(
+      start_col, lval_expr->col,
+      F(translate_lval, lval_expr->string, current_node, false, node->bang,
+                        true, "lock_", &FNAME(translate_unumber),
+                        (void *) unumber);
+      WS("\n");
+    );
+  }
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_unlockvar)
+{
+  FUNCTION_START;
+  const Expression *lval_expr = node->args[ARG_EXPR_EXPR].arg.expr;
+  const ExpressionNode *current_node = lval_expr->node;
+  uintptr_t unumber = (uintptr_t) node->args[ARG_LOCKVAR_DEPTH].arg.unumber;
+  if (unumber == 0) {
+    unumber = 2;
+  }
+  for (; current_node != NULL; current_node = current_node->next) {
+    OVERRIDE_CONTEXT(
+      start_col, lval_expr->col,
+      F(translate_lval, lval_expr->string, current_node, false, node->bang,
+                        true, "unlock_", &FNAME(translate_unumber),
+                        (void *) unumber);
+      WS("\n");
+    );
+  }
+  FUNCTION_END;
+}
+
 static CMD_FDEC(translate_delfunction)
 {
   FUNCTION_START;
@@ -2525,6 +2577,8 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdDelfunction, translate_delfunction)
       SET_HANDLER(kCmdThrow, translate_throw)
       SET_HANDLER(kCmdCall, translate_call)
+      SET_HANDLER(kCmdLockvar, translate_lockvar)
+      SET_HANDLER(kCmdUnlockvar, translate_unlockvar)
 #undef SET_HANDLER
       default: {
         CMD_F(translate_node);
