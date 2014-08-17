@@ -307,6 +307,8 @@ describe(':lockvar/:unlockvar', function()
     'echo g:a',
     'let g:b = 3',
     'unlet g:a',
+    'unlet g:d1.d2.d3',
+    'unlet g:d1.d2',
     'unlet g:d1',
     'unlockvar 1 g:'
   }, {
@@ -322,6 +324,8 @@ describe(':lockvar/:unlockvar', function()
     'Vim(let):E741: Value is locked: a',
     1,
     'Vim(let):E741: Value is locked: b',
+    'Vim(unlet):E741: Value is locked: d3',
+    'Vim(unlet):E741: Value is locked: d2',
   })
   itoe('Locks lists (depth = 1)', {
     'let g:l = [1, 2, 3, 4, [5], [[6], 7]]',
