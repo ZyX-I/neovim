@@ -1034,15 +1034,12 @@ dict = join_tables(container, {
         return true
       end
     end
-    if t.check_locks(state, t, dct, dct_position, key, key_position) then
-      if old_key then
-        dct[key] = nil
-        dct[length_idx] = dct[length_idx] - 1
-      end
-      return old_key or true
-    else
-      return nil
+    if old_key then
+      dct[key] = nil
+      dct[locks_idx][key] = nil
+      dct[length_idx] = dct[length_idx] - 1
     end
+    return old_key or true
   end,
   non_unique_function_message = 'E717: Dictionary entry already exists: %s',
   assign_subscript_function = function(state, unique, dct, dct_position,
