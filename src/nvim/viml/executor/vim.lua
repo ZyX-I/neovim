@@ -1065,10 +1065,15 @@ dict = join_tables(container, {
         return true
       end
     end
-    if old_key then
-      dct[key] = nil
-      dct[locks_idx][key] = nil
-      dct[length_idx] = dct[length_idx] - 1
+    if t.check_locks(state, t, dct, dct_position, key, key_position) then
+      if old_key then
+        dct[key] = nil
+        dct[locks_idx][key] = nil
+        dct[length_idx] = dct[length_idx] - 1
+      end
+      return old_key or true
+    else
+      return nil
     end
     return old_key or true
   end,
@@ -1403,6 +1408,28 @@ scope = join_tables(dict, {
     end
     return dict.assign_subscript(state, dct, dct_position, key, key_position,
                                         val)
+  end,
+  delete_subscript = function(state, mustexist, dct, dct_position,
+                                                key, key_position)
+    local t = vim_type(dct)
+    local old_key = dct[key]
+    if old_key == nil then
+      if mustexist then
+        return err.err(
+          state, key_position, true,
+          ((t.missing_key_delete_message or t.missing_key_message) .. ": %s"),
+          key
+        )
+      else
+        return true
+      end
+    end
+    if old_key then
+      dct[key] = nil
+      dct[locks_idx][key] = nil
+      dct[length_idx] = dct[length_idx] - 1
+    end
+    return old_key or true
   end,
   set_key_lock = function(state, depth, t, dct, dct_position, key, key_position,
                           lock)
