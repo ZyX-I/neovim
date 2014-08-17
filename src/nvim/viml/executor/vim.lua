@@ -257,6 +257,10 @@ BASE_TYPE_FLOAT      = 5
 local VAR_LOCKED = 1
 local VAR_FIXED = 2
 
+local IDX_GET   = 0
+local IDX_SLICE = 1
+local IDX_UNLET = 2
+
 -- {{{2 Utility functions
 local add_type_table = function(func)
   return function(self, ...)
@@ -411,16 +415,37 @@ local type_base = {
   call = function(state, fun, fun_position, ...)
     return err.err(state, fun_position, true, 'E15: Can only call a Funcref')
   end,
-  get_slice_indicies = function(state, length, slice, get_index,
+  get_slice_indicies = function(state, length, idx_type, get_index,
                                 idx1, idx1_position,
                                 idx2, idx2_position)
-    idx1 = get_index(state, length, idx1, idx1_position, slice)
+    idx1 = get_index(state, length, idx1, idx1_position, idx_type)
     if idx1 == nil then
       return nil, nil
     end
-    idx2 = get_index(state, length, idx2, idx2_position, slice)
+    idx2 = get_index(state, length, idx2, idx2_position, idx_type)
     if idx2 == nil then
       return nil, nil
+    end
+    if idx_type == IDX_UNLET then
+      if idx1 > length then
+        return err.err(state, idx1_position, true,
+                       'E684: List index out of range: %i', idx1 - 1), nil
+      end
+      if idx2 < 1 then
+        return err.err(state, idx2_position, true,
+                       'E684: List index out of range: %i',
+                       idx1 - length - 1), nil
+      end
+      if idx1 > idx2 then
+        return err.err(state, idx1_position, true,
+                       'E684: First index is greater than the second'), nil
+      end
+      if idx2 > length then
+        idx2 = length
+      end
+      if idx1 < 1 then
+        idx1 = 1
+      end
     end
     return idx1, idx2
   end,
@@ -452,27 +477,27 @@ scalar = join_tables(type_base, {
     if str == nil then
       return nil
     end
-    local idx = scalar.get_index(state, #str, idx, idx_position, false)
+    local idx = scalar.get_index(state, #str, idx, idx_position, IDX_GET)
     if idx == nil then
       return nil
     end
     return str:sub(idx, idx)
   end,
-  get_index = function(state, length, idx, idx_position, slice)
+  get_index = function(state, length, idx, idx_position, idx_type)
     local ret = get_number(state, idx, idx_position)
-    if slice then
-      ret = ret < 0 and ret + length + 1 or ret + 1
-      if ret <= 0 then
-        return false
-      end
-      return ret
-    else
+    if idx_type == IDX_GET then
       if ret < 0 then
         -- When string.sub receives (0, 0) as argument it returns empty string
         return 0
       else
         return ret + 1
       end
+    else
+      ret = ret < 0 and ret + length + 1 or ret + 1
+      if ret <= 0 then
+        return false
+      end
+      return ret
     end
   end,
   slice = function(state, val, val_position, ...)
@@ -480,7 +505,7 @@ scalar = join_tables(type_base, {
     if str == nil then
       return nil
     end
-    local idx1, idx2 = scalar.get_slice_indicies(state, #str, true,
+    local idx1, idx2 = scalar.get_slice_indicies(state, #str, IDX_SLICE,
                                                  scalar.get_index, ...)
     if idx1 == nil then
       return nil
@@ -725,7 +750,7 @@ list = join_tables(container, {
 -- {{{4 Modification support
   insert = function(state, lst, lst_position, idx, idx_position,
                            val, val_position)
-    local idx = list.get_index(state, lst.length, idx, idx_position, false)
+    local idx = list.get_index(state, lst.length, idx, idx_position, IDX_GET)
     if idx == nil then
       return nil
     end
@@ -751,7 +776,7 @@ list = join_tables(container, {
   end,
 -- {{{4 Assignment support
   assign_subscript = function(state, lst, lst_position, idx, idx_position, val)
-    local idx = list.get_index(state, lst.length, idx, idx_position, false)
+    local idx = list.get_index(state, lst.length, idx, idx_position, IDX_GET)
     if idx == nil then
       return nil
     end
@@ -778,7 +803,7 @@ list = join_tables(container, {
       end
     end
     local idx1, idx2 = list.get_slice_indicies(
-      state, lst.length, false, list.get_index,
+      state, lst.length, IDX_GET, list.get_index,
       idx1, idx1_position,
       idx2, idx2_position
     )
@@ -808,10 +833,10 @@ list = join_tables(container, {
     return true
   end,
 -- {{{4 Querying support
-  get_index = function(state, length, idx, idx_position, slice)
+  get_index = function(state, length, idx, idx_position, idx_type)
     local ret = get_number(state, idx, idx_position)
     ret = ret < 0 and ret + length + 1 or ret + 1
-    if not slice and (ret > length or ret <= 0) then
+    if idx_type == IDX_GET and (ret > length or ret <= 0) then
       return err.err(state, idx_position, true,
                      'E684: List index out of range: %i', idx)
     end
@@ -819,12 +844,12 @@ list = join_tables(container, {
   end,
   subscript = function(state, lst, lst_position, idx, idx_position)
     local length = lst.length
-    local idx = list.get_index(state, length, idx, idx_position, false)
+    local idx = list.get_index(state, length, idx, idx_position, IDX_GET)
     return lst[idx]
   end,
   slice = function(state, lst, lst_position, ...)
     local length = lst.length
-    local idx1, idx2 = list.get_slice_indicies(state, length, true,
+    local idx1, idx2 = list.get_slice_indicies(state, length, IDX_SLICE,
                                                list.get_index, ...)
     if idx1 == nil then
       return nil
@@ -920,7 +945,7 @@ list = join_tables(container, {
                                              idx1, idx1_position,
                                              idx2, idx2_position, lock)
     local idx1, idx2 = list.get_slice_indicies(
-      state, lst.length, false, list.get_index,
+      state, lst.length, IDX_UNLET, list.get_index,
       idx1, idx1_position,
       idx2, idx2_position
     )
