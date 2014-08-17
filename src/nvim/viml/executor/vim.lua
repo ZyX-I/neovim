@@ -637,6 +637,12 @@ container = join_tables(type_base, {
     vim_type(val[key]).set_container_lock(state, depth, val[key], lock, {})
     return true
   end,
+-- {{{3 Copy support
+  copy = function(val)
+    local ret = copy_table(val)
+    ret[locks_idx] = {}
+    return ret
+  end,
 -- {{{3 Operators support
   num_op_priority = 10,
   add = numop,
@@ -1251,6 +1257,10 @@ float = join_tables(scalar, {
   promote_integer = function(state, flt, flt_position)
     return flt
   end,
+-- {{{4 Copy support
+  copy = function(val)
+    return copy_table(val)
+  end,
 -- }}}4
 })
 
@@ -1597,7 +1607,7 @@ end
 
 functions.copy = function(state, self, callee_position, val, val_position)
   if type(val) == 'table' then
-    return copy_table(val)
+    return val[type_idx].copy(val)
   else
     return val
   end
