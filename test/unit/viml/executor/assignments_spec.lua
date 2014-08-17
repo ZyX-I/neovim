@@ -226,3 +226,197 @@ describe(':unlet support', function()
     endtry
   ]], {})
 end)
+
+describe(':lockvar/:unlockvar', function()
+  local ito, itoe
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+  end
+  itoe('Fails to lock scalars', {
+    'let [F, s, n, f] = [function("function"), "", 1, 1.0]',
+    'lockvar F[0]',
+    'lockvar s[0]',
+    'lockvar n[0]',
+    'lockvar f[0]',
+    'unlet F s n f'
+  }, {
+    'Vim(lockvar):E689: Can only index a List or Dictionary',
+    'Vim(lockvar):E689: Can only index a List or Dictionary',
+    'Vim(lockvar):E689: Can only index a List or Dictionary',
+    'Vim(lockvar):E689: Can only index a List or Dictionary',
+  })
+  itoe('Locks scope (depth = 1)', {
+    'let g:a = 1',
+    'lockvar 1 g:',
+    'echo g:a',
+    'let g:a = 2',
+    'echo g:a',
+    'let g:b = 1',
+    'unlet g:a',
+    'let g:a = 3',
+    'echo g:a',
+    'unlockvar 1 g:'
+  }, {
+    1, 2,
+    'Vim(let):E741: Value is locked: b',
+    'Vim(let):E741: Value is locked: a',
+    'Vim(echo):E121: Undefined variable: a',
+  })
+  itoe('Locks dictionaries (depth = 1)', {
+    'let d = {"a": 1}',
+    'lockvar 1 d',
+    'echo d.a',
+    'let d.a = 2',
+    'echo d.a',
+    'let d.b = 3',
+    'unlet d.a',
+    'let d.a = 4',
+    'echo d.b',
+    'echo d.a',
+    'unlet d'
+  }, {
+    1, 2,
+    'Vim(let):E741: Value is locked: b',
+    'Vim(let):E741: Value is locked: a',
+    'Vim(echo):E716: Key not present in Dictionary: b',
+    'Vim(echo):E716: Key not present in Dictionary: a',
+  })
+  itoe('Locks scope (depth = 2)', {
+    'let g:d1 = {"d2": {"d3": {"d4": {}}}}',
+    'let g:a = 1',
+    'lockvar 2 g:',
+    'echo string(g:d1)',
+    'let g:d1.d2.d3.d4 = {}',
+    'echo string(g:d1)',
+    'let g:d1.d2.d3 = {}',
+    'echo string(g:d1)',
+    'let g:d1.d2 = {}',
+    'echo string(g:d1)',
+    'let g:d1 = {}',
+    'echo g:a',
+    'let g:a = 2',
+    'echo g:a',
+    'let g:b = 3',
+    'unlet g:a',
+    'unlet g:d1',
+    'unlockvar 1 g:'
+  }, {
+    '{\'d2\': {\'d3\': {\'d4\': {}}}}',
+    '{\'d2\': {\'d3\': {\'d4\': {}}}}',
+    '{\'d2\': {\'d3\': {}}}',
+    '{\'d2\': {}}',
+    'Vim(let):E741: Value is locked: d1',
+    1,
+    'Vim(let):E741: Value is locked: a',
+    1,
+    'Vim(let):E741: Value is locked: b',
+  })
+  itoe('Locks scope (unlimited depth)', {
+    'let g:d1 = {"d2": {"d3": {"d4": {}}}}',
+    'let g:a = 1',
+    'lockvar! g:',
+    'echo string(g:d1)',
+    'let g:d1.d2.d3.d4 = {}',
+    'echo string(g:d1)',
+    'let g:d1.d2.d3 = {}',
+    'echo string(g:d1)',
+    'let g:d1.d2 = {}',
+    'echo string(g:d1)',
+    'let g:d1 = {}',
+    'echo g:a',
+    'let g:a = 2',
+    'echo g:a',
+    'let g:b = 3',
+    'unlet g:a',
+    'unlet g:d1',
+    'unlockvar 1 g:'
+  }, {
+    '{\'d2\': {\'d3\': {\'d4\': {}}}}',
+    'Vim(let):E741: Value is locked: d4',
+    '{\'d2\': {\'d3\': {\'d4\': {}}}}',
+    'Vim(let):E741: Value is locked: d3',
+    '{\'d2\': {\'d3\': {\'d4\': {}}}}',
+    'Vim(let):E741: Value is locked: d2',
+    '{\'d2\': {\'d3\': {\'d4\': {}}}}',
+    'Vim(let):E741: Value is locked: d1',
+    1,
+    'Vim(let):E741: Value is locked: a',
+    1,
+    'Vim(let):E741: Value is locked: b',
+  })
+  itoe('Locks lists (depth = 1)', {
+    'let g:l = [1, 2, 3, 4, [5], [[6], 7]]',
+    'lockvar 1 g:l',
+    'echo g:l',
+    'let g:l[0] = -1',
+    'echo g:l',
+    'let g:l[4][0] = -2',
+    'echo g:l',
+    'let g:l[5][0][0] = -3',
+    'echo g:l',
+    'let g:l += [1]',
+    'echo g:l',
+    'let g:l = []',
+    'echo g:l',
+    'unlet g:l'
+  }, {
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+    {-1, 2, 3, 4, {5}, {{6}, 7}},
+    {-1, 2, 3, 4, {-2}, {{6}, 7}},
+    {-1, 2, 3, 4, {-2}, {{-3}, 7}},
+    'Vim(let):E741: Value is locked: nil',
+    {-1, 2, 3, 4, {-2}, {{-3}, 7}},
+    'Vim(let):E741: Value is locked: l',
+    {-1, 2, 3, 4, {-2}, {{-3}, 7}},
+  })
+  itoe('Locks lists (unlimited depth)', {
+    'let g:l = [1, 2, 3, 4, [5], [[6], 7]]',
+    'lockvar! g:l',
+    'echo g:l',
+    'let g:l[0] = -1',
+    'echo g:l',
+    'let g:l[4][0] = -2',
+    'echo g:l',
+    'let g:l[5][0][0] = -3',
+    'echo g:l',
+    'let g:l += [1]',
+    'echo g:l',
+    'let g:l = []',
+    'echo g:l',
+    'unlet g:l'
+  }, {
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+    'Vim(let):E741: Value is locked: 0',
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+    'Vim(let):E741: Value is locked: 0',
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+    'Vim(let):E741: Value is locked: 0',
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+    'Vim(let):E741: Value is locked: nil',
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+    'Vim(let):E741: Value is locked: l',
+    {1, 2, 3, 4, {5}, {{6}, 7}},
+  })
+  itoe('Locks slices (depth = 1)', {
+    'let l = [[1], [2], [3], [4], [5]]',
+    'lockvar 1 l[1:3]',
+    'echo l',
+    'let l[1] = 0',
+    'echo l',
+    'let l[0] = [0]',
+    'echo l',
+    'lockvar 1 l[-100:100]',
+    'let l[0] = [-1]',
+    'echo l',
+    'unlet l'
+  }, {
+    {{1}, {2}, {3}, {4}, {5}},
+    'Vim(let):E741: Value is locked: 1',
+    {{1}, {2}, {3}, {4}, {5}},
+    {{0}, {2}, {3}, {4}, {5}},
+    'Vim(let):E741: Value is locked: 0',
+    {{0}, {2}, {3}, {4}, {5}},
+  })
+end)
