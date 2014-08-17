@@ -158,6 +158,26 @@ describe('copy() function', function()
   ]], {
     0, 1, 1, 1,
   })
+  itoe('Does not copy locks', {
+    'let l = [[1], [2], [3], [4], [5]]',
+    'lockvar! l',
+    'let l[0][0] = 0',
+    'let l[0] = 0',
+    'echo l',
+    'let l2 = copy(l)',
+    'let l2[0][0] = 0',
+    'echo l2',
+    'let l2[0] = 0',
+    'echo l2',
+    'unlet l l2'
+  }, {
+    'Vim(let):E741: Value is locked: 0',
+    'Vim(let):E741: Value is locked: 0',
+    {{1}, {2}, {3}, {4}, {5}},
+    'Vim(let):E741: Value is locked: 0',
+    {{1}, {2}, {3}, {4}, {5}},
+    {0, {2}, {3}, {4}, {5}},
+  })
 end)
 
 describe('deepcopy() function', function()
@@ -229,5 +249,24 @@ describe('deepcopy() function', function()
     unlet d d2
   ]], {
     0, 0, 0, 0, 1,
+  })
+  itoe('Does not copy locks', {
+    'let l = [[1], [2], [3], [4], [5]]',
+    'lockvar! l',
+    'let l[0][0] = 0',
+    'let l[0] = 0',
+    'echo l',
+    'let l2 = deepcopy(l)',
+    'let l2[0][0] = 0',
+    'echo l2',
+    'let l2[0] = 0',
+    'echo l2',
+    'unlet l l2'
+  }, {
+    'Vim(let):E741: Value is locked: 0',
+    'Vim(let):E741: Value is locked: 0',
+    {{1}, {2}, {3}, {4}, {5}},
+    {{0}, {2}, {3}, {4}, {5}},
+    {0, {2}, {3}, {4}, {5}},
   })
 end)
