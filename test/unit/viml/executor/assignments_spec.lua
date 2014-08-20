@@ -225,6 +225,26 @@ describe(':unlet support', function()
       echo v:exception
     endtry
   ]], {})
+  ito('Unlets a slice', [[
+    let l = [1, 2, 3, 4, 5, 6]
+    unlet l[1:3]
+    echo l
+    let l = [1, 2, 3, 4, 5, 6]
+    unlet l[1:1]
+    echo l
+    let l = [1, 2, 3, 4, 5, 6]
+    unlet l[0:0]
+    echo l
+    let l = [1, 2, 3, 4, 5, 6]
+    unlet l[-1:]
+    echo l
+    unlet l
+  ]], {
+    {1, 5, 6},
+    {1, 3, 4, 5, 6},
+    {2, 3, 4, 5, 6},
+    {1, 2, 3, 4, 5},
+  })
 end)
 
 describe(':lockvar/:unlockvar', function()
