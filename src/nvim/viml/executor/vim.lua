@@ -838,6 +838,32 @@ list = join_tables(container, {
     end
     return true
   end,
+  delete_slice = function(state, lst, lst_position, idx1, idx1_position,
+                                                    idx2, idx2_position)
+    local idx1, idx2 = list.get_slice_indicies(
+      state, lst.length, IDX_UNLET, list.get_index,
+      idx1, idx1_position,
+      idx2, idx2_position
+    )
+    if idx1 == nil then
+      return nil
+    end
+    local slicelen = idx2 - idx1 + 1
+    local movelen = lst.length - idx2
+    local locks = lst[locks_idx]
+    for i = 1,movelen do
+      lst[idx1 + i - 1] = lst[idx2 + i]
+      locks[idx1 + i - 1] = locks[idx1 + i]
+      lst[idx2 + i] = nil
+      locks[idx2 + i] = nil
+    end
+    for i = idx1+movelen,idx2 do
+      lst[i] = nil
+      locks[i] = nil
+    end
+    lst.length = lst.length - slicelen
+    return true
+  end,
 -- {{{4 Querying support
   get_index = function(state, length, idx, idx_position, idx_type)
     local ret = get_number(state, idx, idx_position)
@@ -1837,6 +1863,12 @@ assign = {
   del_slice = function(state, bang, lst, lst_position,
                                     idx1, idx1_position,
                                     idx2, idx2_position)
+    if not (lst and idx1 and idx2) then
+      return nil
+    end
+    local t = vim_type(lst)
+    return t.delete_slice(state, lst, lst_position, idx1, idx1_position,
+                                                    idx2, idx2_position)
   end,
 
   del_slice_function = function(state, bang, lst, lst_position,
