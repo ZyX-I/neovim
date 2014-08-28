@@ -66,6 +66,104 @@ describe(':let assignments', function()
   ]], {1, {_t='list'}})
 end)
 
+describe('Curly braces names', function()
+  ito('work with :let', [[
+    let {"abc"} = 1
+    let g:{"d"}{"e"}{"f"} = 2
+    let {"g:"}g{"h"}i = 3
+    let j{"kl"} = 4
+    let g:m{"no"} = 5
+    let s{"t"."u"} = 6
+    echo [abc, g:def, g:ghi, jkl, g:mno, stu]
+    unlet abc g:def g:ghi jkl g:mno stu
+  ]], {{1, 2, 3, 4, 5, 6}})
+  ito('work inside expressions', [[
+    let abc = 1
+    let g:def = 2
+    let g:ghi = 3
+    let jkl = 4
+    let g:mno = 5
+    let stu = 6
+    echo [{"abc"}, g:{"de"}{"f"}, {"g:"}gh{"i"}, {"j"}{"kl"}, g:m{"no"}, s{"t"."u"}]
+    unlet abc g:def g:ghi jkl g:mno stu
+  ]], {{1, 2, 3, 4, 5, 6}})
+  ito('work with :unlet', [[
+    let abc = 1
+    let g:def = 2
+    let g:ghi = 3
+    let jkl = 4
+    let g:mno = 5
+    let stu = 6
+    echo [abc, g:def, g:ghi, jkl, g:mno, stu]
+    unlet {"abc"} g:{"de"}{"f"} {"g:"}gh{"i"} {"j"}{"kl"} g:m{"no"} s{"t"."u"}
+    for name in ["abc", "g:def", "g:ghi", "jkl", "g:mno", "stu"]
+      try
+        echo {name}
+      catch
+        echo v:exception
+      endtry
+    endfor
+    unlet name
+  ]], {
+    {1, 2, 3, 4, 5, 6},
+    'Vim(echo):E121: Undefined variable: abc',
+    'Vim(echo):E121: Undefined variable: def',
+    'Vim(echo):E121: Undefined variable: ghi',
+    'Vim(echo):E121: Undefined variable: jkl',
+    'Vim(echo):E121: Undefined variable: mno',
+    'Vim(echo):E121: Undefined variable: stu',
+  })
+  ito('work with :(un)lockvar', [[
+    let abc = 1
+    let g:def = 2
+    let g:ghi = 3
+    let jkl = 4
+    let g:mno = 5
+    let stu = 6
+    echo [abc, g:def, g:ghi, jkl, g:mno, stu]
+    lockvar {"abc"}
+    lockvar g:{"de"}{"f"}
+    lockvar {"g:"}gh{"i"}
+    lockvar {"j"}{"kl"}
+    lockvar g:m{"no"}
+    lockvar s{"t"."u"}
+    for name in ["abc", "g:def", "g:ghi", "jkl", "g:mno", "stu"]
+      try
+        let {name} = -1
+      catch
+        echo v:exception
+      endtry
+    endfor
+    echo [abc, g:def, g:ghi, jkl, g:mno, stu]
+    unlockvar {"abc"}
+    unlockvar g:{"de"}{"f"}
+    unlockvar {"g:"}gh{"i"}
+    unlockvar {"j"}{"kl"}
+    unlockvar g:m{"no"}
+    unlockvar s{"t"."u"}
+    for name in ["abc", "g:def", "g:ghi", "jkl", "g:mno", "stu"]
+      try
+        let {name} = -1
+      catch
+        echo v:exception
+      endtry
+    endfor
+    echo [abc, g:def, g:ghi, jkl, g:mno, stu]
+    unlet abc g:def g:ghi jkl g:mno stu
+    unlet name
+  ]], {
+    {1, 2, 3, 4, 5, 6},
+    'Vim(let):E741: Value is locked: abc',
+    'Vim(let):E741: Value is locked: def',
+    'Vim(let):E741: Value is locked: ghi',
+    'Vim(let):E741: Value is locked: jkl',
+    'Vim(let):E741: Value is locked: mno',
+    'Vim(let):E741: Value is locked: stu',
+    {1, 2, 3, 4, 5, 6},
+    {-1, -1, -1, -1, -1, -1},
+  })
+end)
+
 describe(':let modifying assignments', function()
   ito('Increments single value from default scope', [[
     let a = 1
