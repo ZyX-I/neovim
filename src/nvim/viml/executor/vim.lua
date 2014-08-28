@@ -2161,11 +2161,32 @@ local concat_or_subscript = function(state, bind, dct, dct_position,
   end
 end
 
-local get_scope_and_key = function(state, key)
+local scopes = {
+  v = function(state) return state.global.v end,
+  g = function(state) return state.global.g end,
+
+  s = function(state) return state.s end,
+  a = function(state) return state.a end,
+
+  l = function(state) return state.l end,
+
+  t = function(state) return state.global.tabpage.t end,
+  w = function(state) return state.global.window.w end,
+  b = function(state) return state.global.buffer.b end,
+}
+
+local get_scope_and_key = function(state, key, key_position)
+  -- FIXME This function duplicates part of the functionality of 
+  -- “translate_scope” function.
   if not key then
     return nil
   end
-  -- TODO
+  if key:sub(2, 2) == ':' then
+    if scopes[key:sub(1, 1)] then
+      return scopes[key:sub(1, 1)](state), key_position, key:sub(3), key_position
+    end
+  end
+  return state.current_scope, key_position, key, key_position
 end
 
 -- {{{1 Test helpers
