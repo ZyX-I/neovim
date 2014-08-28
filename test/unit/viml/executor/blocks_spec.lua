@@ -322,6 +322,15 @@ describe(':for loops', function()
     endfor
     unlet i
   ]], {1, 2})
+  ito('respects :continue', [[
+    for i in [1, 2, 3, 4, 5, 6]
+      if i % 2 == 0
+        continue
+      endif
+      echo i
+    endfor
+    unlet i
+  ]], {1, 3, 5})
   for _, v in ipairs({{'dictionary', '{}'},
                       {'string', '""'},
                       {'number', '0'},
@@ -369,6 +378,17 @@ describe(':while loop', function()
     endwhile
     unlet i
   ]], {1, 2})
+  ito('respects :continue', [[
+    let i = 0
+    while i < 10
+      let i += 1
+      if i % 2 == 0
+        continue
+      endif
+      echo i
+    endwhile
+    unlet i
+  ]], {1, 3, 5, 7, 9})
 end)
 
 describe(':break command', function()
@@ -397,6 +417,35 @@ describe(':break command', function()
     'unlet i',
   }, {
     'Vim(break):E587: :break without :while or :for'
+  })
+end)
+
+describe(':continue command', function()
+  local ito, itoe
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+  end
+  itoe('does not work outside the loop', {
+    'continue'
+  }, {
+    'Vim(continue):E586: :continue without :while or :for'
+  })
+  itoe('does not work inside a function inside the :for loop', {
+    'for i in [1, 2, 3]|function Abc()|continue|endfunction|call Abc()|endfor',
+    'delfunction Abc',
+    'unlet i',
+  }, {
+    'Vim(continue):E586: :continue without :while or :for'
+  })
+  itoe('does not work inside a function inside the :while loop', {
+    'let i = 0',
+    'while i < 3|function Abc()|continue|endfunction|call Abc()|let i+=1|endwhile',
+    'delfunction Abc',
+    'unlet i',
+  }, {
+    'Vim(continue):E586: :continue without :while or :for'
   })
 end)
 
