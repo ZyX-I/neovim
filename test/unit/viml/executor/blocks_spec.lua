@@ -331,6 +331,26 @@ describe(':for loops', function()
   end
 end)
 
+describe(':while loop', function()
+  local ito, itoe
+  do
+    local _obj_0 = require('test.unit.viml.executor.helpers')(it)
+    ito = _obj_0.ito
+    itoe = _obj_0.itoe
+  end
+  ito('works', [[
+    let i = 0
+    let j = 10
+    while i < j
+      let i += 1
+      let j -= 1
+      echo i
+      echo j
+    endwhile
+    unlet i j
+  ]], {1, 9, 2, 8, 3, 7, 4, 6, 5, 5})
+end)
+
 describe('Function calls', function()
   local ito, itoe
   do
