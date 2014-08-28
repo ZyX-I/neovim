@@ -1147,8 +1147,6 @@ static FDEC(translate_expr_node, const char *const s,
     case kExprVariableName: {
       WS("vim.subscript.subscript(state, false, ");
       F(translate_varname, s, node, FALSE);
-      W(", ");
-      F(dump_position, o.lnr, o.start_col + node->start, o.name);
       WS(")");
       break;
     }
@@ -1481,6 +1479,8 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 /// the last arguments to the outer function because it may translate to one 
 /// argument: a call of get_scope_and_key which will return two values.
 ///
+/// @note This function is responsible for adding position as well.
+///
 /// @param[in]  s            String holding initial expression representation.
 /// @param[in]  node         Translated variable name. Must be a node with 
 ///                          kExprVariableName type.
@@ -1491,7 +1491,7 @@ static FDEC(translate_varname, const char *const s,
 {
   FUNCTION_START;
   const ExpressionNode *current_node = node->children;
-  bool add_concat;
+  ExpressionNode new_current_node;
   bool close_parenthesis = false;
 
   assert(node->type == kExprVariableName);
@@ -1504,55 +1504,58 @@ static FDEC(translate_varname, const char *const s,
                                                  : 0));
     if (start == NULL) {
 
-      WS("vim.get_scope_and_key(state, vim.concat(state, '");
-      W_EXPR_POS(s, current_node);
-      WS("', ");
-      F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
+      WS("vim.get_scope_and_key(state");
       close_parenthesis = true;
     } else {
-      WS(", vim.concat(state, '");
-      W_END(start, s + current_node->end);
-      WS("', ");
-      F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
+      WS(", ");
+      F(dump_position, o.lnr, o.start_col + node->start, o.name);
+      const size_t new_start = (start - s);
+      if (new_start == current_node->start) {
+        // Keep present value of current_node
+      } else if (new_start <= current_node->end) {
+        new_current_node = *current_node;
+        new_current_node.start = new_start;
+        current_node = &new_current_node;
+      } else {
+        current_node = current_node->next;
+      }
     }
-    add_concat = true;
   } else {
-    WS("vim.get_scope_and_key(state, vim.concat(state, ");
-    add_concat = false;
+    WS("vim.get_scope_and_key(state");
     close_parenthesis = true;
   }
+  WS(", vim.op.concat(state");
 
-  for (current_node = current_node->next; current_node != NULL;
-        current_node = current_node->next) {
-    if (add_concat) {
-      WS(", ");
-    } else {
-      add_concat = true;
-    }
+  for (; current_node != NULL; current_node = current_node->next) {
+    WS(", ");
     switch (current_node->type) {
       case kExprIdentifier: {
         WS("'");
         W_EXPR_POS(s, current_node);
         WS("', ");
-        F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
         break;
       }
       case kExprCurlyName: {
         F(translate_expr_node, s, current_node->children, false);
         WS(", ");
-        F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
         break;
       }
       default: {
         assert(false);
       }
     }
+    F(dump_position, o.lnr, o.start_col + current_node->start, o.name);
   }
 
   WS(")");
 
   if (close_parenthesis) {
+    WS(", ");
+    F(dump_position, o.lnr, o.start_col + node->start, o.name);
     WS(")");
+  } else {
+    WS(", ");
+    F(dump_position, o.lnr, o.start_col + node->children->next->start, o.name);
   }
 
   FUNCTION_END;
@@ -1628,8 +1631,6 @@ static FDEC(translate_lval, const char *const s,
       ADD_CALL("dict");
 
       F(translate_varname, s, node, is_funccall);
-      WS(", ");
-      F(dump_position, o.lnr, o.start_col + node->start, o.name);
 
       WS(")");
       break;
