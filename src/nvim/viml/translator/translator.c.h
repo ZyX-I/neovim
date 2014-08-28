@@ -163,6 +163,7 @@ typedef struct {
   size_t lnr;                ///< Number of the line that is being translated.
   size_t start_col;          ///< Offset of “first” column in the line.
   const char *const *lines;  ///< Dumped code lines.
+  bool inloop;               ///< True if inside the loop.
 } TranslationContext;
 
 FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
@@ -2065,8 +2066,8 @@ static CMD_FDEC(translate_function)
   FUNCTION_START;
   const TranslateFuncArgs args = {node, indent};
   WINDENT(indent);
-  F(translate_lval, TRANS_NODE_EXPR_ARGS(node, ARG_FUNC_NAME), true, node->bang,
-                    true, "ass_",
+  F(translate_lval, TRANS_NODE_EXPR_ARGS(node, ARG_FUNC_NAME), true,
+                    node->bang, true, "ass_",
                     (FTYPE(AssignmentValueDump))
                       &FNAME(translate_function_definition),
                     (void *) &args);
@@ -2111,6 +2112,19 @@ static CMD_FDEC(translate_while)
 
   WINDENT(indent);
   WS("end\n");
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_break)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  if (o.inloop) {
+    WS("break\n");
+  } else {
+    DUMP_ERR_ERR(o.lnr, o.start_col, o.name,
+                 "E587: :break without :while or :for");
+  }
   FUNCTION_END;
 }
 
@@ -2566,9 +2580,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdSyntaxError, translate_error)
       SET_HANDLER(kCmdMissing, translate_missing)
       SET_HANDLER(kCmdUSER, translate_user)
-      SET_HANDLER(kCmdFunction, translate_function)
-      SET_HANDLER(kCmdFor, translate_for)
-      SET_HANDLER(kCmdWhile, translate_while)
+      SET_HANDLER(kCmdBreak, translate_break)
       case kCmdElse:
       case kCmdElseif:
       SET_HANDLER(kCmdIf, translate_if_block)
@@ -2581,6 +2593,20 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdLockvar, translate_lockvar)
       SET_HANDLER(kCmdUnlockvar, translate_unlockvar)
 #undef SET_HANDLER
+#define SET_LOOP_HANDLER(cmd_type, handler, inloop_value) \
+      case cmd_type: { \
+        OVERRIDE_CONTEXT( \
+          inloop, inloop_value, \
+          CMD_F(handler); \
+        ); \
+        continue; \
+      }
+      // Function body may not be treated as located inside the loop: this 
+      // affects :break/:continue commands handling resulting in lua error.
+      SET_LOOP_HANDLER(kCmdFunction, translate_function, false)
+      SET_LOOP_HANDLER(kCmdFor, translate_for, true)
+      SET_LOOP_HANDLER(kCmdWhile, translate_while, true)
+#undef SET_LOOP_HANDLER
       default: {
         CMD_F(translate_node);
         continue;
@@ -2613,9 +2639,13 @@ static FDEC(translate_parser_result, const ParserResult *const pres,
   F(dump_string, pres->fname);
   WS(")\n");
   OVERRIDE_CONTEXT(
-    lines, (const char *const *) pres->lines,
+    inloop, false,
 
-    F(translate_nodes, pres->node, indent);
+    OVERRIDE_CONTEXT(
+      lines, (const char *const *) pres->lines,
+
+      F(translate_nodes, pres->node, indent);
+    );
   );
   FUNCTION_END;
 }
