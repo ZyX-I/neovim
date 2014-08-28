@@ -2079,6 +2079,10 @@ static CMD_FDEC(translate_for)
 {
   FUNCTION_START;
   WINDENT(indent);
+  WS("do\n");
+  WINDENT(indent + 1);
+  WS("local cont = true\n");
+  WINDENT(indent + 2);
   WS("for _, i in vim.iter(state, ");
   F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_FOR_RHS), false);
   WS(", ");
@@ -2086,15 +2090,28 @@ static CMD_FDEC(translate_for)
                    o.name);
   WS(") do\n");
 
-  WINDENT(indent + 1);
+  WINDENT(indent + 2);
   F(translate_assignment, node->args[ARG_FOR_LHS].arg.expr, indent + 1,
                           "break",
                           (FTYPE(AssignmentValueDump))
                             (&FNAME(dump_raw_string)),
                           (void *) "i", VAL_LET_ASSIGN);
 
-  F(translate_nodes, node->children, indent + 1);
+  WINDENT(indent + 2);
+  WS("repeat\n");
 
+  F(translate_nodes, node->children, indent + 3);
+
+  WINDENT(indent + 2);
+  WS("until true\n");
+  WINDENT(indent + 2);
+  WS("if not cont then\n");
+  WINDENT(indent + 3);
+  WS("break\n");
+  WINDENT(indent + 2);
+  WS("end\n");
+  WINDENT(indent + 1);
+  WS("end\n");
   WINDENT(indent);
   WS("end\n");
   FUNCTION_END;
@@ -2104,12 +2121,22 @@ static CMD_FDEC(translate_while)
 {
   FUNCTION_START;
   WINDENT(indent);
-  WS("while vim.get_boolean(state, ");
+  WS("do\n");
+  WINDENT(indent + 1);
+  WS("local cont = true\n");
+  WINDENT(indent + 1);
+  WS("while cont and vim.get_boolean(state, ");
   F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_EXPR_EXPR), false);
   WS(") do\n");
+  WINDENT(indent + 2);
+  WS("repeat\n");
 
-  F(translate_nodes, node->children, indent + 1);
+  F(translate_nodes, node->children, indent + 3);
 
+  WINDENT(indent + 2);
+  WS("until true\n");
+  WINDENT(indent + 1);
+  WS("end\n");
   WINDENT(indent);
   WS("end\n");
   FUNCTION_END;
@@ -2120,10 +2147,25 @@ static CMD_FDEC(translate_break)
   FUNCTION_START;
   WINDENT(indent);
   if (o.inloop) {
+    WS("cont = false\n");
+    WINDENT(indent);
     WS("break\n");
   } else {
     DUMP_ERR_ERR(o.lnr, o.start_col, o.name,
                  "E587: :break without :while or :for");
+  }
+  FUNCTION_END;
+}
+
+static CMD_FDEC(translate_continue)
+{
+  FUNCTION_START;
+  WINDENT(indent);
+  if (o.inloop) {
+    WS("break\n");
+  } else {
+    DUMP_ERR_ERR(o.lnr, o.start_col, o.name,
+                 "E586: :continue without :while or :for");
   }
   FUNCTION_END;
 }
@@ -2581,6 +2623,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
       SET_HANDLER(kCmdMissing, translate_missing)
       SET_HANDLER(kCmdUSER, translate_user)
       SET_HANDLER(kCmdBreak, translate_break)
+      SET_HANDLER(kCmdContinue, translate_continue)
       case kCmdElse:
       case kCmdElseif:
       SET_HANDLER(kCmdIf, translate_if_block)
