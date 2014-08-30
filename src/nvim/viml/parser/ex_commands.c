@@ -120,15 +120,15 @@ static Regex *regex_alloc(const char *string, size_t len)
 /// @param[in]  type  Part type.
 ///
 /// @return Pointer to allocated block of memory.
-static Glob *glob_alloc(GlobType type)
+static Pattern *pattern_alloc(PatternType type)
 {
-  Glob *glob;
+  Pattern *pat;
 
-  glob = XCALLOC_NEW(Glob, 1);
+  pat = XCALLOC_NEW(Pattern, 1);
 
-  glob->type = type;
+  pat->type = type;
 
-  return glob;
+  return pat;
 }
 
 /// Allocate new address followup structure and set its type
@@ -166,12 +166,22 @@ static void free_regex(Regex *regex)
   free(regex);
 }
 
-static void free_glob(Glob *glob)
+static void free_patterns(Patterns *pats)
 {
-  if (glob == NULL)
+  if (pats == NULL)
+    return;
+  free_pattern(pats->pat);
+  free(pats->pat);
+  free_patterns(pats->next);
+  free(pats->next);
+}
+
+static void free_pattern(Pattern *pat)
+{
+  if (pat == NULL)
     return;
 
-  switch (glob->type) {
+  switch (pat->type) {
     case kPatMissing:
     case kPatHome:
     case kPatCurrent:
@@ -188,25 +198,29 @@ static void free_glob(Glob *glob)
     case kPatEnviron:
     case kPatCollection:
     case kGlobShell: {
-      free(glob->data.str);
+      free(pat->data.str);
       break;
     }
     case kGlobExpression: {
-      free_expr(glob->data.expr);
+      free_expr(pat->data.expr);
       break;
     }
     case kPatBranch: {
-      free_glob(glob->data.glob);
+      free_patterns(&(pat->data.pats));
       break;
     }
   }
-  free_glob(glob->next);
-  free(glob);
+  free_pattern(pat->next);
 }
 
-static void free_pattern(Pattern *pat)
+static void free_glob(Glob *glob)
 {
-  free_glob((Glob *) pat);
+  if (glob == NULL)
+    return;
+
+  free_pattern(&(glob->pat));
+  free_glob(glob->next);
+  free(glob->next);
 }
 
 static void free_address_data(Address *address)
@@ -312,6 +326,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     }
     case kArgGlob: {
       free_glob(arg->arg.glob);
+      free(arg->arg.glob);
       break;
     }
     case kArgRegex: {
@@ -371,27 +386,28 @@ void free_cmd(CommandNode *node)
 
   free_cmd(node->next);
   free_cmd(node->children);
-  free_glob(node->glob);
+  free_glob(&(node->glob));
   free_range_data(&(node->range));
   free(node->name);
   free(node->skips);
   free(node);
 }
 
-static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
-                    bool is_branch, bool is_glob, const size_t col)
+static int get_pattern(const char **pp, CommandParserError *error,
+                       Pattern **pat, const bool is_branch, const bool is_glob,
+                       const size_t col)
 {
   const char *p = *pp;
-  Glob **next = glob;
+  Pattern **next = pat;
   size_t literal_length = 0;
   const char *literal_start = NULL;
   int ret = FAIL;
   const char *const s = p;
 
-  *glob = NULL;
+  *pat = NULL;
 
   for (;;) {
-    GlobType type = kPatMissing;
+    PatternType type = kPatMissing;
     switch (*p) {
       case '`': {
         if (!is_glob)
@@ -458,32 +474,52 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
       }
       case '{': {
         type = kPatBranch;
+        break;
+      }
+      case '}': {
+        if (is_branch) {
+          type = kPatMissing;
+        } else {
+          type = kPatLiteral;
+        }
+        break;
       }
       case '$': {
         type = kPatHome;
         break;
       }
-      case NUL: {
-        type = kPatMissing;
-        break;
-      }
       case ',': {
-        if (is_branch)
+        if (is_branch) {
           type = kPatMissing;
-        else
+        } else {
           type = kPatLiteral;
+        }
         break;
       }
+      case '\\': {
+        type = kPatLiteral;
+        p++;
+        break;
+      }
+      // Ends the whole command
+      case NUL:
+      case '|':
+      case '\n':
+      case '"': {
+        // fallthrough
+      }
+      // Ends one pattern
       case ' ':
       case '\t': {
         type = kPatMissing;
         break;
       }
       case '~': {
-        if (p == *pp)
+        if (p == *pp) {
           type = kPatHome;
-        else
+        } else {
           type = kPatLiteral;
+        }
         break;
       }
       default: {
@@ -495,7 +531,7 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
       if (literal_start == NULL)
         literal_start = p;
       literal_length++;
-#define GLOB_SPECIAL_CHARS "`#*?%\\[{}]$"
+#define GLOB_SPECIAL_CHARS "`#*?%\\[{}]$ \t"
 #define IS_GLOB_SPECIAL(c) (strchr(GLOB_SPECIAL_CHARS, c) != NULL)
       // TODO Compare with vim
       if (*p == '\\' && IS_GLOB_SPECIAL(p[1]))
@@ -506,7 +542,7 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
       if (literal_start != NULL) {
         char *s;
         const char *t;
-        *next = glob_alloc(kPatLiteral);
+        *next = pattern_alloc(kPatLiteral);
         (*next)->data.str = XCALLOC_NEW(char, literal_length + 1);
         s = (*next)->data.str;
 
@@ -524,7 +560,7 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
       }
       if (type == kPatMissing)
         break;
-      *next = glob_alloc(type);
+      *next = pattern_alloc(type);
       switch (type) {
         case kGlobExpression: {
           ExpressionParserError expr_error;
@@ -540,12 +576,27 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
             ret = NOTDONE;
             goto get_glob_error_return;
           }
+          p++;
           break;
         }
         case kGlobShell: {
-          *next = glob_alloc(kGlobShell);
-          ((*next)->data.str = xstrdup(p));
-          p += STRLEN(p);
+          *next = pattern_alloc(kGlobShell);
+          const char *const init_p = p;
+          p++;
+          while (!ENDS_EXCMD(*p) && !(*p == '`' && p[-1] != '\\')) {
+            p++;
+          }
+          if(*p != '`' || p == init_p + 1) {
+            free_pattern(*next);
+            memset(*next, 0, sizeof(**next));
+            p = init_p + 1;
+            literal_start = init_p;
+            literal_length = 1;
+            continue;
+          } else {
+            ((*next)->data.str = xstrndup(init_p + 1, p - init_p - 1));
+            p++;
+          }
           break;
         }
         case kPatHome:
@@ -581,19 +632,38 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
           break;
         }
         case kPatBranch: {
-          Glob **cnext = &((*next)->data.glob);
+          Patterns *cur_pats = &((*next)->data.pats);
+          Patterns **next_pats = &cur_pats;
+          const char *const init_p = p;
           do {
             int cret;
+            Pattern *pat = NULL;
             p++;
-            if ((cret = get_glob(&p, error, cnext, true, is_glob, col))
+            if ((cret = get_pattern(&p, error, &pat, true, is_glob, col))
                 == FAIL)
               return FAIL;
             if (cret == NOTDONE) {
               ret = NOTDONE;
               goto get_glob_error_return;
             }
-            cnext = &((*cnext)->next);
+            if (pat != NULL) {
+              if (*next_pats == NULL) {
+                *next_pats = XCALLOC_NEW(Patterns, 1);
+              }
+              (*next_pats)->pat = pat;
+              next_pats = &((*next_pats)->next);
+            }
           } while (*p == ',');
+          if (*p == '}' && (*next)->data.pats.next != NULL) {
+            p++;
+          } else {
+            free_pattern(*next);
+            memset(*next, 0, sizeof(**next));
+            p = init_p + 1;
+            literal_start = init_p;
+            literal_length = 1;
+            continue;
+          }
           break;
         }
         case kPatMissing:
@@ -609,7 +679,8 @@ static int get_glob(const char **pp, CommandParserError *error, Glob **glob,
   return OK;
 
 get_glob_error_return:
-  free_glob(*glob);
+  free_pattern(*pat);
+  *pat = NULL;
   return ret;
 }
 
@@ -2896,7 +2967,6 @@ int parse_one_cmd(const char **pp,
   CommandArgsParser parse = NULL;
   CountType cnt_type = kCntMissing;
   int count = 0;
-  Glob *glob = NULL;
 
   memset(&error, 0, sizeof(CommandParserError));
 
@@ -3121,9 +3191,42 @@ int parse_one_cmd(const char **pp,
     }
   }
 
-  if (CMDDEF(type).flags & XFILE) {
+  Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
+
+  if (CMDDEF(type).flags & EDITCMD) {
+    Glob *cur_glob = &glob;
+    Glob **next = &cur_glob;
+    while (!ENDS_EXCMD(*p)) {
+      Pattern *pat = NULL;
+      p = skipwhite(p);
+      int ret;
+      if ((ret = get_pattern(&p, &error, &pat, false, true,
+                             (p - s) + position.col))
+          == FAIL) {
+        free_range_data(&range);
+        free_pattern(pat);
+        return FAIL;
+      }
+      if (ret == NOTDONE) {
+        free_range_data(&range);
+        free_pattern(pat);
+        if (create_error_node(next_node, &error, position, s) == FAIL)
+          return FAIL;
+        return NOTDONE;
+      }
+      if (pat != NULL) {
+        if (*next == NULL) {
+          *next = XCALLOC_NEW(Glob, 1);
+        }
+        (*next)->pat = *pat;
+        free(pat);
+        next = &((*next)->next);
+      }
+    }
+  } else if (CMDDEF(type).flags & XFILE) {
     int ret;
-    if ((ret = get_glob(&p, &error, &glob, false, true, (p - s) + position.col))
+    Pattern *pat = NULL;
+    if ((ret = get_pattern(&p, &error, &pat, false, true, (p - s) + position.col))
         == FAIL) {
       free_range_data(&range);
       return FAIL;
@@ -3134,6 +3237,10 @@ int parse_one_cmd(const char **pp,
         return FAIL;
       return NOTDONE;
     }
+    if (pat != NULL) {
+      glob.pat = *pat;
+      free(pat);
+    }
   }
 
   if (!(CMDDEF(type).flags & EXTRA)
@@ -3141,7 +3248,7 @@ int parse_one_cmd(const char **pp,
       && *p != '"'
       && (*p != '|' || !(CMDDEF(type).flags & TRLBAR))) {
     free_range_data(&range);
-    free_glob(glob);
+    free_glob(&glob);
     error.message = (char *) e_trailing;
     error.position = p;
     if (create_error_node(next_node, &error, position, s) == FAIL)
@@ -3386,8 +3493,15 @@ const CommandNode nocmd = {
   0,
   0,
   NULL,
-  NULL,
-  NULL,
+  {
+    {
+      kPatMissing,
+      {NULL},
+      NULL
+    },
+    NULL
+  },
+  false,
   {
     {{0}}
   }
