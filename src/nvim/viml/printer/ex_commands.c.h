@@ -36,24 +36,26 @@
 # include "viml/printer/ex_commands.c.h.generated.h"
 #endif
 
-static FDEC(print_glob, const Glob *const glob)
+static FDEC(print_pattern, const Pattern *const pat)
 {
   FUNCTION_START;
-  const Glob *cur_glob;
+  const Pattern *cur_pat;
 
-  if (glob == NULL)
+  if (pat == NULL)
     EARLY_RETURN;
 
-  for (cur_glob = glob; cur_glob != NULL; cur_glob = cur_glob->next) {
-    switch (cur_glob->type) {
+  for (cur_pat = pat; cur_pat != NULL; cur_pat = cur_pat->next) {
+    switch (cur_pat->type) {
       case kGlobExpression: {
         WS("`=");
-        F(print_expr, cur_glob->data.expr);
+        F(print_expr, cur_pat->data.expr);
         WC('`');
         break;
       }
       case kGlobShell: {
-        W(cur_glob->data.str);
+        WC('`');
+        W(cur_pat->data.str);
+        WC('`');
         break;
       }
       case kPatHome: {
@@ -86,12 +88,12 @@ static FDEC(print_glob, const Glob *const glob)
       }
       case kPatOldFile: {
         WS("#<");
-        F_NOOPT(dump_unumber, (uintmax_t) cur_glob->data.number);
+        F_NOOPT(dump_unumber, (uintmax_t) cur_pat->data.number);
         break;
       }
       case kPatBufname: {
         WC('#');
-        F_NOOPT(dump_unumber, (uintmax_t) cur_glob->data.number);
+        F_NOOPT(dump_unumber, (uintmax_t) cur_pat->data.number);
         break;
       }
       case kPatCollection: {
@@ -103,18 +105,20 @@ static FDEC(print_glob, const Glob *const glob)
         break;
       }
       case kPatBranch: {
-        Glob *cglob;
+        const Patterns *cpats;
         WC('{');
-        for (cglob = cur_glob->data.glob; cglob != NULL; cglob = cglob->next) {
-          F(print_glob, cglob);
-          if (cglob->next != NULL)
+        for (cpats = &(cur_pat->data.pats);
+             cpats != NULL;
+             cpats = cpats->next) {
+          F(print_pattern, cpats->pat);
+          if (cpats->next != NULL)
             WC(',');
         }
         WC('}');
         break;
       }
       case kPatLiteral: {
-        W(cur_glob->data.str);
+        W(cur_pat->data.str);
         break;
       }
       case kPatMissing: {
@@ -385,14 +389,18 @@ static FDEC(print_plus_cmd, const CommandNode *const node)
   FUNCTION_END;
 }
 
-static FDEC(print_glob_arg, const Glob *const glob)
+static FDEC(print_glob_arg, const Glob glob)
 {
   FUNCTION_START;
-  if (glob == NULL) {
+  if (glob.pat.type == kPatMissing) {
     EARLY_RETURN;
   }
-  WC(' ');
-  F(print_glob, glob);
+  for (const Glob *cur_glob = &glob;
+       cur_glob != NULL;
+       cur_glob = cur_glob->next) {
+    WC(' ');
+    F(print_pattern, &(cur_glob->pat));
+  }
   FUNCTION_END;
 }
 

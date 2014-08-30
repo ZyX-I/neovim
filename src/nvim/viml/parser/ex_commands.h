@@ -49,21 +49,29 @@ typedef enum {
   // The following arguments are only valid for Glob and not for Pattern
   kGlobShell,       ///< Shell backtick expansion (char *str)
   kGlobExpression,  ///< "`=expr`" expansion (Expression *expr)
-} GlobType;
+} PatternType;
 
 /// Structure representing glob pattern
-typedef struct glob {
-  GlobType type;           ///< Type of the glob
+typedef struct pattern {
+  PatternType type;        ///< Type of the pattern chunk
   union {
     char *str;             ///< String argument (for most types)
     Expression *expr;      ///< Expression (for "`=expr`")
     int number;            ///< Buffer name or old file number
-    struct glob *glob;     ///< Glob(s)
-  } data;                  ///< Glob data
-  struct glob *next;       ///< Next part of the pattern
-} Glob;
+    struct patterns {
+      struct pattern *pat;
+      struct patterns *next;
+    } pats;                ///< Pattern used for branch ({a,b,c})
+  } data;                  ///< Pattern data
+  struct pattern *next;    ///< Next chunk
+} Pattern;
 
-typedef Glob Pattern;
+typedef struct patterns Patterns;
+
+typedef struct glob {
+  Pattern pat;
+  struct glob *next;
+} Glob;
 
 /// Address followup type
 typedef enum {
@@ -190,7 +198,7 @@ typedef struct command_node {
   uint_least8_t exflags;          ///< Ex flags (for :print command and like)
   uint_least32_t optflags;        ///< ++opt flags
   char *enc;                      ///< Encoding from ++enc
-  Glob *glob;                     ///< File name(s)
+  Glob glob;                      ///< File name(s)
   bool bang;                      ///< true if command was used with a bang
   struct command_argument {
     union {
