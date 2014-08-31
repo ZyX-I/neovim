@@ -123,6 +123,9 @@ const StyleOptions default_po = {
     {
       COMMENT_INLINE_SPACES,
       COMMENT_SPACES
+    },
+    {
+      true
     }
   }
 };
