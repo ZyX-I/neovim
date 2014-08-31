@@ -72,6 +72,9 @@ typedef struct {
       size_t before_inline;
       size_t before_text;
     } comment;
+    struct {
+      bool ast_glob;
+    } glob;
   } command;
 } StyleOptions;
 

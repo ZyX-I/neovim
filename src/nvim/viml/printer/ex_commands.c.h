@@ -44,56 +44,67 @@ static FDEC(print_pattern, const Pattern *const pat)
   if (pat == NULL)
     EARLY_RETURN;
 
+#define IF_AST(s1, s2) \
+  do { \
+    if (GLOB_AST) { \
+      WS(s1); \
+    } else { \
+      WS(s2); \
+    } \
+  } while (0)
+#define IF_AST_END(s2) IF_AST(")", s2)
   for (cur_pat = pat; cur_pat != NULL; cur_pat = cur_pat->next) {
     switch (cur_pat->type) {
       case kGlobExpression: {
-        WS("`=");
+        IF_AST("expr(", "`=");
         F(print_expr, cur_pat->data.expr);
-        WC('`');
+        IF_AST_END("`");
         break;
       }
       case kGlobShell: {
-        WC('`');
+        IF_AST("shell(", "`");
         W(cur_pat->data.str);
-        WC('`');
+        IF_AST_END("`");
         break;
       }
       case kPatHome: {
-        WC('~');
+        IF_AST("home()", "~");
         break;
       }
       case kPatCurrent: {
-        WC('%');
+        IF_AST("cur()", "%");
         break;
       }
       case kPatAlternate: {
-        WC('#');
+        IF_AST("alt()", "#");
         break;
       }
       case kPatCharacter: {
-        WC('?');
+        IF_AST("char()", "?");
         break;
       }
       case kPatAnything: {
-        WC('*');
+        IF_AST("any()", "*");
         break;
       }
       case kPatArguments: {
-        WS("##");
+        IF_AST("args()", "##");
         break;
       }
       case kPatAnyRecurse: {
-        WS("**");
+        IF_AST("any(recursive)", "**");
         break;
       }
       case kPatOldFile: {
-        WS("#<");
+        IF_AST("old(", "#<");
         F_NOOPT(dump_unumber, (uintmax_t) cur_pat->data.number);
+        IF_AST_END("");
         break;
       }
       case kPatBufname: {
-        WC('#');
+        IF_AST("buf(", "#");
         F_NOOPT(dump_unumber, (uintmax_t) cur_pat->data.number);
+        IF_AST_END("");
         break;
       }
       case kPatCollection: {
@@ -106,7 +117,7 @@ static FDEC(print_pattern, const Pattern *const pat)
       }
       case kPatBranch: {
         const Patterns *cpats;
-        WC('{');
+        IF_AST("branch(", "{");
         for (cpats = &(cur_pat->data.pats);
              cpats != NULL;
              cpats = cpats->next) {
@@ -114,18 +125,27 @@ static FDEC(print_pattern, const Pattern *const pat)
           if (cpats->next != NULL)
             WC(',');
         }
-        WC('}');
+        IF_AST_END("}");
         break;
       }
       case kPatLiteral: {
+        if (GLOB_AST) {
+          WS("lit(");
+        }
         W(cur_pat->data.str);
+        IF_AST_END("");
         break;
       }
       case kPatMissing: {
         assert(false);
       }
     }
+    if (GLOB_AST && cur_pat->next != NULL) {
+      WS(".");
+    }
   }
+#undef IF_AST
+#undef IF_AST_END
 
   FUNCTION_END;
 }

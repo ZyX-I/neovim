@@ -393,6 +393,7 @@
 # define SPACES_AFTER4(a1, a2, a3, a4)    SPACES(o->a1.a2.a3.a4.after)
 
 # define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
+# define GLOB_AST                         o->command.glob.ast_glob
 #endif
 
 #define NVIM_VIML_DUMPERS_CH_MACROS_H
