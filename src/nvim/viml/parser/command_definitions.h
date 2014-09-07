@@ -519,7 +519,7 @@ typedef enum
   EX(kCmdEndwhile,        "endwhile",     NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      TRLBAR|SBOXOK|CMDWIN),
-  EX(kCmdEnew,            "enew",         NULL,
+  EX(kCmdEnew,            "enew",         NOFUNC,
      ARG_E_FILES, ARGS_E,
      BANG|TRLBAR),
   EX(kCmdEx,              "ex",           NULL,
