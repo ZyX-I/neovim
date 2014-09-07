@@ -3193,7 +3193,8 @@ int parse_one_cmd(const char **pp,
 
   Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
 
-  if (CMDDEF(type).flags & EDITCMD) {
+  if (CMDDEF(type).flags & EDITCMD
+      || ((CMDDEF(type).flags & FILES) == FILES)) {
     Glob *cur_glob = &glob;
     Glob **next = &cur_glob;
     while (!ENDS_EXCMD(*p)) {
