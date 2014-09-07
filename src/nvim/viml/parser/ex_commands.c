@@ -3193,8 +3193,7 @@ int parse_one_cmd(const char **pp,
 
   Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
 
-  if (CMDDEF(type).flags & EDITCMD
-      || ((CMDDEF(type).flags & FILES) == FILES)) {
+  if (CMDDEF(type).flags & XFILE) {
     Glob *cur_glob = &glob;
     Glob **next = &cur_glob;
     while (!ENDS_EXCMD(*p)) {
@@ -3223,24 +3222,6 @@ int parse_one_cmd(const char **pp,
         free(pat);
         next = &((*next)->next);
       }
-    }
-  } else if (CMDDEF(type).flags & XFILE) {
-    int ret;
-    Pattern *pat = NULL;
-    if ((ret = get_pattern(&p, &error, &pat, false, true, (p - s) + position.col))
-        == FAIL) {
-      free_range_data(&range);
-      return FAIL;
-    }
-    if (ret == NOTDONE) {
-      free_range_data(&range);
-      if (create_error_node(next_node, &error, position, s) == FAIL)
-        return FAIL;
-      return NOTDONE;
-    }
-    if (pat != NULL) {
-      glob.pat = *pat;
-      free(pat);
     }
   }
 
