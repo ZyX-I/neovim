@@ -786,13 +786,17 @@ static int get_regex(const char **pp, CommandParserError *error,
   return OK;
 }
 
-static int parse_append(const char **pp,
-                        CommandNode *node,
-                        CommandParserError *error,
-                        CommandParserOptions o,
-                        CommandPosition position,
-                        VimlLineGetter fgetline,
-                        void *cookie)
+#define CMD_P_ARGS \
+    const char **pp, \
+    CommandNode *node, \
+    CommandParserError *error, \
+    CommandParserOptions o, \
+    CommandPosition position, \
+    VimlLineGetter fgetline, \
+    void *cookie
+#define CMD_P_DEF(f) int f(CMD_P_ARGS)
+
+static CMD_P_DEF(parse_append)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   garray_T *strs = &(node->args[ARG_APPEND_LINES].arg.strs);
@@ -924,14 +928,7 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
 ///                           :*unmap/:*unabbrev command is being parsed.
 ///
 /// @return FAIL when out of memory, OK otherwise.
-static int do_parse_map(const char **pp,
-                        CommandNode *node,
-                        CommandParserError *error,
-                        CommandParserOptions o,
-                        CommandPosition position,
-                        VimlLineGetter fgetline,
-                        void *cookie,
-                        bool unmap)
+static int do_parse_map(CMD_P_ARGS, bool unmap)
 {
   uint_least32_t map_flags = 0;
   const char *p = *pp;
@@ -1059,35 +1056,17 @@ static int do_parse_map(const char **pp,
   return OK;
 }
 
-static int parse_map(const char **pp,
-                     CommandNode *node,
-                     CommandParserError *error,
-                     CommandParserOptions o,
-                     CommandPosition position,
-                     VimlLineGetter fgetline,
-                     void *cookie)
+static CMD_P_DEF(parse_map)
 {
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, false);
 }
 
-static int parse_unmap(const char **pp,
-                       CommandNode *node,
-                       CommandParserError *error,
-                       CommandParserOptions o,
-                       CommandPosition position,
-                       VimlLineGetter fgetline,
-                       void *cookie)
+static CMD_P_DEF(parse_unmap)
 {
   return do_parse_map(pp, node, error, o, position, fgetline, cookie, true);
 }
 
-static int parse_mapclear(const char **pp,
-                          CommandNode *node,
-                          CommandParserError *error,
-                          CommandParserOptions o,
-                          CommandPosition position,
-                          VimlLineGetter fgetline,
-                          void *cookie)
+static CMD_P_DEF(parse_mapclear)
 {
   bool local;
 
@@ -1116,13 +1095,7 @@ static void menu_unescape(char *p)
   }
 }
 
-static int parse_menu(const char **pp,
-                      CommandNode *node,
-                      CommandParserError *error,
-                      CommandParserOptions o,
-                      CommandPosition position,
-                      VimlLineGetter fgetline,
-                      void *cookie)
+static CMD_P_DEF(parse_menu)
 {
   // FIXME "menu *" parses to something weird
   uint_least32_t menu_flags = 0;
@@ -1352,13 +1325,7 @@ static int do_parse_expr_cmd(const char **pp,
   return OK;
 }
 
-static int parse_expr_cmd(const char **pp,
-                          CommandNode *node,
-                          CommandParserError *error,
-                          CommandParserOptions o,
-                          CommandPosition position,
-                          VimlLineGetter fgetline,
-                          void *cookie)
+static CMD_P_DEF(parse_expr_cmd)
 {
   if (node->type == kCmdReturn && ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
@@ -1366,13 +1333,7 @@ static int parse_expr_cmd(const char **pp,
   return do_parse_expr_cmd(pp, node, error, o, position, false);
 }
 
-static int parse_call(const char **pp,
-                      CommandNode *node,
-                      CommandParserError *error,
-                      CommandParserOptions o,
-                      CommandPosition position,
-                      VimlLineGetter fgetline,
-                      void *cookie)
+static CMD_P_DEF(parse_call)
 {
   const char *s = *pp;
   int ret = do_parse_expr_cmd(pp, node, error, o, position, false);
@@ -1385,13 +1346,7 @@ static int parse_call(const char **pp,
   return ret;
 }
 
-static int parse_expr_seq_cmd(const char **pp,
-                              CommandNode *node,
-                              CommandParserError *error,
-                              CommandParserOptions o,
-                              CommandPosition position,
-                              VimlLineGetter fgetline,
-                              void *cookie)
+static CMD_P_DEF(parse_expr_seq_cmd)
 {
   if (ENDS_EXCMD_NOCOMMENT(**pp)) {
     return OK;
@@ -1399,13 +1354,7 @@ static int parse_expr_seq_cmd(const char **pp,
   return do_parse_expr_cmd(pp, node, error, o, position, true);
 }
 
-static int parse_rest_line(const char **pp,
-                           CommandNode *node,
-                           CommandParserError *error,
-                           CommandParserOptions o,
-                           CommandPosition position,
-                           VimlLineGetter fgetline,
-                           void *cookie)
+static CMD_P_DEF(parse_rest_line)
 {
   size_t len;
   if (**pp == NUL) {
@@ -1421,13 +1370,7 @@ static int parse_rest_line(const char **pp,
   return OK;
 }
 
-static int parse_rest_allow_empty(const char **pp,
-                                  CommandNode *node,
-                                  CommandParserError *error,
-                                  CommandParserOptions o,
-                                  CommandPosition position,
-                                  VimlLineGetter fgetline,
-                                  void *cookie)
+static CMD_P_DEF(parse_rest_allow_empty)
 {
   if (**pp == NUL)
     return OK;
@@ -1447,13 +1390,7 @@ static const char *do_fgetline(int c, const char **arg, int indent)
   }
 }
 
-static int parse_do(const char **pp,
-                    CommandNode *node,
-                    CommandParserError *error,
-                    CommandParserOptions o,
-                    CommandPosition position,
-                    VimlLineGetter fgetline,
-                    void *cookie)
+static CMD_P_DEF(parse_do)
 {
   CommandNode *cmd;
   const char *arg = *pp;
@@ -1681,13 +1618,7 @@ static int parse_lval(const char **pp,
   return OK;
 }
 
-static int parse_lvals(const char **pp,
-                       CommandNode *node,
-                       CommandParserError *error,
-                       CommandParserOptions o,
-                       CommandPosition position,
-                       VimlLineGetter fgetline,
-                       void *cookie)
+static CMD_P_DEF(parse_lvals)
 {
   Expression *expr;
   int ret;
@@ -1708,13 +1639,7 @@ static int parse_lvals(const char **pp,
   return OK;
 }
 
-static int parse_lockvar(const char **pp,
-                         CommandNode *node,
-                         CommandParserError *error,
-                         CommandParserOptions o,
-                         CommandPosition position,
-                         VimlLineGetter fgetline,
-                         void *cookie)
+static CMD_P_DEF(parse_lockvar)
 {
   if (VIM_ISDIGIT(**pp)) {
     node->args[ARG_LOCKVAR_DEPTH].arg.unumber = (unsigned) getdigits(pp);
@@ -1723,13 +1648,7 @@ static int parse_lockvar(const char **pp,
   return parse_lvals(pp, node, error, o, position, fgetline, cookie);
 }
 
-static int parse_for(const char **pp,
-                     CommandNode *node,
-                     CommandParserError *error,
-                     CommandParserOptions o,
-                     CommandPosition position,
-                     VimlLineGetter fgetline,
-                     void *cookie)
+static CMD_P_DEF(parse_for)
 {
   const char *const s = *pp;
   Expression *expr;
@@ -1773,13 +1692,7 @@ static int parse_for(const char **pp,
   return OK;
 }
 
-static int parse_function(const char **pp,
-                          CommandNode *node,
-                          CommandParserError *error,
-                          CommandParserOptions o,
-                          CommandPosition position,
-                          VimlLineGetter fgetline,
-                          void *cookie)
+static CMD_P_DEF(parse_function)
 {
   const char *p = *pp;
   Expression *expr;
@@ -1913,13 +1826,7 @@ static int parse_function(const char **pp,
   return OK;
 }
 
-static int parse_let(const char **pp,
-                     CommandNode *node,
-                     CommandParserError *error,
-                     CommandParserOptions o,
-                     CommandPosition position,
-                     VimlLineGetter fgetline,
-                     void *cookie)
+static CMD_P_DEF(parse_let)
 {
   const char *const s = *pp;
   Expression *expr;
@@ -2022,13 +1929,7 @@ static int parse_let(const char **pp,
   return OK;
 }
 
-static int parse_scriptencoding(const char **pp,
-                                CommandNode *node,
-                                CommandParserError *error,
-                                CommandParserOptions o,
-                                CommandPosition position,
-                                VimlLineGetter fgetline,
-                                void *cookie)
+static CMD_P_DEF(parse_scriptencoding)
 {
   if (**pp == NUL)
     return OK;
@@ -2038,6 +1939,9 @@ static int parse_scriptencoding(const char **pp,
   *pp += STRLEN(*pp);
   return OK;
 }
+
+#undef CMD_P_DEF
+#undef CMD_P_ARGS
 
 /// Check for an Ex command with optional tail.
 ///
