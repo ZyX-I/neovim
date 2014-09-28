@@ -6,8 +6,9 @@ typedef enum {
   kArgExpressions,   // :echo {expr1}[ {expr2}]
   kArgFlags,         // :map {<nowait><expr><buffer><silent><unique>}
   kArgNumber,        // :resize -1
+  kArgNumbers,       // :menu 1.2.3
   kArgUNumber,       // :sign place {id} line={lnum} name=name buffer={nr}
-  kArgNumbers,       // :dig e: {num1} a: {num2}
+  kArgUNumbers,      // :dig e: {num1} a: {num2}
   kArgString,        // :sign place 10 line=11 name={name} buffer=1
   // Note the difference: you cannot use backtics in :autocmd, but can in :e
   kArgPattern,       // :autocmd BufEnter {pattern} :echo 'HERE'
@@ -15,10 +16,10 @@ typedef enum {
   kArgRegex,         // :s/{reg}/\="abc"/g
   kArgReplacement,   // :s/.*/{repl}/g
   kArgLines,         // :py << EOF\n{str}\n{str2}EOF, :append\n{str}\n.
-  kArgStrings,       // :cscope add cscope.out /usr/local/vim {str1}[ {str2}]
+  kArgGaStrings,     // :function arguments
+  kArgStrings,       // :dig digraphs
   kArgAssignLhs,     // :let {lhs} = [1, 2]
   kArgMenuName,      // :amenu File.Edit :browse edit<CR>
-  kArgAuEvent,       // :doau {event}
   kArgAuEvents,      // :au {event1}[,{event2}] * :echo 'HERE'
   kArgAddress,       // :copy {address}
   kArgCmdComplete,   // :command -complete={complete}
@@ -32,35 +33,37 @@ typedef enum {
 #define ARGS_DO       ARGS_NO
 #define ARGS_APPEND   {kArgLines}
 #define ARGS_MAP      {kArgFlags, kArgString, kArgString, kArgExpression}
-#define ARGS_MENU     {kArgFlags, kArgString, kArgNumbers, kArgMenuName, \
+#define ARGS_MENU     {kArgFlags, kArgString, kArgUNumbers, kArgMenuName, \
                        kArgString, kArgString}
 #define ARGS_CLEAR    {kArgFlags}
 #define ARGS_E        {kArgString, kArgGlob}
+#define ARGS_OPEN     {kArgString, kArgRegex}
 #define ARGS_SO       {kArgPattern}
 #define ARGS_AU       {kArgString, kArgAuEvents, kArgPattern, kArgFlags}
 #define ARGS_NAME     {kArgString}
 #define ARGS_UNMAP    {kArgFlags, kArgString}
 #define ARGS_UNMENU   {kArgMenuName}
 #define ARGS_BREAK    {kArgFlags, kArgPattern}
+#define ARGS_NUMBER   {kArgNumber}
 #define ARGS_EXPR     {kArgExpression}
 #define ARGS_REG      {kArgRegex}
-#define ARGS_CENTER   {kArgNumber}
 #define ARGS_CLIST    {kArgNumber, kArgNumber}
 #define ARGS_ADDR     {kArgAddress}
-#define ARGS_CMD      {kArgFlags, kArgCmdComplete, kArgString}
+#define ARGS_CMD      {kArgFlags, kArgCmdComplete, kArgString, kArgString}
 #define ARGS_SUBCMD   {kArgArgs}
 #define ARGS_CSTAG    {kArgString}
-#define ARGS_DIG      {kArgStrings, kArgNumbers}
-#define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvent, kArgString}
+#define ARGS_DIG      {kArgStrings, kArgUNumbers}
+#define ARGS_DOAU     {kArgFlags, kArgString, kArgAuEvents, kArgString}
 #define ARGS_EXPRS    {kArgExpressions}
 #define ARGS_LOCKVAR  {kArgExpressions, kArgUNumber}
 #define ARGS_EXIT     {kArgString, kArgGlob}
 #define ARGS_WN       {kArgString, kArgGlob}
 #define ARGS_FOR      {kArgString, kArgAssignLhs, kArgExpression}
 #define ARGS_LET      {kArgFlags, kArgAssignLhs, kArgExpression}
-#define ARGS_FUNC     {kArgRegex, kArgAssignLhs, kArgStrings, kArgFlags}
-#define ARGS_G        {kArgRegex}
+#define ARGS_FUNC     {kArgRegex, kArgAssignLhs, kArgGaStrings, kArgFlags}
+#define ARGS_G        {kArgFlags, kArgRegex}
 #define ARGS_SHELL    {kArgString}
+#define ARGS_HELP     {kArgString, kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
 #define ARGS_HI       {kArgFlags,  kArgString, kArgFlags,   kArgString,  \
                        kArgString, kArgFlags,  kArgUNumber, kArgUNumber, \
@@ -68,24 +71,29 @@ typedef enum {
                        kArgUNumber}
 #define ARGS_HIST     {kArgFlags, kArgNumber, kArgNumber}
 #define ARGS_LANG     {kArgFlags, kArgString}
+#define ARGS_RESIZE   {kArgFlags, kArgNumber}
 #define ARGS_VIMG     {kArgFlags, kArgRegex, kArgString, kArgGlob}
 #define ARGS_MARK     {kArgChar}
+#define ARGS_POPUP    {kArgMenuName}
 #define ARGS_SIMALT   {kArgChar}
+#define ARGS_LATER    {kArgFlags, kArgUNumber}
 #define ARGS_MATCH    {kArgString, kArgRegex}
 #define ARGS_MT       {kArgString, kArgString}
 #define ARGS_NORMAL   {kArgString}
 #define ARGS_PROFILE  {kArgFlags, kArgString, kArgGlob, kArgPattern}
 #define ARGS_W        {kArgString, kArgGlob, kArgString}
-#define ARGS_REDIR    {kArgFlags, kArgString, kArgGlob, kArgAssignLhs}
+#define ARGS_REDIR    {kArgFlags, kArgString, kArgAssignLhs}
 #define ARGS_S        {kArgRegex, kArgReplacement, kArgFlags}
-#define ARGS_SET      {kArgStrings, kArgNumbers, kArgStrings}
+#define ARGS_SET      {kArgStrings, kArgUNumbers, kArgNumbers, kArgUNumbers, \
+                       kArgNumbers, kArgStrings}
 #define ARGS_FT       {kArgFlags}
 #define ARGS_SLEEP    {kArgUNumber}
 #define ARGS_SNIFF    {kArgString}
 #define ARGS_SORT     {kArgFlags, kArgRegex}
 #define ARGS_SYNTIME  {kArgFlags}
-#define ARGS_WINSIZE  {kArgUNumber, kArgUNumber}
+#define ARGS_2INTS    {kArgFlags, kArgNumber, kArgNumber}
 #define ARGS_WINCMD   {kArgChar}
+#define ARGS_Z        {kArgChar, kArgUNumber, kArgUNumber}
 #define ARGS_ERROR    {kArgString, kArgString, kArgColumn}
 #define ARGS_USER     {kArgString}
 
@@ -163,10 +171,16 @@ enum {
 // :argdo/:bufdo
 #define ARG_DO_CMD         ARG_NO_ARGS
 
-// :args/:e
+// :args/:e, also for :open
 enum {
   ARG_E_EXPR        = 0,
   ARG_E_FILES,
+};
+
+// :open
+enum {
+  ARG_OPEN_FILE     = 0,
+  ARG_OPEN_REGEX,
 };
 
 // :argadd/:argdelete/:source
@@ -201,13 +215,20 @@ enum {
 // :breakadd/:breakdel
 // lnum is recorded in range
 enum {
-  ARG_BREAK_FLAGS   = 0,
+  ARG_BREAK_TYPE    = 0,
   ARG_BREAK_NAME,
 };
 
-#define FLAG_BREAK_FUNC    0x01
-#define FLAG_BREAK_FILE    0x02
-#define FLAG_BREAK_HERE    0x04
+typedef enum {
+  kBreakInFunction,
+  kBreakInFile,
+  kBreakHere
+} BreakType;
+
+// :[lc](add)?buffer
+enum {
+  ARG_NUMBER_NUMBER = 0
+};
 
 // :caddexpr/:laddexpr/:call
 enum {
@@ -217,11 +238,6 @@ enum {
 // :catch/:djump
 enum {
   ARG_REG_REG       = 0,
-};
-
-// :center
-enum {
-  ARG_CENTER_WIDTH  = 0,
 };
 
 // :clist
@@ -239,24 +255,32 @@ enum {
 enum {
   ARG_CMD_FLAGS     = 0,
   ARG_CMD_COMPLETE,
+  ARG_CMD_NAME,
+  ARG_CMD_COMMAND
 };
 
-#define FLAG_CMD_NARGS_MASK 0x007
-#define VAL_CMD_NARGS_NO    0x000
-#define VAL_CMD_NARGS_ONE   0x001
-#define VAL_CMD_NARGS_ANY   0x002
-#define VAL_CMD_NARGS_Q     0x003
-#define VAL_CMD_NARGS_P     0x004
+#define FLAG_CMD_NARGS_MASK  0x007
+#define VAL_CMD_NARGS_NO     0x000
+#define VAL_CMD_NARGS_ONE    0x001
+#define VAL_CMD_NARGS_ANY    0x002
+#define VAL_CMD_NARGS_Q      0x003
+#define VAL_CMD_NARGS_P      0x004
 // Number is recorded in count
-#define FLAG_CMD_RANGE_MASK 0x018
-#define VAL_CMD_RANGE_NO    0x000
-#define VAL_CMD_RANGE_CUR   0x008
-#define VAL_CMD_RANGE_ALL   0x010
-#define VAL_CMD_RANGE_COUNT 0x018
-#define FLAG_CMD_BANG       0x020
-#define FLAG_CMD_BAR        0x040
-#define FLAG_CMD_REGISTER   0x080
-#define FLAG_CMD_BUFFER     0x100
+#define FLAG_CMD_RANGE_MASK  0x018
+#define VAL_CMD_RANGE_NO     0x000
+#define VAL_CMD_RANGE_CUR    0x008
+#define VAL_CMD_RANGE_ALL    0x010
+// Count (specified in -range)
+#define VAL_CMD_RANGE_COUNT  0x018
+#define FLAG_CMD_BANG        0x040
+#define FLAG_CMD_BAR         0x080
+#define FLAG_CMD_REGISTER    0x100
+#define FLAG_CMD_BUFFER      0x200
+// Count (specified in -count: additionally allows count as a first argument)
+#define FLAG_CMD_COUNT_MASK  0xC00
+#define VAL_CMD_COUNT_NO     0x000
+#define VAL_CMD_COUNT_EMPTY  0x400
+#define VAL_CMD_COUNT_COUNT  0x800
 
 // :cscope/:sign
 enum {
@@ -306,7 +330,7 @@ enum {
 enum {
   ARG_DOAU_NOMDLINE = 0,
   ARG_DOAU_GROUP,
-  ARG_DOAU_EVENT,
+  ARG_DOAU_EVENTS,
   ARG_DOAU_FNAME,
 };
 
@@ -366,12 +390,22 @@ enum {
 
 // :global
 enum {
-  ARG_G_REG         = 0,
+  ARG_G_FLAGS       = 0,
+  ARG_G_REG,
 };
+
+#define FLAG_G_RE_SUBST    0x01
+#define FLAG_G_RE_SEARCH   0x02
 
 // :grep/:make/:!
 enum {
   ARG_SHELL_ARGS    = 0,
+};
+
+// :help
+enum {
+  ARG_HELP_TOPIC    = 0,
+  ARG_HELP_LANG,
 };
 
 // :helpg/:lhelpg
@@ -426,8 +460,12 @@ enum {
 #define FLAG_HIST_EXPR     0x04
 #define FLAG_HIST_INPUT    0x08
 #define FLAG_HIST_DEBUG    0x10
-#define FLAG_HIST_HAS_FST  0x20
-#define FLAG_HIST_HAS_LST  0x40
+#define FLAG_HIST_DEFAULT  0x20
+#define FLAG_HIST_ALL (FLAG_HIST_CMD\
+                       |FLAG_HIST_SEARCH\
+                       |FLAG_HIST_EXPR\
+                       |FLAG_HIST_INPUT\
+                       |FLAG_HIST_DEBUG)
 
 // :language
 enum {
@@ -439,11 +477,16 @@ enum {
 #define FLAG_LANG_CTYPE    0x02
 #define FLAG_LANG_TIME     0x04
 
+// :resize
+enum {
+  ARG_RESIZE_FLAGS  = 0,
+  ARG_RESIZE_NUMBER,
+};
+
 // :*vimgrep*
 enum {
   ARG_VIMG_FLAGS    = 0,
   ARG_VIMG_REG,
-  ARG_VIMG_FILES,
 };
 
 #define FLAG_VIMG_EVERY    0x01
@@ -454,10 +497,29 @@ enum {
   ARG_MARK_CHAR     = 0,
 };
 
+// :popup
+enum {
+  ARG_POPUP_NAME    = 0,
+};
+
 // :simalt
 enum {
   ARG_SIMALT_CHAR   = 0,
 };
+
+// :earlier/:later
+enum {
+  ARG_LATER_FLAGS   = 0,
+  ARG_LATER_COUNT
+};
+
+#define FLAG_LATER_TYPE_MASK  0x07
+#define VAL_LATER_COUNT       0x00
+#define VAL_LATER_SECONDS     0x01
+#define VAL_LATER_MINUTES     0x02
+#define VAL_LATER_HOURS       0x03
+#define VAL_LATER_DAYS        0x04
+#define VAL_LATER_FILE        0x05
 
 // :match
 enum {
@@ -500,8 +562,7 @@ enum {
 
 // :redir
 enum {
-  ARG_REDIR_EXPR    = 0,
-  ARG_REDIR_FLAGS,
+  ARG_REDIR_FLAGS   = 0,
   ARG_REDIR_FILE,
   ARG_REDIR_VAR,
 };
@@ -528,24 +589,46 @@ enum {
 #define FLAG_S_PRINT_LNR   0x200
 #define FLAG_S_PRINT_LIST  0x400
 #define FLAG_S_R           0x800
+#define FLAG_S_RE_SUBST   0x1000
+#define FLAG_S_RE_SEARCH  0x2000
+#define FLAG_S_SUB_PREV   0x4000
 
 // :set
 enum {
   ARG_SET_OPTIONS   = 0,
   ARG_SET_FLAGSS,
+  ARG_SET_INDEXES,
+  ARG_SET_KEYS,
+  ARG_SET_IVALUES,
   ARG_SET_VALUES,
 };
 
+/// Set boolean value to true
 #define FLAG_SET_SET       0x001
+/// Set boolean value to false
 #define FLAG_SET_UNSET     0x002
+/// Show option value
 #define FLAG_SET_SHOW      0x004
+/// Invert boolean option value
 #define FLAG_SET_INVERT    0x008
-#define FLAG_SET_VI        0x010
-#define FLAG_SET_VIM       0x020
-#define FLAG_SET_ASSIGN    0x040
-#define FLAG_SET_APPEND    0x080
-#define FLAG_SET_PREPEND   0x100
-#define FLAG_SET_SUBTRACT  0x200
+/// Set option value to default
+#define FLAG_SET_DEFAULT   0x010
+/// When setting option value to default use Vi default
+#define FLAG_SET_VI        0x020
+/// When setting option value to default use Vim default
+#define FLAG_SET_VIM       0x040
+/// Assign number or string option
+#define FLAG_SET_ASSIGN    0x080
+/// Append string to the option value (set +=)
+#define FLAG_SET_APPEND    0x100
+/// Prepend string to the option value (set ^=)
+#define FLAG_SET_PREPEND   0x200
+/// Remove string from the option value (set -=)
+#define FLAG_SET_REMOVE    0x400
+/// Set option value to global option value (set <)
+#define FLAG_SET_GLOBAL    0x800
+/// Set if current option has an integer value (for printer)
+#define FLAG_SET_IVALUE   0x1000
 
 // :filetype
 enum {
@@ -553,16 +636,17 @@ enum {
 };
 
 #define FLAG_FT_ON         0x01
-#define FLAG_FT_PLUGIN     0x02
-#define FLAG_FT_INDENT     0x04
-#define FLAG_FT_DETECT     0x08
+#define FLAG_FT_OFF        0x02
+#define FLAG_FT_DETECT     0x04
+#define FLAG_FT_PLUGIN     0x08
+#define FLAG_FT_INDENT     0x10
 
 // :sign
 // FIXME
 
 // :sleep
 enum {
-  ARG_SLEEP_SECONDS = 0,
+  ARG_SLEEP_MULT    = 0,
 };
 
 // :sniff
@@ -576,12 +660,13 @@ enum {
   ARG_SORT_REG,
 };
 
-#define FLAG_SORT_IC       0x01
-#define FLAG_SORT_DECIMAL  0x02
-#define FLAG_SORT_HEX      0x04
-#define FLAG_SORT_OCTAL    0x08
-#define FLAG_SORT_KEEPFST  0x10
-#define FLAG_SORT_USEMATCH 0x20
+#define FLAG_SORT_IC        0x01
+#define FLAG_SORT_DECIMAL   0x02
+#define FLAG_SORT_HEX       0x04
+#define FLAG_SORT_OCTAL     0x08
+#define FLAG_SORT_KEEPFST   0x10
+#define FLAG_SORT_USEMATCH  0x20
+#define FLAG_SORT_RE_SEARCH 0x40
 
 // :syn
 // FIXME
@@ -591,20 +676,28 @@ enum {
   ARG_SYNTIME_ACTION= 0,
 };
 
-#define ACT_SYNTIME_ON     0x01
-#define ACT_SYNTIME_OFF    0x02
-#define ACT_SYNTIME_CLEAR  0x03
-#define ACT_SYNTIME_REPORT 0x04
+#define VAL_SYNTIME_ON     0x01
+#define VAL_SYNTIME_OFF    0x02
+#define VAL_SYNTIME_CLEAR  0x03
+#define VAL_SYNTIME_REPORT 0x04
 
-// :winsize
+// :winsize/:winpos
 enum {
-  ARG_WINSIZE_WIDTH = 0,
-  ARG_WINSIZE_HEIGHT,
+  ARG_2INTS_FLAGS = 0,
+  ARG_2INTS_NUM1,
+  ARG_2INTS_NUM2,
 };
 
 // :wincmd
 enum {
   ARG_WINCMD_CHAR   = 0,
+};
+
+// :z
+enum {
+  ARG_Z_KIND        = 0,
+  ARG_Z_BIGNESS,
+  ARG_Z_MULTIPLIER,
 };
 
 // syntax error

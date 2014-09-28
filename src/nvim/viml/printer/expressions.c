@@ -126,6 +126,9 @@ const StyleOptions default_po = {
     },
     {
       true
+    },
+    {
+      false
     }
   }
 };

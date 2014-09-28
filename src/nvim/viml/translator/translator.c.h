@@ -1327,8 +1327,8 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 {
   FUNCTION_START;
   const char **argnames =
-      (const char **) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_data;
-  size_t size = (size_t) args->node->args[ARG_FUNC_ARGS].arg.strs.ga_len;
+      (const char **) args->node->args[ARG_FUNC_ARGS].arg.ga_strs.ga_data;
+  size_t size = (size_t) args->node->args[ARG_FUNC_ARGS].arg.ga_strs.ga_len;
   uint_least32_t flags = args->node->args[ARG_FUNC_FLAGS].arg.flags;
   bool varargs = flags & FLAG_FUNC_VARARGS;
   const Expression *funcname = args->node->args[ARG_FUNC_NAME].arg.expr;

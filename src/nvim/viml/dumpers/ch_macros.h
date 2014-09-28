@@ -394,6 +394,7 @@
 
 # define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
 # define GLOB_AST                         o->command.glob.ast_glob
+# define SET_SHOW_SHORT                   o->command.set.display_short
 #endif
 
 #define NVIM_VIML_DUMPERS_CH_MACROS_H
