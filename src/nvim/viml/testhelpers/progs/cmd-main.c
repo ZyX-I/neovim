@@ -9,7 +9,7 @@
 int do_init(void **);
 
 static void (*init_func)(void);
-static char *(*parse_cmd_test)(char *arg, uint_least8_t flags, bool one,
+static char *(*parse_cmd_test)(char *arg, uint_least16_t flags, bool one,
                                bool out);
 
 int main(int argc, char **argv, char **env)
@@ -28,7 +28,7 @@ int main(int argc, char **argv, char **env)
     return 5;
 
   parse_cmd_test(argv[1], (argc > 2
-                           ? (uint_least8_t) atoi(argv[2])
+                           ? (uint_least16_t) atoi(argv[2])
                            : 0),
                  false, true);
   putc('\n', stdout);

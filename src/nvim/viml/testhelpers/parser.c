@@ -29,7 +29,7 @@ static const char *const out_str = "<written to stdout>";
 /// @return NULL in case of error, non-NULL pointer to some string if out 
 ///         argument is true and represented result in allocated memory 
 ///         otherwise.
-char *parse_cmd_test(const char *arg, const uint_least8_t flags,
+char *parse_cmd_test(const char *arg, const uint_least16_t flags,
                      const bool one, const bool out)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {

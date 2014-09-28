@@ -42,7 +42,7 @@ return describe('parse_one_cmd', function()
     itn('unsilent join', 'uns j')
     itn('verbose join', 'verb j')
     itn('verbose 1 join', '1verb j')
-    return itn('vertical join', 'vert j')
+    itn('vertical join', 'vert j')
   end)
   describe('ranges', function()
     itn('1,2join', ':1,2join')
@@ -391,18 +391,45 @@ return describe('parse_one_cmd', function()
       vnoreme = 'vnoremenu',
       snoreme = 'snoremenu',
       inoreme = 'inoremenu',
-      cnoreme = 'cnoremenu'
+      cnoreme = 'cnoremenu',
+      unme = 'unmenu',
+      aun = 'aunmenu',
+      cunme = 'cunmenu',
+      iunme = 'iunmenu',
+      nunme = 'nunmenu',
+      ounme = 'ounmenu',
+      vunme = 'vunmenu',
+      xunme = 'xunmenu',
+      sunme = 'sunmenu',
+      tunme = 'tunmenu',
     }) do
-      itn('5' .. full, '5' .. trunc)
+      local unmenu = full:match('unmenu$')
+      local un = function(s, s_un)
+        if unmenu then
+          return s_un or ''
+        else
+          return s
+        end
+      end
+      itn(un('5' .. full, '\\ error: E481: No range allowed: !!5!!' .. trunc), '5' .. trunc)
       itn(full, trunc)
-      itn(full .. ' icon=abc.gif', trunc .. '\ticon=abc.gif')
+      itn(full .. un(' icon=abc.gif'), trunc .. '\ticon=abc.gif')
       itn(full .. ' enable', trunc .. '\tenable')
       itn(full .. ' disable', trunc .. '\tdisable')
-      itn(full .. ' .2 abc.def ghi', trunc .. ' .2 abc.def ghi')
-      itn(full .. ' 1.2 abc.def ghi', trunc .. ' 1.2 abc.def ghi')
-      itn(full .. ' abc.def def', trunc .. ' abc.def def')
-      itn(full .. ' abc.def<Tab>def def', trunc .. ' abc.def<tAb>def def')
-      itn(full .. ' abc.def<Tab>def def', trunc .. ' abc.def\\\tdef def')
+      itn(full .. un(' .2') .. ' abc.def', trunc .. ' .2 abc.def')
+      itn(full .. un(' 1.2') .. ' abc.def', trunc .. ' 1.2 abc.def')
+      itn(full .. un(' 1.2') .. ' abc.def' .. un('<Tab>Desc'), trunc .. ' 1.2 abc.def\\\tDesc')
+      itn(full .. un(' 1.2') .. ' abc.def' .. un('<Tab>Desc'), trunc .. ' 1.2 abc.def<tAb>Desc')
+      itn(un(full .. ' abc.def def', '\\ error: E488: Trailing characters: abc.def !!d!!ef'), trunc .. ' abc.def def')
+      if not unmenu then
+        itn(full .. ' abc.def<Tab>def def', trunc .. ' abc.def<tAb>def def')
+        itn(full .. ' abc.def<Tab>def def', trunc .. ' abc.def\\\tdef def')
+        itn(full .. ' .2 abc.def ghi', trunc .. ' .2 abc.def ghi')
+        itn(full .. ' 1.2 abc.def ghi', trunc .. ' 1.2 abc.def ghi')
+        itn(full .. ' abc.def def', trunc .. ' abc.def def')
+        itn(full .. ' abc.def<Tab>def def', trunc .. ' abc.def<tAb>def def')
+        itn(full .. ' abc.def<Tab>def def', trunc .. ' abc.def\\\tdef def')
+      end
     end
   end)
   describe('expression commands', function()
@@ -475,13 +502,14 @@ return describe('parse_one_cmd', function()
     itn('colorscheme', 'colo')
     return itn('colorscheme abc def', 'colo abc def')
   end)
-  describe('iterator commands', function()
+  describe('iterator commands and :debug', function()
     itn('bufdo if 1 | endif', 'bufd:if1|end')
     itn('windo if 1 | endif', 'wind:if1|end')
     itn('tabdo if 1 | endif', 'tabd:if1|end')
     itn('argdo if 1 | endif', 'argdo:if1|end')
     itn('folddoopen if 1 | endif', 'foldd:if1|end')
-    return itn('folddoclosed if 1 | endif', 'folddoc:if1|end')
+    itn('folddoclosed if 1 | endif', 'folddoc:if1|end')
+    itn('debug if 1 | endif', 'debug:if1|end')
   end)
   describe('multiple expressions commands', function()
     for trunc, full in pairs({
@@ -527,12 +555,36 @@ return describe('parse_one_cmd', function()
     itn('let a += 1', 'let a+=\t1')
     return itn('let $A .= 1', 'let$A.=1')
   end)
-  return describe(':scriptencoding', function()
+  describe(':scriptencoding', function()
     itn('scriptencoding', 'scripte')
     itn('scriptencoding utf-8', 'scriptencoding UTF-8')
     itn('scriptencoding utf-8', 'scriptencoding UTF8')
     itn('scriptencoding utf-8', 'scriptencoding utf8')
     itn('scriptencoding utf-8', 'scriptencoding utf-8')
     return itn('scriptencoding ucs-2', 'scriptencoding ucs-2')
+  end)
+  describe('debugging functions', function()
+    itn('breakadd func 13 lit(a)', 'breaka func13a')
+    itn('breakdel func 13 lit(a)', 'breakd func13a')
+    itn('breakadd file 13 any()', 'breaka file13*')
+    itn('breakdel file 13 any()', 'breakd file13*')
+    itn('breakadd file any()', 'breaka file*')
+    itn('breakdel file any()', 'breakd file*')
+    itn('profile file any()', 'prof file*')
+    itn('profile func any()', 'prof func*')
+    itn('profile file lit(13)', 'profile file13')
+    itn('profdel file any()', 'profd file*')
+    itn('profdel func any()', 'profd func*')
+    itn('profdel file lit(13)', 'profdel file13')
+    itn('breakadd here', 'breaka here')
+    itn('breakdel here', 'breakd here')
+  end)
+  describe(':display and :registers', function()
+    itn('display +az', 'di+za')
+    itn('registers +az', 'reg+za')
+    itn('display +az', 'di\x1B+za')
+    itn('registers az', 'reg\x1Bza')
+    itn('display', 'di')
+    itn('registers', 'reg')
   end)
 end)

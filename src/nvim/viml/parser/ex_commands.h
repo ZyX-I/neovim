@@ -17,13 +17,10 @@
 #include "nvim/vim.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/regexp_defs.h"
-
-// :argadd/:argd
-#define ARG_NAME_FILES     0
+#include "nvim/ex_docmd.h"
 
 // FIXME
 typedef int AuEvent;
-typedef int CmdCompleteType;
 
 /// Regular expression
 typedef struct {
@@ -49,6 +46,8 @@ typedef enum {
   // The following arguments are only valid for Glob and not for Pattern
   kGlobShell,       ///< Shell backtick expansion (char *str)
   kGlobExpression,  ///< "`=expr`" expansion (Expression *expr)
+  // The following arguments are only valid for :autocmd pattern list
+  kPatAuList        ///< :autocmd pattern list
 } PatternType;
 
 /// Structure representing glob pattern
@@ -155,18 +154,49 @@ typedef struct {
   size_t col;
 } CommandPosition;
 
-/// Counter type: type of a simple additional argument
-typedef enum {
-  kCntMissing = 0,  ///< No additional argument was specified
-  kCntCount,        ///< Unsigned integer
-  kCntBuffer,
-  kCntReg,
-  kCntExprReg,
-} CountType;
+/// Structure for representing a register.
+typedef struct {
+  char name;         ///< Register name.
+  Expression *expr;  ///< Expression (for "=" register only).
+} Register;
 
 #define FLAG_EX_LIST  0x01
 #define FLAG_EX_LNR   0x02
 #define FLAG_EX_PRINT 0x04
+
+/// Possible replacement types
+///
+/// @note Special "%" is not listed below because it is the only atom that works 
+///       depending on an option.
+typedef enum {
+  kRepLiteral,       ///< Literal string.
+  kRepExpr,          ///< "\\=" expression.
+  kRepEscLiteral,    ///< Escaped character.
+  kRepEscaped,       ///< Special character in escaped form (e.g. "\\t").
+  kRepMatched,       ///< Whole matched pattern ("\\0", "&").
+  kRepGroup,         ///< Capturing group index ("\\1"…"\\9").
+  kRepPrevSub,       ///< Previous :s replacement string ("~").
+  kRepCharUpCase,    ///< Next character made uppercase ("\\u").
+  kRepUpCase,        ///< Following characters made uppercase ("\\U").
+  kRepCharDownCase,  ///< Next character made lowercase ("\\l").
+  kRepDownCase,      ///< Following characters made lowercase ("\\L").
+  kRepCaseEnd,       ///< End of kRep*Case ("\\e", "\\E").
+  kRepNewLine,       ///< New line ("\\r").
+} ReplacementType;
+
+/// Structure representing :s replacement string
+typedef struct replacement {
+  ReplacementType type;  ///< Item type.
+  size_t start_col;      ///< Offset of the first character of the item.
+  size_t end_col;        ///< Offset of the last character of the item.
+  union {
+    uint8_t group;       ///< Group number, for kRepGroup. Is always in [1, 9].
+    uint32_t ch;         ///< Escaped character, kRepEscaped and kRepEscLiteral.
+    char *str;           ///< Literal replacement string, for kRepLiteral.
+    Expression *expr;    ///< Replacement expression, for kRepExpr.
+  } data;
+  struct replacement *next;  ///< Next parsed item.
+} Replacement;
 
 /// Structure for representing one command
 typedef struct command_node {
@@ -188,13 +218,9 @@ typedef struct command_node {
   size_t skips_count;             ///< Number of items in the above array.
   CommandPosition position;       ///< Position of the start of the command
   colnr_T end_col;                ///< Last column occupied by this command
-  CountType cnt_type;             ///< Type of the argument in the next union
-  union {
-    int count;                    ///< Count (for kCntCount)
-    int bufnr;
-    char reg;
-    Expression *expr;
-  } cnt;                          ///< First simple argument
+  bool has_count;                 ///< True if there is a count.
+  int count;                      ///< Count.
+  Register reg;                   ///< Register.
   uint_least8_t exflags;          ///< Ex flags (for :print command and like)
   uint_least32_t optflags;        ///< ++opt flags
   char *enc;                      ///< Encoding from ++enc
@@ -208,21 +234,25 @@ typedef struct command_node {
       unsigned unumber;           ///< Unsigned integer
       colnr_T col;                ///< Column number (for syntax error)
       int number;                 ///< Signed integer
-      int *numbers;               ///< A sequence of numbers in allocated memory
+      int *numbers;               ///< An array of signed integers.
+      uint_least32_t *unumbers;   ///< An array of unsigned integers in 
+                                  ///< allocated memory. At least 32 bits are 
+                                  ///< needed to hold any unicode codepoint.
       char ch;                    ///< A single character
       char *str;                  ///< String in allocated memory
-      garray_T strs;              ///< Growarray
+      char **strs;                ///< NULL-terminated strings array.
+      garray_T ga_strs;           ///< Growarray containing char * strings.
       Pattern *pat;               ///< Pattern (like in :au)
       Glob *glob;                 ///< Glob (like in :e)
       Regex *reg;                 ///< Regular expression (like in :catch)
-      AuEvent event;              ///< A autocmd event
       AuEvent *events;            ///< A sequence of autocommand events
       MenuItem *menu_item;        ///< Menu item
-      Address *address;           ///< Ex mode address
+      Range *range;               ///< Ex mode address
       CmdComplete *complete;
       Expression *expr;           ///< Expression (:if) or a list of 
                                   ///< expressions (:echo) (uses expr->next to 
                                   ///< build a linked list)
+      Replacement *rep;           ///< Replacement string, parsed.
       struct command_subargs {
         unsigned type;
         size_t num_args;
@@ -270,8 +300,11 @@ typedef int (*CommandArgsParser)(const char **,
 #define FLAG_POC_CPO_SPECI   0x08
 #define FLAG_POC_CPO_KEYCODE 0x10
 #define FLAG_POC_CPO_BAR     0x20
-#define FLAG_POC_ALTKEYMAP   0x40
-#define FLAG_POC_RL          0x80
+#define FLAG_POC_CPO_SUBPC   0x40
+#define FLAG_POC_ALTKEYMAP   0x80
+#define FLAG_POC_RL         0x100
+#define FLAG_POC_MAGIC      0x200
+#define FLAG_POC_ED         0x400
 
 #define FLAG_POC_TO_FLAG_CPO(flags) ((flags >> 3)&0x06)
 
@@ -289,6 +322,12 @@ typedef struct {
 
 /// Array containing all built-in commands.
 extern VimlCommandDefinition cmddefs[kCmdREAL_SIZE];
+
+/// Static empty string
+///
+/// Is used to replace NULL (i.e. “no value”) in NULL-terminated list of 
+/// strings.
+extern const char *const empty_string;
 
 /// Macros that returns command definition
 ///
@@ -309,6 +348,13 @@ const CommandNode nocmd;
 
 /// Like #ENDS_EXCMD_NOCOMMENT above, but also includes comment character
 #define ENDS_EXCMD(ch) ((ch) == '"' || ENDS_EXCMD_NOCOMMENT(ch))
+
+/// Number that is guaranteed to be less or equal to the minimal mark character
+#define FIRST_MARK_CODE 0x21
+/// Number that is guaranteed to be greater or equal to the max mark character
+#define LAST_MARK_CODE 0x7F
+/// Length of the string that may hold enough marks
+#define MAX_NUM_MARKS (LAST_MARK_CODE - FIRST_MARK_CODE + 1)
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.h.generated.h"

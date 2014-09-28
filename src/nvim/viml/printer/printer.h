@@ -75,6 +75,9 @@ typedef struct {
     struct {
       bool ast_glob;
     } glob;
+    struct {
+      bool display_short;
+    } set;
   } command;
 } StyleOptions;
 

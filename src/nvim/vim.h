@@ -135,7 +135,7 @@ Error: configure did not run properly.Check auto/config.log.
 /*
  * values for xp_context when doing command line completion
  */
-enum {
+typedef enum {
   EXPAND_UNSUCCESSFUL = -2,
   EXPAND_OK = -1,
   EXPAND_NOTHING = 0,
@@ -182,7 +182,7 @@ enum {
   EXPAND_HISTORY,
   EXPAND_USER,
   EXPAND_SYNTIME,
-};
+} CmdCompleteType;
 
 
 

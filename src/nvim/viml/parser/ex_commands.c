@@ -24,9 +24,20 @@
 #include "nvim/option.h"
 #include "nvim/regexp.h"
 #include "nvim/ascii.h"
+#include "nvim/ex_getln.h"
+#include "nvim/ex_docmd.h"
+#include "nvim/ops.h"
+#include "nvim/option.h"
 
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
+
+#ifdef INCLUDE_GENERATED_DECLARATIONS
+// FIXME should include fileio.h, but this spawns lots of errors
+int check_nomodeline(char_u **argp);
+# include "auevents_enum.generated.h"
+# include "viml/parser/auevents_find.generated.h"
+#endif
 
 #define getdigits(arg) getdigits((char_u **) (arg))
 #define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
@@ -38,6 +49,15 @@
 #define replace_termcodes(a, b, c, d, e, f, g) \
     (char *) replace_termcodes((const char_u *) a, b, (char_u **) c, d, e, f, g)
 #define lrswap(s) lrswap((char_u *) s)
+#define get_list_range(pp, i1, i2) get_list_range((char_u **)pp, i1, i2)
+#define skiptowhite(p) (const char *) skiptowhite((char_u *) p)
+#define check_nomodeline(p) check_nomodeline((char_u **) p)
+#define get_histtype(p, len, d) get_histtype((const char_u *) p, len, d)
+#define find_key_option_len(p, l) find_key_option_len((const char_u *) p, len)
+#define findoption_len(p, l) findoption_len((const char_u *) p, l)
+#define vim_str2nr(p, ...) vim_str2nr((const char_u *) (p), __VA_ARGS__)
+#define string_to_key(p) string_to_key((char_u *) (p))
+#define mb_cptr2char_adv(p) mb_cptr2char_adv((char_u **) (p))
 
 typedef struct {
   CommandType find_in_stack;
@@ -55,6 +75,14 @@ typedef struct {
   void *cookie;
   garray_T ga;
 } SavingFgetlineArgs;
+
+/// Options for parse_menu_name
+typedef enum {
+  kMenuDefaults,    ///< Do unescape menu items and save text after <Tab>.
+  kMenuIgnoreText,  ///< Respect text after <Tab>, but do not save it.
+  kMenuWholeCmd,    ///< Ignore <Tab>, do not treat whitespaces specially and
+                    ///< treat <C-v> as "\\".
+} MenuNameParsingOptions;
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.c.generated.h"
@@ -115,6 +143,29 @@ static Regex *regex_alloc(const char *string, size_t len)
   return regex;
 }
 
+/// Allocate new replacement atom
+///
+/// @note Does not zero memory when allocating, but does assign NULL to next 
+///       field.
+///
+/// @param[in]  type       Type of the replacement.
+/// @param[in]  start_col  First column of the atom.
+/// @param[in]  end_col    Last column of the atom.
+///
+/// @return Pointer to allocated block of memory.
+static Replacement *replacement_alloc(const ReplacementType type,
+                                      const size_t start_col,
+                                      const size_t end_col)
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
+{
+  Replacement *ret = xmalloc(sizeof(Replacement));
+  ret->type = type;
+  ret->start_col = start_col;
+  ret->end_col = end_col;
+  ret->next = NULL;
+  return ret;
+}
+
 /// Allocate new glob pattern part
 ///
 /// @param[in]  type  Part type.
@@ -147,6 +198,16 @@ static AddressFollowup *address_followup_alloc(AddressFollowupType type)
   return followup;
 }
 
+static void free_complete(CmdComplete *compl)
+{
+  if (compl == NULL) {
+    return;
+  }
+
+  free(compl->arg);
+  free(compl);
+}
+
 static void free_menu_item(MenuItem *menu_item)
 {
   if (menu_item == NULL)
@@ -164,6 +225,38 @@ static void free_regex(Regex *regex)
 
   vim_regfree(regex->prog);
   free(regex);
+}
+
+static void free_replacement(Replacement *rep)
+{
+  if (rep == NULL) {
+    return;
+  }
+
+  switch (rep->type) {
+    case kRepExpr: {
+      free_expr(rep->data.expr);
+      break;
+    }
+    case kRepLiteral: {
+      free(rep->data.str);
+      break;
+    }
+    case kRepEscaped:
+    case kRepEscLiteral:
+    case kRepMatched:
+    case kRepGroup:
+    case kRepPrevSub:
+    case kRepCharUpCase:
+    case kRepUpCase:
+    case kRepCharDownCase:
+    case kRepDownCase:
+    case kRepCaseEnd:
+    case kRepNewLine: {
+      break;
+    }
+  }
+  free(rep);
 }
 
 static void free_patterns(Patterns *pats)
@@ -205,6 +298,7 @@ static void free_pattern(Pattern *pat)
       free_expr(pat->data.expr);
       break;
     }
+    case kPatAuList:
     case kPatBranch: {
       free_patterns(&(pat->data.pats));
       break;
@@ -248,15 +342,6 @@ static void free_address_data(Address *address)
   free_address_followup(address->followups);
 }
 
-static void free_address(Address *address)
-{
-  if (address == NULL)
-    return;
-
-  free_address_data(address);
-  free(address);
-}
-
 static void free_address_followup(AddressFollowup *followup)
 {
   if (followup == NULL)
@@ -295,6 +380,8 @@ static void free_range(Range *range)
   free(range);
 }
 
+const char *const empty_string = "";
+
 static void free_cmd_arg(CommandArg *arg, CommandArgType type)
 {
   switch (type) {
@@ -307,13 +394,16 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     case kArgFlags:
     case kArgNumber:
     case kArgUNumber:
-    case kArgAuEvent:
     case kArgChar:
     case kArgColumn: {
       break;
     }
     case kArgNumbers: {
       free(arg->arg.numbers);
+      break;
+    }
+    case kArgUNumbers: {
+      free(arg->arg.unumbers);
       break;
     }
     case kArgString: {
@@ -334,12 +424,26 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       break;
     }
     case kArgReplacement: {
-      // FIXME
+      free_replacement(arg->arg.rep);
       break;
     }
     case kArgLines:
+    case kArgGaStrings: {
+      ga_clear_strings(&(arg->arg.ga_strs));
+      break;
+    }
     case kArgStrings: {
-      ga_clear_strings(&(arg->arg.strs));
+      char **const strs = arg->arg.strs;
+      if (strs != NULL) {
+        char **cur_str = strs;
+        while (*cur_str != NULL) {
+          if (*cur_str != empty_string) {
+            free(*cur_str);
+          }
+          cur_str++;
+        }
+        free(strs);
+      }
       break;
     }
     case kArgMenuName: {
@@ -351,7 +455,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       break;
     }
     case kArgAddress: {
-      free_address(arg->arg.address);
+      free_range(arg->arg.range);
       break;
     }
     case kArgCmdComplete: {
@@ -391,6 +495,55 @@ void free_cmd(CommandNode *node)
   free(node->name);
   free(node->skips);
   free(node);
+}
+
+/// Get a list of comma separated patterns
+///
+/// Useful for branches (src/{foo,bar}.c) and autocommand pattern list 
+/// (src/foo.c,src/bar.c).
+///
+/// @param[in,out]  pp       Parsed string. Warning: it expects one character 
+///                          before the actual pattern.
+/// @param[out]     error    Address where error will be saved.
+/// @param[out]     pat      Address where pattern will be saved.
+/// @param[in]      is_glob  True if parsing fully qualified globs (i.e. `` 
+///                          `shell command` `` and `` `=VimL.Expression()` `` 
+///                          are allowed).
+/// @param[in]      col      Column number (for error reporting).
+///
+/// @return OK if everything is good, NOTDONE if there was an error (in this 
+///         case error structure must be populated), FAIL if there was error 
+///         without error message.
+static int get_comma_separated_patterns(const char **pp,
+                                        CommandParserError *error,
+                                        Pattern **pat,
+                                        const bool is_glob,
+                                        const size_t col)
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  Pattern **next = pat;
+  const char *p = *pp;
+  const char *const s = p;
+  Patterns *cur_pats = &((*next)->data.pats);
+  Patterns **next_pats = &cur_pats;
+  do {
+    int cret;
+    Pattern *pat = NULL;
+    p++;
+    if ((cret = get_pattern(&p, error, &pat, true, is_glob, col + (p - s)))
+        != OK) {
+      return cret;
+    }
+    if (pat != NULL) {
+      if (*next_pats == NULL) {
+        *next_pats = XCALLOC_NEW(Patterns, 1);
+      }
+      (*next_pats)->pat = pat;
+      next_pats = &((*next_pats)->next);
+    }
+  } while (*p == ',');
+  *pp = p;
+  return OK;
 }
 
 static int get_pattern(const char **pp, CommandParserError *error,
@@ -632,40 +785,27 @@ static int get_pattern(const char **pp, CommandParserError *error,
           break;
         }
         case kPatBranch: {
-          Patterns *cur_pats = &((*next)->data.pats);
-          Patterns **next_pats = &cur_pats;
           const char *const init_p = p;
-          do {
-            int cret;
-            Pattern *pat = NULL;
-            p++;
-            if ((cret = get_pattern(&p, error, &pat, true, is_glob, col))
-                == FAIL)
-              return FAIL;
-            if (cret == NOTDONE) {
-              ret = NOTDONE;
-              goto get_glob_error_return;
-            }
-            if (pat != NULL) {
-              if (*next_pats == NULL) {
-                *next_pats = xcalloc(1, sizeof(Patterns));
-              }
-              (*next_pats)->pat = pat;
-              next_pats = &((*next_pats)->next);
-            }
-          } while (*p == ',');
+          int gcsp_ret = get_comma_separated_patterns(&p, error, next, is_glob,
+                                                      col + (p - s));
+          if (gcsp_ret != OK) {
+            ret = gcsp_ret;
+            goto get_glob_error_return;
+          }
           if (*p == '}' && (*next)->data.pats.next != NULL) {
             p++;
           } else {
+            p = init_p;
             free_pattern(*next);
             memset(*next, 0, sizeof(**next));
-            p = init_p + 1;
-            literal_start = init_p;
+            literal_start = p;
+            p++;
             literal_length = 1;
             continue;
           }
           break;
         }
+        case kPatAuList:
         case kPatMissing:
         case kPatLiteral: {
           assert(false);
@@ -756,12 +896,19 @@ static int get_vcol(const char **pp)
 ///                        NUL here will result in a faster code: NULs cannot 
 ///                        be escaped, so it just uses STRLEN to find regex 
 ///                        end).
+/// @param[in]      no_end_message
+///                        Error message which should be thrown if string ended, 
+///                        but endch was not found. If NULL this situation is 
+///                        considered to be OK.
 ///
-/// @return FAIL when out of memory, OK otherwise.
+/// @return FAIL in case of non-recoverable failure, NOTDONE in case of error, 
+///         OK otherwise.
 static int get_regex(const char **pp, CommandParserError *error,
-                     Regex **regex, const char endch)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+                     Regex **regex, const char endch,
+                     const char *const no_end_message)
+  FUNC_ATTR_NONNULL_ARG(1,2,3) FUNC_ATTR_WARN_UNUSED_RESULT
 {
+  assert(endch != NUL || no_end_message == NULL);
   const char *p = *pp;
   const char *s = p;
 
@@ -778,8 +925,13 @@ static int get_regex(const char **pp, CommandParserError *error,
 
   *regex = regex_alloc(s, p - s);
 
-  if (*p != NUL)
+  if (*p != NUL) {
     p++;
+  } else if (no_end_message != NULL) {
+    error->message = no_end_message;
+    error->position = p;
+    return NOTDONE;
+  }
 
   *pp = p;
 
@@ -799,13 +951,13 @@ static int get_regex(const char **pp, CommandParserError *error,
 static CMD_P_DEF(parse_append)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  garray_T *strs = &(node->args[ARG_APPEND_LINES].arg.strs);
+  garray_T *ga_strs = &(node->args[ARG_APPEND_LINES].arg.ga_strs);
   char *next_line;
   const char *first_nonblank;
   int vcol = -1;
   int cur_vcol = -1;
 
-  ga_init(strs, (int) sizeof(char *), 3);
+  ga_init(ga_strs, (int) sizeof(char *), 3);
 
   while ((next_line = fgetline(':', cookie, vcol == -1 ? 0 : vcol)) != NULL) {
     first_nonblank = next_line;
@@ -819,14 +971,8 @@ static CMD_P_DEF(parse_append)
       free(next_line);
       break;
     }
-    ga_grow(strs, 1);
-#if 0
-    if (ga_grow(strs, 1) == FAIL) {
-      ga_clear_strings(strs);
-      return FAIL;
-    }
-#endif
-    ((char **)(strs->ga_data))[strs->ga_len++] = (char *) next_line;
+    ga_grow(ga_strs, 1);
+    ((char **)(ga_strs->ga_data))[ga_strs->ga_len++] = (char *) next_line;
   }
 
   return OK;
@@ -936,7 +1082,6 @@ static int do_parse_map(CMD_P_ARGS, bool unmap)
   const char *lhs_end;
   const char *rhs;
   char *lhs_buf;
-  // do_backslash = (strchr(p_cpo, CPO_BSLASH) == NULL);
   bool do_backslash = !(o.flags&FLAG_POC_CPO_BSLASH);
 
   for (;;) {
@@ -1085,28 +1230,125 @@ static CMD_P_DEF(parse_mapclear)
 /// alter. This function only removes "\\" charaters from the string, modifying 
 /// memory in-place.
 ///
-/// @param[in,out]  p  String being unescaped.
-static void menu_unescape(char *p)
+/// @param[in,out]  p        String being unescaped.
+/// @param[in]      unctrlv  Treat <C-v> as escape character.
+static void str_unescape(char *p, bool unctrlv)
 {
   while (*p) {
-    if (*p == '\\' && p[1] != NUL)
+    if ((*p == '\\' || (*p == Ctrl_V && unctrlv)) && p[1] != NUL)
       STRMOVE(p, p + 1);
     p++;
   }
 }
 
-static CMD_P_DEF(parse_menu)
+/// Parse menu name
+///
+/// @param[in,out]  pp         Parsed string.
+/// @param[out]     error      Address where parsing errors are saved.
+/// @param[in]      unmenu     True when parsing :unmenu.
+/// @param[out]     menu_item  Address where allocated menu is saved.
+/// @param[out]     menu_text  Address where left text is saved.
+///
+/// @return OK in case of success, NOTDONE in case of error, FAIL in case of 
+///         unrecoverable error.
+static int parse_menu_name(const char **pp, CommandParserError *error,
+                           MenuNameParsingOptions mnpo, MenuItem **menu_item,
+                           char **menu_text)
+{
+  MenuItem *sub = NULL;
+  const char *p = *pp;
+  const char *s = NULL;
+  const char *menu_path_end = NULL;
+  const char *menu_path = p;
+  MenuItem **next = menu_item;
+
+  if (*menu_path == '.') {
+    error->message = N_("E475: Expected menu name");
+    error->position = menu_path;
+    return NOTDONE;
+  }
+
+  while (*p && (mnpo == kMenuWholeCmd || !vim_iswhite(*p))) {
+    if ((*p == '\\' || *p == Ctrl_V) && p[1] != NUL) {
+      p++;
+      if (*p == TAB && mnpo != kMenuWholeCmd) {
+        s = p + 1;
+        menu_path_end = p - 2;
+      }
+    } else if (STRNICMP(p, "<TAB>", 5) == 0 && mnpo != kMenuWholeCmd) {
+      menu_path_end = p - 1;
+      p += 4;
+      s = p + 1;
+    } else if (*p == '.' && s == NULL) {
+      menu_path_end = p - 1;
+      if (menu_path_end == menu_path) {
+        error->message = N_("E792: Empty menu name");
+        error->position = p;
+        return NOTDONE;
+      }
+    } else if ((!p[1] || (mnpo != kMenuWholeCmd && vim_iswhite(p[1])))
+               && p != menu_path && s == NULL) {
+      menu_path_end = p;
+    }
+    if (menu_path_end != NULL) {
+      sub = xcalloc(1, sizeof(MenuItem));
+
+      *next = sub;
+      next = &(sub->subitem);
+
+      sub->name = xmemdupz(menu_path, menu_path_end - menu_path + 1);
+
+      str_unescape(sub->name, mnpo == kMenuWholeCmd);
+
+      menu_path = p + 1;
+      menu_path_end = NULL;
+    }
+    p++;
+  }
+
+  if (s != NULL) {
+    char *text;
+    if (*menu_item == NULL) {
+      error->message = N_("E792: Empty menu name");
+      error->position = s;
+      return NOTDONE;
+    }
+
+    if (mnpo == kMenuDefaults) {
+      text = xmemdupz(s, p - s);
+
+      str_unescape(text, false);
+
+      *menu_text = text;
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
+/// Parse :*menu/:*unmenu
+///
+/// @param[in,out]  pp        Parsed string. Is advanced to the end of the 
+///                           string unless a error occurred. Must point to the 
+///                           first non-white character of the command argument.
+/// @param[out]     node      Location where parsing results are saved.
+/// @param[out]     error     Structure where errors are saved.
+/// @param[in]      o         Options that control parsing behavior.
+/// @param[in]      position  Position of input.
+/// @param[in]      fgetline  Function used to obtain the next line. Not used.
+/// @param[in,out]  cookie    Argument to the above function. Not used.
+/// @param[in]      unmenu    Determines whether :*menu or :*unmenu command is 
+///                           being parsed.
+///
+/// @return FAIL when out of memory, OK otherwise.
+static int do_parse_menu(CMD_P_ARGS, bool unmenu)
 {
   // FIXME "menu *" parses to something weird
   uint_least32_t menu_flags = 0;
   const char *p = *pp;
   size_t i;
   const char *s;
-  const char *menu_path;
-  const char *menu_path_end;
   const char *map_to;
-  MenuItem *sub = NULL;
-  MenuItem *cur = NULL;
 
   for (;;) {
     if (STRNCMP(p, "<script>", 8) == 0) {
@@ -1142,7 +1384,7 @@ static CMD_P_DEF(parse_menu)
 
     icon = xmemdupz(s, p - s);
 
-    menu_unescape(icon);
+    str_unescape(icon, false);
 
     node->args[ARG_MENU_ICON].arg.str = icon;
 
@@ -1181,78 +1423,33 @@ static CMD_P_DEF(parse_menu)
     p = skipwhite(p + 7);
   }
 
-  node->args[ARG_MENU_FLAGS].arg.flags = menu_flags;
+  if (!unmenu) {
+    node->args[ARG_MENU_FLAGS].arg.flags = menu_flags;
+  }
 
   if (*p == NUL) {
     *pp = p;
     return OK;
   }
 
-  menu_path = p;
-  if (*menu_path == '.') {
-    error->message = N_("E475: Expected menu name");
-    error->position = menu_path;
-    return NOTDONE;
-  }
-
-  menu_path_end = NULL;
-  s = NULL;
-  while (*p && !vim_iswhite(*p)) {
-    if ((*p == '\\' || *p == Ctrl_V) && p[1] != NUL) {
-      p++;
-      if (*p == TAB) {
-        s = p + 1;
-        menu_path_end = p - 2;
-      }
-    } else if (STRNICMP(p, "<TAB>", 5) == 0) {
-      menu_path_end = p - 1;
-      p += 4;
-      s = p + 1;
-    } else if (*p == '.' && s == NULL) {
-      menu_path_end = p - 1;
-      if (menu_path_end == menu_path) {
-        error->message = N_("E792: Empty menu name");
-        error->position = p;
-        return NOTDONE;
-      }
-    } else if ((!p[1] || vim_iswhite(p[1])) && p != menu_path && s == NULL) {
-      menu_path_end = p;
-    }
-    if (menu_path_end != NULL) {
-      sub = xcalloc(1, sizeof(MenuItem));
-
-      if (node->args[ARG_MENU_NAME].arg.menu_item == NULL)
-        node->args[ARG_MENU_NAME].arg.menu_item = sub;
-      else
-        cur->subitem = sub;
-
-      sub->name = xmemdupz(menu_path, menu_path_end - menu_path + 1);
-
-      menu_unescape(sub->name);
-
-      cur = sub;
-      menu_path = p + 1;
-      menu_path_end = NULL;
-    }
-    p++;
-  }
-
-  if (s != NULL) {
-    char *text;
-    if (node->args[ARG_MENU_NAME].arg.menu_item == NULL) {
-      error->message = N_("E792: Empty menu name");
-      error->position = s;
-      return NOTDONE;
-    }
-
-    text = xmemdupz(s, p - s);
-
-    menu_unescape(text);
-
-    node->args[ARG_MENU_TEXT].arg.str = text;
+  const char *const menu_path = p;
+  const size_t name_idx = (unmenu ? ARG_UNMENU_LHS : ARG_MENU_NAME);
+  int pmn_ret = parse_menu_name(&p, error,
+                                unmenu ? kMenuIgnoreText : kMenuDefaults,
+                                &(node->args[name_idx].arg.menu_item),
+                                unmenu
+                                ? NULL
+                                : &(node->args[ARG_MENU_TEXT].arg.str));
+  if (pmn_ret != OK) {
+    return pmn_ret;
   }
 
   p = skipwhite(p);
+
+  if (unmenu) {
+    *pp = p;
+    return OK;
+  }
 
   map_to = p;
 
@@ -1276,6 +1473,16 @@ static CMD_P_DEF(parse_menu)
 
   *pp = p;
   return OK;
+}
+
+static CMD_P_DEF(parse_menu)
+{
+  return do_parse_menu(pp, node, error, o, position, fgetline, cookie, false);
+}
+
+static CMD_P_DEF(parse_unmenu)
+{
+  return do_parse_menu(pp, node, error, o, position, fgetline, cookie, true);
 }
 
 /// Parse an expression or a whitespace-separated sequence of expressions
@@ -1697,7 +1904,7 @@ static CMD_P_DEF(parse_function)
   const char *p = *pp;
   Expression *expr;
   int ret;
-  garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.strs);
+  garray_T *args = &(node->args[ARG_FUNC_ARGS].arg.ga_strs);
   uint_least32_t flags = 0;
   bool mustend = false;
 
@@ -1705,7 +1912,7 @@ static CMD_P_DEF(parse_function)
     return OK;
 
   if (*p == '/') {
-    return get_regex(&p, error, &(node->args[ARG_FUNC_REG].arg.reg), '/');
+    return get_regex(&p, error, &(node->args[ARG_FUNC_REG].arg.reg), '/', NULL);
   }
 
   if ((ret = parse_lval(&p, error, o, position.col + (p - *pp), &expr,
@@ -1940,6 +2147,2342 @@ static CMD_P_DEF(parse_scriptencoding)
   return OK;
 }
 
+static AuEvent *parse_events(const char **pp, CommandParserError *error)
+{
+  const char *p = *pp;
+  if (*p == '*') {
+    if (p[1] != NUL && !vim_iswhite(p[1])) {
+      error->message = N_("E215: Illegal character after *");
+      error->position = p + 1;
+      return NULL;
+    }
+    AuEvent *events = xcalloc(2, sizeof(AuEvent));
+    events[0] = ANY_EVENT;
+    events[1] = NO_EVENT;
+    p = skipwhite(p + 1);
+    *pp = p;
+    return events;
+  }
+  garray_T ga;
+  ga_init(&ga, (int) sizeof(AuEvent), 1);
+  AuEvent event = NO_EVENT;
+  do {
+    event = find_event(&p);
+    GA_APPEND(AuEvent, &ga, event);
+    if (*p == ',') {
+      p++;
+    } else {
+      break;
+    }
+  } while (event != NO_EVENT);
+  GA_APPEND(AuEvent, &ga, NO_EVENT);
+  if (!(vim_iswhite(*p) || *p == NUL)) {
+    ga_clear(&ga);
+    return NULL;
+  }
+  p = skipwhite(p);
+  *pp = p;
+  return (AuEvent *) ga.ga_data;
+}
+
+/// Parse event and group names for :au and :doau
+///
+/// @param[in,out]  pp      Parsed string.
+/// @param[out]     error   Address where errors are saved.
+/// @param[out]     events  Address where found events are saved.
+/// @param[out]     group   Address where group name is saved.
+///
+/// @return OK in case of success, NOTDONE in case of syntax error and FAIL in 
+///         case of non-recoverable error.
+static int parse_group_and_event(const char **pp,
+                                 CommandParserError *error,
+                                 AuEvent **events,
+                                 char **group)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  const char *p = *pp;
+  *group = NULL;
+  *events = parse_events(&p, error);
+  if (error->message != NULL) {
+    return NOTDONE;
+  }
+  if (*events == NULL) {
+    const char *const start = p;
+    while (!vim_iswhite(*p) && *p) {
+      p++;
+    }
+    *group = xmemdupz(start, p - start);
+    p = skipwhite(p);
+    if (*p) {
+      *events = parse_events(&p, error);
+      if (error->message != NULL) {
+        return NOTDONE;
+      }
+      if (events == NULL) {
+        error->message = N_("E216: No such event");
+        error->position = p;
+        return NOTDONE;
+      }
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_autocmd)
+{
+  if (**pp == NUL) {
+    return OK;
+  }
+  const char *p = *pp;
+  const char *const s = p;
+  int pgeret;
+  if ((pgeret = parse_group_and_event(&p,
+                                      error,
+                                      &(node->args[ARG_AU_EVENTS].arg.events),
+                                      &(node->args[ARG_AU_GROUP].arg.str)))
+      != OK) {
+    return pgeret;
+  }
+  p = skipwhite(p);
+  if (*p == NUL) {
+    *pp = p;
+    return OK;
+  }
+
+  Pattern *pat = pattern_alloc(kPatAuList);
+  p--;
+  int gcsp_ret = get_comma_separated_patterns(&p, error, &pat, false,
+                                              position.col + (p - s));
+  if (gcsp_ret != OK) {
+    return gcsp_ret;
+  }
+  node->args[ARG_AU_PATTERNS].arg.pat = pat;
+  p = skipwhite(p);
+
+  if (STRNCMP(p, "nested", sizeof("nested") - 1) == 0) {
+    const char *const start = p;
+    p = skipwhite(p + sizeof("nested") - 1 + 1);
+    if (*p == NUL) {
+      p = start;
+    } else {
+      node->args[ARG_AU_NESTED].arg.flags = 1;
+    }
+  }
+
+  if (*p == NUL) {
+    *pp = p;
+    return OK;
+  }
+
+  CommandPosition do_position = position;
+  position.col += (p - s);
+  int do_ret = parse_do(&p, node, error, o, do_position, fgetline, cookie);
+  if (do_ret != OK) {
+    return do_ret;
+  }
+
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_doautocmd)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  int pgeret;
+  AuEvent *events = NULL;
+  node->args[ARG_DOAU_NOMDLINE].arg.flags =
+      (uint_least32_t) (!check_nomodeline(&p));
+  p = skipwhite(p);
+  if ((pgeret = parse_group_and_event(&p, error, &events,
+                                      &(node->args[ARG_DOAU_GROUP].arg.str)))
+      != OK) {
+    return pgeret;
+  }
+  node->args[ARG_DOAU_EVENTS].arg.events = events;
+  if (events != NULL && *events == ANY_EVENT) {
+    error->message = N_("E217: Can't execute autocommands for ALL events");
+    error->position = s;
+    return NOTDONE;
+  }
+  p = skipwhite(p);
+  if (*p != NUL) {
+    size_t len = STRLEN(p);
+    node->args[ARG_DOAU_FNAME].arg.str = xmemdupz(p, len);
+    p += len;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_behave)
+{
+  if (STRCMP(*pp, "mswin") == 0 || STRCMP(*pp, "xterm") == 0) {
+    node->args[ARG_NAME_NAME].arg.str = xstrdup(*pp);
+    *pp += STRLEN(*pp);
+    return OK;
+  } else {
+    error->message =
+        N_("E475: :behave command currently only supports mswin and xterm");
+    error->position = *pp;
+    return NOTDONE;
+  }
+}
+
+static CMD_P_DEF(parse_breakadd)
+{
+  BreakType type;
+  const char *p = *pp;
+  const char *const s = p;
+  bool profiling = (node->type == kCmdProfile || node->type == kCmdProfdel);
+
+  if (STRNCMP(p, "func", 4) == 0) {
+    type = kBreakInFunction;
+    p += 4;
+  } else if (STRNCMP(p, "file", 4) == 0) {
+    type = kBreakInFile;
+    p += 4;
+  } else if (!profiling && STRNCMP(p, "here", 4) == 0) {
+    type = kBreakHere;
+    p += 4;
+  } else {
+    if (profiling) {
+      error->message =
+          N_("E475: Profile commands only accept `func' and `file' "
+             "as their first argument");
+    } else {
+      error->message =
+          N_("E475: Debug commands only accept `func', `file' and `here'");
+    }
+    error->position = p;
+    return NOTDONE;
+  }
+
+  p = skipwhite(p);
+
+  if (type == kBreakHere) {
+    // Do nothing
+  } else {
+    if (!profiling && VIM_ISDIGIT(*p)) {
+      size_t lnr = 0;
+      lnr = (size_t) getdigits(&p);
+      p = skipwhite(p);
+      node->range.address.type = kAddrFixed;
+      node->range.address.data.lnr = (linenr_T) lnr;
+    }
+    if (!*p) {
+      if (type == kBreakInFunction) {
+        error->message = N_("E475: Expecting function name or pattern");
+      } else {
+        error->message = N_("E475: Expecting file name or pattern");
+      }
+      error->position = p;
+      return NOTDONE;
+    }
+    p = skipwhite(p);
+    Pattern *pat = NULL;
+    int cret;
+    if ((cret = get_pattern(&p, error, &pat, false, true,
+                            (p - s) + position.col))
+        != OK) {
+      free_pattern(pat);
+      return cret;
+    }
+    node->args[ARG_BREAK_NAME].arg.pat = pat;
+  }
+  node->args[ARG_BREAK_TYPE].arg.flags = (uint_least32_t) type;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_cbuffer)
+{
+  const char *p = *pp;
+  node->args[ARG_NUMBER_NUMBER].arg.number = -1;
+  if (*p != NUL) {
+    int bufnr;
+    if (VIM_ISDIGIT(*p)) {
+      bufnr = getdigits(&p);
+    }
+    if (*p != NUL) {
+      error->message = N_("E474: Expected buffer number");
+      error->position = p;
+      return NOTDONE;
+    }
+    node->args[ARG_NUMBER_NUMBER].arg.number = bufnr;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_number)
+{
+  node->args[ARG_NUMBER_NUMBER].arg.number = atoi(*pp);
+  *pp += STRLEN(*pp);
+  return OK;
+}
+
+static CMD_P_DEF(parse_clist)
+{
+  int start = 1;
+  int end = -1;
+  const char *p = *pp;
+
+  if (get_list_range(&p, &start, &end) != OK) {
+    error->message = N_("E488: Expected valid integer range");
+    error->position = p;
+    return NOTDONE;
+  }
+  node->args[ARG_CLIST_FIRST].arg.number = start;
+  node->args[ARG_CLIST_LAST].arg.number = end;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_regex)
+{
+  const char *p = *pp;
+  Regex *regex = NULL;
+  if (*p == NUL) {
+  } else if (*p == '/') {
+    p++;
+    int rret;
+    if ((rret = get_regex(&p, error, &regex, '/', NULL)) != OK) {
+      return rret;
+    }
+  } else {
+    size_t numbslashes = 0;
+    const char *e;
+    for (e = p; *e; e++) {
+      if (*e == '\\') {
+        numbslashes++;
+      }
+    }
+    char *new_regex = xmalloc(6 + numbslashes + (e - p + 1));
+    //                        ^ \V\< and \>
+    char *np = new_regex;
+    memcpy(np, "\\V\\<", 4);
+    np += 4;
+    for (; p < e; p++) {
+      *np++ = *p;
+      if (*p == '\\') {
+        *np++ = '\\';
+      }
+    }
+    memcpy(np, "\\>", 3);
+    //                ^ Also copy trailing NUL
+    np += 2;
+    assert(*np == NUL);
+    regex = regex_alloc(new_regex, np - new_regex);
+  }
+  *pp = p;
+  node->args[ARG_REG_REG].arg.reg = regex;
+  return OK;
+}
+
+static CMD_P_DEF(parse_catch)
+{
+  const char *p = *pp;
+  Regex *regex = NULL;
+  if (ENDS_EXCMD(*p)) {
+  } else {
+    p++;
+    int rret;
+    if ((rret = get_regex(&p, error, &regex, p[-1], NULL)) != OK) {
+      return rret;
+    }
+  }
+  node->args[ARG_REG_REG].arg.reg = regex;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_address)
+{
+  const char *p = *pp;
+  Range *range = NULL;
+  Range **next = &range;
+  while (*p) {
+    *next = xcalloc(1, sizeof(Range));
+    if (get_address(&p, &((*next)->address), error) == FAIL) {
+      free_range(range);
+      return FAIL;
+    }
+    if ((*next)->address.type == kAddrMissing) {
+      if (*next != range) {
+        break;
+      }
+      error->message = N_("E14: Invalid address");
+      error->position = p;
+      return NOTDONE;
+    }
+    if (get_address_followups(&p, error, &((*next)->address.followups)) == FAIL) {
+      free_range(range);
+      return FAIL;
+    }
+    p = skipwhite(p);
+    (*next)->setpos = (*p == ';');
+    if (*p == ';' || *p == ',') {
+      p++;
+      next = &((*next)->next);
+    } else {
+      break;
+    }
+  }
+  node->args[ARG_ADDR_ADDR].arg.range = range;
+  *pp = p;
+  return OK;
+}
+
+/// Parse -complete option
+///
+/// @param[in]   p       Pointer to the first character of the parsed value.
+/// @param[in]   vallen  Length of the parsed value.
+/// @param[out]  error   Address where error is saved.
+/// @param[out]  comp    Address where parsing results are saved. Must be zeroed 
+///                      before passing here.
+///
+/// @return OK in case of success, NOTDONE in case of failure if error was set, 
+///         FAIL in case of non-recoverable error.
+static int parse_completion_argument(const char *p, const size_t vallen,
+                                     CommandParserError *error,
+                                     CmdComplete *compl)
+{
+  const char *arg = NULL;
+  size_t arglen = 0;
+  size_t valend = vallen;
+
+  // Look for any argument part - which is the part after any ','
+  for (size_t i = 0; i < vallen; i++) {
+    if (p[i] == ',') {
+      arg = p + i + 1;
+      arglen = vallen - i - 1;
+      valend = i;
+      break;
+    }
+  }
+  for (size_t i = 0; command_complete[i].expand != 0; i++) {
+    if (STRLEN(command_complete[i].name) == valend
+        && STRNCMP(p, command_complete[i].name, valend) == 0) {
+      compl->type = command_complete[i].expand;
+      break;
+    }
+  }
+  if (compl->type == EXPAND_NOTHING) {
+    error->message = N_("E180: Invalid complete value");
+    error->position = p;
+    return NOTDONE;
+  }
+  if (arg == NULL) {
+    if (compl->type == EXPAND_USER_DEFINED || compl->type == EXPAND_USER_LIST) {
+      error->message =
+          N_("E467: Custom completion requires a function argument");
+      error->position = p + vallen;
+      return NOTDONE;
+    }
+  } else {
+    if (compl->type != EXPAND_USER_DEFINED && compl->type != EXPAND_USER_LIST) {
+      error->message =
+          N_("E468: Completion argument only allowed for custom completion");
+      error->position = arg - 1;
+      return NOTDONE;
+    }
+    compl->arg = xmemdupz(arg, arglen);
+  }
+  return OK;
+}
+
+static CMD_P_DEF(parse_command)
+{
+  const char *p = *pp;
+  uint_least32_t flags = 0;
+  CmdComplete *compl = NULL;
+  while (*p == '-') {
+    p++;
+    const char *const end = skiptowhite(p);
+    const size_t nlen = end - p;
+    if (STRNICMP(p, "bang", nlen) == 0) {
+      flags |= FLAG_CMD_BANG;
+    } else if (STRNICMP(p, "buffer", nlen) == 0) {
+      flags |= FLAG_CMD_BUFFER;
+    } else if (STRNICMP(p, "bar", nlen) == 0) {
+      flags |= FLAG_CMD_BAR;
+    } else if (STRNICMP(p, "register", nlen) == 0) {
+      flags |= FLAG_CMD_REGISTER;
+    } else {
+      const char *val = NULL;
+      size_t vallen = 0;
+      size_t attrlen = nlen;
+
+      // Look for the attribute name - which is the part before any '='
+      size_t i;
+      for (i = 0; i < nlen; ++i) {
+        if (p[i] == '=') {
+          val = p + i + 1;
+          vallen = nlen - i - 1;
+          attrlen = i;
+          break;
+        }
+      }
+
+      if (STRNICMP(p, "nargs", attrlen) == 0) {
+        // If vallen != 1 then argument is definitely invalid. NUL value skips 
+        // to default: case.
+        flags &= ~FLAG_CMD_NARGS_MASK;
+        switch (vallen == 1 ? *val : NUL) {
+          case '0': {
+            flags |= VAL_CMD_NARGS_NO;
+            break;
+          }
+          case '1': {
+            flags |= VAL_CMD_NARGS_ONE;
+            break;
+          }
+          case '*': {
+            flags |= VAL_CMD_NARGS_ANY;
+            break;
+          }
+          case '?': {
+            flags |= VAL_CMD_NARGS_Q;
+            break;
+          }
+          case '+': {
+            flags |= VAL_CMD_NARGS_P;
+            break;
+          }
+          default: {
+            error->message = N_("E176: Invalid number of arguments");
+            error->position = (val == NULL ? p + attrlen : val);
+            goto parse_command_error_return;
+          }
+        }
+      } else if (STRNICMP(p, "range", attrlen) == 0) {
+        if (vallen == 1 && *val == '%') {
+          flags &= ~FLAG_CMD_RANGE_MASK;
+          flags |= VAL_CMD_RANGE_ALL;
+        } else if (val == NULL) {
+          flags &= ~FLAG_CMD_RANGE_MASK;
+          flags |= VAL_CMD_RANGE_CUR;
+        } else {
+          p = val;
+          if ((flags & FLAG_CMD_COUNT_MASK) == VAL_CMD_COUNT_COUNT
+              || (flags & FLAG_CMD_RANGE_MASK) == VAL_CMD_RANGE_COUNT) {
+            goto parse_command_double_count;
+          }
+          int count = (int) getdigits(&p);
+          if (p != val + vallen || vallen == 0) {
+            goto parse_command_invalid_count;
+          }
+          flags &= ~FLAG_CMD_RANGE_MASK;
+          flags |= VAL_CMD_RANGE_COUNT;
+          // Do not alter has_count so that printer does not dump count without 
+          // special-casing it.
+          node->count = count;
+        }
+      } else if (STRNICMP(p, "count", attrlen) == 0) {
+        if (val == NULL) {
+          flags &= ~FLAG_CMD_COUNT_MASK;
+          flags |= VAL_CMD_COUNT_EMPTY;
+        } else {
+          p = val;
+          if ((flags & FLAG_CMD_COUNT_MASK) == VAL_CMD_COUNT_COUNT
+              || (flags & FLAG_CMD_RANGE_MASK) == VAL_CMD_RANGE_COUNT) {
+            goto parse_command_double_count;
+          }
+          int count = (int) getdigits(&p);
+          if (p != val + vallen) {
+            goto parse_command_invalid_count;
+          }
+          flags &= ~FLAG_CMD_COUNT_MASK;
+          flags |= VAL_CMD_COUNT_COUNT;
+          // Do not alter has_count so that printer does not dump count without 
+          // special-casing it.
+          node->count = count;
+        }
+      } else if (STRNICMP(p, "complete", attrlen) == 0) {
+        if (val == NULL) {
+          error->message = N_("E179: Argument required for -complete");
+          error->position = p + attrlen;
+          goto parse_command_error_return;
+        }
+        compl = xcalloc(1, sizeof(CmdComplete));
+        int cret;
+        if ((cret = parse_completion_argument(val, vallen, error, compl))
+            != OK) {
+          free_complete(compl);
+          return cret;
+        }
+      } else {
+        error->message = N_("E181: Invalid attribute");
+        error->position = p;
+        goto parse_command_error_return;
+      }
+    }
+    p = skipwhite(end);
+  }
+  const char *const name_start = p;
+  if (ASCII_ISALPHA(*p)) {
+    while (ASCII_ISALNUM(*p)) {
+      p++;
+    }
+  }
+  size_t name_len = p - name_start;
+  if (!ends_excmd(*p) && !vim_iswhite(*p)) {
+    error->message = N_("E182: Invalid command name");
+    error->position = p;
+    goto parse_command_error_return;
+  } else if (!ASCII_ISUPPER(*name_start)) {
+    error->message =
+        N_("E183: User defined commands must start with an uppercase letter");
+    error->position = name_start;
+    goto parse_command_error_return;
+  } else if ((name_len == 1 && *name_start == 'X')
+             || (name_len <= 4 && STRNCMP(name_start, "Next", name_len) == 0)) {
+    error->message =
+        N_("E841: Reserved name, cannot be used for user defined command");
+    error->position = name_start;
+    goto parse_command_error_return;
+  }
+  char *name = xmemdupz(name_start, name_len);
+  p = skipwhite(p);
+  if (*p != NUL) {
+    node->args[ARG_CMD_COMMAND].arg.str = xstrdup(p);
+    p += STRLEN(p);
+  }
+  node->args[ARG_CMD_FLAGS].arg.flags = flags;
+  node->args[ARG_CMD_COMPLETE].arg.complete = compl;
+  node->args[ARG_CMD_NAME].arg.str = name;
+  *pp = p;
+  return OK;
+parse_command_double_count:
+  error->message = N_("E177: Count cannot be specified twice");
+  error->position = p;
+  goto parse_command_error_return;
+parse_command_invalid_count:
+  error->message = N_("E178: Invalid default value for count");
+  error->position = p;
+  goto parse_command_error_return;
+parse_command_error_return:
+  free_complete(compl);
+  return NOTDONE;
+}
+
+static CMD_P_DEF(parse_delmarks)
+{
+  const char *p = *pp;
+  if (node->bang) {
+    if (*p == NUL) {
+      return OK;
+    } else {
+      error->message = N_("E474: :delmarks must be called either without bang "
+                          "or without arguments");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else if (*p == NUL) {
+    error->message = N_("E471: You must specify register(s)");
+    error->position = p;
+    return NOTDONE;
+  }
+  // All marks are in range 0x20 - 0x7F (really narrower)
+  uint8_t marks[MAX_NUM_MARKS];
+  memset(&(marks[0]), 'N', MAX_NUM_MARKS);
+  for (; *p != NUL; p++) {
+    bool is_lower = ASCII_ISLOWER(*p);
+    bool is_digit = VIM_ISDIGIT(*p);
+    if (is_lower || is_digit || ASCII_ISUPPER(*p)) {
+      if (p[1] == '-') {
+        uint8_t from = (uint8_t) *p;
+        uint8_t to = (uint8_t) p[2];
+        if (!(is_lower
+              ? ASCII_ISLOWER(to)
+              : (is_digit
+                 ? VIM_ISDIGIT(to)
+                 : ASCII_ISUPPER(to)))) {
+          error->message = N_("E475: Trying to construct range out of marks "
+                              "from different sets");
+          error->position = p + 2;
+          return NOTDONE;
+        } else if (to < from) {
+          error->message =
+              N_("E475: Upper range bound is less then lower range bound");
+          error->position = p + 2;
+          return NOTDONE;
+        }
+        memset(&(marks[from - FIRST_MARK_CODE]), 'Y', (to - from + 1));
+        p += 2;
+      } else {
+        marks[*p - FIRST_MARK_CODE] = 'Y';
+      }
+    } else {
+      switch (*p) {
+        case '"':
+        case '^':
+        case '.':
+        case '[':
+        case ']':
+        case '<':
+        case '>': {
+          marks[*p - FIRST_MARK_CODE] = 'Y';
+          break;
+        }
+        case ' ': {
+          break;
+        }
+        default: {
+          error->message = N_("E475: Unknown mark");
+          error->position = p;
+          return NOTDONE;
+        }
+      }
+    }
+  }
+  node->args[ARG_NAME_NAME].arg.str = xmemdupz(&(marks[0]), MAX_NUM_MARKS);
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_display)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    return OK;
+  }
+#define REGSTART 0x20
+#define REGNUM 0x5F - REGSTART + 1
+  char regtab[REGNUM];
+  size_t reglen = 0;
+  memset(regtab, 0, REGNUM);
+  for (; *p; p++) {
+    if (!valid_yank_reg(*p, false)) {
+      continue;
+    }
+    uint8_t reg = TOUPPER_ASC(*p);
+    assert(reg - REGSTART < REGNUM && reg > REGSTART);
+    if (!regtab[reg - REGSTART]) {
+      reglen++;
+    }
+    regtab[reg - REGSTART] = 1;
+  }
+  char *regnames = xmallocz(reglen);
+  char *cur_regname = regnames;
+  for (size_t i = 0; i < REGNUM; i++) {
+    if (regtab[i]) {
+      *cur_regname++ = TOLOWER_ASC(i + REGSTART);
+    }
+  }
+  node->args[ARG_NAME_NAME].arg.str = regnames;
+  *pp = p;
+#undef REGSTART
+#undef REGNUM
+  return OK;
+}
+
+static CMD_P_DEF(parse_digraphs)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  if (*p == NUL) {
+    return OK;
+  }
+
+  size_t dig_count = 0;
+
+  while (*p != NUL) {
+    p = skipwhite(p);
+    if (*p == NUL) {
+      return OK;
+    } else if (*p == ESC) {
+      goto parse_digraphs_esc_error;
+    }
+    mb_ptr_adv_(p);
+    if (*p == NUL) {
+      error->message =
+          N_("E474: Expected second digraph character, but got nothing");
+      error->position = p;
+      return NOTDONE;
+    } else if (*p == ESC) {
+      goto parse_digraphs_esc_error;
+    }
+    mb_ptr_adv_(p);
+    p = skipwhite(p);
+    if (!VIM_ISDIGIT(*p)) {
+      error->message = (const char *) e_number_exp;
+      error->position = p;
+      return NOTDONE;
+    }
+    p = skipdigits(p);
+    dig_count++;
+  }
+
+  if (dig_count == 0) {
+    return OK;
+  }
+
+  p = s;
+
+  char **const digraphs = xmalloc(sizeof(char *) * (dig_count + 1));
+  uint_least32_t *const codepoints = xmalloc(sizeof(uint_least32_t) * dig_count);
+
+  char **cur_dig = digraphs;
+  uint_least32_t *cur_cp = codepoints;
+
+  while (dig_count) {
+    p = skipwhite(p);
+    const char *const dig_start = p;
+    mb_ptr_adv_(p);
+    mb_ptr_adv_(p);
+    *cur_dig++ = xmemdupz(dig_start, (p - dig_start));
+    p = skipwhite(p);
+    *cur_cp++ = getdigits(&p);
+    dig_count--;
+  }
+  *cur_dig = NULL;
+  node->args[ARG_DIG_DIGRAPHS].arg.strs = digraphs;
+  node->args[ARG_DIG_CHARS].arg.unumbers = codepoints;
+  *pp = skipwhite(p);
+  return OK;
+parse_digraphs_esc_error:
+  error->message = N_("E104: Escape not allowed in digraph");
+  error->position = p;
+  return NOTDONE;
+}
+
+static CMD_P_DEF(parse_later)
+{
+  const char *p = *pp;
+  uint_least32_t later_type = VAL_LATER_COUNT;
+  unsigned count = 1;
+  if (VIM_ISDIGIT(*p)) {
+    count = getdigits(&p);
+    switch (*p) {
+#define LATER_TYPE(ch, type) \
+      case ch: { \
+        p++; \
+        later_type = VAL_LATER_##type; \
+        break; \
+      }
+      LATER_TYPE('s', SECONDS)
+      LATER_TYPE('m', MINUTES)
+      LATER_TYPE('h', HOURS)
+      LATER_TYPE('d', DAYS)
+      LATER_TYPE('f', FILE)
+#undef LATER_TYPE
+      case NUL: {
+        break;
+      }
+      default: {
+        error->message =
+            N_("E475: Expected 's', 'm', 'h', 'd', 'f' or nothing "
+               "after number");
+        error->position = p;
+        return NOTDONE;
+      }
+    }
+    if (*p != NUL) {
+      error->message = N_("E475: Trailing characters");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else if (*p != NUL) {
+    error->message = N_("E475: Expected numeric argument");
+    error->position = p;
+    return NOTDONE;
+  }
+  *pp = p;
+  node->args[ARG_LATER_FLAGS].arg.number = later_type;
+  node->args[ARG_LATER_COUNT].arg.unumber = count;
+  return OK;
+}
+
+static CMD_P_DEF(parse_filetype)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    return OK;
+  }
+  uint_least32_t flags = 0;
+  for (;;) {
+    if (STRNCMP(p, "plugin", 6) == 0) {
+      flags |= FLAG_FT_PLUGIN;
+      p = skipwhite(p + 6);
+      continue;
+    } else if (STRNCMP(p, "indent", 6) == 0) {
+      flags |= FLAG_FT_INDENT;
+      p = skipwhite(p + 6);
+      continue;
+    }
+    break;
+  }
+  if (STRCMP(p, "on") == 0) {
+    flags |= FLAG_FT_ON;
+    p += 2;
+  } else if (STRCMP(p, "detect") == 0) {
+    flags |= FLAG_FT_DETECT;
+    p += 6;
+  } else if (STRCMP(p, "off") == 0) {
+    flags |= FLAG_FT_OFF;
+    p += 3;
+  } else {
+    error->message = N_("E475: Invalid syntax: expected "
+                        "`filetype[ [plugin|indent]... {on|off|detect}]'");
+    error->position = p;
+    return NOTDONE;
+  }
+  *pp = p;
+  node->args[ARG_FT_FLAGS].arg.flags = flags;
+  return OK;
+}
+
+static CMD_P_DEF(parse_history)
+{
+  const char *p = *pp;
+  uint_least32_t flags = 0;
+  if (!(VIM_ISDIGIT(*p) || *p == '-' || *p == ',')) {
+    const char *end = p;
+    while (*end && (ASCII_ISALPHA(*end) || strchr(":=@>/?", *end) != NULL)) {
+      end++;
+    }
+    HistoryType histtype = get_histtype(p, end - p, true);
+    switch (histtype) {
+      case HIST_INVALID: {
+        if (STRNICMP(p, "all", end - p) == 0) {
+          flags |= FLAG_HIST_ALL;
+          break;
+        } else {
+          error->message = N_("E488: Expected history name or nothing");
+          error->position = p;
+          return NOTDONE;
+        }
+      }
+#define HIST_TO_FLAG(h) \
+      case HIST_##h: { \
+        flags |= FLAG_HIST_##h; \
+        break; \
+      }
+      HIST_TO_FLAG(DEFAULT)
+      HIST_TO_FLAG(CMD)
+      HIST_TO_FLAG(SEARCH)
+      HIST_TO_FLAG(EXPR)
+      HIST_TO_FLAG(INPUT)
+      HIST_TO_FLAG(DEBUG)
+#undef HIST_TO_FLAG
+    }
+    p = end;
+  } else {
+    flags |= FLAG_HIST_DEFAULT;
+  }
+  node->args[ARG_HIST_FIRST].arg.number = 1;
+  node->args[ARG_HIST_LAST].arg.number = -1;
+  if (get_list_range(&p, &(node->args[ARG_HIST_FIRST].arg.number),
+                     &(node->args[ARG_HIST_LAST].arg.number)) != OK) {
+    error->message = N_("E488: Expected valid history lines range");
+    error->position = p;
+    return NOTDONE;
+  }
+  node->args[ARG_HIST_FLAGS].arg.flags = flags;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_mark)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    error->message = N_("E471: Expected mark name");
+    error->position = p;
+    return NOTDONE;
+  }
+  if (   ASCII_ISLOWER(*p)
+      || ASCII_ISUPPER(*p)
+      || *p == '\''
+      || *p == '`') {
+    node->args[ARG_MARK_CHAR].arg.ch = *p;
+    p++;
+  } else {
+    error->message =
+        N_("E191: Argument must be a letter or forward/backward quote");
+    error->position = p;
+    return NOTDONE;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_popup)
+{
+  return parse_menu_name(pp, error, kMenuWholeCmd,
+                         &(node->args[ARG_POPUP_NAME].arg.menu_item), NULL);
+}
+
+static CMD_P_DEF(parse_make)
+{
+  // Warning: Vim redirects parsing to :vimgrep if &grepprg is "internal". 
+  // Parser cannot do this.
+  return parse_rest_allow_empty(pp, node, error, o, position, fgetline, cookie);
+}
+
+static CMD_P_DEF(parse_retab)
+{
+  const char *p = *pp;
+  int new_ts = getdigits(&p);
+  if (new_ts < 0) {
+    error->message = (const char *) e_positive;
+    error->position = *pp;
+    return NOTDONE;
+  }
+  node->count = new_ts;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_resize)
+{
+  const char *p = *pp;
+  int n = atoi(p);
+  bool relative = (*p == '-' || *p == '+');
+  node->args[ARG_RESIZE_FLAGS].arg.flags = (uint_least32_t) relative;
+  node->args[ARG_RESIZE_NUMBER].arg.number = n;
+  *pp += STRLEN(p);
+  return OK;
+}
+
+static CMD_P_DEF(parse_redir)
+{
+  const char *p = *pp;
+  uint_least32_t flags = 0;
+  switch (*p) {
+    case '>': {
+      p++;
+      if (*p == '>') {
+        p++;
+        flags |= FLAG_REDIR_APPEND;
+      }
+      p = skipwhite(p);
+      size_t len = STRLEN(p);
+      node->args[ARG_REDIR_FILE].arg.str = xmemdupz(p, len);
+      p += len;
+      break;
+    }
+    case '@': {
+      p++;
+      if (*p == NUL) {
+        // :redir @ seems to behave the same way as :redir END.
+      } else if (ASCII_ISALPHA(*p) || strchr("\"*+", *p) != NULL) {
+        flags |= (((uint_least32_t) (*p)) & FLAG_REDIR_REG_MASK);
+        p++;
+        if (*p == '>') {
+          p++;
+          if (*p == '>') {
+            p++;
+            flags |= FLAG_REDIR_APPEND;
+          }
+        }
+      } else {
+        error->message =
+            N_("E475: Expected register name; one of A-Z, a-z, \", * and +");
+        error->position = p;
+        return NOTDONE;
+      }
+      break;
+    }
+    case '=': {
+      p++;
+      if (*p == '>') {
+        p++;
+        Expression *expr;
+        int ret;
+
+        if ((ret = parse_lval(&p, error, o, position.col, &expr, 0)) == FAIL) {
+          return FAIL;
+        }
+        node->args[ARG_REDIR_VAR].arg.expr = expr;
+        if (ret == NOTDONE) {
+          return NOTDONE;
+        }
+      } else {
+        error->message = N_("E475: Expected `>' and variable name");
+        error->position = p;
+        return NOTDONE;
+      }
+      break;
+    }
+    case 'E':
+    case 'e': {
+      if (STRICMP(p, "END") == 0) {
+        p += 3;
+      } else {
+        error->message = N_("E475: Expected `END'");
+        error->position = p + 1;
+        return NOTDONE;
+      }
+      break;
+    }
+    default: {
+      error->message =
+          N_("E475: Expected `END', `>[>] {file}', "
+             "`@{register}[>[>]]' or `=> {variable}'");
+      error->position = p;
+      return NOTDONE;
+    }
+  }
+  node->args[ARG_REDIR_FLAGS].arg.flags = flags;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_script)
+{
+  const char *p = *pp;
+  garray_T *ga_strs = &(node->args[ARG_APPEND_LINES].arg.ga_strs);
+
+  ga_init(ga_strs, sizeof(char *), 16);
+
+  if (p[0] != '<' || p[1] != '<') {
+    size_t len = STRLEN(p);
+    GA_APPEND(char *, ga_strs, xmemdupz(p, len));
+    p += len;
+  } else {
+    p = skipwhite(p + 2);
+    const char *const end_pattern = (*p ? p : ".");
+    char *next_line;
+    while ((next_line = fgetline(':', cookie, 0)) != NULL) {
+      if (STRCMP(end_pattern, next_line) == 0) {
+        free(next_line);
+        break;
+      }
+      GA_APPEND(char *, ga_strs, next_line);
+    }
+    p += STRLEN(p);
+  }
+
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_open)
+{
+  const char *p = *pp;
+  if (*p == '/') {
+    p++;
+    int rret;
+    if ((rret = get_regex(&p, error, &(node->args[ARG_OPEN_REGEX].arg.reg), '/',
+                          NULL)) != OK) {
+      return rret;
+    }
+    // Ignore any other arguments
+    p += STRLEN(p);
+  } else if (*p != NUL) {
+    size_t len = STRLEN(p);
+    node->args[ARG_OPEN_FILE].arg.str = xmemdupz(p, len);
+    p += len;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_global)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  uint_least32_t flags = 0;
+  // Udocumented Vi feature:
+  //  :g\/ and :g\?: use previous search pattern
+  //  :g\&         : use previous substitute pattern
+  if (*p == '\\') {
+    p++;
+    if (*p == '&') {
+      flags |= FLAG_G_RE_SUBST;
+    } else if (*p == '/' || *p == '?') {
+      flags |= FLAG_G_RE_SEARCH;
+    } else {
+      error->message = (const char *) e_backslash;
+      error->position = p;
+      return NOTDONE;
+    }
+    p++;
+  } else if (*p == NUL) {
+    error->message = N_("E148: Regular expression missing from global");
+    error->position = p;
+    return NOTDONE;
+  } else {
+    p++;
+    int rret;
+    if ((rret = get_regex(&p, error, &(node->args[ARG_G_REG].arg.reg), p[-1],
+                          NULL)) != OK) {
+      return rret;
+    }
+  }
+  node->args[ARG_G_FLAGS].arg.flags = flags;
+  if (*p != NUL) {
+    CommandPosition do_position = position;
+    position.col += (p - s);
+    int do_ret = parse_do(&p, node, error, o, do_position, fgetline, cookie);
+    if (do_ret != OK) {
+      return do_ret;
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_vimgrep)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  Regex *regex = NULL;
+  uint_least32_t flags = 0;
+  // ":vimgrep pattern fname"
+  if (vim_isIDc(*p)) {
+    const char *const s = p;
+    p = skiptowhite(p);
+    regex = regex_alloc(s, p - s);
+  } else {
+    p++;
+    int rret;
+    if ((rret = get_regex(&p, error, &regex, p[-1], NULL)) != OK) {
+      return rret;
+    }
+    for (;;) {
+      switch (*p) {
+        case 'g': {
+          flags |= FLAG_VIMG_EVERY;
+          p++;
+          continue;
+        }
+        case 'j': {
+          flags |= FLAG_VIMG_NOJUMP;
+          p++;
+          continue;
+        }
+        default: {
+          break;
+        }
+      }
+      break;
+    }
+  }
+  node->args[ARG_VIMG_FLAGS].arg.flags = flags;
+  node->args[ARG_VIMG_REG].arg.reg = regex;
+  p = skipwhite(p);
+  if (*p == NUL) {
+    error->message = N_("E683: File name missing or invalid pattern");
+    error->position = p;
+    return NOTDONE;
+  }
+  int pfret = parse_files(&p, error, position.col + (p - s), &(node->glob));
+  if (pfret == FAIL) {
+    return FAIL;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_marks)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  size_t marksnum = 0;
+  for (; *p; p++) {
+    if (ASCII_ISALPHA(*p) || strchr("'\"[]^.<>", *p) != NULL) {
+      marksnum++;
+    }
+  }
+  *pp = p;
+  char *const marks = xmallocz(marksnum);
+  char *cur_mark = marks;
+  for (p = s; *p; p++) {
+    if (ASCII_ISALPHA(*p) || strchr("'\"[]^.<>", *p) != NULL) {
+      *cur_mark++ = *p;
+    }
+  }
+  node->args[ARG_NAME_NAME].arg.str = marks;
+  return OK;
+}
+
+static CMD_P_DEF(parse_match)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    return OK;
+  } else if (STRNICMP(p, "none", 4) == 0
+             && (vim_iswhite(p[4]) || ENDS_EXCMD(p[4]))) {
+    p += 4;
+    return OK;
+  }
+  const char *const s = p;
+  p = skiptowhite(p);
+  node->args[ARG_MATCH_GROUP].arg.str = xmemdupz(s, p - s);
+  p = skipwhite(p);
+  if (*p == NUL) {
+    error->message = N_("E475: Expected regular expression");
+    error->position = p;
+    return NOTDONE;
+  }
+  p++;
+  int rret;
+  if ((rret = get_regex(&p, error, &(node->args[ARG_MATCH_REG].arg.reg), p[-1],
+                        NULL)) != OK) {
+    return rret;
+  }
+  *pp = skipwhite(p);
+  return OK;
+}
+
+///< Structure that holds :set arguments
+typedef struct set_arg {
+  const char *name;      ///< Address of the first character of the option name.
+  size_t name_len;       ///< Name length.
+  int opt_idx;           ///< Option index or -1.
+  int key;               ///< Key index or 0.
+  uint_least32_t flags;  ///< Flags.
+  const char *value;     ///< String value.
+  size_t value_len;      ///< Value length.
+  long ivalue;           ///< Integer value.
+  struct set_arg *next;  ///< Next processed option.
+} SetArg;
+
+static int wildcharm_idx = -2;
+static int wildchar_idx = -2;
+
+static CMD_P_DEF(parse_set)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    return OK;
+  }
+  if (wildcharm_idx == -2) {
+#define FINDOPTION(s) findoption_len(s, sizeof(s) - 1)
+    wildcharm_idx = FINDOPTION("wildcharm");
+    wildchar_idx = FINDOPTION("wildchar");
+#undef FINDOPTION
+  }
+  size_t num_options = 0;
+  SetArg *args;
+  SetArg **next = &args;
+  while (ASCII_ISLOWER(*p) || *p == '<') {
+    const char *const start_arg = p;
+    *next = xcalloc(1, sizeof(SetArg));
+    num_options++;
+    if (STRNCMP(p, "all", 3) == 0 && !ASCII_ISALPHA(p[3])) {
+      (*next)->name = p;
+      (*next)->name_len = 3;
+      (*next)->opt_idx = -1;
+      p += 3;
+      if (*p == '&') {
+        p++;
+        (*next)->flags |= FLAG_SET_DEFAULT;
+      } else {
+        (*next)->flags |= FLAG_SET_SHOW;
+      }
+    } else if (STRNCMP(p, "termcap", 7) == 0) {
+      (*next)->name = p;
+      (*next)->name_len = 7;
+      (*next)->opt_idx = -1;
+      (*next)->flags |= FLAG_SET_SHOW;
+      p += 7;
+    } else {
+      if (STRNCMP(p, "no", 2) == 0 && STRNCMP(p, "novice", 6) != 0) {
+        (*next)->flags |= FLAG_SET_UNSET;
+        p += 2;
+      } else if (STRNCMP(p, "inv", 3) == 0) {
+        (*next)->flags |= FLAG_SET_INVERT;
+        p += 3;
+      }
+      int key = 0;
+      int len = 0;
+      int nextchar = 0;
+      int opt_idx = -1;
+      if (*p == '<') {
+        if (p[1] == 't' && p[2] == '_' && p[3] && p[4]) {
+          len = 5;
+        } else {
+          len = 1;
+          while (p[len] && p[len] != '>') {
+            len++;
+          }
+        }
+        if (p[len] != '>') {
+          error->message = N_("E474: Expected `<'");
+          error->position = p + len;
+          goto parse_set_error;
+        }
+        opt_idx = findoption_len(p + 1, len - 1);
+        len++;
+        if (opt_idx == -1) {
+          key = find_key_option_len(p + 1, len);
+          (*next)->name = p;
+          (*next)->name_len = len;
+        } else {
+          (*next)->name = p + 1;
+          (*next)->name_len = len - 2;
+        }
+      } else {
+        if (p[0] == 't' && p[1] == '_' && p[2] && p[3]) {
+          len = 4;
+        } else {
+          while (ASCII_ISALNUM(p[len]) || p[len] == '_') {
+            len++;
+          }
+        }
+        opt_idx = findoption_len(p, len);
+        if (opt_idx == -1) {
+          key = find_key_option_len(p, len);
+        }
+        (*next)->name = p;
+        (*next)->name_len = len;
+      }
+
+      if (opt_idx == -1 && key == 0) {
+        error->message = N_("E518: Unknown option");
+        error->position = p;
+        goto parse_set_error;
+      }
+
+      (*next)->opt_idx = opt_idx;
+      (*next)->key = key;
+
+      int afterchar = p[len];
+      while (vim_iswhite(p[len])) {
+        len++;
+      }
+
+      if (p[len] && p[len + 1] == '=') {
+        switch (p[len]) {
+          case '+': {
+            (*next)->flags |= FLAG_SET_APPEND;
+            len++;
+            break;
+          }
+          case '-': {
+            (*next)->flags |= FLAG_SET_REMOVE;
+            len++;
+            break;
+          }
+          case '^': {
+            (*next)->flags |= FLAG_SET_PREPEND;
+            len++;
+            break;
+          }
+          default: {
+            break;
+          }
+        }
+      }
+      nextchar = p[len];
+
+      uint_least8_t properties;
+
+      if (opt_idx >= 0) {
+        properties = get_option_properties_idx(opt_idx);
+      } else {
+        // Key properties
+        properties = GOP_STRING|GOP_GLOBAL;
+      }
+
+      p += len;
+      if (nextchar == '&' && p[1] == 'v' && p[2] == 'i') {
+        (*next)->flags |= FLAG_SET_DEFAULT;
+        if (p[3] == 'm') {
+          (*next)->flags |= FLAG_SET_VIM;
+          p += 3;
+        } else {
+          (*next)->flags |= FLAG_SET_VI;
+          p += 2;
+        }
+      }
+      if (nextchar && strchr("?!&<", nextchar) != NULL
+          && p[1] != NUL && !vim_iswhite(p[1])) {
+        error->message = (const char *) e_trailing;
+        error->position = p + 1;
+        goto parse_set_error;
+      }
+
+      if (nextchar == '?' || (
+              ((*next)->flags & (FLAG_SET_UNSET|FLAG_SET_INVERT)) == 0
+              && (!nextchar || strchr("=:&<", nextchar) == NULL)
+              && !(properties & GOP_BOOLEAN))) {
+        (*next)->flags |= FLAG_SET_SHOW;
+        if (nextchar == '?') {
+          p++;
+        }
+      } else {
+        if (properties & GOP_BOOLEAN) {
+          if (nextchar == '=' || nextchar == ':') {
+            error->message =
+                N_("E474: Cannot set boolean options with `=' or `:'");
+            error->position = p;
+            goto parse_set_error;
+          }
+          switch (nextchar) {
+            case '!': {
+              (*next)->flags |= FLAG_SET_INVERT;
+              p++;
+              break;
+            }
+            case '&': {
+              (*next)->flags |= FLAG_SET_DEFAULT;
+              p++;
+              break;
+            }
+            case '<': {
+              (*next)->flags |= FLAG_SET_GLOBAL;
+              p++;
+              break;
+            }
+            case NUL: {
+              break;
+            }
+            default: {
+              if (!vim_iswhite(afterchar)) {
+                error->message = (const char *) e_trailing;
+                error->position = p;
+                goto parse_set_error;
+              }
+              break;
+            }
+          }
+        } else {
+          if ((nextchar && strchr("=:&<", nextchar) == NULL)) {
+            error->message = N_("E474: Expected `=', `:', `&' or `<'");
+            error->position = p;
+            goto parse_set_error;
+          }
+          if ((*next)->flags & (FLAG_SET_UNSET|FLAG_SET_INVERT)) {
+            error->message =
+                N_("E474: Cannot invert or unset non-boolean option");
+            error->position = start_arg;
+            goto parse_set_error;
+          }
+          if (properties & GOP_NUMERIC) {
+            p++;
+            if (nextchar == '&') {
+              (*next)->flags |= FLAG_SET_DEFAULT;
+            } else if (nextchar == '<') {
+              (*next)->flags |= FLAG_SET_GLOBAL;
+            } else if ((opt_idx == wildcharm_idx
+                        || opt_idx == wildchar_idx)
+                       && (*p == '<' || *p == '^'
+                           || ((!p[1] || vim_iswhite(p[1]))
+                               && !VIM_ISDIGIT(*p)))) {
+              (*next)->ivalue = string_to_key(p);
+              (*next)->flags |= FLAG_SET_IVALUE|FLAG_SET_ASSIGN;
+              if ((*next)->ivalue == 0 && opt_idx == wildcharm_idx) {
+                error->message = N_("E474: Expected key definition");
+                error->position = p;
+                goto parse_set_error;
+              }
+              while (*p != NUL && !vim_iswhite(*p)) {
+                if (*p++ == '\\' && *p != NUL) {
+                  p++;
+                }
+              }
+            } else if (*p == '-' || VIM_ISDIGIT(*p)) {
+              (*next)->flags |= FLAG_SET_IVALUE|FLAG_SET_ASSIGN;
+              int ilen = 0;
+              vim_str2nr(p, NULL, &ilen, TRUE, TRUE, &((*next)->ivalue), NULL);
+              if (p[ilen] != NUL && !vim_iswhite(p[ilen])) {
+                error->message = N_("E474: Only numbers are allowed");
+                error->position = p;
+                goto parse_set_error;
+              }
+              p += ilen;
+            } else {
+              error->message = N_("E521: Number required after =");
+              error->position = p;
+              goto parse_set_error;
+            }
+          } else if (opt_idx >= 0) {
+            p++;
+            if (nextchar == '&') {
+              (*next)->flags |= FLAG_SET_DEFAULT;
+            } else if (nextchar == '<') {
+              (*next)->flags |= FLAG_SET_GLOBAL;
+            } else {
+              (*next)->flags |= FLAG_SET_ASSIGN;
+              size_t arglen = 0;
+              for (; p[arglen] && !vim_iswhite(p[arglen]); arglen++) {
+                if (p[arglen] == '\\') {
+                  arglen++;
+                }
+              }
+              (*next)->value = p;
+              (*next)->value_len = arglen;
+              p += arglen;
+            }
+          } else {
+            assert(nextchar == '=');
+            (*next)->flags |= FLAG_SET_ASSIGN;
+            p++;
+            size_t arglen = 0;
+            for (; p[arglen] && !vim_iswhite(p[arglen]); arglen++) {
+              if (p[arglen] == '\\') {
+                arglen++;
+              }
+            }
+            (*next)->value = p;
+            (*next)->value_len = arglen;
+            p += arglen;
+          }
+        }
+      }
+    }
+    p = skipwhite(p);
+    next = &((*next)->next);
+  }
+  // Note: using num_options + 1 here to have place for NULL which indicates 
+  //       number of options set. It is not indicated anywhere else.
+  char **const names = node->args[ARG_SET_OPTIONS].arg.strs =
+      xmalloc(sizeof(char *) * (num_options + 1));
+  // Note: using xcalloc so that NULLs will appear where appropriate.
+  // Note: using num_options + 1 here because trailing NULL is needed for 
+  //       free_cmd_arg(). One should not use it to determine whether option 
+  //       list ended.
+  char **const values = node->args[ARG_SET_VALUES].arg.strs =
+      xcalloc(num_options + 1, sizeof(char *));
+  uint_least32_t *const flagss = node->args[ARG_SET_FLAGSS].arg.unumbers =
+      xmalloc(sizeof(uint_least32_t) * num_options);
+  uint_least32_t *const keys = node->args[ARG_SET_KEYS].arg.unumbers =
+      xmalloc(sizeof(uint_least32_t) * num_options);
+  int *ivalues = node->args[ARG_SET_IVALUES].arg.numbers =
+      xmalloc(sizeof(int) * num_options);
+  int *opt_idxs = node->args[ARG_SET_INDEXES].arg.numbers =
+      xmalloc(sizeof(int) * num_options);
+  SetArg *cur = args;
+  for (size_t i = 0; cur != NULL; i++) {
+    names[i] = xmemdupz(cur->name, cur->name_len);
+    if (cur->value != NULL) {
+      values[i] = xmemdupz(cur->value, cur->value_len);
+      str_unescape(values[i], false);
+    } else {
+      values[i] = (char *) empty_string;
+    }
+    flagss[i] = cur->flags;
+    keys[i] = cur->key;
+    // TODO Hold long?
+    ivalues[i] = (int) cur->ivalue;
+    opt_idxs[i] = cur->opt_idx;
+    SetArg *prev = cur;
+    cur = cur->next;
+    free(prev);
+  }
+  names[num_options] = NULL;
+  *pp = p;
+  return OK;
+parse_set_error:
+  for (SetArg *cur = args; cur != NULL;) {
+    SetArg *prev = cur;
+    cur = prev->next;
+    free(prev);
+  }
+  return NOTDONE;
+}
+
+static CMD_P_DEF(parse_sleep)
+{
+  switch (**pp) {
+    case 'm': {
+      // :sleep in Vim ignores characters after 'm'
+      *pp += STRLEN(*pp);
+      break;
+    }
+    case NUL: {
+      node->args[ARG_SLEEP_MULT].arg.unumber = 1000;
+      break;
+    }
+    default: {
+      error->message = N_("E475: Expected `m' or nothing");
+      error->position = *pp;
+      return NOTDONE;
+    }
+  }
+  return OK;
+}
+
+static CMD_P_DEF(parse_sub)
+{
+#define P_COL(p) (((p) - s) + position.col)
+  const char *p = *pp;
+  const char *const s = p;
+  uint_least32_t flags = 0;
+  char delim = 0;
+  if ((node->type == kCmdSubstitute
+       || node->type == kCmdSmagic
+       || node->type == kCmdSnomagic)
+      && *p && !vim_iswhite(*p) && strchr("0123456789cegriIp|\"", *p) == NULL) {
+    if (isalpha(*p)) {
+      error->message =
+          N_("E146: Regular expressions can't be delimited by letters");
+      error->position = p;
+      return NOTDONE;
+    }
+    if (*p == '\\') {
+      p++;
+      switch (*p) {
+        case '/':
+        case '?': {
+          flags |= FLAG_S_RE_SEARCH;
+          break;
+        }
+        case '&': {
+          flags |= FLAG_S_RE_SUBST;
+          break;
+        }
+        default: {
+          error->message = (char *) e_backslash;
+          error->position = p;
+          return NOTDONE;
+        }
+      }
+      delim = *p;
+      p++;
+    } else {
+      delim = *p;
+      p++;
+      int rret;
+      if ((rret = get_regex(&p, error, &(node->args[ARG_S_REG].arg.reg), delim,
+                            NULL)) != OK) {
+        return rret;
+      }
+    }
+    const char *const sub_start = p;
+    while (*p) {
+      if (*p == delim) {
+        break;
+      }
+      if (*p == '\\' && p[1]) {
+        p++;
+      }
+      mb_ptr_adv_(p);
+    }
+    if (p - sub_start == 1 && *sub_start == '%'
+        && (o.flags & FLAG_POC_CPO_SUBPC)) {
+      flags |= FLAG_S_SUB_PREV;
+    } else {
+      if (*sub_start == '\\' && sub_start[1] == '=') {
+        char *const expr_str_start = xmemdupz(sub_start + 2, p - sub_start - 2);
+        const char *expr_str = expr_str_start;
+        Expression *expr;
+        ExpressionParserError expr_error;
+
+        expr = parse_one_expression(&expr_str, &expr_error, &parse0_err,
+                                    P_COL(sub_start + 2));
+        if (expr == NULL) {
+          if (expr_error.message == NULL) {
+            return FAIL;
+          }
+          error->message = expr_error.message;
+          error->position = sub_start + 2
+              + (expr_error.position - expr_str_start);
+          return NOTDONE;
+        }
+        if (*expr_str) {
+          // Expected expression to end here. Early return will result in 
+          // e_trailing error message.
+          *pp = sub_start + (expr_str - expr_str_start);
+          free(expr_str_start);
+          return OK;
+        }
+        free(expr_str_start);
+        Replacement *rep = node->args[ARG_S_REP].arg.rep
+            = replacement_alloc(kRepExpr, P_COL(sub_start), P_COL(p - 1));
+        rep->data.expr = expr;
+      } else {
+        const char *p2 = sub_start;
+        Replacement **next = &(node->args[ARG_S_REP].arg.rep);
+        while (p2 < p) {
+          switch (*p2) {
+            case '\\': {
+              p2++;
+              switch (*p2) {
+#define REP_ATOM(ch, rep_type) \
+                case ch: { \
+                  (*next) = replacement_alloc(rep_type, P_COL(p2 - 1), \
+                                              P_COL(p2)); \
+                  p2++; \
+                  break; \
+                }
+                REP_ATOM('u', kRepCharUpCase)
+                REP_ATOM('l', kRepCharDownCase)
+                REP_ATOM('U', kRepUpCase)
+                REP_ATOM('L', kRepDownCase)
+                case 'e':
+                REP_ATOM('E', kRepCaseEnd)
+                REP_ATOM('0', kRepMatched)
+                REP_ATOM('r', kRepNewLine)
+#undef REP_ATOM
+#define REP_ESC_ATOM(c, res) \
+                case c: { \
+                  (*next) = replacement_alloc(kRepEscaped, P_COL(p2 - 1), \
+                                              P_COL(p2)); \
+                  (*next)->data.ch = (uint32_t) (res); \
+                  p2++; \
+                  break; \
+                }
+                REP_ESC_ATOM('n', NUL)
+                REP_ESC_ATOM('b', BS)
+                REP_ESC_ATOM('t', TAB)
+                // May as well use literal escapes for the characters below, but 
+                // these ones are explicitly mentioned in help.
+                REP_ESC_ATOM('\\', '\\')
+                REP_ESC_ATOM(CAR, CAR)
+#undef REP_ESC_ATOM
+                case '1':
+                case '2':
+                case '3':
+                case '4':
+                case '5':
+                case '6':
+                case '7':
+                case '8':
+                case '9': {
+                  (*next) = replacement_alloc(kRepGroup, P_COL(p2 - 1),
+                                              P_COL(p2));
+                  (*next)->data.group = *p2 - '0';
+                  p2++;
+                  break;
+                }
+                case '&': {
+                  if (!(o.flags & FLAG_POC_MAGIC)) {
+                    (*next) = replacement_alloc(kRepMatched,
+                                                P_COL(p2 - 1), P_COL(p2));
+                    p2++;
+                    break;
+                  }
+                  // fallthrough
+                }
+                case '~': {
+                  if (!(o.flags & FLAG_POC_MAGIC)) {
+                    (*next) = replacement_alloc(kRepPrevSub,
+                                                P_COL(p2 - 1), P_COL(p2));
+                    p2++;
+                    break;
+                  }
+                  // fallthrough
+                }
+                default: {
+                  const char *const p2_s = p2;
+                  uint32_t ch = (uint32_t) mb_cptr2char_adv(&p2);
+                  (*next) = replacement_alloc(kRepEscLiteral,
+                                              P_COL(p2_s - 1),
+                                              P_COL(p2 - 1));
+                  (*next)->data.ch = ch;
+                  // TODO: Give a warning in most cases because \x is reserved.
+                  break;
+                }
+              }
+              break;
+            }
+            case '&': {
+              if (o.flags & FLAG_POC_MAGIC) {
+                (*next) = replacement_alloc(kRepMatched,
+                                            P_COL(p2 - 1), P_COL(p2));
+                p2++;
+                break;
+              }
+              // fallthrough
+            }
+            case '~': {
+              if (o.flags & FLAG_POC_MAGIC) {
+                (*next) = replacement_alloc(kRepPrevSub,
+                                            P_COL(p2 - 1), P_COL(p2));
+                p2++;
+                break;
+              }
+              // fallthrough
+            }
+            default: {
+              const char *const p2_s = p2;
+              while (p2 < p && *p2 != '\\'
+                     && ((*p2 != '~' && *p2 != '&')
+                         || !(o.flags & FLAG_POC_MAGIC))) {
+                assert(*p2 != NUL);
+                p2++;
+              }
+              (*next) = replacement_alloc(kRepLiteral, P_COL(p2_s), P_COL(p2));
+              (*next)->data.str = xmemdupz(p2_s, p2 - p2_s);
+              break;
+            }
+          }
+          assert(*next != NULL);
+          next = &((*next)->next);
+        }
+      }
+    }
+  } else {
+    delim = '&';
+  }
+  if (*p == delim) {
+    p++;
+  }
+  while (*p) {
+    switch (*p) {
+#define S_FLAG(ch, flag) \
+      case ch: { \
+        flags |= flag; \
+        p++; \
+        continue; \
+      }
+      S_FLAG('c', FLAG_S_CONFIRM)
+      S_FLAG('n', FLAG_S_COUNT)
+      S_FLAG('e', FLAG_S_NOERR)
+      S_FLAG('r', FLAG_S_R)
+      S_FLAG('p', FLAG_S_PRINT)
+      S_FLAG('#', FLAG_S_PRINT_LNR)
+      S_FLAG('l', FLAG_S_PRINT_LIST)
+      S_FLAG('i', FLAG_S_IC)
+      S_FLAG('I', FLAG_S_NOIC)
+#undef S_FLAG
+      case 'g': {
+        if (o.flags & FLAG_POC_ED) {
+          if (flags & FLAG_S_G) {
+            flags &= ~FLAG_S_G;
+            flags |= FLAG_S_G_REVERSE;
+          } else {
+            flags &= ~FLAG_S_G_REVERSE;
+            flags |= FLAG_S_G;
+          }
+        } else {
+          flags |= FLAG_S_G;
+        }
+        p++;
+        continue;
+      }
+      default: {
+        break;
+      }
+    }
+    break;
+  }
+  if (flags & FLAG_S_COUNT) {
+    // TODO Give a warning here if COUNT and CONFIRM flags are both enabled.
+    flags &= ~FLAG_S_CONFIRM;
+  }
+  p = skipwhite(p);
+  if (VIM_ISDIGIT(*p)) {
+    const char *const p_s = p;
+    node->count = getdigits(&p);
+    if (node->count == 0) {
+      error->message = (char *) e_zerocount;
+      error->position = p_s;
+      return NOTDONE;
+    }
+  }
+  node->args[ARG_S_FLAGS].arg.flags = flags;
+  p = skipwhite(p);
+  *pp = p;
+#undef P_COL
+  return OK;
+}
+
+static CMD_P_DEF(parse_sort)
+{
+  const char *p = *pp;
+  uint_least32_t flags = 0;
+  for (; *p; p++) {
+    switch (*p) {
+      case ' ':
+      case TAB: {
+        continue;
+      }
+#define SORT_FLAG(ch, flag) \
+      case ch: { \
+        flags |= flag; \
+        continue; \
+      }
+      SORT_FLAG('i', FLAG_SORT_IC)
+      SORT_FLAG('r', FLAG_SORT_USEMATCH)
+      SORT_FLAG('u', FLAG_SORT_KEEPFST)
+#undef SORT_FLAG
+      case 'n': {
+        flags |= FLAG_SORT_DECIMAL;
+        if (flags & (FLAG_SORT_OCTAL | FLAG_SORT_HEX)) {
+          goto parse_sort_numeric_error;
+        }
+        continue;
+      }
+      case 'o': {
+        flags |= FLAG_SORT_OCTAL;
+        if (flags & (FLAG_SORT_DECIMAL | FLAG_SORT_HEX)) {
+          goto parse_sort_numeric_error;
+        }
+        continue;
+      }
+      case 'x': {
+        flags |= FLAG_SORT_HEX;
+        if (flags & (FLAG_SORT_DECIMAL | FLAG_SORT_OCTAL)) {
+          goto parse_sort_numeric_error;
+        }
+        continue;
+      }
+      // ENDS_EXCMD
+      case NL:
+      case NUL:
+      case '|':
+      case '"': {
+        break;
+      }
+      default: {
+        if (ASCII_ISALPHA(*p)) {
+          error->message = N_("E475: Expected sort flag or non-ASCII "
+                              "regular expression delimiter");
+          error->position = p;
+          return NOTDONE;
+        }
+        const char delim = *p;
+        p++;
+        int rret;
+        if (*p == delim) {
+          flags |= FLAG_SORT_RE_SEARCH;
+          p++;
+        } else if ((rret = get_regex(&p, error,
+                                     &(node->args[ARG_SORT_REG].arg.reg),
+                                     delim, (char *) e_invalpat)) != OK) {
+          return rret;
+        }
+        break;
+      }
+    }
+    break;
+  }
+  node->args[ARG_SORT_FLAGS].arg.flags = flags;
+  *pp = p;
+  return OK;
+parse_sort_numeric_error:
+  error->message = N_("E474: Can only specify one kind of numeric sort");
+  error->position = p;
+  return NOTDONE;
+}
+
+static CMD_P_DEF(parse_syntime)
+{
+  uint_least32_t action = 0;
+  if (STRCMP(*pp, "on") == 0) {
+    action = VAL_SYNTIME_ON;
+  } else if (STRCMP(*pp, "off") == 0) {
+    action = VAL_SYNTIME_OFF;
+  } else if (STRCMP(*pp, "clear") == 0) {
+    action = VAL_SYNTIME_CLEAR;
+  } else if (STRCMP(*pp, "report") == 0) {
+    action = VAL_SYNTIME_REPORT;
+  } else {
+    error->message =
+        N_("E475: Expected one action of `on', `off', `clear' or `report'");
+    error->position = *pp;
+    return NOTDONE;
+  }
+  node->args[ARG_SYNTIME_ACTION].arg.flags = action;
+  *pp += STRLEN(*pp);
+  return OK;
+}
+
+static CMD_P_DEF(parse_2numbers)
+{
+  const char *p = *pp;
+  if (node->type == kCmdWinpos && *p == NUL) {
+    node->args[ARG_2INTS_FLAGS].arg.flags = (uint_least32_t) true;
+    return OK;
+  }
+  node->args[ARG_2INTS_NUM1].arg.number = (int) getdigits(&p);
+  p = skipwhite(p);
+  const char *const num2_start = p;
+  node->args[ARG_2INTS_NUM2].arg.number = (int) getdigits(&p);
+  if (*num2_start == NUL || *p != NUL) {
+    switch (node->type) {
+      case kCmdWinsize: {
+        error->message = N_("E465: :winsize requires two number arguments");
+        break;
+      }
+      case kCmdWinpos: {
+        error->message = N_("E466: :winpos requires two number arguments");
+        break;
+      }
+      default: {
+        assert(false);
+      }
+    }
+    error->position = (*num2_start == NUL ? num2_start : p);
+    return NOTDONE;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_wincmd)
+{
+  const char *p = *pp;
+  uint8_t action = 0;
+  switch (*p) {
+#define WINCMD_ACTION(ch) \
+    case ch: { \
+      action = (uint8_t) ch; \
+      p++; \
+      break; \
+    }
+    // split current window in two parts, horizontally
+    case 'S':
+    case Ctrl_S:
+    WINCMD_ACTION('s')
+    // split current window in two parts, vertically
+    case Ctrl_V:
+    WINCMD_ACTION('v')
+    // split current window and edit alternate file
+    case Ctrl_HAT:
+    WINCMD_ACTION('^')
+    // open new window
+    case Ctrl_N:
+    WINCMD_ACTION('n')
+    // quit current window
+    case Ctrl_Q:
+    WINCMD_ACTION('q')
+    // close current window
+    case Ctrl_C:
+    WINCMD_ACTION('c')
+    // close preview window
+    case Ctrl_Z:
+    WINCMD_ACTION('z')
+    // cursor to preview window
+    WINCMD_ACTION('P')
+    // close all but current window
+    case Ctrl_O:
+    WINCMD_ACTION('o')
+    // cursor to next window with wrap around
+    case Ctrl_W:
+    WINCMD_ACTION('w')
+    // cursor to previous window with wrap around
+    WINCMD_ACTION('W')
+    // cursor to window below
+    case Ctrl_J:
+    WINCMD_ACTION('j')
+    // cursor to window above
+    case Ctrl_K:
+    WINCMD_ACTION('k')
+    // cursor to left window
+    case Ctrl_H:
+    WINCMD_ACTION('h')
+    // cursor to right window
+    case Ctrl_L:
+    WINCMD_ACTION('l')
+    // move window to new tab page
+    WINCMD_ACTION('T')
+    // cursor to top-left window
+    case Ctrl_T:
+    WINCMD_ACTION('t')
+    // cursor to bottom-right window
+    case Ctrl_B:
+    WINCMD_ACTION('b')
+    // cursor to last accessed (previous) window
+    case Ctrl_P:
+    WINCMD_ACTION('p')
+    // exchange current and next window
+    case Ctrl_X:
+    WINCMD_ACTION('x')
+    // rotate windows downwards
+    case Ctrl_R:
+    WINCMD_ACTION('r')
+    // rotate windows upwards
+    WINCMD_ACTION('R')
+    // move window to the very top/bottom/left/right
+    WINCMD_ACTION('K')
+    WINCMD_ACTION('J')
+    WINCMD_ACTION('H')
+    WINCMD_ACTION('L')
+    // make all windows the same height
+    WINCMD_ACTION('=')
+    // increase current window height
+    WINCMD_ACTION('+')
+    // decrease current window height
+    WINCMD_ACTION('-')
+    // set current window height
+    case Ctrl__:
+    WINCMD_ACTION('_')
+    // increase current window width
+    WINCMD_ACTION('>')
+    // decrease current window width
+    WINCMD_ACTION('<')
+    // set current window width
+    WINCMD_ACTION('|')
+    // jump to tag and split window if tag exists (in preview window)
+    WINCMD_ACTION('}')
+    case Ctrl_RSB:
+    WINCMD_ACTION(']')
+    // edit file name under cursor in a new window
+    case 'F':
+    case Ctrl_F:
+    WINCMD_ACTION('f')
+    // Go to the first occurrence of the identifier under cursor along path in 
+    // a new window -- webb
+    //
+    // Go to any match
+    WINCMD_ACTION('i')
+    // Go to definition, using 'define'
+    case Ctrl_D:
+    WINCMD_ACTION('d')
+    WINCMD_ACTION(CAR)
+    // CTRL-W g  extended commands
+    case 'g':
+    case Ctrl_G: {
+      p++;
+      switch (*p) {
+#define EXTENDED_WINCMD_ACTION(ch) \
+        case ch: { \
+          action = 0x80 | ((uint8_t) ch); \
+          p++; \
+          break; \
+        }
+        EXTENDED_WINCMD_ACTION('}');
+        case Ctrl_RSB:
+        EXTENDED_WINCMD_ACTION(']');
+        EXTENDED_WINCMD_ACTION('f');
+        EXTENDED_WINCMD_ACTION('F');
+#undef EXTENDED_WINCMD_ACTION
+        case NUL: {
+          error->message =
+              N_("E474: Expected extended window action "
+                 "(see help tags starting with CTRL-W_g)");
+          error->position = p + 1;
+          return NOTDONE;
+        }
+        default: {
+          p++;
+          break;
+        }
+      }
+      break;
+    }
+    case NUL: {
+      error->message = (char *) e_argreq;
+      error->position = p;
+      return NOTDONE;
+    }
+    default: {
+      p++;
+      break;
+    }
+#undef WINCMD_ACTION
+  }
+  p = skipwhite(p);
+  if (!ENDS_EXCMD(*p)) {
+    error->message = N_("E474: Trailing characters");
+    error->position = p;
+    return NOTDONE;
+  }
+  node->args[ARG_WINCMD_CHAR].arg.ch = action;
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_z)
+{
+  const char *p = *pp;
+
+  const char kind = *p;
+  if (kind && strchr("-+=^.", kind) != NULL) {
+    node->args[ARG_Z_KIND].arg.ch = kind;
+    p++;
+  }
+  if (kind == '+' || kind == '-') {
+    size_t multiplier = 1;
+    while (p[multiplier - 1] == kind) {
+      multiplier++;
+    }
+    p += multiplier - 1;
+    node->args[ARG_Z_MULTIPLIER].arg.unumber = (uint_least32_t) multiplier;
+  }
+  while (*p == '-' || *p == '+') {
+    p++;
+  }
+  if (*p) {
+    if (!VIM_ISDIGIT(*p)) {
+      error->message = N_("E144: non-numeric argument to :z");
+      error->position = p;
+      return NOTDONE;
+    } else {
+      node->args[ARG_Z_BIGNESS].arg.unumber = (uint_least32_t) getdigits(&p);
+    }
+  }
+
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_at)
+{
+  char c = **pp;
+  if (c == NUL || (c == '*' && node->type == kCmdStar)) {
+    c = '@';
+  }
+  if (c != '@' && !valid_yank_reg(c, false)) {
+    error->message = (const char *) e_invalidreg;
+    error->position = *pp;
+    return NOTDONE;
+  }
+  node->args[ARG_MARK_CHAR].arg.ch = c;
+  *pp += STRLEN(*pp);
+  return OK;
+}
+
+/// Get :help language
+///
+/// @param[in]      s    Start of the checked string.
+/// @param[in,out]  end  Pointer to the end (e.g. NUL character) of the checked 
+///                      string. Will be moved to the "@" sign if language was 
+///                      found.
+///
+/// @return Help language (NUL-terminated string with length equal to 2) or 
+///         NULL.
+static inline char *get_help_lang(const char *const s, const char **end)
+{
+  const char *p = *end;
+  if (p - 3 >= s
+      && p[-3] == '@'
+      && ASCII_ISALPHA(p[-2])
+      && ASCII_ISALPHA(p[-1])) {
+    *end -= 3;
+    return xmemdupz(p - 2, 2);
+  } else {
+    return NULL;
+  }
+}
+
+static CMD_P_DEF(parse_help)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  const char *end = p;
+  while (*end && *end != '\n' && *end != '\r'
+        && !(*end == '|' && end[1] && end[1] != '|')) {
+    end++;
+  }
+  p = end;
+  // Remove trailing blanks
+  while (end - 1 >= s && vim_iswhite(end[-1]) && end[-2] != '\\') {
+    end--;
+  }
+  node->args[ARG_HELP_LANG].arg.str = get_help_lang(s, &end);
+  if (end != s) {
+    node->args[ARG_HELP_TOPIC].arg.str = xmemdupz(s, end - s);
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_helpgrep)
+{
+  const char *p = *pp;
+  const char *end = p + STRLEN(p);
+  *pp = end;
+  if (end == p) {
+    error->message = (char *) e_argreq;
+    error->position = p;
+    return NOTDONE;
+  }
+  node->args[ARG_HELPG_LANG].arg.str = get_help_lang(p, &end);
+  node->args[ARG_HELPG_REG].arg.reg = regex_alloc(p, end - p);
+  return OK;
+}
+
 #undef CMD_P_DEF
 #undef CMD_P_ARGS
 
@@ -1951,7 +4494,7 @@ static CMD_P_DEF(parse_scriptencoding)
 /// @param[in]      len  Minimal length required to accept a match.
 ///
 /// @return true if requested command was found, false otherwise.
-static int checkforcmd(const char **pp, const char *cmd, int len)
+static int check_for_cmd(const char **pp, const char *cmd, int len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int i;
@@ -2009,8 +4552,11 @@ static int get_address(const char **pp, Address *address,
         address->type = kAddrForwardSearch;
       else
         address->type = kAddrBackwardSearch;
-      if (get_regex(&p, error, &(address->data.regex), c) == FAIL)
-        return FAIL;
+      int rret;
+      if ((rret = get_regex(&p, error, &(address->data.regex), c, NULL))
+          != OK) {
+        return rret;
+      }
       break;
     }
     case '\\': {
@@ -2099,9 +4645,11 @@ static int get_address_followups(const char **pp, CommandParserError *error,
       }
       case kAddressFollowupForwardPattern:
       case kAddressFollowupBackwardPattern: {
-        if (get_regex(&p, error, &(fw->data.regex), p[-1]) == FAIL) {
+        int rret;
+        if ((rret = get_regex(&p, error, &(fw->data.regex), p[-1], NULL))
+            != OK) {
           free_address_followup(fw);
-          return FAIL;
+          return rret;
         }
         break;
       }
@@ -2123,7 +4671,7 @@ static int get_address_followups(const char **pp, CommandParserError *error,
 ///
 /// @return First character of next command (last character after command 
 ///         separator), NULL if no separator was found.
-static const char *check_nextcmd(const char *p)
+static const char *check_next_cmd(const char *p)
   FUNC_ATTR_CONST
 {
   p = skipwhite(p);
@@ -2321,7 +4869,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
            || !(CMDDEF(type).flags & USECTRLV)) && *(p - 1) == '\\') {
         skcnt++;
       } else {
-        const char *nextcmd = check_nextcmd(p);
+        const char *nextcmd = check_next_cmd(p);
         if (nextcmd != NULL) {
           did_set_next_cmd_offset = true;
           *next_cmd_offset = (nextcmd - start);
@@ -2507,7 +5055,7 @@ static int parse_argopt(const char **pp,
     } else {
       *optflags |= FLAG_OPT_BIN_USE_FLAG|FLAG_OPT_BIN;
     }
-    if (!checkforcmd(pp, "binary", 3)) {
+    if (!check_for_cmd(pp, "binary", 3)) {
       error->message = N_("E474: Expected ++[no]bin or ++[no]binary");
       error->position = *pp + 3;
       return NOTDONE;
@@ -2776,7 +5324,7 @@ int parse_modifiers(const char **pp, CommandNode ***node,
         while (name[common_len] == prev_name[common_len])
           common_len++;
       }
-      if (checkforcmd(&p, CMDDEF(i).name, common_len + 1)) {
+      if (check_for_cmd(&p, CMDDEF(i).name, common_len + 1)) {
         *type = (CommandType) i;
         break;
       }
@@ -2803,8 +5351,8 @@ int parse_modifiers(const char **pp, CommandNode ***node,
     }
     **node = cmd_alloc(*type, position);
     if (VIM_ISDIGIT(*pstart)) {
-      (**node)->cnt_type = kCntCount;
-      (**node)->cnt.count = getdigits(&pstart);
+      (**node)->has_count = true;
+      (**node)->count = getdigits(&pstart);
     }
     if (*p == '!') {
       (**node)->bang = true;
@@ -2856,13 +5404,16 @@ static int set_comment_node(const char **pp, CommandType comment_type,
 ///
 ///    Flag                 | Description
 ///    -------------------- | -------------------------------------------------
-///    FLAG_POC_EXMODE      | Is set if parser is called for Ex mode
-///    FLAG_POC_CPO_STAR    | Is set if CPO_STAR flag is present in &cpo
-///    FLAG_POC_CPO_SPECI   | Is set if CPO_SPECI flag is present in &cpo
-///    FLAG_POC_CPO_KEYCODE | Is set if CPO_KEYCODE flag is present in &cpo
-///    FLAG_POC_CPO_BAR     | Is set if CPO_BAR flag is present in &cpo
-///    FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set
-///    FLAG_POC_RL          | Is set if &rl option is set
+///    FLAG_POC_EXMODE      | Is set if parser is called for Ex mode.
+///    FLAG_POC_CPO_STAR    | Is set if CPO_STAR flag is present in &cpo.
+///    FLAG_POC_CPO_SPECI   | Is set if CPO_SPECI flag is present in &cpo.
+///    FLAG_POC_CPO_KEYCODE | Is set if CPO_KEYCODE flag is present in &cpo.
+///    FLAG_POC_CPO_BAR     | Is set if CPO_BAR flag is present in &cpo.
+///    FLAG_POC_CPO_SUBPC   | Is set if CPO_SUBPERCENT flag is present in &cpo.
+///    FLAG_POC_ALTKEYMAP   | Is set if &altkeymap option is set.
+///    FLAG_POC_RL          | Is set if &rl option is set.
+///    FLAG_POC_MAGIC       | Is set if &magic option is set.
+///    FLAG_POC_ED          | Is set if &edcompatible option is set.
 /// @endparblock
 /// @param[in]      position  Position of input.
 /// @param[in]      fgetline  Function used to obtain the next line.
@@ -2880,9 +5431,9 @@ int parse_one_cmd(const char **pp,
 {
   CommandNode **next_node = node;
   CommandNode *children = NULL;
-  CommandParserError error;
+  CommandParserError error = {NULL, NULL};
   CommandType type = kCmdUnknown;
-  Range range;
+  Range range = {{kAddrMissing, {NULL}, NULL}, false, NULL};
   const char *p;
   const char *s = *pp;
   const char *nextcmd = NULL;
@@ -2893,10 +5444,19 @@ int parse_one_cmd(const char **pp,
   uint_least32_t optflags = 0;
   char *enc = NULL;
   CommandArgsParser parse = NULL;
-  CountType cnt_type = kCntMissing;
+  bool has_count = false;
   int count = 0;
-
-  memset(&error, 0, sizeof(CommandParserError));
+  Register reg = {NUL, NULL};
+  bool used_get_cmd_arg = false;
+  const char *cmd_arg;
+#define FREE_CMD_ARG_START free((void *) cmd_arg_start)
+  const char *cmd_arg_start;
+  size_t next_cmd_offset = 0;
+  size_t *skips = NULL;
+  size_t *cur_skip = skips;
+  size_t skips_count = 0;
+  const char *real_cmd_arg = NULL;
+  int ret = OK;
 
   if (((*pp)[0] == '#') &&
       ((*pp)[1] == '!') &&
@@ -2905,7 +5465,7 @@ int parse_one_cmd(const char **pp,
     return set_comment_node(pp, kCmdHashbangComment, next_node, position, s);
   }
 
-  p = *pp;
+  cmd_arg_start = cmd_arg = p = *pp;
   for (;;) {
     const char *pstart;
     // 1. skip comment lines and leading white space and colons
@@ -2941,12 +5501,13 @@ int parse_one_cmd(const char **pp,
     if (ASCII_ISLOWER(*p)) {
       CommandPosition new_position = position;
       new_position.col += p - s;
-      int ret = parse_modifiers(&p, &next_node, o, new_position, pstart,
-                                &type);
-      if (ret != OK)
-        return ret;
-      else if (p == pstart)
+      int mret = parse_modifiers(&p, &next_node, o, new_position, pstart,
+                                 &type);
+      if (mret != OK) {
+        return mret;
+      } else if (p == pstart) {
         break;
+      }
     } else {
       p = pstart;
       break;
@@ -2958,9 +5519,11 @@ int parse_one_cmd(const char **pp,
   {
     CommandPosition new_position = position;
     new_position.col += p - s;
-    int ret = parse_range(&p, next_node, o, new_position, &range, &range_start);
-    if (ret != OK)
-      return ret;
+    int rret = parse_range(&p, next_node, o, new_position, &range,
+                           &range_start);
+    if (rret != OK) {
+      return rret;
+    }
   }
 
   // 4. parse command
@@ -2973,7 +5536,7 @@ int parse_one_cmd(const char **pp,
    * If we got a line, but no command, then go to the line.
    * If we find a '|' or '\n' we set ea.nextcmd.
    */
-  if (*p == NUL || *p == '"' || (nextcmd = check_nextcmd(p)) != NULL) {
+  if (*p == NUL || *p == '"' || (nextcmd = check_next_cmd(p)) != NULL) {
     /*
      * strange vi behaviour:
      * ":3"		jumps to line 3
@@ -3053,13 +5616,15 @@ int parse_one_cmd(const char **pp,
 
   if (CMDDEF(type).flags & ARGOPT) {
     while (p[0] == '+' && p[1] == '+') {
-      int ret;
-      if ((ret = parse_argopt(&p, &optflags, &enc, o, &error)) == FAIL)
+      int aret;
+      if ((aret = parse_argopt(&p, &optflags, &enc, o, &error)) == FAIL) {
         return FAIL;
-      if (ret == NOTDONE) {
+      }
+      if (aret == NOTDONE) {
         free_range_data(&range);
-        if (create_error_node(next_node, &error, position, s) == FAIL)
+        if (create_error_node(next_node, &error, position, s) == FAIL) {
           return FAIL;
+        }
         return NOTDONE;
       }
     }
@@ -3070,9 +5635,70 @@ int parse_one_cmd(const char **pp,
       return FAIL;
   }
 
-  if (CMDDEF(type).flags & COUNT) {
+  if (CMDDEF(type).flags & REGSTR
+      && *p != NUL
+      // Numbered registers are not allowed for if count is allowed
+      && !(CMDDEF(type).flags & COUNT && VIM_ISDIGIT(*p))) {
+    if (valid_yank_reg(*p, type != kCmdPut)) {
+      if (*p == '=') {
+        p++;
+        const char *expr_start = p;
+        used_get_cmd_arg = true;
+        char *new_cmd_arg = NULL;
+        CommandPosition arg_position = position;
+        arg_position.col += p - s;
+        if (get_cmd_arg(type, o, p, arg_position.col, &new_cmd_arg,
+                        &next_cmd_offset, &skips, &skips_count)
+            == FAIL) {
+          free_cmd(*next_node);
+          *next_node = NULL;
+          return FAIL;
+        }
+        cmd_arg = cmd_arg_start = new_cmd_arg;
+        ExpressionParserError expr_error;
+        reg.name = '=';
+        if ((reg.expr = parse_one_expression(&cmd_arg, &expr_error, &parse0_err,
+                                             position.col)) == NULL) {
+          if (expr_error.message == NULL) {
+            FREE_CMD_ARG_START;
+            return FAIL;
+          }
+          error.message = expr_error.message;
+          error.position = expr_error.position;
+          if (create_error_node(next_node, &error, position, s) == FAIL) {
+            FREE_CMD_ARG_START;
+            return FAIL;
+          }
+          return NOTDONE;
+        }
+        // Adjust p according to cmd_arg adjustment
+        p += (cmd_arg - cmd_arg_start);
+        if (skips_count) {
+          // TODO Test behavior when skip occurs at the very end
+          cur_skip = skips;
+          while (*cur_skip < (size_t) (p - expr_start)) {
+            p++;
+            cur_skip++;
+          }
+          real_cmd_arg = p;
+        }
+      } else {
+        reg.name = *p;
+        p++;
+      }
+    } else {
+      error.message = (const char *) e_invalidreg;
+      error.position = p;
+      if (create_error_node(next_node, &error, position, s) == FAIL) {
+        return FAIL;
+      }
+      return NOTDONE;
+    }
+  }
+
+  if (CMDDEF(type).flags & COUNT && !(CMDDEF(type).flags & BUFNAME)) {
     if (VIM_ISDIGIT(*p)) {
-      cnt_type = kCntCount;
+      has_count = true;
       count = getdigits(&p);
       p = skipwhite(p);
     }
@@ -3106,21 +5732,21 @@ int parse_one_cmd(const char **pp,
 
   Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
 
-  if (CMDDEF(type).flags & XFILE) {
+  if (CMDDEF(type).flags & (XFILE|BUFNAME)) {
     Glob *cur_glob = &glob;
     Glob **next = &cur_glob;
     while (!ENDS_EXCMD(*p)) {
       Pattern *pat = NULL;
       p = skipwhite(p);
-      int ret;
-      if ((ret = get_pattern(&p, &error, &pat, false, true,
-                             (p - s) + position.col))
+      int pret;
+      if ((pret = get_pattern(&p, &error, &pat, false, true,
+                              (p - s) + position.col))
           == FAIL) {
         free_range_data(&range);
         free_pattern(pat);
         return FAIL;
       }
-      if (ret == NOTDONE) {
+      if (pret == NOTDONE) {
         free_range_data(&range);
         free_pattern(pat);
         if (create_error_node(next_node, &error, position, s) == FAIL)
@@ -3158,29 +5784,42 @@ int parse_one_cmd(const char **pp,
   (*next_node)->range = range;
   (*next_node)->name = (char *) name;
   (*next_node)->exflags = exflags;
-  (*next_node)->cnt_type = cnt_type;
-  (*next_node)->cnt.count = count;
+  (*next_node)->has_count = has_count;
+  (*next_node)->count = count;
+  (*next_node)->reg = reg;
   (*next_node)->children = children;
   (*next_node)->optflags = optflags;
   (*next_node)->enc = enc;
   (*next_node)->glob = glob;
+  (*next_node)->skips = skips;
+  (*next_node)->skips_count = skips_count;
 
   parse = CMDDEF(type).parse;
 
   if (parse != NULL) {
-    int ret;
-    bool used_get_cmd_arg = false;
-    const char *cmd_arg = p;
-    char *cmd_arg_start = (char *) p;
-    size_t next_cmd_offset = 0;
+    // Adjust cmd_arg according to p
+    if (used_get_cmd_arg) {
+      cmd_arg += (p - real_cmd_arg);
+      if (skips_count) {
+        // TODO Test behavior when skip occurs at the very end
+        while (*cur_skip < (size_t) (p - real_cmd_arg)) {
+          cmd_arg--;
+          cur_skip++;
+        }
+      }
+    } else {
+      cmd_arg = p;
+    }
     CommandPosition arg_position = position;
-    arg_position.col += cmd_arg_start - s;
+    arg_position.col += p - s;
     // XFILE commands may have bars inside `=…`
     // ISGREP commands may have bars inside patterns
     // ISEXPR commands may have bars inside "" or as logical OR
-    if (!(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR|LITERAL))) {
+    if (!used_get_cmd_arg
+        && !(CMDDEF(type).flags & (XFILE|ISGREP|ISEXPR|LITERAL))) {
       used_get_cmd_arg = true;
-      if (get_cmd_arg(type, o, p, arg_position.col, &cmd_arg_start,
+      char *new_cmd_arg = NULL;
+      if (get_cmd_arg(type, o, p, arg_position.col, &new_cmd_arg,
                       &next_cmd_offset, &((*next_node)->skips),
                       &((*next_node)->skips_count))
           == FAIL) {
@@ -3188,18 +5827,21 @@ int parse_one_cmd(const char **pp,
         *next_node = NULL;
         return FAIL;
       }
-      cmd_arg = cmd_arg_start;
+      cmd_arg = cmd_arg_start = new_cmd_arg;
     }
-    if ((ret = parse(&cmd_arg, *next_node, &error, o, arg_position, fgetline,
-                     cookie))
+    int pret;
+    if ((pret = parse(&cmd_arg, *next_node, &error, o, arg_position, fgetline,
+                      cookie))
         == FAIL) {
-      if (used_get_cmd_arg)
-        free(cmd_arg_start);
+      if (used_get_cmd_arg) {
+        FREE_CMD_ARG_START;
+      }
       free_cmd(*next_node);
       *next_node = NULL;
       return FAIL;
     }
-    if (ret == NOTDONE) {
+    assert(pret == NOTDONE || error.message == NULL);
+    if (pret == NOTDONE) {
       free_cmd(*next_node);
       *next_node = NULL;
       if (create_error_node(next_node, &error, position,
@@ -3213,23 +5855,27 @@ int parse_one_cmd(const char **pp,
         error.message = (char *) e_trailing;
         error.position = cmd_arg;
         if (create_error_node(next_node, &error, position, cmd_arg_start)
-            == FAIL)
+            == FAIL) {
+          FREE_CMD_ARG_START;
           return FAIL;
+        }
+        FREE_CMD_ARG_START;
         return NOTDONE;
       }
-      free(cmd_arg_start);
       p += next_cmd_offset;
     } else {
       p = cmd_arg;
     }
-    *pp = p;
-    (*next_node)->end_col = position.col + (*pp - s);
-    return ret;
+    ret = pret;
   }
 
+  if (used_get_cmd_arg) {
+    FREE_CMD_ARG_START;
+  }
   *pp = p;
   (*next_node)->end_col = position.col + (*pp - s);
-  return OK;
+  return ret;
+#undef FREE_CMD_ARG_START
 }
 
 static void get_block_options(CommandType type, CommandBlockOptions *bo)
@@ -3362,43 +6008,51 @@ static char *get_missing_message(CommandType type)
 }
 
 const CommandNode nocmd = {
-  kCmdMissing,
-  NULL,
-  NULL,
-  NULL,
-  NULL,
-  {
-    {
-      kAddrMissing,
-      {NULL},
-      NULL
+  .type = kCmdMissing,
+  .name = NULL,
+  .prev = NULL,
+  .next = NULL,
+  .children = NULL,
+  .range = {
+    .address = {
+      .type = kAddrMissing,
+      .data = {.regex = NULL},
+      .followups = NULL,
     },
-    NULL,
-    false
+    .setpos = false,
+    .next = NULL,
   },
-  NULL,
-  0,
-  {
-    0,
-    0
+  .skips = NULL,
+  .skips_count = 0,
+  .position = {
+    .lnr = 0,
+    .col = 0,
   },
-  0,
-  kCntMissing,
-  {0},
-  0,
-  0,
-  NULL,
-  {
-    {
-      kPatMissing,
-      {NULL},
-      NULL
+  .end_col = 0,
+  .has_count = false,
+  .count = 0,
+  .reg = {
+    .name = NUL,
+    .expr = NULL,
+  },
+  .exflags = 0,
+  .optflags = 0,
+  .enc = NULL,
+  .glob = {
+    .pat = {
+      .type = kPatMissing,
+      .data = {.pats = {.pat = NULL, .next = NULL}},
+      .next = NULL,
     },
-    NULL
+    .next = NULL,
   },
-  false,
-  {
-    {{0}}
+  .bang = false,
+  .args = {
+    {
+      .arg = {
+        .str = NULL,
+      }
+    },
   }
 };
 
@@ -3514,7 +6168,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       get_block_options(block_type, &bo);
 
       if (block_type == kCmdFunction)
-        if (block_command_node->args[ARG_FUNC_ARGS].arg.strs.ga_growsize == 0)
+        if (block_command_node->args[ARG_FUNC_ARGS].arg.ga_strs.ga_growsize == 0)
           memset(&bo, 0, sizeof(CommandBlockOptions));
 
       if (bo.find_in_stack != kCmdUnknown) {

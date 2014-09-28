@@ -12,7 +12,7 @@ local libnvim = cimport('./src/nvim/viml/testhelpers/parser.h')
 local p1ct
 p1ct = function(str, one, flags)
   if flags == nil then
-    flags = 0
+    flags = 0 + 0x200
   end
   local s = to_cstr(str)
   local result = libnvim.parse_cmd_test(s, flags, one, false)
@@ -23,9 +23,6 @@ p1ct = function(str, one, flags)
 end
 local eqn
 eqn = function(expected_result, cmd, one, flags)
-  if flags == nil then
-    flags = 0
-  end
   if cmd == nil then
     cmd = expected_result
   end
@@ -37,9 +34,6 @@ itn = function(expected_result, cmd, flags)
   if cmd == nil then
     cmd = nil
   end
-  if flags == nil then
-    flags = 0
-  end
   return it('parses ' .. (cmd or expected_result), function()
     return eqn(expected_result, cmd, true, flags)
   end)
@@ -48,9 +42,6 @@ local t
 t = function(expected_result, cmd, flags)
   if cmd == nil then
     cmd = nil
-  end
-  if flags == nil then
-    flags = 0
   end
   return it('parses ' .. (cmd or expected_result), function()
     local expected = expected_result

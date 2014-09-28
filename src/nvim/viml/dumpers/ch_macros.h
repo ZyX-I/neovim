@@ -114,6 +114,12 @@
 /// @param  s       String which will be written.
 /// @param  length  Length of this string.
 
+/// @def W_ESCAPED
+/// @brief Write string, escaping certain characters with backslash
+///
+/// @param  s         String which will be written.
+/// @param  escchars  Characters that should be escaped.
+
 /// @def FILL
 /// @brief Write some character multiple times
 ///
@@ -195,6 +201,9 @@
 #endif
 #ifdef W_LEN
 # undef W_LEN
+#endif
+#ifdef W_ESCAPED
+# undef W_ESCAPED
 #endif
 #ifdef FILL
 # undef FILL
@@ -370,6 +379,16 @@
     W_LEN(s, e - s + 1)
 # define W_EXPR_POS(s, node) \
     W_LEN(s + node->start, node->end - node->start + 1)
+# define W_ESCAPED(s, escchars) \
+   do { \
+     const char *const escchars_ = escchars; \
+     for (const char *s_ = s; *s_; s_++) { \
+       if (strchr(escchars_, *s_) != NULL) { \
+         WC('\\'); \
+       } \
+       WC(*s_); \
+     } \
+   } while (false)
 # define SPACES(length) \
     do { \
       if (length) { \
@@ -394,6 +413,7 @@
 
 # define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
 # define GLOB_AST                         o->command.glob.ast_glob
+# define SET_SHOW_SHORT                   o->command.set.display_short
 #endif
 
 #define NVIM_VIML_DUMPERS_CH_MACROS_H
