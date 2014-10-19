@@ -5394,6 +5394,70 @@ static int set_comment_node(const char **pp, CommandType comment_type,
   return OK;
 }
 
+/// Parse lines without commands
+///
+/// Duplicates vi behaviour:
+///
+/// - `:3` jumps to line 3
+/// - `:3|…` prints line 3
+/// - `:|` prints current line
+///
+/// Is also responsible for creating comment nodes (unless they were created 
+/// earlier).
+///
+/// @param[in,out]  pp            String being parsed.
+/// @param[out]     node          Address where parsed node will be saved.
+/// @param[in]      o             Parser options, as described in parse_one_cmd 
+///                               documentation.
+/// @param[in]      position      Position where parsing started.
+/// @param[in]      s             Start of the string (position pointed to by 
+///                               `position` argument).
+/// @param[in]      prev_cmd_end  End of the previous command. Will be saved to 
+///                               the current node’s end_col member if there is 
+///                               current node.
+/// @param[in]      range         Previously parsed range.
+/// @param[in]      nextcmd       Start of the next command.
+///
+/// @returns OK.
+static int parse_no_cmd(const char **pp,
+                        CommandNode **node,
+                        CommandParserOptions o,
+                        CommandPosition position,
+                        const char *const s,
+                        const char *const prev_cmd_end,
+                        Range range,
+                        const char *const nextcmd)
+  FUNC_ATTR_NONNULL_ALL
+{
+  CommandNode **next_node = node;
+  const char *p = *pp;
+  if (NODE_IS_ALLOCATED(*next_node)) {
+    (*next_node)->end_col = position.col + (p - prev_cmd_end);
+  }
+  if (*p == '|' || (o.flags&FLAG_POC_EXMODE
+                    && range.address.type != kAddrMissing)) {
+    *next_node = cmd_alloc(kCmdPrint, position);
+    (*next_node)->range = range;
+    p++;
+    *pp = p;
+    (*next_node)->end_col = position.col + (*pp - s);
+    return OK;
+  } else if (*p == '"') {
+    free_range_data(&range);
+    *pp = p + 1;
+    return set_comment_node(pp, kCmdComment, next_node, position, s);
+  } else {
+    *next_node = cmd_alloc(kCmdMissing, position);
+    (*next_node)->range = range;
+
+    *pp = (nextcmd == NULL
+           ? p
+           : nextcmd);
+    (*next_node)->end_col = position.col + (*pp - s);
+    return OK;
+  }
+}
+
 /// Parses one command
 ///
 /// @param[in,out]  pp        Command to parse.
@@ -5536,46 +5600,11 @@ int parse_one_cmd(const char **pp,
   while (*p == ' ' || *p == TAB || *p == ':')
     p++;
 
-  /*
-   * If we got a line, but no command, then go to the line.
-   * If we find a '|' or '\n' we set ea.nextcmd.
-   */
   const char *nextcmd = NULL;
   if (*p == NUL || *p == '"' || (nextcmd = check_next_cmd(p)) != NULL) {
-    /*
-     * strange vi behaviour:
-     * ":3"		jumps to line 3
-     * ":3|..."	prints line 3
-     * ":|"		prints current line
-     */
-    if (*p == '|' || (o.flags&FLAG_POC_EXMODE
-                      && range.address.type != kAddrMissing)) {
-      if (NODE_IS_ALLOCATED(*next_node))
-        (*next_node)->end_col = position.col + (p - modifiers_end);
-      *next_node = cmd_alloc(kCmdPrint, position);
-      (*next_node)->range = range;
-      p++;
-      *pp = p;
-      (*next_node)->end_col = position.col + (*pp - s);
-      return OK;
-    } else if (*p == '"') {
-      free_range_data(&range);
-      if (NODE_IS_ALLOCATED(*next_node))
-        (*next_node)->end_col = position.col + (p - modifiers_end);
-      *pp = p + 1;
-      return set_comment_node(pp, kCmdComment, next_node, position, s);
-    } else {
-      if (NODE_IS_ALLOCATED(*next_node))
-        (*next_node)->end_col = position.col + (p - modifiers_end);
-      *next_node = cmd_alloc(kCmdMissing, position);
-      (*next_node)->range = range;
-
-      *pp = (nextcmd == NULL
-             ? p
-             : nextcmd);
-      (*next_node)->end_col = position.col + (*pp - s);
-      return OK;
-    }
+    *pp = p;
+    return parse_no_cmd(pp, next_node, o, position, s, modifiers_end, range,
+                        nextcmd);
   }
 
   if (find_command(&p, &type, &name, &error) == FAIL) {
@@ -5655,8 +5684,8 @@ int parse_one_cmd(const char **pp,
         if (get_cmd_arg(type, o, p, arg_position.col, &new_cmd_arg,
                         &next_cmd_offset, &skips, &skips_count)
             == FAIL) {
-          free_cmd(*next_node);
-          *next_node = NULL;
+          free_cmd(*node);
+          *node = NULL;
           return FAIL;
         }
         cmd_arg = cmd_arg_start = new_cmd_arg;
@@ -5780,8 +5809,9 @@ int parse_one_cmd(const char **pp,
     return NOTDONE;
   }
 
-  if (NODE_IS_ALLOCATED(*next_node))
+  if (NODE_IS_ALLOCATED(*next_node)) {
     (*next_node)->end_col = position.col + (p - modifiers_end);
+  }
   *next_node = cmd_alloc(type, position);
   (*next_node)->bang = bang;
   (*next_node)->range = range;
