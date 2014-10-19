@@ -5430,31 +5430,34 @@ int parse_one_cmd(const char **pp,
   FUNC_ATTR_NONNULL_ALL
 {
   CommandNode **next_node = node;
-  CommandNode *children = NULL;
-  CommandParserError error = {NULL, NULL};
+  // Node options, populated before allocation
   CommandType type = kCmdUnknown;
-  Range range = {{kAddrMissing, {NULL}, NULL}, false, NULL};
-  const char *p;
-  const char *s = *pp;
-  const char *nextcmd = NULL;
-  const char *name = NULL;
-  const char *range_start = NULL;
   bool bang = false;
+  Range range = {{kAddrMissing, {NULL}, NULL}, false, NULL};
   uint_least8_t exflags = 0;
-  uint_least32_t optflags = 0;
-  char *enc = NULL;
-  CommandArgsParser parse = NULL;
+  const char *name = NULL;
   bool has_count = false;
   int count = 0;
   Register reg = {NUL, NULL};
+  CommandNode *children = NULL;
+  uint_least32_t optflags = 0;
+  char *enc = NULL;
+  Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
+  size_t *skips = NULL;
+  size_t skips_count = 0;
+
+  CommandParserError error = {NULL, NULL};
+
+  const char *p;
+  // Start of the command: position pointed to by `position` argument
+  const char *s = *pp;
+
+#define FREE_CMD_ARG_START free((void *) cmd_arg_start)
   bool used_get_cmd_arg = false;
   const char *cmd_arg;
-#define FREE_CMD_ARG_START free((void *) cmd_arg_start)
   const char *cmd_arg_start;
   size_t next_cmd_offset = 0;
-  size_t *skips = NULL;
   size_t *cur_skip = skips;
-  size_t skips_count = 0;
   const char *real_cmd_arg = NULL;
   int ret = OK;
 
@@ -5515,6 +5518,7 @@ int parse_one_cmd(const char **pp,
   }
 
   const char *modifiers_end = p;
+  const char *range_start = NULL;
   // 3. parse a range specifier
   {
     CommandPosition new_position = position;
@@ -5536,6 +5540,7 @@ int parse_one_cmd(const char **pp,
    * If we got a line, but no command, then go to the line.
    * If we find a '|' or '\n' we set ea.nextcmd.
    */
+  const char *nextcmd = NULL;
   if (*p == NUL || *p == '"' || (nextcmd = check_next_cmd(p)) != NULL) {
     /*
      * strange vi behaviour:
@@ -5730,8 +5735,6 @@ int parse_one_cmd(const char **pp,
     }
   }
 
-  Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
-
   if (CMDDEF(type).flags & (XFILE|BUFNAME)) {
     Glob *cur_glob = &glob;
     Glob **next = &cur_glob;
@@ -5794,7 +5797,7 @@ int parse_one_cmd(const char **pp,
   (*next_node)->skips = skips;
   (*next_node)->skips_count = skips_count;
 
-  parse = CMDDEF(type).parse;
+  CommandArgsParser parse = CMDDEF(type).parse;
 
   if (parse != NULL) {
     // Adjust cmd_arg according to p
