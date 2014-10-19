@@ -5516,7 +5516,14 @@ int parse_one_cmd(const char **pp,
   // Start of the command: position pointed to by `position` argument
   const char *s = *pp;
 
-#define FREE_CMD_ARG_START free((void *) cmd_arg_start)
+#define FREE_CMD_ARG_START \
+  do { \
+    if (used_get_cmd_arg) { \
+      free((void *) cmd_arg_start); \
+      cmd_arg_start = NULL; \
+    } \
+  } while (0)
+#define FAIL_RET do { ret = FAIL; goto parse_one_cmd_free_return; } while (0)
   bool used_get_cmd_arg = false;
   const char *cmd_arg;
   const char *cmd_arg_start;
@@ -5608,12 +5615,7 @@ int parse_one_cmd(const char **pp,
   }
 
   if (find_command(&p, &type, &name, &error) == FAIL) {
-    free_range_data(&range);
-    if (error.message == NULL)
-      return FAIL;
-    if (create_error_node(next_node, &error, position, s) == FAIL)
-      return FAIL;
-    return NOTDONE;
+    goto parse_one_cmd_checked_error_return;
   }
 
   // Here used to be :Ni! egg. It was removed
@@ -5623,24 +5625,16 @@ int parse_one_cmd(const char **pp,
       p++;
       bang = true;
     } else {
-      free_range_data(&range);
       error.message = (char *) e_nobang;
       error.position = p;
-      if (create_error_node(next_node, &error, position, s) == FAIL)
-        return FAIL;
-      return NOTDONE;
+      goto parse_one_cmd_error_return;
     }
   }
 
-  if (range.address.type != kAddrMissing) {
-    if (!(CMDDEF(type).flags & RANGE)) {
-      free_range_data(&range);
-      error.message = (char *) e_norange;
-      error.position = range_start;
-      if (create_error_node(next_node, &error, position, s) == FAIL)
-        return FAIL;
-      return NOTDONE;
-    }
+  if (range.address.type != kAddrMissing && !(CMDDEF(type).flags & RANGE)) {
+    error.message = (char *) e_norange;
+    error.position = range_start;
+    goto parse_one_cmd_error_return;
   }
 
   // Skip to start of argument.
@@ -5652,21 +5646,18 @@ int parse_one_cmd(const char **pp,
     while (p[0] == '+' && p[1] == '+') {
       int aret;
       if ((aret = parse_argopt(&p, &optflags, &enc, o, &error)) == FAIL) {
-        return FAIL;
+        FAIL_RET;
       }
       if (aret == NOTDONE) {
-        free_range_data(&range);
-        if (create_error_node(next_node, &error, position, s) == FAIL) {
-          return FAIL;
-        }
-        return NOTDONE;
+        goto parse_one_cmd_error_return;
       }
     }
   }
 
   if (CMDDEF(type).flags & EDITCMD) {
-    if (parse_argcmd(&p, &children, o, position, s) == FAIL)
-      return FAIL;
+    if (parse_argcmd(&p, &children, o, position, s) == FAIL) {
+      FAIL_RET;
+    }
   }
 
   if (CMDDEF(type).flags & REGSTR
@@ -5686,24 +5677,16 @@ int parse_one_cmd(const char **pp,
             == FAIL) {
           free_cmd(*node);
           *node = NULL;
-          return FAIL;
+          FAIL_RET;
         }
         cmd_arg = cmd_arg_start = new_cmd_arg;
         ExpressionParserError expr_error;
         reg.name = '=';
         if ((reg.expr = parse_one_expression(&cmd_arg, &expr_error, &parse0_err,
                                              position.col)) == NULL) {
-          if (expr_error.message == NULL) {
-            FREE_CMD_ARG_START;
-            return FAIL;
-          }
           error.message = expr_error.message;
           error.position = expr_error.position;
-          if (create_error_node(next_node, &error, position, s) == FAIL) {
-            FREE_CMD_ARG_START;
-            return FAIL;
-          }
-          return NOTDONE;
+          goto parse_one_cmd_checked_error_return;
         }
         // Adjust p according to cmd_arg adjustment
         p += (cmd_arg - cmd_arg_start);
@@ -5723,10 +5706,7 @@ int parse_one_cmd(const char **pp,
     } else {
       error.message = (const char *) e_invalidreg;
       error.position = p;
-      if (create_error_node(next_node, &error, position, s) == FAIL) {
-        return FAIL;
-      }
-      return NOTDONE;
+      goto parse_one_cmd_error_return;
     }
   }
 
@@ -5772,18 +5752,13 @@ int parse_one_cmd(const char **pp,
       p = skipwhite(p);
       int pret;
       if ((pret = get_pattern(&p, &error, &pat, false, true,
-                              (p - s) + position.col))
-          == FAIL) {
-        free_range_data(&range);
-        free_pattern(pat);
-        return FAIL;
+                              (p - s) + position.col)) == FAIL) {
+        FAIL_RET;
       }
       if (pret == NOTDONE) {
-        free_range_data(&range);
         free_pattern(pat);
-        if (create_error_node(next_node, &error, position, s) == FAIL)
-          return FAIL;
-        return NOTDONE;
+        free(pat);
+        goto parse_one_cmd_free_return;
       }
       if (pat != NULL) {
         if (*next == NULL) {
@@ -5800,13 +5775,9 @@ int parse_one_cmd(const char **pp,
       && *p != NUL
       && *p != '"'
       && (*p != '|' || !(CMDDEF(type).flags & TRLBAR))) {
-    free_range_data(&range);
-    free_glob(&glob);
     error.message = (char *) e_trailing;
     error.position = p;
-    if (create_error_node(next_node, &error, position, s) == FAIL)
-      return FAIL;
-    return NOTDONE;
+    goto parse_one_cmd_error_return;
   }
 
   if (NODE_IS_ALLOCATED(*next_node)) {
@@ -5856,9 +5827,7 @@ int parse_one_cmd(const char **pp,
                       &next_cmd_offset, &((*next_node)->skips),
                       &((*next_node)->skips_count))
           == FAIL) {
-        free_cmd(*next_node);
-        *next_node = NULL;
-        return FAIL;
+        goto parse_one_cmd_node_free_return;
       }
       cmd_arg = cmd_arg_start = new_cmd_arg;
     }
@@ -5866,12 +5835,7 @@ int parse_one_cmd(const char **pp,
     if ((pret = parse(&cmd_arg, *next_node, &error, o, arg_position, fgetline,
                       cookie))
         == FAIL) {
-      if (used_get_cmd_arg) {
-        FREE_CMD_ARG_START;
-      }
-      free_cmd(*next_node);
-      *next_node = NULL;
-      return FAIL;
+      goto parse_one_cmd_node_free_return;
     }
     assert(pret == NOTDONE || error.message == NULL);
     if (pret == NOTDONE) {
@@ -5902,13 +5866,34 @@ int parse_one_cmd(const char **pp,
     ret = pret;
   }
 
-  if (used_get_cmd_arg) {
-    FREE_CMD_ARG_START;
-  }
+  FREE_CMD_ARG_START;
   *pp = p;
   (*next_node)->end_col = position.col + (*pp - s);
   return ret;
+parse_one_cmd_checked_error_return:
+  if (error.message == NULL) {
+    ret = FAIL;
+  }
+parse_one_cmd_error_return:
+  if (create_error_node(next_node, &error, position, s) == FAIL) {
+    ret = FAIL;
+  } else {
+    ret = NOTDONE;
+  }
+parse_one_cmd_free_return:
+  FREE_CMD_ARG_START;
+  free_range_data(&range);
+  free_glob(&glob);
+  free_expr(reg.expr);
+  free_cmd(children);
+  return ret;
+parse_one_cmd_node_free_return:
+  FREE_CMD_ARG_START;
+  free_cmd(*next_node);
+  *next_node = NULL;
+  return FAIL;
 #undef FREE_CMD_ARG_START
+#undef FAIL_RET
 }
 
 static void get_block_options(CommandType type, CommandBlockOptions *bo)
