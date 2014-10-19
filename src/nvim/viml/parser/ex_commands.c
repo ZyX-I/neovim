@@ -594,7 +594,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
             literal_length = 1;
             continue;
           } else {
-            ((*next)->data.str = xstrndup(init_p + 1, p - init_p - 1));
+            ((*next)->data.str = xmemdupz(init_p + 1, p - init_p - 1));
             p++;
           }
           break;
@@ -1140,7 +1140,7 @@ static CMD_P_DEF(parse_menu)
       mb_ptr_adv_(p);
     }
 
-    icon = xstrndup(s, p - s);
+    icon = xmemdupz(s, p - s);
 
     menu_unescape(icon);
 
@@ -1226,7 +1226,7 @@ static CMD_P_DEF(parse_menu)
       else
         cur->subitem = sub;
 
-      sub->name = xstrndup(menu_path, menu_path_end - menu_path + 1);
+      sub->name = xmemdupz(menu_path, menu_path_end - menu_path + 1);
 
       menu_unescape(sub->name);
 
@@ -1245,7 +1245,7 @@ static CMD_P_DEF(parse_menu)
       return NOTDONE;
     }
 
-    text = xstrndup(s, p - s);
+    text = xmemdupz(s, p - s);
 
     menu_unescape(text);
 
@@ -1365,7 +1365,7 @@ static CMD_P_DEF(parse_rest_line)
 
   len = STRLEN(*pp);
 
-  node->args[0].arg.str = xstrndup(*pp, len);
+  node->args[0].arg.str = xmemdupz(*pp, len);
   *pp += len;
   return OK;
 }
@@ -1768,7 +1768,7 @@ static CMD_P_DEF(parse_function)
         return NOTDONE;
       }
 
-      arg = xstrndup(arg_start, p - arg_start);
+      arg = xmemdupz(arg_start, p - arg_start);
 
       for (i = 0; i < args->ga_len; i++)
         if (STRCMP(((char **)(args->ga_data))[i], arg) == 0) {
@@ -2255,7 +2255,7 @@ static int find_command(const char **pp, CommandType *type,
         p++;
       if (p == *pp)
         cmdidx = kCmdUnknown;
-      *name = xstrndup(*pp, p - *pp);
+      *name = xmemdupz(*pp, p - *pp);
       *type = kCmdUSER;
     } else if (!found) {
       *type = kCmdUnknown;
@@ -2453,7 +2453,7 @@ static int parse_argcmd(const char **pp,
         mb_ptr_adv_(p);
       }
 
-      arg = xstrndup(cmd_start, p - cmd_start);
+      arg = xmemdupz(cmd_start, p - cmd_start);
 
       arg_start = arg;
 
@@ -2597,7 +2597,7 @@ static int parse_argopt(const char **pp,
     }
   } else if (do_enc) {
     char *e;
-    *enc = xstrndup(arg_start, *pp - arg_start);
+    *enc = xmemdupz(arg_start, *pp - arg_start);
     for (e = *enc; *e != NUL; e++)
       *e = TOLOWER_ASC(*e);
   } else if (do_bad) {
