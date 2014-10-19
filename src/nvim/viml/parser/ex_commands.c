@@ -2821,6 +2821,31 @@ int parse_modifiers(const char **pp, CommandNode ***node,
   return OK;
 }
 
+/// Add comment node
+///
+/// @param[in,out]  pp            Parsed string, points to the start of the 
+///                               comment.
+/// @param[in]      comment_type  Comment type (there are hashbang comments and 
+///                               '"' comments).
+/// @param[out]     node          Address where node should be saved.
+/// @param[in]      position      Node position.
+/// @param[in]      s             Start of the string (position pointed by 
+///                               `position` argument).
+///
+/// @return OK
+static int set_comment_node(const char **pp, CommandType comment_type, 
+                            CommandNode **node, CommandPosition position,
+                            const char *const s)
+  FUNC_ATTR_NONNULL_ALL
+{
+  *node = cmd_alloc(comment_type, position);
+  size_t len = STRLEN(*pp);
+  (*node)->args[0].arg.str = xmemdup(*pp, len + 1);
+  *pp += len;
+  (*node)->end_col = position.col + (*pp - s);
+  return OK;
+}
+
 /// Parses one command
 ///
 /// @param[in,out]  pp        Command to parse.
@@ -2867,7 +2892,6 @@ int parse_one_cmd(const char **pp,
   uint_least8_t exflags = 0;
   uint_least32_t optflags = 0;
   char *enc = NULL;
-  size_t len;
   CommandArgsParser parse = NULL;
   CountType cnt_type = kCntMissing;
   int count = 0;
@@ -2877,13 +2901,8 @@ int parse_one_cmd(const char **pp,
   if (((*pp)[0] == '#') &&
       ((*pp)[1] == '!') &&
       position.col == 1) {
-    *next_node = cmd_alloc(kCmdHashbangComment, position);
-    p = *pp + 2;
-    len = STRLEN(p);
-    (*next_node)->args[0].arg.str = xstrndup(p, len);
-    *pp = p + len;
-    (*next_node)->end_col = position.col + (*pp - s);
-    return OK;
+    *pp += 2;
+    return set_comment_node(pp, kCmdHashbangComment, next_node, position, s);
   }
 
   p = *pp;
@@ -2905,13 +2924,8 @@ int parse_one_cmd(const char **pp,
     }
 
     if (*p == '"') {
-      *next_node = cmd_alloc(kCmdComment, position);
-      p++;
-      len = STRLEN(p);
-      (*next_node)->args[0].arg.str = xstrndup(p, len);
-      *pp = p + len;
-      (*next_node)->end_col = position.col + (*pp - s);
-      return OK;
+      *pp = p + 1;
+      return set_comment_node(pp, kCmdComment, next_node, position, s);
     }
 
     if (*p == NUL) {
@@ -2980,13 +2994,8 @@ int parse_one_cmd(const char **pp,
       free_range_data(&range);
       if (NODE_IS_ALLOCATED(*next_node))
         (*next_node)->end_col = position.col + (p - modifiers_end);
-      *next_node = cmd_alloc(kCmdComment, position);
-      p++;
-      len = STRLEN(p);
-      (*next_node)->args[0].arg.str = xstrndup(p, len);
-      *pp = p + len;
-      (*next_node)->end_col = position.col + (*pp - s);
-      return OK;
+      *pp = p + 1;
+      return set_comment_node(pp, kCmdComment, next_node, position, s);
     } else {
       if (NODE_IS_ALLOCATED(*next_node))
         (*next_node)->end_col = position.col + (p - modifiers_end);
