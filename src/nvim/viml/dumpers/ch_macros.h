@@ -18,8 +18,8 @@
 ///
 /// @note If neither #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE 
 ///       macros are defined then functions with `void f(CH_MACROS_OPTIONS_TYPE 
-///       o, ..., char **p)` signature are defined. They are supposed to write 
-///       resulting string to `**p` and advance `*p` to the end of written 
+///       o, ..., char **pp)` signature are defined. They are supposed to write 
+///       resulting string to `**pp` and advance `*pp` to the end of written 
 ///       string. They are not supposed to output trailing NUL though.
 
 /// @def CH_MACROS_INDENT_STR
@@ -301,7 +301,7 @@
 # else
 #  define FNAME(f) s##f
 #  define F_NOOPT(f, ...) \
-    FNAME(f)(__VA_ARGS__, &p)
+    FNAME(f)(__VA_ARGS__, &p_)
 #  define _FARGS(...) CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__, char **pp
 #  define FDEC(f, ...) \
     void FNAME(f)(_FARGS(__VA_ARGS__))
@@ -309,50 +309,50 @@
 #  define FDEC_TYPEDEF(t, ...) \
     void (*FTYPE(t))(_FARGS(__VA_ARGS__))
 #  define FUNCTION_START \
-    char *p = *pp
+    char *p_ = *pp
 #  define EARLY_RETURN \
     return
 #  define FUNCTION_END \
     do { \
-      *pp = p; \
+      *pp = p_; \
       return; \
     } while (0)
 #  define WC(c) \
-    *p++ = c
+    *p_++ = c
 #  define WS(s) \
     do { \
-      memcpy(p, (const char *) s, sizeof(s) - 1); \
-      p += sizeof(s) - 1; \
+      memcpy(p_, (const char *) s, sizeof(s) - 1); \
+      p_ += sizeof(s) - 1; \
     } while (0)
 #  define W(s) \
     do { \
       size_t len = STRLEN(s); \
       if (len) {\
-        memcpy(p, s, len); \
-        p += len; \
+        memcpy(p_, s, len); \
+        p_ += len; \
       } \
     } while (0)
 #  define W_LEN(s, length) \
     do { \
       if (length) {\
-        memcpy(p, s, length); \
-        p += length; \
+        memcpy(p_, s, length); \
+        p_ += length; \
       } \
     } while (0)
 #  define FILL(c, length) \
-    memset(p, c, length); \
-    p += length
+    memset(p_, c, length); \
+    p_ += length
 #  define F_ESCAPED(f, e, ...) \
     do { \
-      char *arg_start = p; \
+      char *arg_start = p_; \
       const char *const echars = e; \
       F(f, __VA_ARGS__); \
-      while (arg_start < p) { \
+      while (arg_start < p_) { \
         if (strchr(echars, *arg_start) != NULL) { \
           STRMOVE(arg_start + 1, arg_start); \
           *arg_start = '\\'; \
           arg_start += 2; \
-          p++; \
+          p_++; \
         } else { \
           arg_start++; \
         } \
