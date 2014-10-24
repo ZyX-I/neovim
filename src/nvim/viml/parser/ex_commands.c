@@ -1402,14 +1402,25 @@ static int do_parse_menu(CMD_P_ARGS, bool unmenu)
     for (; i < MENUDEPTH && !vim_iswhite(*p); i++) {
     }
     if (i) {
-      pris = XCALLOC_NEW(int, i + 1);
-      node->args[ARG_MENU_PRI].arg.numbers = pris;
-      for (i = 0; i < MENUDEPTH && !vim_iswhite(*p); i++) {
-        pris[i] = (int) getdigits(&p);
-        if (pris[i] == 0)
-          pris[i] = MENU_DEFAULT_PRI;
-        if (*p == '.')
-          p++;
+      if (unmenu) {
+        for (i = 0; i < MENUDEPTH && !vim_iswhite(*p); i++) {
+          p = skipdigits(p);
+          if (*p == '.') {
+            p++;
+          }
+        }
+      } else {
+        pris = XCALLOC_NEW(int, i + 1);
+        node->args[ARG_MENU_PRI].arg.numbers = pris;
+        for (i = 0; i < MENUDEPTH && !vim_iswhite(*p); i++) {
+          pris[i] = (int) getdigits(&p);
+          if (pris[i] == 0) {
+            pris[i] = MENU_DEFAULT_PRI;
+          }
+          if (*p == '.') {
+            p++;
+          }
+        }
       }
     }
     p = skipwhite(p);
@@ -4885,15 +4896,18 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
     *next_cmd_offset = p - start;
   }
 
+  size_t len = (p - start) - skcnt + 1;
+
   // From del_trailing_spaces
   if (!(CMDDEF(type).flags & NOTRLCOM)) {  // remove trailing spaces
     while (--p > start && vim_iswhite(*p) && p[-1] != '\\' && p[-1] != Ctrl_V) {
+      len--;
     }
   }
 
   const char *e = p;
 
-  *arg = XMALLOC_NEW(char, (p - start) - skcnt + 1);
+  *arg = XMALLOC_NEW(char, len);
 
   if (skcnt) {
     *skips = XMALLOC_NEW(size_t, skcnt);
@@ -4932,6 +4946,8 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
       } else {
         break;
       }
+    } else if (*p == NUL) {
+      break;
     }
     size_t ch_len = mb_ptr2len(p);
     memcpy(s, p, ch_len);
