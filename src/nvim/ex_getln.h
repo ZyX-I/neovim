@@ -23,15 +23,18 @@
 #define WILD_ESCAPE             128
 #define WILD_ICASE              256
 
-/*
- * There are four history tables:
- */
-#define HIST_CMD        0       /* colon commands */
-#define HIST_SEARCH     1       /* search commands */
-#define HIST_EXPR       2       /* expressions (from entering = register) */
-#define HIST_INPUT      3       /* input() lines */
-#define HIST_DEBUG      4       /* debug commands */
-#define HIST_COUNT      5       /* number of history tables */
+/// History tables
+typedef enum {
+  HIST_DEFAULT = -2,  ///< Default (current) history.
+  HIST_INVALID = -1,  ///< Unknown history.
+  HIST_CMD = 0,       ///< Colon commands.
+  HIST_SEARCH,        ///< Search commands.
+  HIST_EXPR,          ///< Expressions (e.g. from "<C-r>=").
+  HIST_INPUT,         ///< Lines entered into input().
+  HIST_DEBUG,         ///< Commands in debug mode.
+} HistoryType;
+/// Number of history tables
+#define HIST_COUNT      5
 
 typedef char_u *(*CompleteListItemGetter)(expand_T *, int);
 
