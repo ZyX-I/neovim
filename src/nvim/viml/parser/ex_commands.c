@@ -5474,6 +5474,48 @@ static int parse_no_cmd(const char **pp,
   }
 }
 
+/// Parse a sequence of file names
+///
+/// @param[in,out]  pp     Parsed string.
+/// @param[out]     error  Address where errors are saved.
+/// @param[in]      col    Column number of the first parsed character.
+/// @param[out]     glob   Address where result will be saved.
+///
+/// @return FAIL in case of failure, NOTDONE in case of error, OK in case of 
+///         success.
+static int parse_files(const char **pp, CommandParserError *error,
+                       const size_t col, Glob *glob)
+{
+  const char *p = *pp;
+  const char *s = p;
+  Glob *cur_glob = glob;
+  Glob **next = &cur_glob;
+  while (!ENDS_EXCMD(*p)) {
+    Pattern *pat = NULL;
+    p = skipwhite(p);
+    int pret;
+    if ((pret = get_pattern(&p, error, &pat, false, true, (p - s) + col))
+        == FAIL) {
+      return FAIL;
+    }
+    if (pret == NOTDONE) {
+      free_pattern(pat);
+      free(pat);
+      return NOTDONE;
+    }
+    if (pat != NULL) {
+      if (*next == NULL) {
+        *next = xcalloc(1, sizeof(Glob));
+      }
+      (*next)->pat = *pat;
+      free(pat);
+      next = &((*next)->next);
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
 /// Parses one command
 ///
 /// @param[in,out]  pp        Command to parse.
@@ -5761,28 +5803,15 @@ int parse_one_cmd(const char **pp,
   }
 
   if (CMDDEF(type).flags & (XFILE|BUFNAME)) {
-    Glob *cur_glob = &glob;
-    Glob **next = &cur_glob;
-    while (!ENDS_EXCMD(*p)) {
-      Pattern *pat = NULL;
-      p = skipwhite(p);
-      int pret;
-      if ((pret = get_pattern(&p, &error, &pat, false, true,
-                              (p - s) + position.col)) == FAIL) {
-        FAIL_RET;
+    switch (parse_files(&p, &error, (p - s) + position.col, &glob)) {
+      case OK: {
+        break;
       }
-      if (pret == NOTDONE) {
-        free_pattern(pat);
-        free(pat);
+      case NOTDONE: {
+        goto parse_one_cmd_error_return;
+      }
+      case FAIL: {
         goto parse_one_cmd_free_return;
-      }
-      if (pat != NULL) {
-        if (*next == NULL) {
-          *next = xcalloc(1, sizeof(Glob));
-        }
-        (*next)->pat = *pat;
-        free(pat);
-        next = &((*next)->next);
       }
     }
   }
