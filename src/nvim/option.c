@@ -7830,17 +7830,13 @@ unsigned int get_bkc_value(buf_T *buf)
 ///
 /// If no flags are set (== returned zero) then option was not found.
 ///
-/// @param[in]  name  Option that will be searched for.
+/// @param[in]  idx  Option index. Must be a valid index: this fact is not 
+///                  checked.
 ///
 /// @return Flag value.
-uint_least8_t get_option_properties(const char_u *const name, const size_t len)
+uint_least8_t get_option_properties_idx(int idx)
 {
   uint_least8_t flags = 0;
-  int idx = findoption_len(name, len);
-
-  if (idx == -1)
-    return flags;
-
   const struct vimoption *const p = options + idx;
 
   if (p->indir == PV_NONE) {
@@ -7872,4 +7868,23 @@ uint_least8_t get_option_properties(const char_u *const name, const size_t len)
     assert(FALSE);
 
   return flags;
+}
+
+/// Return option properties
+///
+/// Currently only returns the locality and type of the option. Check out 
+/// get_option_properties_idx() description for the list of the flags.
+///
+/// @param[in]  name  Option that will be searched for.
+/// @param[in]  len   Length of the name.
+///
+/// @return Flag value.
+uint_least8_t get_option_properties(const char_u *const name, const size_t len)
+{
+  int idx = findoption_len(name, len);
+
+  if (idx == -1)
+    return 0;
+
+  return get_option_properties_idx(idx);
 }
