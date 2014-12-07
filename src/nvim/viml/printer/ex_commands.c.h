@@ -120,7 +120,9 @@ static FDEC(print_pattern, const Pattern *const pat)
         break;
       }
       case kPatEnviron: {
-        // FIXME
+        IF_AST("env(", "$");
+        W(cur_pat->data.str);
+        IF_AST_END("");
         break;
       }
       case kPatAuList:

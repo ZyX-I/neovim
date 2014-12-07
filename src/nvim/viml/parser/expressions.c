@@ -504,7 +504,7 @@ static EDEC_NOARGS(parse_option)
 ///         the variable name otherwise (i.e. *arg - 1).
 ///
 /// @note Uses vim_isIDc() function: depends on &isident option.
-static const char *find_env_end(const char **arg)
+const char *find_env_end(const char **arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   const char *p;
