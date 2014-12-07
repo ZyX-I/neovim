@@ -43,7 +43,7 @@ int check_nomodeline(char_u **argp);
 #define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
 #define skipdigits(arg) (char *) skipdigits((char_u *) (arg))
 #define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((const char_u *) p) : 1
-#define mb_ptr2len(p) mb_ptr2len((const char_u *) p)
+#define mb_ptr2len(p) ((size_t) mb_ptr2len((const char_u *) p))
 #define enc_canonize(p) (char *) enc_canonize((char_u *) (p))
 #define check_ff_value(p) check_ff_value((char_u *) (p))
 #define replace_termcodes(a, b, c, d, e, f, g) \
@@ -530,7 +530,8 @@ static int get_comma_separated_patterns(const char **pp,
     int cret;
     Pattern *pat = NULL;
     p++;
-    if ((cret = get_pattern(&p, error, &pat, true, is_glob, col + (p - s)))
+    if ((cret = get_pattern(&p, error, &pat, true, is_glob,
+                            col + (size_t) (p - s)))
         != OK) {
       return cret;
     }
@@ -720,7 +721,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
           p += 2;
           if (((*next)->data.expr = parse_one_expression(&p, &expr_error,
                                                          &parse0_err,
-                                                         col + (p - s)))
+                                                         col + (size_t)(p - s)))
               == NULL) {
             if (expr_error.message == NULL)
               goto get_glob_error_return;
@@ -747,7 +748,8 @@ static int get_pattern(const char **pp, CommandParserError *error,
             literal_length = 1;
             continue;
           } else {
-            ((*next)->data.str = xmemdupz(init_p + 1, p - init_p - 1));
+            ((*next)->data.str = xmemdupz(init_p + 1,
+                                          (size_t) (p - init_p) - 1));
             p++;
           }
           break;
@@ -771,7 +773,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
         }
         case kPatBufname: {
           p++;
-          (*next)->data.number = getdigits(&p);
+          (*next)->data.number = (int) getdigits(&p);
           break;
         }
         case kPatCollection: {
@@ -790,14 +792,14 @@ static int get_pattern(const char **pp, CommandParserError *error,
             p = init_p;
             literal_length = 1;
           } else {
-            (*next)->data.str = xmemdupz(init_p, p - init_p);
+            (*next)->data.str = xmemdupz(init_p, (size_t) (p - init_p));
           }
           break;
         }
         case kPatBranch: {
           const char *const init_p = p;
           int gcsp_ret = get_comma_separated_patterns(&p, error, next, is_glob,
-                                                      col + (p - s));
+                                                      col + (size_t) (p - s));
           if (gcsp_ret != OK) {
             ret = gcsp_ret;
             goto get_glob_error_return;
@@ -850,7 +852,7 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
     *node = cmd_alloc(kCmdSyntaxError, position);
     (*node)->args[ARG_ERROR_LINESTR].arg.str = xstrdup(s);
     (*node)->args[ARG_ERROR_MESSAGE].arg.str = xstrdup(error->message);
-    (*node)->args[ARG_ERROR_OFFSET].arg.col = (colnr_T) (error->position - s);
+    (*node)->args[ARG_ERROR_OFFSET].arg.col = (size_t) (error->position - s);
   }
   return OK;
 }
@@ -933,7 +935,7 @@ static int get_regex(const char **pp, CommandParserError *error,
     }
   }
 
-  *regex = regex_alloc(s, p - s);
+  *regex = regex_alloc(s, (size_t) (p - s));
 
   if (*p != NUL) {
     p++;
@@ -1186,7 +1188,7 @@ static int do_parse_map(CMD_P_ARGS, bool unmap)
     //       options too) it is not unlikely that both 1. file will be parsed 
     //       before result is actually used and 2. option value at the execution 
     //       stage will make results invalid.
-    lhs = replace_termcodes(lhs, lhs_end - lhs, &lhs_buf, true, true,
+    lhs = replace_termcodes(lhs, (size_t) (lhs_end - lhs), &lhs_buf, true, true,
                             map_flags&FLAG_MAP_SPECIAL,
                             FLAG_POC_TO_FLAG_CPO(o.flags));
     if (lhs_buf == NULL)
@@ -1306,7 +1308,7 @@ static int parse_menu_name(const char **pp, CommandParserError *error,
       *next = sub;
       next = &(sub->subitem);
 
-      sub->name = xmemdupz(menu_path, menu_path_end - menu_path + 1);
+      sub->name = xmemdupz(menu_path, (size_t) (menu_path_end - menu_path) + 1);
 
       menu_unescape(sub->name, mnpo == kMenuWholeCmd);
 
@@ -1325,7 +1327,7 @@ static int parse_menu_name(const char **pp, CommandParserError *error,
     }
 
     if (mnpo == kMenuDefaults) {
-      text = xmemdupz(s, p - s);
+      text = xmemdupz(s, (size_t) (p - s));
 
       menu_unescape(text, false);
 
@@ -1392,7 +1394,7 @@ static int do_parse_menu(CMD_P_ARGS, bool unmenu)
       mb_ptr_adv_(p);
     }
 
-    icon = xmemdupz(s, p - s);
+    icon = xmemdupz(s, (size_t) (p - s));
 
     menu_unescape(icon, false);
 
@@ -1906,7 +1908,8 @@ static CMD_P_DEF(parse_for)
   *pp = skipwhite(*pp + 2);
 
   if ((list_expr = parse_one_expression(pp, &expr_error, &parse0_err,
-                                        position.col + (*pp - s))) == NULL) {
+                                        position.col + (size_t) (*pp - s)))
+      == NULL) {
     if (expr_error.message == NULL) {
       return FAIL;
     }
@@ -1936,7 +1939,7 @@ static CMD_P_DEF(parse_function)
     return get_regex(&p, error, &(node->args[ARG_FUNC_REG].arg.reg), '/', NULL);
   }
 
-  if ((ret = parse_lval(&p, error, o, position.col + (p - *pp), &expr,
+  if ((ret = parse_lval(&p, error, o, position.col + (size_t) (p - *pp), &expr,
                         FLAG_PLVAL_NOLOWER))
       == FAIL) {
     return FAIL;
@@ -1996,7 +1999,7 @@ static CMD_P_DEF(parse_function)
         return NOTDONE;
       }
 
-      arg = xmemdupz(arg_start, p - arg_start);
+      arg = xmemdupz(arg_start, (size_t) (p - arg_start));
 
       for (i = 0; i < args->ga_len; i++)
         if (STRCMP(((char **)(args->ga_data))[i], arg) == 0) {
@@ -2143,7 +2146,8 @@ static CMD_P_DEF(parse_let)
   *pp = skipwhite(*pp);
 
   if ((rval_expr = parse_one_expression(pp, &expr_error, &parse0_err,
-                                        position.col + (*pp - s))) == NULL) {
+                                        position.col + (size_t) (*pp - s)))
+      == NULL) {
     if (expr_error.message == NULL) {
       return FAIL;
     }
@@ -2232,7 +2236,7 @@ static int parse_group_and_event(const char **pp,
     while (!vim_iswhite(*p) && *p) {
       p++;
     }
-    *group = xmemdupz(start, p - start);
+    *group = xmemdupz(start, (size_t) (p - start));
     p = skipwhite(p);
     if (*p) {
       *events = parse_events(&p, error);
@@ -2274,7 +2278,7 @@ static CMD_P_DEF(parse_autocmd)
   Pattern *pat = pattern_alloc(kPatAuList);
   p--;
   int gcsp_ret = get_comma_separated_patterns(&p, error, &pat, false,
-                                              position.col + (p - s));
+                                              position.col + (size_t) (p - s));
   if (gcsp_ret != OK) {
     return gcsp_ret;
   }
@@ -2297,7 +2301,7 @@ static CMD_P_DEF(parse_autocmd)
   }
 
   CommandPosition do_position = position;
-  position.col += (p - s);
+  position.col += (size_t) (p - s);
   int do_ret = parse_do(&p, node, error, o, do_position, fgetline, cookie);
   if (do_ret != OK) {
     return do_ret;
@@ -2405,7 +2409,7 @@ static CMD_P_DEF(parse_breakadd)
     Pattern *pat = NULL;
     int cret;
     if ((cret = get_pattern(&p, error, &pat, false, true,
-                            (p - s) + position.col))
+                            (size_t) (p - s) + position.col))
         != OK) {
       free_pattern(pat);
       return cret;
@@ -2424,7 +2428,7 @@ static CMD_P_DEF(parse_cbuffer)
   if (*p != NUL) {
     int bufnr;
     if (VIM_ISDIGIT(*p)) {
-      bufnr = getdigits(&p);
+      bufnr = (int) getdigits(&p);
     }
     if (*p != NUL) {
       error->message = N_("E474: Expected buffer number");
@@ -2480,7 +2484,7 @@ static CMD_P_DEF(parse_regex)
         numbslashes++;
       }
     }
-    char *new_regex = xmalloc(6 + numbslashes + (e - p + 1));
+    char *new_regex = xmalloc(6 + numbslashes + ((size_t) (e - p) + 1));
     //                        ^ \V\< and \>
     char *np = new_regex;
     memcpy(np, "\\V\\<", 4);
@@ -2495,7 +2499,7 @@ static CMD_P_DEF(parse_regex)
     //                ^ Also copy trailing NUL
     np += 2;
     assert(*np == NUL);
-    regex = regex_alloc(new_regex, np - new_regex);
+    regex = regex_alloc(new_regex, (size_t) (np - new_regex));
   }
   *pp = p;
   node->args[ARG_REG_REG].arg.reg = regex;
@@ -2622,7 +2626,7 @@ static CMD_P_DEF(parse_command)
   while (*p == '-') {
     p++;
     const char *const end = skiptowhite(p);
-    const size_t nlen = end - p;
+    const size_t nlen = (size_t) (end - p);
     if (STRNICMP(p, "bang", nlen) == 0) {
       flags |= FLAG_CMD_BANG;
     } else if (STRNICMP(p, "buffer", nlen) == 0) {
@@ -2748,7 +2752,7 @@ static CMD_P_DEF(parse_command)
       p++;
     }
   }
-  size_t name_len = p - name_start;
+  size_t name_len = (size_t) (p - name_start);
   if (!ends_excmd(*p) && !vim_iswhite(*p)) {
     error->message = N_("E182: Invalid command name");
     error->position = p;
@@ -2879,7 +2883,7 @@ static CMD_P_DEF(parse_display)
     if (!valid_yank_reg(*p, false)) {
       continue;
     }
-    uint8_t reg = TOUPPER_ASC(*p);
+    uint8_t reg = (uint8_t) TOUPPER_ASC(*p);
     assert(reg - REGSTART < REGNUM && reg > REGSTART);
     if (!regtab[reg - REGSTART]) {
       reglen++;
@@ -2888,9 +2892,9 @@ static CMD_P_DEF(parse_display)
   }
   char *regnames = xmallocz(reglen);
   char *cur_regname = regnames;
-  for (size_t i = 0; i < REGNUM; i++) {
+  for (uint8_t i = 0; i < REGNUM; i++) {
     if (regtab[i]) {
-      *cur_regname++ = TOLOWER_ASC(i + REGSTART);
+      *cur_regname++ = TOLOWER_ASC((char) (i + REGSTART));
     }
   }
   node->args[ARG_NAME_NAME].arg.str = regnames;
@@ -2954,9 +2958,9 @@ static CMD_P_DEF(parse_digraphs)
     const char *const dig_start = p;
     mb_ptr_adv_(p);
     mb_ptr_adv_(p);
-    *cur_dig++ = xmemdupz(dig_start, (p - dig_start));
+    *cur_dig++ = xmemdupz(dig_start, (size_t) (p - dig_start));
     p = skipwhite(p);
-    *cur_cp++ = getdigits(&p);
+    *cur_cp++ = (uint_least32_t) getdigits(&p);
     dig_count--;
   }
   *cur_dig = NULL;
@@ -2976,7 +2980,7 @@ static CMD_P_DEF(parse_later)
   uint_least32_t later_type = VAL_LATER_COUNT;
   unsigned count = 1;
   if (VIM_ISDIGIT(*p)) {
-    count = getdigits(&p);
+    count = (unsigned) getdigits(&p);
     switch (*p) {
 #define LATER_TYPE(ch, type) \
       case ch: { \
@@ -3012,7 +3016,7 @@ static CMD_P_DEF(parse_later)
     return NOTDONE;
   }
   *pp = p;
-  node->args[ARG_LATER_FLAGS].arg.number = later_type;
+  node->args[ARG_LATER_FLAGS].arg.flags = later_type;
   node->args[ARG_LATER_COUNT].arg.unumber = count;
   return OK;
 }
@@ -3065,7 +3069,7 @@ static CMD_P_DEF(parse_history)
     while (*end && (ASCII_ISALPHA(*end) || strchr(":=@>/?", *end) != NULL)) {
       end++;
     }
-    HistoryType histtype = get_histtype(p, end - p, true);
+    HistoryType histtype = get_histtype(p, (size_t) (end - p), true);
     switch (histtype) {
       case HIST_INVALID: {
         if (STRNICMP(p, "all", end - p) == 0) {
@@ -3147,7 +3151,7 @@ static CMD_P_DEF(parse_make)
 static CMD_P_DEF(parse_retab)
 {
   const char *p = *pp;
-  int new_ts = getdigits(&p);
+  int new_ts = (int) getdigits(&p);
   if (new_ts < 0) {
     error->message = (const char *) e_positive;
     error->position = *pp;
@@ -3338,7 +3342,7 @@ static CMD_P_DEF(parse_global)
   node->args[ARG_G_FLAGS].arg.flags = flags;
   if (*p != NUL) {
     CommandPosition do_position = position;
-    position.col += (p - s);
+    position.col += (size_t) (p - s);
     int do_ret = parse_do(&p, node, error, o, do_position, fgetline, cookie);
     if (do_ret != OK) {
       return do_ret;
@@ -3358,7 +3362,7 @@ static CMD_P_DEF(parse_vimgrep)
   if (vim_isIDc(*p)) {
     const char *const s = p;
     p = skiptowhite(p);
-    regex = regex_alloc(s, p - s);
+    regex = regex_alloc(s, (size_t) (p - s));
   } else {
     p++;
     int rret;
@@ -3392,7 +3396,8 @@ static CMD_P_DEF(parse_vimgrep)
     error->position = p;
     return NOTDONE;
   }
-  int pfret = parse_files(&p, error, position.col + (p - s), &(node->glob));
+  int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
+                          &(node->glob));
   if (pfret == FAIL) {
     return FAIL;
   }
@@ -3434,7 +3439,7 @@ static CMD_P_DEF(parse_match)
   }
   const char *const s = p;
   p = skiptowhite(p);
-  node->args[ARG_MATCH_GROUP].arg.str = xmemdupz(s, p - s);
+  node->args[ARG_MATCH_GROUP].arg.str = xmemdupz(s, (size_t) (p - s));
   p = skipwhite(p);
   if (*p == NUL) {
     error->message = N_("E475: Expected regular expression");
@@ -3512,7 +3517,7 @@ static CMD_P_DEF(parse_set)
         p += 3;
       }
       int key = 0;
-      int len = 0;
+      size_t len = 0;
       int nextchar = 0;
       int opt_idx = -1;
       if (*p == '<') {
@@ -3780,7 +3785,7 @@ static CMD_P_DEF(parse_set)
       values[i] = (char *) empty_string;
     }
     flagss[i] = cur->flags;
-    keys[i] = cur->key;
+    keys[i] = (uint_least32_t) cur->key;
     // TODO Hold long?
     ivalues[i] = (int) cur->ivalue;
     opt_idxs[i] = cur->opt_idx;
@@ -3823,7 +3828,7 @@ static CMD_P_DEF(parse_sleep)
 
 static CMD_P_DEF(parse_sub)
 {
-#define P_COL(p) (((p) - s) + position.col)
+#define P_COL(p) ((size_t) ((p) - s) + position.col)
   const char *p = *pp;
   const char *const s = p;
   uint_least32_t flags = 0;
@@ -3882,7 +3887,8 @@ static CMD_P_DEF(parse_sub)
       flags |= FLAG_S_SUB_PREV;
     } else {
       if (*sub_start == '\\' && sub_start[1] == '=') {
-        char *const expr_str_start = xmemdupz(sub_start + 2, p - sub_start - 2);
+        char *const expr_str_start = xmemdupz(sub_start + 2,
+                                              (size_t) (p - sub_start) - 2);
         const char *expr_str = expr_str_start;
         Expression *expr;
         ExpressionParserError expr_error;
@@ -3960,7 +3966,7 @@ static CMD_P_DEF(parse_sub)
                 case '9': {
                   (*next) = replacement_alloc(kRepGroup, P_COL(p2 - 1),
                                               P_COL(p2));
-                  (*next)->data.group = *p2 - '0';
+                  (*next)->data.group = (uint8_t) *p2 - '0';
                   p2++;
                   break;
                 }
@@ -4022,7 +4028,7 @@ static CMD_P_DEF(parse_sub)
                 p2++;
               }
               (*next) = replacement_alloc(kRepLiteral, P_COL(p2_s), P_COL(p2));
-              (*next)->data.str = xmemdupz(p2_s, p2 - p2_s);
+              (*next)->data.str = xmemdupz(p2_s, (size_t) (p2 - p2_s));
               break;
             }
           }
@@ -4083,7 +4089,7 @@ static CMD_P_DEF(parse_sub)
   p = skipwhite(p);
   if (VIM_ISDIGIT(*p)) {
     const char *const p_s = p;
-    node->count = getdigits(&p);
+    node->count = (int) getdigits(&p);
     if (node->count == 0) {
       error->message = (char *) e_zerocount;
       error->position = p_s;
@@ -4389,7 +4395,7 @@ static CMD_P_DEF(parse_wincmd)
     error->position = p;
     return NOTDONE;
   }
-  node->args[ARG_WINCMD_CHAR].arg.ch = action;
+  node->args[ARG_WINCMD_CHAR].arg.ch = (char) action;
   *pp = p;
   return OK;
 }
@@ -4483,7 +4489,7 @@ static CMD_P_DEF(parse_help)
   }
   node->args[ARG_HELP_LANG].arg.str = get_help_lang(s, &end);
   if (end != s) {
-    node->args[ARG_HELP_TOPIC].arg.str = xmemdupz(s, end - s);
+    node->args[ARG_HELP_TOPIC].arg.str = xmemdupz(s, (size_t) (end - s));
   }
   *pp = p;
   return OK;
@@ -4500,7 +4506,7 @@ static CMD_P_DEF(parse_helpgrep)
     return NOTDONE;
   }
   node->args[ARG_HELPG_LANG].arg.str = get_help_lang(p, &end);
-  node->args[ARG_HELPG_REG].arg.reg = regex_alloc(p, end - p);
+  node->args[ARG_HELPG_REG].arg.reg = regex_alloc(p, (size_t) (end - p));
   return OK;
 }
 
@@ -4515,10 +4521,10 @@ static CMD_P_DEF(parse_helpgrep)
 /// @param[in]      len  Minimal length required to accept a match.
 ///
 /// @return true if requested command was found, false otherwise.
-static int check_for_cmd(const char **pp, const char *cmd, int len)
+static bool check_for_cmd(const char **pp, const char *cmd, size_t len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  int i;
+  size_t i;
 
   for (i = 0; cmd[i] != NUL; i++)
     if (cmd[i] != (*pp)[i])
@@ -4659,7 +4665,7 @@ static int get_address_followups(const char **pp, CommandParserError *error,
       case kAddressFollowupShift: {
         int sign = (p[-1] == '+' ? 1 : -1);
         if (VIM_ISDIGIT(*p))
-          fw->data.shift = sign * getdigits(&p);
+          fw->data.shift = sign * (int) getdigits(&p);
         else
           fw->data.shift = sign;
         break;
@@ -4824,7 +4830,7 @@ static int find_command(const char **pp, CommandType *type,
         p++;
       if (p == *pp)
         cmdidx = kCmdUnknown;
-      *name = xmemdupz(*pp, p - *pp);
+      *name = xmemdupz(*pp, (size_t) (p - *pp));
       *type = kCmdUSER;
     } else if (!found) {
       *type = kCmdUnknown;
@@ -4893,7 +4899,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
         const char *nextcmd = check_next_cmd(p);
         if (nextcmd != NULL) {
           did_set_next_cmd_offset = true;
-          *next_cmd_offset = (nextcmd - start);
+          *next_cmd_offset = (size_t) (nextcmd - start);
         }
         break;
       }
@@ -4903,10 +4909,10 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
   *skips_count = skcnt;
 
   if (!did_set_next_cmd_offset) {
-    *next_cmd_offset = p - start;
+    *next_cmd_offset = (size_t) (p - start);
   }
 
-  size_t len = (p - start) - skcnt + 1;
+  size_t len = (size_t) (p - start) - skcnt + 1;
 
   // From del_trailing_spaces
   if (!(CMDDEF(type).flags & NOTRLCOM)) {  // remove trailing spaces
@@ -4931,7 +4937,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
   for (p = start; p <= e;) {
     if (*p == Ctrl_V && !(CMDDEF(type).flags&USECTRLV)) {
       p++;
-      *cur_move++ = p - start;
+      *cur_move++ = (size_t) (p - start);
       if (*p == NUL) {  // stop at NUL after CTRL-V
         break;
       }
@@ -4952,7 +4958,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
       if (((o.flags & FLAG_POC_CPO_BAR)
            || !(CMDDEF(type).flags & USECTRLV)) && p[-1] == '\\') {
         s--;  // remove the '\'
-        *cur_move++ = p - 1 - start;
+        *cur_move++ = (size_t) (p - start) - 1;
       } else {
         break;
       }
@@ -5011,14 +5017,14 @@ static int parse_argcmd(const char **pp,
     if (vim_isspace(*p) || !*p) {
       *next_node = cmd_alloc(kCmdMissing, position);
       (*next_node)->range.address.type = kAddrEnd;
-      (*next_node)->end_col = position.col + (p - s);
+      (*next_node)->end_col = position.col + (size_t) (p - s);
     } else {
       const char *cmd_start = p;
       char *arg;
       char *arg_start;
       CommandPosition new_position = {
         position.lnr,
-        position.col + (p - s)
+        position.col + (size_t) (p - s)
       };
 
       while (*p && !vim_isspace(*p)) {
@@ -5027,7 +5033,7 @@ static int parse_argcmd(const char **pp,
         mb_ptr_adv_(p);
       }
 
-      arg = xmemdupz(cmd_start, p - cmd_start);
+      arg = xmemdupz(cmd_start, (size_t) (p - cmd_start));
 
       arg_start = arg;
 
@@ -5171,11 +5177,11 @@ static int parse_argopt(const char **pp,
     }
   } else if (do_enc) {
     char *e;
-    *enc = xmemdupz(arg_start, *pp - arg_start);
+    *enc = xmemdupz(arg_start, (size_t) (*pp - arg_start));
     for (e = *enc; *e != NUL; e++)
       *e = TOLOWER_ASC(*e);
   } else if (do_bad) {
-    size_t len = *pp - arg_start;
+    size_t len = (size_t) (*pp - arg_start);
     if (STRNICMP(arg_start, "keep", len) == 0) {
       *optflags |= VAL_OPT_BAD_KEEP;
     } else if (STRNICMP(arg_start, "drop", len) == 0) {
@@ -5378,14 +5384,14 @@ int parse_modifiers(const char **pp, CommandNode ***node,
     **node = cmd_alloc(*type, position);
     if (VIM_ISDIGIT(*pstart)) {
       (**node)->has_count = true;
-      (**node)->count = getdigits(&pstart);
+      (**node)->count = (int) getdigits(&pstart);
     }
     if (*p == '!') {
       (**node)->bang = true;
       p++;
     }
-    (**node)->position.col = position.col + (mod_start - s);
-    (**node)->end_col = position.col + (p - s - 1);
+    (**node)->position.col = position.col + (size_t) (mod_start - s);
+    (**node)->end_col = position.col + ((size_t) (p - s) - 1);
     *node = &((**node)->children);
     *type = kCmdUnknown;
   } else {
@@ -5416,7 +5422,7 @@ static int set_comment_node(const char **pp, CommandType comment_type,
   size_t len = STRLEN(*pp);
   (*node)->args[0].arg.str = xmemdup(*pp, len + 1);
   *pp += len;
-  (*node)->end_col = position.col + (*pp - s);
+  (*node)->end_col = position.col + (size_t) (*pp - s);
   return OK;
 }
 
@@ -5458,7 +5464,7 @@ static int parse_no_cmd(const char **pp,
   CommandNode **next_node = node;
   const char *p = *pp;
   if (NODE_IS_ALLOCATED(*next_node)) {
-    (*next_node)->end_col = position.col + (p - prev_cmd_end);
+    (*next_node)->end_col = position.col + (size_t) (p - prev_cmd_end);
   }
   if (*p == '|' || (o.flags&FLAG_POC_EXMODE
                     && range.address.type != kAddrMissing)) {
@@ -5466,7 +5472,7 @@ static int parse_no_cmd(const char **pp,
     (*next_node)->range = range;
     p++;
     *pp = p;
-    (*next_node)->end_col = position.col + (*pp - s);
+    (*next_node)->end_col = position.col + (size_t) (*pp - s);
     return OK;
   } else if (*p == '"') {
     free_range_data(&range);
@@ -5479,7 +5485,7 @@ static int parse_no_cmd(const char **pp,
     *pp = (nextcmd == NULL
            ? p
            : nextcmd);
-    (*next_node)->end_col = position.col + (*pp - s);
+    (*next_node)->end_col = position.col + (size_t) (*pp - s);
     return OK;
   }
 }
@@ -5504,7 +5510,8 @@ static int parse_files(const char **pp, CommandParserError *error,
     Pattern *pat = NULL;
     p = skipwhite(p);
     int pret;
-    if ((pret = get_pattern(&p, error, &pat, false, true, (p - s) + col))
+    if ((pret = get_pattern(&p, error, &pat, false, true,
+                            (size_t) (p - s) + col))
         == FAIL) {
       return FAIL;
     }
@@ -5621,7 +5628,7 @@ int parse_one_cmd(const char **pp,
       fw = address_followup_alloc(kAddressFollowupShift);
       fw->data.shift = 1;
       (*next_node)->range.address.followups = fw;
-      (*next_node)->end_col = position.col + (*pp - s);
+      (*next_node)->end_col = position.col + (size_t) (*pp - s);
       return OK;
     }
 
@@ -5642,7 +5649,7 @@ int parse_one_cmd(const char **pp,
     // 2. handle command modifiers.
     if (ASCII_ISLOWER(*p)) {
       CommandPosition new_position = position;
-      new_position.col += p - s;
+      new_position.col += (size_t) (p - s);
       int mret = parse_modifiers(&p, &next_node, o, new_position, pstart,
                                  &type);
       if (mret != OK) {
@@ -5661,7 +5668,7 @@ int parse_one_cmd(const char **pp,
   // 3. parse a range specifier
   {
     CommandPosition new_position = position;
-    new_position.col += p - s;
+    new_position.col += (size_t) (p - s);
     int rret = parse_range(&p, next_node, o, new_position, &range,
                            &range_start);
     if (rret != OK) {
@@ -5739,7 +5746,7 @@ int parse_one_cmd(const char **pp,
         used_get_cmd_arg = true;
         char *new_cmd_arg = NULL;
         CommandPosition arg_position = position;
-        arg_position.col += p - s;
+        arg_position.col += (size_t) (p - s);
         if (get_cmd_arg(type, o, p, arg_position.col, &new_cmd_arg,
                         &next_cmd_offset, &skips, &skips_count)
             == FAIL) {
@@ -5781,7 +5788,7 @@ int parse_one_cmd(const char **pp,
   if (CMDDEF(type).flags & COUNT && !(CMDDEF(type).flags & BUFNAME)) {
     if (VIM_ISDIGIT(*p)) {
       has_count = true;
-      count = getdigits(&p);
+      count = (int) getdigits(&p);
       p = skipwhite(p);
     }
   }
@@ -5813,7 +5820,7 @@ int parse_one_cmd(const char **pp,
   }
 
   if (CMDDEF(type).flags & (XFILE|BUFNAME)) {
-    switch (parse_files(&p, &error, (p - s) + position.col, &glob)) {
+    switch (parse_files(&p, &error, (size_t) (p - s) + position.col, &glob)) {
       case OK: {
         break;
       }
@@ -5836,7 +5843,7 @@ int parse_one_cmd(const char **pp,
   }
 
   if (NODE_IS_ALLOCATED(*next_node)) {
-    (*next_node)->end_col = position.col + (p - modifiers_end);
+    (*next_node)->end_col = position.col + (size_t) (p - modifiers_end);
   }
   *next_node = cmd_alloc(type, position);
   (*next_node)->bang = bang;
@@ -5870,7 +5877,7 @@ int parse_one_cmd(const char **pp,
       cmd_arg = p;
     }
     CommandPosition arg_position = position;
-    arg_position.col += p - s;
+    arg_position.col += (size_t) (p - s);
     // XFILE commands may have bars inside `=…`
     // ISGREP commands may have bars inside patterns
     // ISEXPR commands may have bars inside "" or as logical OR
@@ -5923,7 +5930,7 @@ int parse_one_cmd(const char **pp,
 
   FREE_CMD_ARG_START;
   *pp = p;
-  (*next_node)->end_col = position.col + (*pp - s);
+  (*next_node)->end_col = position.col + (size_t) (*pp - s);
   return ret;
 parse_one_cmd_checked_error_return:
   if (error.message == NULL) {
@@ -6219,7 +6226,7 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
       CommandType block_type = kCmdMissing;
       CommandNode *block_command_node;
 
-      position.col = line - line_start + 1;
+      position.col = (size_t) (line - line_start) + 1;
       assert(!NODE_IS_ALLOCATED(*next_node));
       if ((ret = parse_one_cmd((const char **) &line, next_node, o, position,
                                fgetline, cookie))
@@ -6425,7 +6432,7 @@ ParserResult *parse_string(CommandParserOptions o, const char *fname,
   ret->node = parse_cmd_sequence(o, position, (VimlLineGetter) &saving_fgetline,
                                  &fgargs, false);
   ret->lines = (char **) fgargs.ga.ga_data;
-  ret->lines_size = fgargs.ga.ga_len;
+  ret->lines_size = (size_t) fgargs.ga.ga_len;
   ret->fname = xstrdup(fname);
   if (ret->node == NULL) {
     free_parser_result(ret);

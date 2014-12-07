@@ -29,7 +29,7 @@ char *fgetline_file(int _, FILE *file, int indent)
   while ((c = fgetc(file)) != EOF) {
     if (c == '\n')
       break;
-    ga_append(&ga, c);
+    ga_append(&ga, (char) c);
   }
   ga_append(&ga, NUL);
 

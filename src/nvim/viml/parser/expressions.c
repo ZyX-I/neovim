@@ -31,7 +31,7 @@
 #define MAX_FUNC_ARGS   20
 
 /// Position relative to the start of the expression
-#define POS(pos) (pos - eo.start)
+#define POS(pos) ((size_t) (pos - eo.start))
 
 #define UP_NODE(type, error, old_top_node, top_node, next_node) \
   { \
@@ -1488,7 +1488,7 @@ Expression *parse_one_expression(const char **arg, ExpressionParserError *error,
     return NULL;
   }
 
-  result->size = *arg - s;
+  result->size = (size_t) (*arg - s);
   result->string = xmemdup(s, result->size);
   result->col = col;
 
@@ -1535,7 +1535,7 @@ Expression *parse_many_expressions(const char **arg,
     next = &((*next)->next);
   }
 
-  result->size = *arg - s;
+  result->size = (size_t) (*arg - s);
   result->string = xmemdup(s, result->size);
   result->col = col;
 

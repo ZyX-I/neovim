@@ -16,7 +16,7 @@ void sdump_object(const Object o, char **pp)
   sdump_obj(0, o, 0, pp);
 }
 
-size_t dump_object(const Object o, Writer write, void *cookie)
+int dump_object(const Object o, Writer write, void *cookie)
 {
   return dump_obj(0, o, 0, write, cookie);
 }

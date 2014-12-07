@@ -44,6 +44,11 @@
 # include "viml/printer/ex_commands.c.h.generated.h"
 #endif
 
+#ifndef NVIM_VIML_PRINTER_EX_COMMANDS_C_H_MACROS
+# define NVIM_VIML_PRINTER_EX_COMMANDS_C_H_MACROS
+# define mb_char2bytes(n, b) ((size_t) mb_char2bytes(n, (char_u *) b))
+#endif
+
 static FDEC(print_pattern, const Pattern *const pat)
 {
   FUNCTION_START;
@@ -218,14 +223,14 @@ static FDEC(print_replacement, const Replacement *rep)
       case kRepEscLiteral: {
         WC('\\');
         char s[MB_MAXBYTES];
-        const size_t s_len = mb_char2bytes(rep->data.ch, (char_u *) &(s[0]));
+        const size_t s_len = mb_char2bytes((int) rep->data.ch, &(s[0]));
         W_LEN(s, s_len);
         break;
       }
       case kRepGroup: {
         WC('\\');
         assert(rep->data.group > 0 && rep->data.group < 10);
-        WC('0' + rep->data.group);
+        WC('0' + (char) rep->data.group);
         break;
       }
       case kRepLiteral: {
@@ -897,7 +902,7 @@ static CMD_FDEC(print_lockvar)
   FUNCTION_START;
   if (node->args[ARG_LOCKVAR_DEPTH].arg.number) {
     WC(' ');
-    F_NOOPT(dump_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.number);
+    F_NOOPT(dump_unumber, node->args[ARG_LOCKVAR_DEPTH].arg.unumber);
   }
   WC(' ');
   F(print_expr, node->args[ARG_EXPRS_EXPRS].arg.expr);
@@ -1232,7 +1237,7 @@ static CMD_FDEC(print_delmarks)
       switch (*p) {
         case 'Y': {
           if (from == 0) {
-            from = FIRST_MARK_CODE + (p - s);
+            from = FIRST_MARK_CODE + (uint8_t) (p - s);
           }
           break;
         }
@@ -1241,11 +1246,11 @@ static CMD_FDEC(print_delmarks)
           if (from == 0) {
             break;
           }
-          const uint8_t to = FIRST_MARK_CODE + (p - s) - 1;
-          WC(from);
+          const uint8_t to = FIRST_MARK_CODE + (uint8_t) (p - s) - 1;
+          WC((char) from);
           if (from != to) {
             WC('-');
-            WC(to);
+            WC((char) to);
           }
           from = 0;
           break;
