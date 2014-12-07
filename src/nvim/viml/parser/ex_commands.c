@@ -638,7 +638,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
         break;
       }
       case '$': {
-        type = kPatHome;
+        type = kPatEnviron;
         break;
       }
       case ',': {
@@ -781,7 +781,17 @@ static int get_pattern(const char **pp, CommandParserError *error,
         }
         case kPatEnviron: {
           p++;
-          // FIXME
+          const char *const init_p = p;
+          const char *const end = find_env_end(&p);
+          if (end == NULL) {
+            free_pattern(*next);
+            memset(*next, 0, sizeof(**next));
+            literal_start = init_p - 1;
+            p = init_p;
+            literal_length = 1;
+          } else {
+            (*next)->data.str = xmemdupz(init_p, p - init_p);
+          }
           break;
         }
         case kPatBranch: {
