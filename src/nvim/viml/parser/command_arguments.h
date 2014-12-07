@@ -259,28 +259,28 @@ enum {
   ARG_CMD_COMMAND
 };
 
-#define FLAG_CMD_NARGS_MASK  0x007
-#define VAL_CMD_NARGS_NO     0x000
-#define VAL_CMD_NARGS_ONE    0x001
-#define VAL_CMD_NARGS_ANY    0x002
-#define VAL_CMD_NARGS_Q      0x003
-#define VAL_CMD_NARGS_P      0x004
+#define FLAG_CMD_NARGS_MASK  0x007U
+#define VAL_CMD_NARGS_NO     0x000U
+#define VAL_CMD_NARGS_ONE    0x001U
+#define VAL_CMD_NARGS_ANY    0x002U
+#define VAL_CMD_NARGS_Q      0x003U
+#define VAL_CMD_NARGS_P      0x004U
 // Number is recorded in count
-#define FLAG_CMD_RANGE_MASK  0x018
-#define VAL_CMD_RANGE_NO     0x000
-#define VAL_CMD_RANGE_CUR    0x008
-#define VAL_CMD_RANGE_ALL    0x010
+#define FLAG_CMD_RANGE_MASK  0x018U
+#define VAL_CMD_RANGE_NO     0x000U
+#define VAL_CMD_RANGE_CUR    0x008U
+#define VAL_CMD_RANGE_ALL    0x010U
 // Count (specified in -range)
-#define VAL_CMD_RANGE_COUNT  0x018
-#define FLAG_CMD_BANG        0x040
-#define FLAG_CMD_BAR         0x080
-#define FLAG_CMD_REGISTER    0x100
-#define FLAG_CMD_BUFFER      0x200
+#define VAL_CMD_RANGE_COUNT  0x018U
+#define FLAG_CMD_BANG        0x040U
+#define FLAG_CMD_BAR         0x080U
+#define FLAG_CMD_REGISTER    0x100U
+#define FLAG_CMD_BUFFER      0x200U
 // Count (specified in -count: additionally allows count as a first argument)
-#define FLAG_CMD_COUNT_MASK  0xC00
-#define VAL_CMD_COUNT_NO     0x000
-#define VAL_CMD_COUNT_EMPTY  0x400
-#define VAL_CMD_COUNT_COUNT  0x800
+#define FLAG_CMD_COUNT_MASK  0xC00U
+#define VAL_CMD_COUNT_NO     0x000U
+#define VAL_CMD_COUNT_EMPTY  0x400U
+#define VAL_CMD_COUNT_COUNT  0x800U
 
 // :cscope/:sign
 enum {
@@ -577,21 +577,21 @@ enum {
   ARG_S_FLAGS,
 };
 
-#define FLAG_S_KEEP        0x001
-#define FLAG_S_CONFIRM     0x002
-#define FLAG_S_NOERR       0x004
-#define FLAG_S_G           0x008
-#define FLAG_S_G_REVERSE   0x010
-#define FLAG_S_IC          0x020
-#define FLAG_S_NOIC        0x040
-#define FLAG_S_COUNT       0x080
-#define FLAG_S_PRINT       0x100
-#define FLAG_S_PRINT_LNR   0x200
-#define FLAG_S_PRINT_LIST  0x400
-#define FLAG_S_R           0x800
-#define FLAG_S_RE_SUBST   0x1000
-#define FLAG_S_RE_SEARCH  0x2000
-#define FLAG_S_SUB_PREV   0x4000
+#define FLAG_S_KEEP        0x001U
+#define FLAG_S_CONFIRM     0x002U
+#define FLAG_S_NOERR       0x004U
+#define FLAG_S_G           0x008U
+#define FLAG_S_G_REVERSE   0x010U
+#define FLAG_S_IC          0x020U
+#define FLAG_S_NOIC        0x040U
+#define FLAG_S_COUNT       0x080U
+#define FLAG_S_PRINT       0x100U
+#define FLAG_S_PRINT_LNR   0x200U
+#define FLAG_S_PRINT_LIST  0x400U
+#define FLAG_S_R           0x800U
+#define FLAG_S_RE_SUBST   0x1000U
+#define FLAG_S_RE_SEARCH  0x2000U
+#define FLAG_S_SUB_PREV   0x4000U
 
 // :set
 enum {
@@ -660,13 +660,13 @@ enum {
   ARG_SORT_REG,
 };
 
-#define FLAG_SORT_IC        0x01
-#define FLAG_SORT_DECIMAL   0x02
-#define FLAG_SORT_HEX       0x04
-#define FLAG_SORT_OCTAL     0x08
-#define FLAG_SORT_KEEPFST   0x10
-#define FLAG_SORT_USEMATCH  0x20
-#define FLAG_SORT_RE_SEARCH 0x40
+#define FLAG_SORT_IC        0x01U
+#define FLAG_SORT_DECIMAL   0x02U
+#define FLAG_SORT_HEX       0x04U
+#define FLAG_SORT_OCTAL     0x08U
+#define FLAG_SORT_KEEPFST   0x10U
+#define FLAG_SORT_USEMATCH  0x20U
+#define FLAG_SORT_RE_SEARCH 0x40U
 
 // :syn
 // FIXME

@@ -169,11 +169,11 @@ typedef struct {
 FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
 
 #define trans_special(a, b, c, d) \
-    trans_special((const char_u **) a, b, (char_u *) c, d)
+    ((size_t) trans_special((const char_u **) a, b, (char_u *) c, d))
 #define get_option_properties(a, ...) \
     get_option_properties((const char_u *) a, __VA_ARGS__)
-#define mb_ptr2len(s) mb_ptr2len((char_u *) s)
-#define mb_char2bytes(n, b) mb_char2bytes(n, (char_u *) b)
+#define mb_ptr2len(s) ((size_t) mb_ptr2len((char_u *) s))
+#define mb_char2bytes(n, b) ((size_t) mb_char2bytes(n, (char_u *) b))
 
 #endif  // NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H_MACROS
 
@@ -184,10 +184,10 @@ FDEC_TYPEDEF_ALL(AssignmentValueDump, const void *const);
 /// Dump one character
 ///
 /// @param[in]  c  Dumped character
-static FDEC(dump_char, uint8_t c)
+static FDEC(dump_char, char c)
 {
   FUNCTION_START;
-  switch (c) {
+  switch ((uint8_t) c) {
 #define CHAR(c, s) \
     case c: { \
       WS("\\" s); \
@@ -427,9 +427,9 @@ static FDEC(dump_position, size_t lnr, size_t col, const char *name)
 {
   FUNCTION_START;
   WS("'");
-  F_NOOPT(dump_unumber, (uintmax_t) lnr);
+  F_NOOPT(dump_unumber, lnr);
   WS(":");
-  F_NOOPT(dump_unumber, (uintmax_t) col);
+  F_NOOPT(dump_unumber, col);
   WS(":");
   if (name != NULL) {
     W(name);
@@ -458,7 +458,7 @@ static FDEC(translate_address_followup, const AddressFollowup *const followup)
   switch (followup->type) {
     case kAddressFollowupShift: {
       WS("0, ");
-      F_NOOPT(dump_number, (intmax_t) followup->data.shift);
+      F_NOOPT(dump_number, followup->data.shift);
       break;
     }
     case kAddressFollowupForwardPattern: {
@@ -513,7 +513,7 @@ static FDEC(translate_range, const Range *const range)
 
     switch (current_range->address.type) {
       case kAddrFixed: {
-        F_NOOPT(dump_unumber, (uintmax_t) current_range->address.data.lnr);;
+        F_NOOPT(dump_number, current_range->address.data.lnr);;
         break;
       }
       case kAddrEnd: {
@@ -774,7 +774,7 @@ static FDEC(translate_string, ExpressionNodeType type, const char *const s,
                       nr = (nr << 4) + hex2nr(*curp);
                     }
                     if (isx || nr < 0x7F) {
-                      F(dump_char, nr);
+                      F(dump_char, (char) nr);
                     } else {
                       char buf[MAX_CHAR_LEN];
                       size_t size;
@@ -799,10 +799,10 @@ static FDEC(translate_string, ExpressionNodeType type, const char *const s,
                   c = *curp - '0';
                   if ('0' <= curp[1] && curp[1] <= '7') {
                     curp++;
-                    c = (c << 3) + (*curp - '0');
+                    c = (char) (c << 3) + (*curp - '0');
                     if ('0' <= curp[1] && curp[1] <= '7') {
                       curp++;
-                      c = (c << 3) + (*curp - '0');
+                      c = (char) (c << 3) + (*curp - '0');
                     }
                   }
                   F(dump_char, c);
@@ -1336,7 +1336,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
   if (size) {
     WINDENT(args->indent + 1);
     WS("if select('#', ...) < ");
-    F_NOOPT(dump_unumber, (uintmax_t) (size * 2));
+    F_NOOPT(dump_unumber, (size * 2));
     WS(" then\n");
     WINDENT(args->indent + 2);
     WS("return vim.err.err(state, callee_position, true, "
@@ -1349,11 +1349,11 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
   if (!varargs) {
     WINDENT(args->indent + 1);
     WS("if select('#', ...) > ");
-    F_NOOPT(dump_unumber, (uintmax_t) (size * 2));
+    F_NOOPT(dump_unumber, (size * 2));
     WS(" then\n");
     WINDENT(args->indent + 2);
     WS("return vim.err.err(state, select(");
-    F_NOOPT(dump_unumber, (uintmax_t) (size * 2 + 2));
+    F_NOOPT(dump_unumber, (size * 2 + 2));
     WS(", ...), true, 'E118: Too many arguments for function: %s', ");
     F(dump_string_length, funcname->string, funcname->size);
     WS(")\n");
@@ -1377,7 +1377,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
       WS("state.a['");
       W(argnames[i]);
       WS("'] = select(");
-      F_NOOPT(dump_unumber, (uintmax_t) (i*2 + 1));
+      F_NOOPT(dump_unumber, (i*2 + 1));
       WS(", ...)\n");
     }
     if (varargs) {
@@ -1387,7 +1387,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
       WS("state.a['0'] = select('#', ...)/2");
       if (size) {
         WS(" - ");
-        F_NOOPT(dump_unumber, (uintmax_t) size);
+        F_NOOPT(dump_unumber, size);
       }
       WS("\n");
       WINDENT(indent);
@@ -1396,7 +1396,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
       WS("state.a['000'][i] =  select(i*2");
       if (size) {
         WS(" + ");
-        F_NOOPT(dump_unumber, (uintmax_t) (size + 2));
+        F_NOOPT(dump_unumber, (size + 2));
       } else {
         WS(" - 1");
       }
@@ -1510,7 +1510,7 @@ static FDEC(translate_varname, const char *const s,
     } else {
       WS(", ");
       F(dump_position, o.lnr, o.start_col + node->start, o.name);
-      const size_t new_start = (start - s);
+      const size_t new_start = (size_t) (start - s);
       if (new_start == current_node->start) {
         // Keep present value of current_node
       } else if (new_start <= current_node->end) {
@@ -1622,7 +1622,7 @@ static FDEC(translate_lval, const char *const s,
       WS(", '");
       W_END(start, s + node->end);
       WS("', ");
-      F(dump_position, o.lnr, o.start_col + (start - s), o.name);
+      F(dump_position, o.lnr, o.start_col + (size_t) (start - s), o.name);
       WS(")");
       break;
     }
@@ -1676,7 +1676,7 @@ static FDEC(translate_let_list_item, const LetListItemAssArgs *const args)
   FUNCTION_START;
   W(args->var);
   WS("[");
-  F_NOOPT(dump_number, (intmax_t) args->idx);
+  F_NOOPT(dump_unumber, args->idx);
   WS(" + 1]");
   FUNCTION_END;
 }
@@ -1880,7 +1880,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     } else {
       WS(" == ");
     }
-    F_NOOPT(dump_unumber, (uintmax_t) val_num);
+    F_NOOPT(dump_unumber, val_num);
     WS(" then\n");
 
     current_node = lval_expr->node->children;
@@ -1911,7 +1911,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
     WINDENT(indent + 3);
     if (!has_rest) {
       WS("if rhs.length > ");
-      F_NOOPT(dump_unumber, (uintmax_t) val_num);
+      F_NOOPT(dump_unumber, val_num);
       WS(" then\n");
       WINDENT(indent + 4);
       DUMP_ERR_ERR(o.lnr, lval_expr->node->start + o.start_col, o.name,

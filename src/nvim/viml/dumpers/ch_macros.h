@@ -376,7 +376,7 @@
     typedef void (*t##Str)(CH_MACROS_OPTIONS_TYPE, __VA_ARGS__, char **); \
     typedef int (*t)(CH_MACROS_OPTIONS_TYPE, __VA_ARGS__, Writer, void *)
 # define W_END(s, e) \
-    W_LEN(s, e - s + 1)
+    W_LEN(s, (size_t) (e - s) + 1)
 # define W_EXPR_POS(s, node) \
     W_LEN(s + node->start, node->end - node->start + 1)
 # define W_ESCAPED(s, escchars) \

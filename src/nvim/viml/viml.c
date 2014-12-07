@@ -42,7 +42,7 @@ Object execute_viml(const char *const s)
   stranslate(kTransUser, pres, &p);
   free_parser_result(pres);
   assert(p - lua_str.data <= (ptrdiff_t) lua_str.size);
-  lua_str.size = (p - lua_str.data);
+  lua_str.size = (size_t) (p - lua_str.data);
 
   Error err = {
     .set = false

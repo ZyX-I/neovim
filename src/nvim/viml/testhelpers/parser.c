@@ -114,7 +114,7 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
            ? sprint_expr_len
            : srepresent_expr_len)(&po, expr);
 
-  offset = e - arg;
+  offset = (size_t) (e - arg);
   i = offset;
   do {
     shift++;
@@ -129,8 +129,8 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
 
   i = shift;
   do {
-    size_t digit = (offset >> ((i - 1) * 4)) & 0xF;
-    *p++ = (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
+    uint8_t digit = (uint8_t) ((offset >> ((i - 1) * 4)) & 0xF);
+    *p++ = (char) (digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)));
   } while (--i);
 
   *p++ = ':';
@@ -170,7 +170,7 @@ int represent_parse0(const char *arg, const bool print_as_expr)
     }
   }
 
-  size_t offset = e - arg;
+  size_t offset = (size_t) (e - arg);
   size_t i = offset;
   size_t shift = 0;
   do {
@@ -180,8 +180,10 @@ int represent_parse0(const char *arg, const bool print_as_expr)
 
   i = shift;
   do {
-    size_t digit = (offset >> ((i - 1) * 4)) & 0xF;
-    const char s[] = {(digit < 0xA ? ('0' + digit) : ('A' + (digit - 0xA)))};
+    uint8_t digit = (uint8_t) ((offset >> ((i - 1) * 4)) & 0xF);
+    const char s[] = {(digit < 0xA
+                       ? ('0' + (char) digit)
+                       : ('A' + ((char) digit - 0xA)))};
     if (write(s, 1, 1, cookie) != 1) {
       return FAIL;
     }

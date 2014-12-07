@@ -57,7 +57,7 @@ char *execute_viml_test(const char *const s)
   free_parser_result(pres);
   assert(p - lua_str.data <= (ptrdiff_t) lua_str.size);
   memcpy(p, TEST_RET, sizeof(TEST_RET));
-  lua_str.size = (p - lua_str.data + sizeof(TEST_RET) - 1);
+  lua_str.size = ((size_t) (p - lua_str.data) + sizeof(TEST_RET) - 1);
 
   if (os_getenv("NEOVIM_SHOW_TRANSLATED_LUA") != NULL) {
     fputs("\n-------- Lua --------\n", stderr);

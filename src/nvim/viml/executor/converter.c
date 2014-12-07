@@ -73,7 +73,7 @@ static inline void nlua_create_typed_table(lua_State *lstate,
                                     const char *const type)
   FUNC_ATTR_NONNULL_ALL
 {
-  lua_createtable(lstate, narr, 1 + nrec);
+  lua_createtable(lstate, (int) narr, (int) (1 + nrec));
   nlua_push_type_idx(lstate);
   nlua_push_type(lstate, type);
   lua_rawset(lstate, -3);

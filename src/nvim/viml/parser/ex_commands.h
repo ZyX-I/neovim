@@ -217,7 +217,7 @@ typedef struct command_node {
                                   ///< column number)
   size_t skips_count;             ///< Number of items in the above array.
   CommandPosition position;       ///< Position of the start of the command
-  colnr_T end_col;                ///< Last column occupied by this command
+  size_t end_col;                 ///< Last column occupied by this command
   bool has_count;                 ///< True if there is a count.
   int count;                      ///< Count.
   Register reg;                   ///< Register.
@@ -232,7 +232,7 @@ typedef struct command_node {
       // for :hi guifg/guibg/guisp
       uint_least32_t flags;       ///< Command flags
       unsigned unumber;           ///< Unsigned integer
-      colnr_T col;                ///< Column number (for syntax error)
+      size_t col;                 ///< Column number (for syntax error)
       int number;                 ///< Signed integer
       int *numbers;               ///< An array of signed integers.
       uint_least32_t *unumbers;   ///< An array of unsigned integers in 
