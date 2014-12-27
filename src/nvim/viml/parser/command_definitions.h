@@ -1596,7 +1596,7 @@ typedef enum
   EX(kCmdWprevious,       "wprevious",    NOFUNC,
      ARG_WN_FILES, ARGS_WN,
      RANGE|NOTADR|BANG|FILE1|ARGOPT|TRLBAR),
-  EX(kCmdWq,              "wq",           NULL,
+  EX(kCmdWq,              "wq",           NOFUNC,
      ARG_EXIT_FILES, ARGS_EXIT,
      RANGE|WHOLEFOLD|BANG|FILE1|ARGOPT|DFLALL|TRLBAR),
   EX(kCmdWqall,           "wqall",        NOFUNC,
