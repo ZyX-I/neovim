@@ -91,6 +91,7 @@ describe('parse_one_cmd', function()
       diffp = {full='diffpatch'},
       exi = {full='exit', opts=true, range=true, bang=true},
       x = {full='xit', opts=true, range=true, bang=true},
+      wq = {full='wq', opts=true, range=true, bang=true},
       fin = {full='find', cmd=true, opts=true, count=true, bang=true},
       sf = {full='sfind', cmd=true, opts=true, count=true, bang=true},
       laddf = {full='laddfile'},
