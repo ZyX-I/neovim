@@ -622,6 +622,9 @@ describe('parse_one_cmd', function()
     itn('helpgrep .@ru', 'helpg.@ru')
     itn('lhelpgrep .@ru', 'lh.@ru')
   end)
+  describe(':cstag', function()
+    itn('cstag abc', 'cstag\tabc')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF

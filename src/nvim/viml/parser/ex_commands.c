@@ -1588,7 +1588,11 @@ static CMD_P_DEF(parse_rest_line)
 {
   size_t len;
   if (**pp == NUL) {
-    error->message = (char *) e_argreq;
+    if (node->type == kCmdCstag) {
+      error->message = "E562: Usage: cstag <ident>";
+    } else {
+      error->message = (char *) e_argreq;
+    }
     error->position = *pp;
     return NOTDONE;
   }
