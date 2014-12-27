@@ -4536,6 +4536,28 @@ static CMD_P_DEF(parse_helpgrep)
   return OK;
 }
 
+static CMD_P_DEF(parse_helptags)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  if (STRNCMP(p, "++t", 3) == 0 && vim_iswhite(p[3])) {
+    p = skipwhite(p + 3);
+    node->args[ARG_HT_MAIN].arg.flags = 1;
+  }
+  if (*p == NUL) {
+    error->message = (char *) e_argreq;
+    error->position = p;
+    return NOTDONE;
+  }
+  int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
+                          &(node->glob));
+  if (pfret != OK) {
+    return pfret;
+  }
+  *pp = p;
+  return OK;
+}
+
 #undef CMD_P_DEF
 #undef CMD_P_ARGS
 

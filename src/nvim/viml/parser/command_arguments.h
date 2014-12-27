@@ -65,6 +65,7 @@ typedef enum {
 #define ARGS_SHELL    {kArgString}
 #define ARGS_HELP     {kArgString, kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
+#define ARGS_HT       {kArgFlags}
 #define ARGS_HI       {kArgFlags,  kArgString, kArgFlags,   kArgString,  \
                        kArgString, kArgFlags,  kArgUNumber, kArgUNumber, \
                        kArgFlags,  kArgString, kArgUNumber, kArgUNumber, \
@@ -413,6 +414,11 @@ enum {
 enum {
   ARG_HELPG_REG     = 0,
   ARG_HELPG_LANG,
+};
+
+// :helptags
+enum {
+  ARG_HT_MAIN       = 0,
 };
 
 // :highlight

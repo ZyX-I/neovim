@@ -1807,6 +1807,16 @@ static CMD_FDEC(print_gui)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_helptags)
+{
+  FUNCTION_START;
+  if (node->args[ARG_HT_MAIN].arg.flags) {
+    WS(" ++t");
+  }
+  F(print_glob_arg, node->glob);
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -1922,6 +1932,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_helpgrep);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdGui).parse) {
     CMD_F(print_gui);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHelptags).parse) {
+    CMD_F(print_helptags);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {
