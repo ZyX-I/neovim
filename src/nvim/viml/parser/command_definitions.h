@@ -606,9 +606,9 @@ typedef enum
      ARG_HELPG_LANG, ARGS_HELPG,
      EXTRA|NOTRLCOM|NEEDARG | LITERAL),
   /* ++t is in count */
-  EX(kCmdHelptags,        "helptags",     NULL,
-     ARG_SO_FILES, ARGS_SO,
-     NEEDARG|FILES|TRLBAR|CMDWIN),
+  EX(kCmdHelptags,        "helptags",     &parse_helptags,
+     ARG_HT_MAIN, ARGS_HT,
+     NEEDARG|TRLBAR|CMDWIN | EXTRA|LITERAL),
   EX(kCmdHardcopy,        "hardcopy",     &parse_rest_allow_empty,
      ARG_NAME_NAME, ARGS_NAME,
      RANGE|COUNT|EXTRA|TRLBAR|DFLALL|BANG),

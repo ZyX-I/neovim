@@ -635,6 +635,10 @@ describe('parse_one_cmd', function()
     itn('gvim -f', 'gv-f')
     itn('gvim -f lit(+redraw!)', 'gv-f +redraw!')
   end)
+  describe(':helptags', function()
+    itn('helptags lit(++t)', 'helpt++t')
+    itn('helptags ++t any()', 'helpt++t *')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF
