@@ -389,7 +389,7 @@ typedef enum
   EX(kCmdCscope,          "cscope",       NULL,
      ARG_SUBCMD, ARGS_SUBCMD,
      EXTRA|NOTRLCOM|XFILE),
-  EX(kCmdCstag,           "cstag",        NULL,
+  EX(kCmdCstag,           "cstag",        &parse_rest_line,
      ARG_CSTAG_TAG, ARGS_CSTAG,
      BANG|TRLBAR|WORD1),
   EX(kCmdCunmap,          "cunmap",       &parse_unmap,
