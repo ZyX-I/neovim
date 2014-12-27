@@ -1817,6 +1817,30 @@ static CMD_FDEC(print_helptags)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_language)
+{
+  FUNCTION_START;
+  switch((LocaleType) (node->args[ARG_LANG_TYPE].arg.flags)) {
+    case VAL_LANG_ALL: {
+      break;
+    }
+    case VAL_LANG_MESSAGES: {
+      WS(" messages");
+      break;
+    }
+    case VAL_LANG_CTYPE: {
+      WS(" ctype");
+      break;
+    }
+    case VAL_LANG_TIME: {
+      WS(" time");
+      break;
+    }
+  }
+  PRINT_FROM_ARG(node, ARG_LANG_LANG);
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -1934,6 +1958,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_gui);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHelptags).parse) {
     CMD_F(print_helptags);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLanguage).parse) {
+    CMD_F(print_language);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {
