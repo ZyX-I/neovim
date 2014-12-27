@@ -1795,6 +1795,18 @@ static CMD_FDEC(print_helpgrep)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_gui)
+{
+  FUNCTION_START;
+  if (node->args[ARG_GUI_FG].arg.flags) {
+    WS(" -f");
+  } else {
+    WS(" -b");
+  }
+  F(print_glob_arg, node->glob);
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -1908,6 +1920,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_help);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHelpgrep).parse) {
     CMD_F(print_helpgrep);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdGui).parse) {
+    CMD_F(print_gui);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {
