@@ -3402,8 +3402,30 @@ static CMD_P_DEF(parse_vimgrep)
   }
   int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
                           &(node->glob));
-  if (pfret == FAIL) {
-    return FAIL;
+  if (pfret != OK) {
+    return pfret;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_gui)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  if (*p == '-' && (p[1] == 'f' || p[1] == 'b') && (!p[2] || vim_iswhite(p[2])))
+  {
+    node->args[ARG_GUI_FG].arg.flags = (uint_least32_t) (p[1] == 'f');
+    p = skipwhite(p + 2);
+  }
+  if (*p == NUL) {
+    *pp = p;
+    return OK;
+  }
+  int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
+                          &(node->glob));
+  if (pfret != OK) {
+    return pfret;
   }
   *pp = p;
   return OK;
