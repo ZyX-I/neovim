@@ -476,13 +476,16 @@ enum {
 
 // :language
 enum {
-  ARG_LANG_FLAGS    = 0,
+  ARG_LANG_TYPE     = 0,
   ARG_LANG_LANG,
 };
 
-#define FLAG_LANG_MESSAGES 0x01
-#define FLAG_LANG_CTYPE    0x02
-#define FLAG_LANG_TIME     0x04
+typedef enum {
+  VAL_LANG_ALL,
+  VAL_LANG_MESSAGES,
+  VAL_LANG_CTYPE,
+  VAL_LANG_TIME,
+} LocaleType;
 
 // :resize
 enum {

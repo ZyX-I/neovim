@@ -708,7 +708,7 @@ typedef enum
   EX(kCmdLast,            "last",         NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      EXTRA|BANG|EDITCMD|ARGOPT|TRLBAR),
-  EX(kCmdLanguage,        "language",     NULL,
+  EX(kCmdLanguage,        "language",     &parse_language,
      ARG_LANG_LANG, ARGS_LANG,
      EXTRA|TRLBAR|CMDWIN),
   EX(kCmdLaddexpr,        "laddexpr",     &parse_expr_cmd,

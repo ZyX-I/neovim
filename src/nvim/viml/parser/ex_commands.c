@@ -4558,6 +4558,33 @@ static CMD_P_DEF(parse_helptags)
   return OK;
 }
 
+static CMD_P_DEF(parse_language)
+{
+  const char *p = *pp;
+  const char *end = skiptowhite(p);
+  LocaleType type = VAL_LANG_ALL;
+  if ((*end == NUL || vim_iswhite(*end)) && end - p >= 3) {
+    if (STRNICMP(p, "messages", end - p) == 0) {
+      type = VAL_LANG_MESSAGES;
+      p = skipwhite(end);
+    } else if (STRNICMP(p, "ctype", end - p) == 0) {
+      type = VAL_LANG_CTYPE;
+      p = skipwhite(end);
+    } else if (STRNICMP(p, "time", end - p) == 0) {
+      type = VAL_LANG_TIME;
+      p = skipwhite(end);
+    }
+  }
+  node->args[ARG_LANG_TYPE].arg.flags = (uint_least32_t) type;
+  if (*p != NUL) {
+    const size_t len = STRLEN(p);
+    node->args[ARG_LANG_LANG].arg.str = xmemdupz(p, len);
+    p += len;
+  }
+  *pp = p;
+  return OK;
+}
+
 #undef CMD_P_DEF
 #undef CMD_P_ARGS
 
