@@ -922,7 +922,7 @@ static int get_regex(const char **pp, CommandParserError *error,
 {
   assert(endch != NUL || no_end_message == NULL);
   const char *p = *pp;
-  const char *s = p;
+  const char *const s = p;
 
   if (endch == NUL) {
     p += STRLEN(p);
@@ -1565,7 +1565,7 @@ static CMD_P_DEF(parse_expr_cmd)
 
 static CMD_P_DEF(parse_call)
 {
-  const char *s = *pp;
+  const char *const s = *pp;
   int ret = do_parse_expr_cmd(pp, node, error, o, position, false);
   if (ret == OK
       && node->args[ARG_EXPR_EXPR].arg.expr->node->type != kExprCall) {
@@ -1809,7 +1809,7 @@ static int parse_lval(const char **pp,
                       int flags)
 {
   ExpressionParserError expr_error;
-  const char *s = *pp;
+  const char *const s = *pp;
   bool allow_list = (bool) (flags&FLAG_PLVAL_LISTMULT);
   bool allow_env = (bool) (flags&FLAG_PLVAL_ALLOW_ENV);
 
@@ -5320,7 +5320,7 @@ int parse_range(const char **pp, CommandNode **node, CommandParserOptions o,
                 const char **range_start)
 {
   const char *p = *pp;
-  const char *s = p;
+  const char *const s = p;
   Range current_range;
 
   *range_start = NULL;
@@ -5416,7 +5416,7 @@ int parse_modifiers(const char **pp, CommandNode ***node,
 {
   const char *p = *pp;
   const char *mod_start = p;
-  const char *s = p;
+  const char *const s = p;
 
   // FIXME (genex_cmds.lua): Iterate over precomputed table with only modifier 
   //                         commands
@@ -5578,7 +5578,7 @@ static int parse_files(const char **pp, CommandParserError *error,
                        const size_t col, Glob *glob)
 {
   const char *p = *pp;
-  const char *s = p;
+  const char *const s = p;
   Glob *cur_glob = glob;
   Glob **next = &cur_glob;
   while (!ENDS_EXCMD(*p)) {
@@ -5664,7 +5664,7 @@ int parse_one_cmd(const char **pp,
 
   const char *p;
   // Start of the command: position pointed to by `position` argument
-  const char *s = *pp;
+  const char *const s = *pp;
 
 #define FREE_CMD_ARG_START \
   do { \
