@@ -6018,8 +6018,11 @@ int parse_one_cmd(const char **pp,
       free_cmd(*next_node);
       *next_node = NULL;
       if (create_error_node(next_node, &error, position,
-                            used_get_cmd_arg ? cmd_arg_start : s) == FAIL)
+                            used_get_cmd_arg ? cmd_arg_start : s) == FAIL) {
+        FREE_CMD_ARG_START;
         return FAIL;
+      }
+      FREE_CMD_ARG_START;
       return NOTDONE;
     } else if (used_get_cmd_arg) {
       if (*cmd_arg != NUL) {
