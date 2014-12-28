@@ -68,6 +68,9 @@ describe('parse_one_cmd', function()
   describe(':edit command family', function()
     for trunc, cmdprops in pairs({
       e = {full='edit', cmd=true, opts=true, bang=true},
+      w = {full='write', opts=true, bang=true, append=true, shell=true},
+      up = {full='update', opts=true, bang=true, append=true},
+      r = {full='read', opts=true, bang=true, shell=true},
       vi = {full='visual', cmd=true, opts=true, bang=true},
       vie = {full='view', cmd=true, opts=true, bang=true},
       ped = {full='pedit', cmd=true, opts=true, bang=true},
@@ -166,6 +169,17 @@ describe('parse_one_cmd', function()
           itn('\\ error: E492: Not an editor command: !!' .. trunc:sub(1, 1) .. '!!' .. trunc:sub(2) .. '10', trunc .. '10')
         else
           itn(full .. ' lit(10)', trunc .. '10')
+        end
+        if cmdprops.append then
+          itn(full .. ' >> lit(!cat)', trunc .. '>>!cat')
+          itn(full .. ' >> any()', trunc .. '>>*')
+        end
+        if cmdprops.shell then
+          itn(full .. ' !echo abc', trunc .. ' !echo abc')
+          if full:sub(-1, -1) == '!' then
+            itn(full .. ' lit(abc)', trunc .. 'abc')
+            itn(full .. ' !abc', trunc .. '!abc')
+          end
         end
       end
     end

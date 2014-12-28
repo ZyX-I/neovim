@@ -1841,6 +1841,23 @@ static CMD_FDEC(print_language)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_write)
+{
+  FUNCTION_START;
+  if (node->args[ARG_W_APPEND].arg.flags) {
+    assert(node->args[ARG_W_SHELL].arg.str == NULL);
+    WS(" >>");
+  }
+  if (node->args[ARG_W_SHELL].arg.str != NULL) {
+    assert(node->glob.pat.type == kPatMissing);
+    WS(" !");
+    W(node->args[ARG_W_SHELL].arg.str);
+  } else {
+    F(print_glob_arg, node->glob);
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -1960,6 +1977,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_helptags);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLanguage).parse) {
     CMD_F(print_language);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdWrite).parse) {
+    CMD_F(print_write);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

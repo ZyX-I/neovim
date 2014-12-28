@@ -72,10 +72,9 @@
 #define EXFLAGS      0x400000L  // allow flags after count in argument
 
 #define ISMODIFIER   0x800000L  // is a modifier command
-#define SHELLARG    0x1000000L  // :read !cmd/:w !cmd : allows shell arguments
-#define ISGREP      0x2000000L  // :*(vim|)grep* commands
-#define ISEXPR      0x4000000L  // :if/:*expr commands
-#define LITERAL     0x8000000L  // Do not transform its arguments
+#define ISGREP      0x1000000L  // :*(vim|)grep* commands
+#define ISEXPR      0x2000000L  // :if/:*expr commands
+#define LITERAL     0x4000000L  // Do not transform its arguments
 
 #define FILES  (XFILE | EXTRA)  // multiple extra files allowed
 #define WORD1  (EXTRA | NOSPC)  // one extra word allowed
@@ -1116,9 +1115,9 @@ typedef enum
   EX(kCmdQall,            "qall",         NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      BANG|TRLBAR|CMDWIN),
-  EX(kCmdRead,            "read",         NULL,
+  EX(kCmdRead,            "read",         &parse_write,
      ARG_W_SHELL, ARGS_W,
-     BANG|RANGE|WHOLEFOLD|FILE1|ARGOPT|TRLBAR|ZEROR|CMDWIN|MODIFY | SHELLARG),
+     BANG|RANGE|WHOLEFOLD|ARGOPT|TRLBAR|ZEROR|CMDWIN|MODIFY | EXTRA|LITERAL),
   EX(kCmdRecover,         "recover",      NOFUNC,
      ARG_SO_FILES, ARGS_SO,
      BANG|FILE1|TRLBAR),
@@ -1509,9 +1508,9 @@ typedef enum
   EX(kCmdUnsilent,        "unsilent",     NOFUNC,
      ARG_MODIFIER_CMD, ARGS_MODIFIER,
      NEEDARG|EXTRA|NOTRLCOM|SBOXOK|CMDWIN | ISMODIFIER),
-  EX(kCmdUpdate,          "update",       NULL,
-     ARG_W_SHELL, ARGS_W,
-     RANGE|WHOLEFOLD|BANG|FILE1|ARGOPT|DFLALL|TRLBAR | SHELLARG),
+  EX(kCmdUpdate,          "update",       &parse_write,
+     ARG_W_APPEND, ARGS_UP,
+     RANGE|WHOLEFOLD|BANG|ARGOPT|DFLALL|TRLBAR | EXTRA|LITERAL),
   EX(kCmdVglobal,         "vglobal",      &parse_global,
      ARG_G_REG, ARGS_G,
      RANGE|WHOLEFOLD|EXTRA|DFLALL|CMDWIN),
@@ -1566,9 +1565,9 @@ typedef enum
   EX(kCmdVunmenu,         "vunmenu",      &parse_unmenu,
      ARG_UNMENU_LHS, ARGS_UNMENU,
      EXTRA|TRLBAR|NOTRLCOM|USECTRLV|CMDWIN),
-  EX(kCmdWrite,           "write",        NULL,
+  EX(kCmdWrite,           "write",        &parse_write,
      ARG_W_SHELL, ARGS_W,
-     RANGE|WHOLEFOLD|BANG|FILE1|ARGOPT|DFLALL|TRLBAR|CMDWIN | SHELLARG),
+     RANGE|WHOLEFOLD|BANG|ARGOPT|DFLALL|TRLBAR|CMDWIN | EXTRA|LITERAL),
   EX(kCmdWNext,           "wNext",        NOFUNC,
      ARG_WN_FILES, ARGS_WN,
      RANGE|WHOLEFOLD|NOTADR|BANG|FILE1|ARGOPT|TRLBAR),
