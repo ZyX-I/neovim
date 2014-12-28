@@ -678,6 +678,12 @@ describe('parse_one_cmd', function()
     itn('loadkeymap\n\n"^ Empty line', 'loadk\n\n"^ Empty line')
     itn('loadkeymap\n\na\tb\tcom\na\tb\n"^ Empty line', 'loadk\n\na  \t  b \tcom\na\t\t\t\tb\n"^ Empty line')
   end)
+  describe(':mkspell', function()
+    itn('mkspell -ascii any()', 'mksp-ascii*')
+    itn('mkspell! -ascii any()', 'mksp!-ascii*')
+    itn('mkspell any()', 'mksp*')
+    itn('mkspell!', 'mksp!')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF
