@@ -668,6 +668,13 @@ describe('parse_one_cmd', function()
     itn('loadview 1', 'lo1')
     itn('loadview 1', 'lo1oetnsahu tnsoaehdu ntoaeht tinaoudsnpyu ghoeuahtnd hyuio.eu')
   end)
+  describe(':loadkeymap', function()
+    itn('loadkeymap', 'loadk')
+    itn('loadkeymap\n-\t-\tcomment', 'loadk\n- - comment')
+    itn('loadkeymap\n"comment', 'loadk\n"comment')
+    itn('loadkeymap\n\n"^ Empty line', 'loadk\n\n"^ Empty line')
+    itn('loadkeymap\n\na\tb\tcom\na\tb\n"^ Empty line', 'loadk\n\na  \t  b \tcom\na\t\t\t\tb\n"^ Empty line')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF

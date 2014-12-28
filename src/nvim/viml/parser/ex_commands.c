@@ -28,6 +28,7 @@
 #include "nvim/ex_docmd.h"
 #include "nvim/ops.h"
 #include "nvim/option.h"
+#include "nvim/digraph.h"
 
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
@@ -389,6 +390,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     case kArgExpressions:
     case kArgAssignLhs: {
       free_expr(arg->arg.expr);
+      arg->arg.expr = NULL;
       break;
     }
     case kArgFlags:
@@ -400,31 +402,38 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     }
     case kArgNumbers: {
       free(arg->arg.numbers);
+      arg->arg.numbers = NULL;
       break;
     }
     case kArgUNumbers: {
       free(arg->arg.unumbers);
+      arg->arg.unumbers = NULL;
       break;
     }
     case kArgString: {
       free(arg->arg.str);
+      arg->arg.str = NULL;
       break;
     }
     case kArgPattern: {
       free_pattern(arg->arg.pat);
+      arg->arg.pat = NULL;
       break;
     }
     case kArgGlob: {
       free_glob(arg->arg.glob);
       free(arg->arg.glob);
+      arg->arg.glob = NULL;
       break;
     }
     case kArgRegex: {
       free_regex(arg->arg.reg);
+      arg->arg.reg = NULL;
       break;
     }
     case kArgReplacement: {
       free_replacement(arg->arg.rep);
+      arg->arg.rep = NULL;
       break;
     }
     case kArgLines:
@@ -444,34 +453,72 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
         }
         free(strs);
       }
+      arg->arg.strs = NULL;
       break;
     }
     case kArgMenuName: {
       free_menu_item(arg->arg.menu_item);
+      arg->arg.menu_item = NULL;
       break;
     }
     case kArgAuEvents: {
       free(arg->arg.events);
+      arg->arg.events = NULL;
       break;
     }
     case kArgAddress: {
       free_range(arg->arg.range);
+      arg->arg.range = NULL;
       break;
     }
     case kArgCmdComplete: {
       free_complete(arg->arg.complete);
+      arg->arg.complete = NULL;
       break;
     }
     case kArgArgs: {
       CommandArg *subargs = arg->arg.args.args;
       size_t numsubargs = arg->arg.args.num_args;
       size_t i;
-      for (i = 0; i < numsubargs; i++)
+      for (i = 0; i < numsubargs; i++) {
         free_cmd_arg(&(subargs[i]), arg->arg.args.types[i]);
+      }
       free(subargs);
+      arg->arg.args.args = NULL;
+      arg->arg.args.num_args = 0;
       break;
     }
   }
+}
+
+void clear_cmd(CommandNode *node)
+{
+  size_t numargs;
+  size_t i;
+
+  if (!NODE_IS_ALLOCATED(node))
+    return;
+
+  numargs = CMDDEF(node->type).num_args;
+
+  if (node->type != kCmdUnknown) {
+    for (i = 0; i < numargs; i++) {
+      free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
+    }
+  }
+
+  free_cmd(node->next);
+  free_cmd(node->children);
+  free_glob(&(node->glob));
+  free_range_data(&(node->range));
+  free(node->name);
+  free(node->skips);
+  node->next = NULL;
+  node->children = NULL;
+  node->glob.next = NULL;
+  node->glob.pat.type = kPatMissing;
+  node->range.next = NULL;
+  node->range.address.type = kAddrMissing;
 }
 
 void free_cmd(CommandNode *node)
@@ -4624,6 +4671,88 @@ static CMD_P_DEF(parse_loadview)
   return OK;
 }
 
+static CMD_P_DEF(parse_loadkeymap)
+{
+  if (o.flags & FLAG_POC_EXMODE) {
+    error->message = N_("E105: Using :loadkeymap not in a sourced file");
+    error->position = *pp;
+    return NOTDONE;
+  }
+
+  garray_T *ga_lhss = &(node->args[ARG_LKMAP_LHSS].arg.ga_strs);
+  garray_T *ga_rhss = &(node->args[ARG_LKMAP_RHSS].arg.ga_strs);
+  garray_T *ga_coms = &(node->args[ARG_LKMAP_COMS].arg.ga_strs);
+
+  ga_init(ga_lhss, (int) sizeof(char *), 16);
+  ga_init(ga_rhss, (int) sizeof(char *), 16);
+  ga_init(ga_coms, (int) sizeof(char *), 16);
+
+  char *next_line;
+  size_t lnr = 0;
+  const char *error_message = NULL;
+  const char *error_position = NULL;
+  char *error_line = NULL;
+  while ((next_line = fgetline(':', cookie, 0)) != NULL) {
+    lnr++;
+    if (*next_line == NUL) {
+      free(next_line);
+      GA_APPEND(char *, ga_lhss, NULL);
+      GA_APPEND(char *, ga_rhss, NULL);
+      GA_APPEND(char *, ga_coms, NULL);
+    } else if (*next_line == '"') {
+      GA_APPEND(char *, ga_lhss, NULL);
+      GA_APPEND(char *, ga_rhss, NULL);
+      GA_APPEND(char *, ga_coms, next_line);
+    } else {
+      const char *const lhs_start = next_line;
+      const char *const lhs_end = skiptowhite(lhs_start);
+      const char *const rhs_start = skipwhite(lhs_end);
+      const char *const rhs_end = skiptowhite(rhs_start);
+      const char *const com_start = skipwhite(rhs_end);
+      if (lhs_start == lhs_end) {
+        error_message = N_("E791: Empty LHS");
+        error_position = lhs_start;
+        error_line = next_line;
+        goto parse_loadkeymap_error;
+      }
+      if (rhs_start == rhs_end) {
+        error_message = N_("E791: Empty RHS");
+        error_position = rhs_start;
+        error_line = next_line;
+        goto parse_loadkeymap_error;
+      }
+      GA_APPEND(char *, ga_lhss, xmemdupz(lhs_start,
+                                          (size_t) (lhs_end - lhs_start)));
+      GA_APPEND(char *, ga_rhss, xmemdupz(rhs_start,
+                                          (size_t) (rhs_end - rhs_start)));
+      GA_APPEND(char *, ga_coms, *com_start == NUL ? NULL : xstrdup(com_start));
+      free(next_line);
+    }
+  }
+  return OK;
+parse_loadkeymap_error:
+  ;
+  CommandParserError new_error = {
+    .message = error_message,
+    .position = error_position,
+  };
+  CommandPosition new_position = {
+    .lnr = position.lnr + lnr,
+    .col = (size_t) (error_position - error_line) + 1,
+  };
+  CommandNode *new_node = NULL;
+  if (create_error_node(&new_node, &new_error, new_position, error_line)
+      == FAIL) {
+    free(error_line);
+    return FAIL;
+  }
+  clear_cmd(node);
+  node->type = kCmdSyntaxErrorParent;
+  node->children = new_node;
+  free(error_line);
+  return NOTDONE;
+}
+
 #undef CMD_P_DEF
 #undef CMD_P_ARGS
 
@@ -6015,12 +6144,18 @@ int parse_one_cmd(const char **pp,
     }
     assert(pret == NOTDONE || error.message == NULL);
     if (pret == NOTDONE) {
-      free_cmd(*next_node);
-      *next_node = NULL;
-      if (create_error_node(next_node, &error, position,
-                            used_get_cmd_arg ? cmd_arg_start : s) == FAIL) {
-        FREE_CMD_ARG_START;
-        return FAIL;
+      if ((*next_node)->type == kCmdSyntaxErrorParent) {
+        CommandNode *const error_node = (*next_node)->children;
+        free(*next_node);
+        *next_node = error_node;
+      } else {
+        free_cmd(*next_node);
+        *next_node = NULL;
+        if (create_error_node(next_node, &error, position,
+                              used_get_cmd_arg ? cmd_arg_start : s) == FAIL) {
+          FREE_CMD_ARG_START;
+          return FAIL;
+        }
       }
       FREE_CMD_ARG_START;
       return NOTDONE;

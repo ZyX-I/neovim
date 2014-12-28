@@ -1858,6 +1858,39 @@ static CMD_FDEC(print_write)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_loadkeymap)
+{
+  FUNCTION_START;
+  const garray_T *ga_lhss = &(node->args[ARG_LKMAP_LHSS].arg.ga_strs);
+  const garray_T *ga_rhss = &(node->args[ARG_LKMAP_RHSS].arg.ga_strs);
+  const garray_T *ga_coms = &(node->args[ARG_LKMAP_COMS].arg.ga_strs);
+  const size_t lines_len = (size_t) ga_lhss->ga_len;
+  assert(ga_lhss->ga_len == ga_rhss->ga_len);
+  assert(ga_lhss->ga_len == ga_coms->ga_len);
+  for (size_t i = 0; i < lines_len; i++) {
+    WC('\n');
+    const char *const lhs = ((char **)ga_lhss->ga_data)[i];
+    const char *const rhs = ((char **)ga_rhss->ga_data)[i];
+    const char *const com = ((char **)ga_coms->ga_data)[i];
+    if (lhs == NULL && com == NULL) {
+      // Empty line: do nothing
+    } else if (lhs == NULL) {
+      W(com);
+    } else {
+      // TODO Depending on the option align without using tabs
+      assert(lhs != NULL && rhs != NULL);
+      W(lhs);
+      WC('\t');
+      W(rhs);
+      if (com != NULL) {
+        WC('\t');
+        W(com);
+      }
+    }
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -1979,6 +2012,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_language);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdWrite).parse) {
     CMD_F(print_write);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLoadkeymap).parse) {
+    CMD_F(print_loadkeymap);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {
