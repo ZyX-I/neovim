@@ -98,6 +98,7 @@ typedef enum {
 #define ARGS_Z        {kArgChar, kArgUNumber, kArgUNumber}
 #define ARGS_GUI      {kArgFlags}
 #define ARGS_LOADVIEW {kArgChar}
+#define ARGS_LKMAP    {kArgGaStrings, kArgGaStrings, kArgGaStrings}
 #define ARGS_ERROR    {kArgString, kArgString, kArgColumn}
 #define ARGS_USER     {kArgString}
 
@@ -720,6 +721,13 @@ enum {
 // :loadview
 enum {
   ARG_LOADVIEW_NR   = 0,
+};
+
+// :loadkeymap
+enum {
+  ARG_LKMAP_LHSS    = 0,
+  ARG_LKMAP_RHSS,
+  ARG_LKMAP_COMS,
 };
 
 // syntax error
