@@ -4615,6 +4615,15 @@ static CMD_P_DEF(parse_write)
   return OK;
 }
 
+static CMD_P_DEF(parse_loadview)
+{
+  node->args[ARG_LOADVIEW_NR].arg.ch = **pp;
+  if (**pp != NUL) {
+    (*pp) += STRLEN(*pp);
+  }
+  return OK;
+}
+
 #undef CMD_P_DEF
 #undef CMD_P_ARGS
 

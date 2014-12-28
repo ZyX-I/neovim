@@ -97,6 +97,7 @@ typedef enum {
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_Z        {kArgChar, kArgUNumber, kArgUNumber}
 #define ARGS_GUI      {kArgFlags}
+#define ARGS_LOADVIEW {kArgChar}
 #define ARGS_ERROR    {kArgString, kArgString, kArgColumn}
 #define ARGS_USER     {kArgString}
 
@@ -714,6 +715,11 @@ enum {
 // :gui/:gvim
 enum {
   ARG_GUI_FG        = 0,
+};
+
+// :loadview
+enum {
+  ARG_LOADVIEW_NR   = 0,
 };
 
 // syntax error

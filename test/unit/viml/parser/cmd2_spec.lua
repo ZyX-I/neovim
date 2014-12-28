@@ -663,6 +663,11 @@ describe('parse_one_cmd', function()
     itn('language time abc def\tghi', 'lan TIM abc def\tghi')
     itn('language ctype tt     ttt t t tt   t', 'lan ctype tt     ttt t t tt   t  \t')
   end)
+  describe(':loadview', function()
+    itn('loadview', 'lo')
+    itn('loadview 1', 'lo1')
+    itn('loadview 1', 'lo1oetnsahu tnsoaehdu ntoaeht tinaoudsnpyu ghoeuahtnd hyuio.eu')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF
