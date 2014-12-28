@@ -4605,6 +4605,26 @@ static CMD_P_DEF(parse_helptags)
   return OK;
 }
 
+static CMD_P_DEF(parse_mkspell)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  if (STRNCMP(p, "-ascii", 6) == 0) {
+    p = skipwhite(p + 6);
+    node->args[ARG_MKS_ASCII].arg.flags = (uint_least32_t) true;
+  }
+  if (*p == NUL) {
+    return OK;
+  }
+  int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
+                          &(node->glob));
+  if (pfret != OK) {
+    return pfret;
+  }
+  *pp = p;
+  return OK;
+}
+
 static CMD_P_DEF(parse_language)
 {
   const char *p = *pp;

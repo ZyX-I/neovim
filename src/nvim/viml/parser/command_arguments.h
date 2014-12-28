@@ -97,6 +97,7 @@ typedef enum {
 #define ARGS_WINCMD   {kArgChar}
 #define ARGS_Z        {kArgChar, kArgUNumber, kArgUNumber}
 #define ARGS_GUI      {kArgFlags}
+#define ARGS_MKS      {kArgFlags}
 #define ARGS_LOADVIEW {kArgChar}
 #define ARGS_LKMAP    {kArgGaStrings, kArgGaStrings, kArgGaStrings}
 #define ARGS_ERROR    {kArgString, kArgString, kArgColumn}
@@ -716,6 +717,11 @@ enum {
 // :gui/:gvim
 enum {
   ARG_GUI_FG        = 0,
+};
+
+// :mkspell
+enum {
+  ARG_MKS_ASCII     = 0,
 };
 
 // :loadview

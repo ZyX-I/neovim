@@ -1807,6 +1807,16 @@ static CMD_FDEC(print_gui)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_mkspell)
+{
+  FUNCTION_START;
+  if (node->args[ARG_MKS_ASCII].arg.flags) {
+    WS(" -ascii");
+  }
+  F(print_glob_arg, node->glob);
+  FUNCTION_END;
+}
+
 static CMD_FDEC(print_helptags)
 {
   FUNCTION_START;
@@ -2006,6 +2016,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_helpgrep);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdGui).parse) {
     CMD_F(print_gui);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMkspell).parse) {
+    CMD_F(print_mkspell);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHelptags).parse) {
     CMD_F(print_helptags);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLanguage).parse) {
