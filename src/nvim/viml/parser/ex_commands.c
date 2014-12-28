@@ -459,7 +459,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       break;
     }
     case kArgCmdComplete: {
-      // FIXME
+      free_complete(arg->arg.complete);
       break;
     }
     case kArgArgs: {
