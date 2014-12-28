@@ -4585,6 +4585,36 @@ static CMD_P_DEF(parse_language)
   return OK;
 }
 
+static CMD_P_DEF(parse_write)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  if (*p == '>' && node->type != kCmdRead) {
+    p++;
+    if (*p != '>') {
+      error->message = N_("E494: Use w or w>>");
+      error->position = p;
+      return NOTDONE;
+    }
+    p = skipwhite(p + 1);
+    node->args[ARG_W_APPEND].arg.flags = (uint_least32_t) true;
+  } else if (*p == '!' && node->type != kCmdUpdate) {
+    p++;
+    const size_t len = STRLEN(p);
+    node->args[ARG_W_SHELL].arg.str = xmemdupz(p, len);
+    p += len;
+    *pp = p;
+    return OK;
+  }
+  int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
+                          &(node->glob));
+  if (pfret != OK) {
+    return pfret;
+  }
+  *pp = p;
+  return OK;
+}
+
 #undef CMD_P_DEF
 #undef CMD_P_ARGS
 

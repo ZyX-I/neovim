@@ -82,7 +82,8 @@ typedef enum {
 #define ARGS_MT       {kArgString, kArgString}
 #define ARGS_NORMAL   {kArgString}
 #define ARGS_PROFILE  {kArgFlags, kArgString, kArgGlob, kArgPattern}
-#define ARGS_W        {kArgString, kArgGlob, kArgString}
+#define ARGS_W        {kArgFlags, kArgString}
+#define ARGS_UP       {kArgFlags}
 #define ARGS_REDIR    {kArgFlags, kArgString, kArgAssignLhs}
 #define ARGS_S        {kArgRegex, kArgReplacement, kArgFlags}
 #define ARGS_SET      {kArgStrings, kArgUNumbers, kArgNumbers, kArgUNumbers, \
@@ -565,10 +566,10 @@ enum {
 
 // :write/:read/:update
 enum {
-  ARG_W_EXPR        = 0,
-  ARG_W_FILE,
+  ARG_W_APPEND      = 0,
   ARG_W_SHELL,
 };
+// ARG_W_SHELL: not for :update
 
 // :redir
 enum {
