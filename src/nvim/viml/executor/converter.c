@@ -214,7 +214,7 @@ String nlua_pop_String(lua_State *lstate, Error *err)
     return (String) {.size = 0, .data = NULL};
   }
 
-  ret.data = xmemdup(ret.data, ret.size);
+  ret.data = xmemdupz(ret.data, ret.size);
   lua_pop(lstate, 1);
 
   return ret;
