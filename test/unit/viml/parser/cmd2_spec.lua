@@ -689,6 +689,47 @@ describe('parse_one_cmd', function()
     itn('menutranslate F&oo Ф&у', 'menut\t\t\tF&oo\t\t\tФ&у')
     itn('menutranslate F&oo<Tab>Bar Ф&у<Tab>Бар', 'menut F&oo\\\tBar Ф&у<TAB>Бар')
   end)
+  describe(':cscope', function()
+    for trunc, full in pairs({
+      cs='cscope',
+      lcs='lcscope',
+      scs='scscope',
+    }) do
+      itn(full .. ' help', trunc)
+      itn(full .. ' help', trunc .. '\t\t')
+      itn(full .. ' help', trunc .. ' nonexistentcommand')
+      itn(full .. ' help', trunc .. '+')
+      itn(full .. ' help', trunc .. ' h')
+      itn(full .. ' help', trunc .. ' help')
+      itn(full .. ' help', trunc .. ' ADD')
+      itn(full .. ' help', trunc .. ' add\tfile')
+      itn(full .. ' add file', trunc .. ' a file')
+      itn(full .. ' add file prepath', trunc .. ' a file prepath')
+      itn(full .. ' add file prepath -C', trunc .. ' a file prepath -C')
+      itn(full .. ' add file', trunc .. ' add file')
+      itn(full .. ' add file', trunc .. ' ad file')
+      for qchar, qtype in pairs({
+        s=0,
+        g=1,
+        d=2,
+        c=3,
+        t=4,
+        e=6,
+        f=7,
+        i=8,
+      }) do
+        -- Note: two spaces here. Spaces must be kept as-is.
+        itn(full .. ' find ' .. qchar .. '  pattern', full .. ' f ' .. qchar .. '  pattern')
+        itn(full .. ' find ' .. qchar .. '  pattern', full .. ' f ' .. (('%c'):format(('0'):byte() + qtype)) .. '  pattern')
+      end
+      itn(full .. ' kill', trunc .. ' kill')
+      itn(full .. ' reset', trunc .. ' reset')
+      itn(full .. ' show', trunc .. ' show')
+      itn(full .. ' kill', trunc .. ' k')
+      itn(full .. ' reset', trunc .. ' r')
+      itn(full .. ' show', trunc .. ' s')
+    end
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF

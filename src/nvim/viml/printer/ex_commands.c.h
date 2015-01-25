@@ -1927,6 +1927,57 @@ static CMD_FDEC(print_menutranslate)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_cscope)
+{
+  FUNCTION_START;
+  static const char *const cscope_command_names[] = {
+    "add",
+    "find",
+    "help",
+    "kill",
+    "reset",
+    "show",
+  };
+
+#ifndef CH_MACROS_DEFINE_LENGTH
+  static const char *const cscope_find_chars = "sgdct efi";
+#endif
+
+  const CommandSubArgs subargs = node->args[ARG_SUBCMD].arg.args;
+  const CommandArg *subargsargs = subargs.args;
+  WC(' ');
+  W(cscope_command_names[subargs.type]);
+  if (subargs.num_args) {
+    WC(' ');
+    CscopeArgType subargs_type = (CscopeArgType) subargs.type;
+    switch (subargs_type) {
+      case kCscopeAdd: {
+        W(subargsargs[CSCOPE_ARG_ADD_PATH].arg.str);
+        if (subargsargs[CSCOPE_ARG_ADD_PRE_PATH].arg.str != NULL) {
+          WC(' ');
+          W(subargsargs[CSCOPE_ARG_ADD_PRE_PATH].arg.str);
+        }
+        if (subargsargs[CSCOPE_ARG_ADD_FLAGS].arg.str != NULL) {
+          WC(' ');
+          W(subargsargs[CSCOPE_ARG_ADD_FLAGS].arg.str);
+        }
+        break;
+      }
+      case kCscopeFind: {
+        // TODO: Choose whether cscope_find_chars or numbers will be used.
+        WC(cscope_find_chars[subargsargs[CSCOPE_ARG_FIND_TYPE].arg.flags]);
+        WC(' ');
+        W(subargsargs[CSCOPE_ARG_FIND_NAME].arg.str);
+        break;
+      }
+      default: {
+        assert(false);
+      }
+    }
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -2054,6 +2105,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_loadkeymap);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMenutranslate).parse) {
     CMD_F(print_menutranslate);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdCscope).parse) {
+    CMD_F(print_cscope);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

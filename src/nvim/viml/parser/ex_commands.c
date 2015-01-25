@@ -60,6 +60,30 @@ int check_nomodeline(char_u **argp);
 #define string_to_key(p) string_to_key((char_u *) (p))
 #define mb_cptr2char_adv(p) mb_cptr2char_adv((char_u **) (p))
 
+#define CMD_SUBP_ARGS_COMMON \
+    const char **pp, \
+    CommandNode *node, \
+    CommandParserError *error, \
+    CommandParserOptions o, \
+    CommandPosition position
+#define CMD_SUBP_ARGS \
+    CMD_SUBP_ARGS_COMMON, \
+    CommandArg *subargsargs
+#define CMD_P_ARGS \
+    CMD_SUBP_ARGS_COMMON, \
+    VimlLineGetter fgetline, \
+    void *cookie
+
+typedef int (*SubCommandParser)(CMD_SUBP_ARGS);
+
+typedef struct {
+  const char *name;
+  unsigned type;
+  size_t num_args;
+  const CommandArgType *types;
+  const SubCommandParser parse;
+} SubCommandDefinition;
+
 typedef struct {
   CommandType find_in_stack;
   CommandType find_in_stack_2;
@@ -997,14 +1021,7 @@ static int get_regex(const char **pp, CommandParserError *error,
   return OK;
 }
 
-#define CMD_P_ARGS \
-    const char **pp, \
-    CommandNode *node, \
-    CommandParserError *error, \
-    CommandParserOptions o, \
-    CommandPosition position, \
-    VimlLineGetter fgetline, \
-    void *cookie
+#define CMD_SUBP_DEF(f) int f(CMD_SUBP_ARGS)
 #define CMD_P_DEF(f) int f(CMD_P_ARGS)
 
 static CMD_P_DEF(parse_append)
@@ -4850,8 +4867,186 @@ static CMD_P_DEF(parse_menutranslate)
   return OK;
 }
 
+static const char *skiptospace(const char *p)
+{
+  while (*p != ' ' && *p) {
+    p++;
+  }
+  return p;
+}
+
+static const char *skipspaces(const char *p)
+{
+  while (*p == ' ') {
+    p++;
+  }
+  return p;
+}
+
+static CMD_SUBP_DEF(parse_cscope_add)
+{
+  const char *p = *pp;
+  const char *arg_start;
+  char *fname = NULL;
+  char *ppath = NULL;
+  char *flags = NULL;
+  if (!*p) {
+    error->message =
+        N_("E560: Usage: cs[cope] add file|dir [pre-path] [flags]");
+    error->position = p;
+    return NOTDONE;
+  }
+  arg_start = p;
+  p = skiptospace(p);
+  fname = xmemdupz(arg_start, (size_t) (p - arg_start));
+  arg_start = p = skipspaces(p);
+  if (*p) {
+    p = skiptospace(p);
+    ppath = xmemdupz(arg_start, (size_t) (p - arg_start));
+    p = skipspaces(p);
+    if (*p) {
+      size_t flags_len = STRLEN(p);
+      flags = xmemdupz(p, flags_len);
+      p += flags_len;
+    }
+  }
+  subargsargs[CSCOPE_ARG_ADD_PATH].arg.str = fname;
+  subargsargs[CSCOPE_ARG_ADD_PRE_PATH].arg.str = ppath;
+  subargsargs[CSCOPE_ARG_ADD_FLAGS].arg.str = flags;
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_cscope_find)
+{
+  const char *const opt_start = *pp;
+  const char *const opt_end = skiptospace(opt_start);
+  const char *const arg_start = (*opt_end && *opt_end == ' '
+                                 ? opt_end + 1
+                                 : opt_end);
+  if (opt_start == opt_end || !*arg_start) {
+    error->message =
+        N_("E560: Usage: cs[cope] find c|d|e|f|g|i|s|t name");
+    error->position = (opt_start == opt_end? opt_start: arg_start);
+    return NOTDONE;
+  }
+  // Note: normally (opt_end - opt_start) == 1, but this is not ever checked.
+  CscopeSearchType search_type;
+  switch (*opt_start) {
+    case '0':
+    case 's': {
+      search_type = kCscopeFindSymbol;
+      break;
+    }
+    case '1':
+    case 'g': {
+      search_type = kCscopeFindDefinition;
+      break;
+    }
+    case '2':
+    case 'd': {
+      search_type = kCscopeFindCallees;
+      break;
+    }
+    case '3':
+    case 'c': {
+      search_type = kCscopeFindCallers;
+      break;
+    }
+    case '4':
+    case 't': {
+      search_type = kCscopeFindText;
+      break;
+    }
+    case '6':
+    case 'e': {
+      search_type = kCscopeFindEgrep;
+      break;
+    }
+    case '7':
+    case 'f': {
+      search_type = kCscopeFindFile;
+      break;
+    }
+    case '8':
+    case 'i': {
+      search_type = kCscopeFindIncluders;
+      break;
+    }
+    default: {
+      error->message = N_("E561: unknown cscope search type");
+      error->position = opt_start;
+      return NOTDONE;
+    }
+  }
+  size_t arg_len = STRLEN(arg_start);
+  subargsargs[CSCOPE_ARG_FIND_TYPE].arg.flags = (uint_least32_t) search_type;
+  subargsargs[CSCOPE_ARG_FIND_NAME].arg.str = xmemdupz(arg_start, arg_len);
+  *pp = arg_start + arg_len;
+  return OK;
+}
+
+static const SubCommandDefinition cscope_commands[] = {
+  {"add", kCscopeAdd, 3, (CommandArgType[]) CSCOPE_ARGS_ADD, &parse_cscope_add},
+  {"find", kCscopeFind, 2, (CommandArgType[]) CSCOPE_ARGS_FIND,
+   &parse_cscope_find},
+  {"help", kCscopeHelp, 0, NULL, NULL},
+  {"kill", kCscopeKill, 0, NULL, NULL},
+  {"reset", kCscopeReset, 0, NULL, NULL},
+  {"show", kCscopeShow, 0, NULL, NULL},
+  {NULL, 0, 0, NULL, NULL},
+};
+
+static CMD_P_DEF(parse_cscope)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  // Original function uses `strtok`. I do not think this is wise idea.
+  const char *const cmd_end = skiptospace(s);
+  const size_t cmd_len = (size_t) (cmd_end - s);
+  const SubCommandDefinition *cur_cmd = &(cscope_commands[0]);
+  CommandSubArgs *subargs = &(node->args[ARG_SUBCMD].arg.args);
+  subargs->type = kCscopeHelp;
+  if (cmd_len > 0) {
+    while (cur_cmd->name != NULL) {
+      if (STRNCMP(s, cur_cmd->name, cmd_len) == 0) {
+        p += cmd_len;
+        p = skipspaces(p);
+        subargs->type = cur_cmd->type;
+        subargs->num_args = cur_cmd->num_args;
+        subargs->types = cur_cmd->types;
+        CommandArg *subargsargs = NULL;
+        if (cur_cmd->num_args) {
+          subargsargs = xcalloc(subargs->num_args, sizeof(CommandArg));
+        }
+        if (cur_cmd->parse) {
+          int pret;
+          CommandPosition new_position = position;
+          position.col += (size_t) (p - s);
+          if ((pret = cur_cmd->parse(&p, node, error, o, new_position,
+                                     subargsargs)) != OK) {
+            free(subargsargs);
+            subargs->num_args = 0;
+            return pret;
+          }
+        }
+        if (cur_cmd->num_args) {
+          subargs->args = subargsargs;
+        }
+        break;
+      }
+      cur_cmd++;
+    }
+  }
+  if (subargs->type == kCscopeHelp) {
+    p += STRLEN(p);
+  }
+  *pp = p;
+  return OK;
+}
+
 #undef CMD_P_DEF
-#undef CMD_P_ARGS
+#undef CMD_SUBP_DEF
 
 /// Check for an Ex command with optional tail.
 ///
