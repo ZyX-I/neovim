@@ -1901,6 +1901,32 @@ static CMD_FDEC(print_loadkeymap)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_menutranslate)
+{
+  FUNCTION_START;
+  MenuItem *from_item = node->args[ARG_MT_FROM_ITEM].arg.menu_item;
+  const char *const from_text = node->args[ARG_MT_FROM_TEXT].arg.str;
+  MenuItem *to_item = node->args[ARG_MT_TO_ITEM].arg.menu_item;
+  const char *const to_text = node->args[ARG_MT_TO_TEXT].arg.str;
+  assert(from_item != NULL);
+  assert(to_item != NULL);
+  assert(from_item->subitem == NULL);
+  assert(to_item->subitem == NULL);
+  assert(from_item->name != NULL);
+  assert(to_item->name != NULL);
+  F(print_menu_name, from_item);
+  if (from_text != NULL) {
+    WS("<Tab>");
+    W(from_text);
+  }
+  F(print_menu_name, to_item);
+  if (to_text != NULL) {
+    WS("<Tab>");
+    W(to_text);
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -2026,6 +2052,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_write);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdLoadkeymap).parse) {
     CMD_F(print_loadkeymap);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdMenutranslate).parse) {
+    CMD_F(print_menutranslate);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

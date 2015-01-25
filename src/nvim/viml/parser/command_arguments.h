@@ -79,7 +79,7 @@ typedef enum {
 #define ARGS_SIMALT   {kArgChar}
 #define ARGS_LATER    {kArgFlags, kArgUNumber}
 #define ARGS_MATCH    {kArgString, kArgRegex}
-#define ARGS_MT       {kArgString, kArgString}
+#define ARGS_MT       {kArgMenuName, kArgString, kArgMenuName, kArgString}
 #define ARGS_NORMAL   {kArgString}
 #define ARGS_PROFILE  {kArgFlags, kArgString, kArgGlob, kArgPattern}
 #define ARGS_W        {kArgFlags, kArgString}
@@ -543,8 +543,10 @@ enum {
 
 // :menutranslate
 enum {
-  ARG_MT_FROM       = 0,
-  ARG_MT_TO,
+  ARG_MT_FROM_ITEM  = 0,
+  ARG_MT_FROM_TEXT,
+  ARG_MT_TO_ITEM,
+  ARG_MT_TO_TEXT,
 };
 
 // :normal
