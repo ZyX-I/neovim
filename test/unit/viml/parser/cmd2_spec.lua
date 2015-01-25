@@ -684,6 +684,11 @@ describe('parse_one_cmd', function()
     itn('mkspell any()', 'mksp*')
     itn('mkspell!', 'mksp!')
   end)
+  describe(':menutranslate', function()
+    itn('menutranslate Foo Фу', 'menut Foo Фу')
+    itn('menutranslate F&oo Ф&у', 'menut\t\t\tF&oo\t\t\tФ&у')
+    itn('menutranslate F&oo<Tab>Bar Ф&у<Tab>Бар', 'menut F&oo\\\tBar Ф&у<TAB>Бар')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF

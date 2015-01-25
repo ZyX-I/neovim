@@ -2804,7 +2804,7 @@ static CMD_P_DEF(parse_command)
     }
   }
   size_t name_len = (size_t) (p - name_start);
-  if (!ends_excmd(*p) && !vim_iswhite(*p)) {
+  if (!ENDS_EXCMD(*p) && !vim_iswhite(*p)) {
     error->message = N_("E182: Invalid command name");
     error->position = p;
     goto parse_command_error_return;
@@ -4771,6 +4771,83 @@ parse_loadkeymap_error:
   node->children = new_node;
   free(error_line);
   return NOTDONE;
+}
+
+static const char *menu_skip_part(const char *p)
+{
+  while (*p && *p != '.' && !vim_iswhite(*p)) {
+    if ((*p == '\\' || *p == Ctrl_V) && p[1]) {
+      p++;
+    }
+    p++;
+  }
+  return p;
+}
+
+static CMD_P_DEF(parse_menutranslate)
+{
+  const char *p = *pp;
+  if (STRNCMP(p, "clear", 5) == 0 && ENDS_EXCMD(*skipwhite(p + 5))) {
+    p = skipwhite(p + 5);
+  } else {
+    const char *const from = p;
+    const char *const from_end = menu_skip_part(from);
+    const char *const to = skipwhite(from_end);
+    const char *const to_end = menu_skip_part(to);
+    if (to_end == to || *to_end == '.') {
+      if (*to == '.' || *to_end == '.') {
+        error->message = N_("E474: Expected no submenus");
+      } else if (from_end == from) {
+        error->message = N_("E474: Expected string that is to be translated");
+      } else {
+        error->message = N_("E474: Expected translated string");
+      }
+      error->position = to_end;
+      return NOTDONE;
+    }
+
+    int pnmret;
+
+    p = from;
+    if ((pnmret = parse_menu_name(&p, error, kMenuDefaults,
+                                  &(node->args[ARG_MT_FROM_ITEM].arg.menu_item),
+                                  &(node->args[ARG_MT_FROM_TEXT].arg.str)))
+        != OK) {
+      return pnmret;
+    }
+    if (p != from_end) {
+      error->message = N_("E474: Unexpected end of string to be translated");
+      error->position = p;
+      return NOTDONE;
+    }
+    if (node->args[ARG_MT_FROM_ITEM].arg.menu_item->subitem != NULL) {
+      error->message = N_("E474: Expected no submenus");
+      error->position = p;
+      return NOTDONE;
+    }
+
+    p = to;
+    if ((pnmret = parse_menu_name(&p, error, kMenuDefaults,
+                                  &(node->args[ARG_MT_TO_ITEM].arg.menu_item),
+                                  &(node->args[ARG_MT_TO_TEXT].arg.str)))
+        != OK) {
+      return pnmret;
+    }
+    if (p != to_end) {
+      error->message = N_("E474: Unexpected end of translated string");
+      error->position = p;
+      return NOTDONE;
+    }
+    if (node->args[ARG_MT_TO_ITEM].arg.menu_item->subitem != NULL) {
+      error->message = N_("E474: Expected no submenus");
+      error->position = p;
+      return NOTDONE;
+    }
+
+    p = to_end;
+  }
+  *pp = p;
+  return OK;
 }
 
 #undef CMD_P_DEF
