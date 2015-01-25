@@ -256,7 +256,7 @@ typedef struct command_node {
       struct command_subargs {
         unsigned type;
         size_t num_args;
-        CommandArgType *types;
+        const CommandArgType *types;
         struct command_argument *args;
       } args;
     } arg;

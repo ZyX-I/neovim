@@ -295,7 +295,7 @@ enum {
 
 // :cscope
 typedef enum {
-  kCscopeAdd,
+  kCscopeAdd = 0,
   kCscopeFind,
   kCscopeHelp,
   kCscopeKill,
@@ -305,18 +305,19 @@ typedef enum {
 #define CSCOPE_ARG_ADD_PATH     0
 #define CSCOPE_ARG_ADD_PRE_PATH 1
 #define CSCOPE_ARG_ADD_FLAGS    2
-#define CSCOPE_ARGS_ADD {kArgString, kArgString, kArgStrings}
+#define CSCOPE_ARGS_ADD {kArgString, kArgString, kArgString}
 
+// Note: numbers are exactly those cs_create_cmd uses
 typedef enum {
-  kCscopeFindSymbol,
-  kCscopeFindDefinition,
-  kCscopeFindCallees,
-  kCscopeFindCallers,
-  kCscopeFindText,
-  kCscopeFindEgrep,
-  kCscopeFindFile,
-  kCscopeFindIncluders,
-} CscopeArg;
+  kCscopeFindSymbol = 0,
+  kCscopeFindDefinition = 1,
+  kCscopeFindCallees = 2,
+  kCscopeFindCallers = 3,
+  kCscopeFindText = 4,
+  kCscopeFindEgrep = 6,
+  kCscopeFindFile = 7,
+  kCscopeFindIncluders = 8,
+} CscopeSearchType;
 #define CSCOPE_ARG_FIND_TYPE    0
 #define CSCOPE_ARG_FIND_NAME    1
 #define CSCOPE_ARGS_FIND {kArgFlags, kArgString}
