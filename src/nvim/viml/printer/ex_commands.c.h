@@ -1978,6 +1978,16 @@ static CMD_FDEC(print_cscope)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_sniff)
+{
+  FUNCTION_START;
+  if (node->args[ARG_SNIFF_DEF].arg.str != NULL) {
+    WS(" addcmd");
+  }
+  PRINT_FROM_ARG(node, 0);
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -2107,6 +2117,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_menutranslate);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdCscope).parse) {
     CMD_F(print_cscope);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdSniff).parse) {
+    CMD_F(print_sniff);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

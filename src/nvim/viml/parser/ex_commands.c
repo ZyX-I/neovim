@@ -52,6 +52,7 @@ int check_nomodeline(char_u **argp);
 #define lrswap(s) lrswap((char_u *) s)
 #define get_list_range(pp, i1, i2) get_list_range((char_u **)pp, i1, i2)
 #define skiptowhite(p) (const char *) skiptowhite((char_u *) p)
+#define skiptowhite_esc(p) (const char *) skiptowhite_esc((char_u *) p)
 #define check_nomodeline(p) check_nomodeline((char_u **) p)
 #define get_histtype(p, len, d) get_histtype((const char_u *) p, len, d)
 #define find_key_option_len(p, l) find_key_option_len((const char_u *) p, len)
@@ -5042,6 +5043,52 @@ static CMD_P_DEF(parse_cscope)
     p += STRLEN(p);
   }
   *pp = p;
+  return OK;
+}
+
+static CMD_P_DEF(parse_sniff)
+{
+  // Sets:
+  // Case                CMD       SYMBOL    DEF       MSG
+  // List commands       NULL      NULL      NULL      NULL
+  // Define new command  non-NULL  NULL      non-NULL  non-NULL
+  // Run some command    non-NULL  non-NULL  NULL      NULL
+  const char *p = *pp;
+  if (ENDS_EXCMD(*p)) {
+    return OK;
+  }
+  const char *const cmd_end = skiptowhite(p);
+  char *const cmd = xmemdupz(p, (size_t) (cmd_end - p));
+  node->args[ARG_SNIFF_CMD].arg.str = cmd;
+  const char *symbol = skipwhite(cmd_end);
+  if (ENDS_EXCMD(*symbol)) {
+    symbol = NULL;
+  }
+  if (STRCMP(cmd, "addcmd") == 0) {
+    const char *const symbol_end = skiptowhite(symbol);
+    free(node->args[ARG_SNIFF_CMD].arg.str);
+    node->args[ARG_SNIFF_CMD].arg.str =
+        xmemdupz(symbol, (size_t) (symbol_end - symbol));
+    const char *const def = skipwhite(symbol_end);
+    const char *const def_end = skiptowhite(def);
+    node->args[ARG_SNIFF_DEF].arg.str =
+        xmemdupz(def, (size_t) (def_end - def));
+    const char *const msg = skipwhite(def_end);
+    if (ENDS_EXCMD(*msg)) {
+      node->args[ARG_SNIFF_MSG].arg.str =
+          xstrdup(node->args[ARG_SNIFF_CMD].arg.str);
+      *pp = msg;
+    } else {
+      const char *const msg_end = skiptowhite_esc(msg);
+      node->args[ARG_SNIFF_MSG].arg.str =
+          xmemdupz(msg, (size_t) (msg_end - msg));
+      *pp = msg_end;
+    }
+  } else {
+    const size_t len = STRLEN(symbol);
+    node->args[ARG_SNIFF_SYMBOL].arg.str = xmemdupz(symbol, len);
+    *pp = symbol + len;
+  }
   return OK;
 }
 

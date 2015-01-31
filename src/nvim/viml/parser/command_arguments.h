@@ -90,7 +90,7 @@ typedef enum {
                        kArgNumbers, kArgStrings}
 #define ARGS_FT       {kArgFlags}
 #define ARGS_SLEEP    {kArgUNumber}
-#define ARGS_SNIFF    {kArgString}
+#define ARGS_SNIFF    {kArgString, kArgString, kArgString, kArgString}
 #define ARGS_SORT     {kArgFlags, kArgRegex}
 #define ARGS_SYNTIME  {kArgFlags}
 #define ARGS_2INTS    {kArgFlags, kArgNumber, kArgNumber}
@@ -668,7 +668,10 @@ enum {
 
 // :sniff
 enum {
-  ARG_SNIFF_SYMBOL  = 0,
+  ARG_SNIFF_CMD     = 0,
+  ARG_SNIFF_SYMBOL,
+  ARG_SNIFF_DEF,
+  ARG_SNIFF_MSG,
 };
 
 // :sort

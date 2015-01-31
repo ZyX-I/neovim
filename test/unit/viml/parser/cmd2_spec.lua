@@ -731,6 +731,12 @@ describe('parse_one_cmd', function()
   describe(':simalt', function()
     itn('simalt ~a~b~c~', 'sim ~a~b~c~')
   end)
+  describe(':sniff', function()
+    itn('sniff addcmd name def msg', 'sni\taddcmd\t\tname\t  def\t \tmsg')
+    itn('sniff addcmd name def msg\\ foo', 'sni\taddcmd\t\tname\t  def\t \tmsg\\ foo')
+    itn('sniff cmd symbol    llllll', 'sni   cmd      symbol    llllll')
+    itn('sniff', 'sni')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF
