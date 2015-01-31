@@ -14,6 +14,7 @@
 
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/printer/expressions.h"
+#include "nvim/viml/printer/ex_commands.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
 #include "nvim/viml/dumpers/dumpers.h"
@@ -733,18 +734,25 @@ static CMD_FDEC(print_syntax_error)
   FUNCTION_END;
 }
 
-/// Print append command family (:append, :insert, :change)
-static CMD_FDEC(print_append)
+static FDEC(print_ga_strs, const garray_T *const ga, const char delim)
 {
   FUNCTION_START;
-  const garray_T *ga = &(node->args[ARG_APPEND_LINES].arg.ga_strs);
   const int ga_len = ga->ga_len;
   int i;
 
   for (i = 0; i < ga_len ; i++) {
-    WC('\n');
+    WC(delim);
     W(((char **)ga->ga_data)[i]);
   }
+  FUNCTION_END;
+}
+
+/// Print append command family (:append, :insert, :change)
+static CMD_FDEC(print_append)
+{
+  FUNCTION_START;
+  const garray_T *const ga = &(node->args[ARG_APPEND_LINES].arg.ga_strs);
+  F(print_ga_strs, ga, '\n');
   WC('\n');
   WC('.');
   FUNCTION_END;
@@ -1978,6 +1986,652 @@ static CMD_FDEC(print_cscope)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_sniff)
+{
+  FUNCTION_START;
+  if (node->args[ARG_SNIFF_DEF].arg.str != NULL) {
+    WS(" addcmd");
+  }
+  PRINT_FROM_ARG(node, 0);
+  FUNCTION_END;
+}
+
+static FDEC(print_prop_str_p, const char *const p)
+{
+  FUNCTION_START;
+  bool needs_quote = false;
+  if (strpbrk(p, " \t" ENDS_EXCMD_CHARS) != NULL) {
+    WC('\'');
+    needs_quote = true;
+  }
+  // TODO Escape argument
+  W(p);
+  if (needs_quote) {
+    WC('\'');
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_prop_str, const CommandArg arg)
+{
+  FUNCTION_START;
+  F(print_prop_str_p, arg.arg.str);
+  FUNCTION_END;
+}
+
+static FDEC(print_color, const CommandArg arg)
+{
+  FUNCTION_START;
+  const HighlightColor color = arg.arg.color;
+  switch (color.type) {
+    case kHiColorName: {
+      F(print_prop_str_p, color.data.name);
+      break;
+    }
+    case kHiColorRGB: {
+      char color_repr[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+#ifndef CH_MACROS_DEFINE_LENGTH
+      snprintf(&(color_repr[0]), 8, "#%02X%02X%02X",
+               color.data.rgb.red, color.data.rgb.green, color.data.rgb.blue);
+#endif
+      W_LEN(color_repr, sizeof(color_repr) - 1);
+      break;
+    }
+    case kHiColorIdx: {
+      F_NOOPT(dump_unumber, (uintmax_t) color.data.idx);
+      break;
+    }
+    case kHiColorFg: {
+      WS("fg");
+      break;
+    }
+    case kHiColorBg: {
+      WS("bg");
+      break;
+    }
+    case kHiColorNone: {
+      WS("None");
+      break;
+    }
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_attr_flags, const CommandArg arg)
+{
+  FUNCTION_START;
+  const uint_least32_t attr_flags = arg.arg.flags;
+  if (attr_flags == 0) {
+    EARLY_RETURN;
+  }
+  bool did_comma = true;
+  for (const HighlightAttrDef *cur_hl_attr = &(hl_attr_table[0]);
+       cur_hl_attr->hl_attr_name != NULL;
+       cur_hl_attr++) {
+    if (attr_flags & cur_hl_attr->hl_attr_flag
+        // Protect from printing both inverse and reverse.
+        && cur_hl_attr->hl_attr_flag != (cur_hl_attr + 1)->hl_attr_flag) {
+      if (!did_comma) {
+        WC(',');
+      }
+      W_LEN(cur_hl_attr->hl_attr_name, cur_hl_attr->hl_attr_name_len);
+      did_comma = false;
+    }
+  }
+  FUNCTION_END;
+}
+
+typedef FDEC_TYPEDEF(HiPropertyDumperFunc, CommandArg arg);
+
+static CMD_FDEC(print_highlight)
+{
+  FUNCTION_START;
+  const uint_least32_t flags = node->args[ARG_HI_FLAGS].arg.flags;
+  if (flags & FLAG_HI_DEFAULT) {
+    WS(" default");
+  }
+  if (flags & FLAG_HI_CLEAR) {
+    WS(" clear");
+  }
+  if (flags & FLAG_HI_LINK) {
+    WS(" link");
+  }
+  if (node->args[ARG_HI_GROUP].arg.str != NULL) {
+    WC(' ');
+    W(node->args[ARG_HI_GROUP].arg.str);
+  }
+  if (flags & FLAG_HI_LINK) {
+    assert(node->args[ARG_HI_TGT_GROUP].arg.str != NULL);
+    WC(' ');
+    W(node->args[ARG_HI_TGT_GROUP].arg.str);
+    FUNCTION_END;
+  } else {
+    assert(node->args[ARG_HI_TGT_GROUP].arg.str == NULL);
+  }
+  if (flags & FLAG_HI_CLEAR) {
+    FUNCTION_END;
+  }
+  static const PropertyDef prop_table[] = {
+    {(VoidFuncRef) FNAME(print_attr_flags), "term", ARG_HI_TERM},
+    {(VoidFuncRef) FNAME(print_attr_flags), "cterm", ARG_HI_CTERM},
+    {(VoidFuncRef) FNAME(print_color), "ctermfg", ARG_HI_CTERMFG},
+    {(VoidFuncRef) FNAME(print_color), "ctermbg", ARG_HI_CTERMBG},
+    {(VoidFuncRef) FNAME(print_attr_flags), "gui", ARG_HI_GUI},
+    {(VoidFuncRef) FNAME(print_color), "guifg", ARG_HI_GUIFG},
+    {(VoidFuncRef) FNAME(print_color), "guibg", ARG_HI_GUIBG},
+    {(VoidFuncRef) FNAME(print_color), "guisp", ARG_HI_GUISP},
+    {(VoidFuncRef) FNAME(print_prop_str), "font", ARG_HI_FONT},
+    {(VoidFuncRef) FNAME(print_prop_str), "start", ARG_HI_START},
+    {(VoidFuncRef) FNAME(print_prop_str), "stop", ARG_HI_STOP},
+    {NULL, NULL, -1},
+  };
+  CommandArg reference;
+  memset(&reference, 0, sizeof(reference));
+  for (const PropertyDef *prop_def = &(prop_table[0]);
+       prop_def->prop_dump != NULL;
+       prop_def++) {
+    const CommandArg arg = node->args[prop_def->prop_idx];
+    if (memcmp(&reference, &arg, sizeof(CommandArg)) == 0) {
+      continue;
+    } else {
+      WC(' ');
+      W(prop_def->prop_name);
+      WC('=');
+      F_PTR(((FTYPE(HiPropertyDumperFunc)) (prop_def->prop_dump)), arg);
+    }
+  }
+  FUNCTION_END;
+}
+
+static CMD_FDEC(print_sign)
+{
+  FUNCTION_START;
+  static const char *const sign_command_names[] = {
+    "define",
+    "undefine",
+    "list",
+    "place",
+    "unplace",
+    "jump",
+  };
+
+  const CommandSubArgs subargs = node->args[ARG_SUBCMD].arg.args;
+  const CommandArg *subargsargs = subargs.args;
+  WC(' ');
+  W(sign_command_names[subargs.type]);
+  if (subargs.num_args) {
+    SignArgType subargs_type = (SignArgType) subargs.type;
+    switch (subargs_type) {
+      case kSignList:
+      case kSignUndefine:
+      case kSignDefine: {
+        if (subargsargs[SIGN_ARG_DEFINE_NAME].arg.str != NULL) {
+          WC(' ');
+          W(subargsargs[SIGN_ARG_DEFINE_NAME].arg.str);
+        }
+        if (subargs_type == kSignDefine) {
+          if (subargsargs[SIGN_ARG_DEFINE_TEXTHL].arg.str != NULL) {
+            WS(" texthl=");
+            W(subargsargs[SIGN_ARG_DEFINE_TEXTHL].arg.str);
+          }
+          if (subargsargs[SIGN_ARG_DEFINE_LINEHL].arg.str != NULL) {
+            WS(" linehl=");
+            W(subargsargs[SIGN_ARG_DEFINE_LINEHL].arg.str);
+          }
+          if (subargsargs[SIGN_ARG_DEFINE_TEXT].arg.str != NULL) {
+            WS(" text=");
+            W(subargsargs[SIGN_ARG_DEFINE_TEXT].arg.str);
+          }
+          if (subargsargs[SIGN_ARG_DEFINE_ICON].arg.str != NULL) {
+            WS(" icon=");
+            W(subargsargs[SIGN_ARG_DEFINE_ICON].arg.str);
+          }
+        }
+        break;
+      }
+      case kSignPlace:
+      case kSignUnplace:
+      case kSignJump: {
+        if (subargsargs[SIGN_ARG_PLACE_ID].arg.number != SIGN_ID_MISSING) {
+          if (subargsargs[SIGN_ARG_PLACE_ID].arg.number == SIGN_ID_ALL) {
+            WS(" *");
+          } else if (subargsargs[SIGN_ARG_PLACE_ID].arg.number) {
+            WC(' ');
+            F_NOOPT(dump_unumber,
+                    (uintmax_t) subargsargs[SIGN_ARG_PLACE_ID].arg.number);
+          }
+        }
+        if (subargs_type == kSignPlace) {
+          if (subargsargs[SIGN_ARG_PLACE_LINE].arg.unumber) {
+            WS(" line=");
+            F_NOOPT(dump_unumber,
+                    (uintmax_t) subargsargs[SIGN_ARG_PLACE_LINE].arg.unumber);
+          }
+          if (subargsargs[SIGN_ARG_PLACE_NAME].arg.str != NULL) {
+            WS(" name=");
+            W(subargsargs[SIGN_ARG_PLACE_NAME].arg.str);
+          }
+        }
+        if (subargsargs[SIGN_ARG_PLACE_FILE].arg.str != NULL) {
+          WS(" file=");
+          W(subargsargs[SIGN_ARG_PLACE_FILE].arg.str);
+        } else if (subargsargs[SIGN_ARG_PLACE_BUFFER].arg.unumber) {
+          WS(" buffer=");
+          F_NOOPT(dump_unumber,
+                  (uintmax_t) subargsargs[SIGN_ARG_PLACE_BUFFER].arg.unumber);
+        }
+        break;
+      }
+    }
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_group_list, const SynGroupList *const group, const char delim)
+{
+  FUNCTION_START;
+  if (group == NULL) {
+    EARLY_RETURN;
+  }
+  for (const SynGroupList *cur_group = group;
+       cur_group != NULL;
+       cur_group = cur_group->next) {
+    switch (cur_group->type) {
+      case kSynGroupCluster: {
+        WC('@');
+        // fallthrough
+      }
+      case kSynGroupLiteral: {
+        W(cur_group->data.name);
+        break;
+      }
+      case kSynGroupRegex: {
+        F(print_regex, cur_group->data.regex);
+        break;
+      }
+      case kSynGroupAll: {
+        if (cur_group->next != NULL) {
+          W("ALLBUT");
+        } else {
+          W("ALL");
+        }
+        break;
+      }
+      case kSynGroupTop: {
+        W("TOP");
+        break;
+      }
+      case kSynGroupContained: {
+        W("CONTAINED");
+        break;
+      }
+    }
+    if (cur_group->next != NULL) {
+      WC(delim);
+    }
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_syn_options, const int flags_offset,
+            const CommandArg *const subargsargs,
+            const uint_least32_t scope)
+{
+  FUNCTION_START;
+  const uint_least32_t flags =
+      subargsargs[flags_offset + SYN_ARG_FLAGS_OFFSET].arg.flags;
+  static const struct {
+    const uint_least32_t flag;
+    const char *const str;
+  } flags_tab[] = {
+    {FLAG_SYN_MAIN_CONTAINED, "contained"},
+    {FLAG_SYN_MAIN_ONELINE, "oneline"},
+    {FLAG_SYN_REGION_KEEPEND, "keepend"},
+    {FLAG_SYN_MR_EXTEND, "extend"},
+    {FLAG_SYN_MR_EXCLUDENL, "excludenl"},
+    {FLAG_SYN_MAIN_TRANSPARENT, "transparent"},
+    {FLAG_SYN_MAIN_SKIPNL, "skipnl"},
+    {FLAG_SYN_MAIN_SKIPWHITE, "skipwhite"},
+    {FLAG_SYN_MAIN_SKIPEMPTY, "skipempty"},
+    {FLAG_SYN_MAIN_DISPLAY, "display"},
+    {FLAG_SYN_MAIN_FOLD, "fold"},
+    {FLAG_SYN_MAIN_CONCEAL, "conceal"},
+    {FLAG_SYN_REGION_CONCEALENDS, "concealends"},
+    {FLAG_SYN_SYNC_FROMSTART, "fromstart"},
+  };
+  for (size_t i = 0; i < ARRAY_SIZE(flags_tab); i++) {
+    if (flags & flags_tab[i].flag) {
+      WC(' ');
+      W(flags_tab[i].str);
+    }
+  }
+  if (scope & SYN_SCOPE_SYNC) {
+    if (subargsargs[flags_offset + SYN_ARG_GROUPHERE_OFFSET].arg.str != NULL) {
+      WS(" grouphere ");
+      W(subargsargs[flags_offset + SYN_ARG_GROUPHERE_OFFSET].arg.str);
+    }
+    if (subargsargs[flags_offset + SYN_ARG_GROUPTHERE_OFFSET].arg.str != NULL) {
+      WS(" groupthere ");
+      W(subargsargs[flags_offset + SYN_ARG_GROUPTHERE_OFFSET].arg.str);
+    }
+  }
+  if (subargsargs[flags_offset + SYN_ARG_CCHAR_OFFSET].arg.str != NULL) {
+    WS(" cchar=");
+    W(subargsargs[flags_offset + SYN_ARG_CCHAR_OFFSET].arg.str);
+  }
+  if (scope & SYN_SCOPE_MR
+      && subargsargs[flags_offset + SYN_ARG_CONTAINS_OFFSET].arg.group
+         != NULL) {
+    WS(" contains=");
+    F(print_group_list,
+      subargsargs[flags_offset + SYN_ARG_CONTAINS_OFFSET].arg.group, ',');
+  }
+  if (subargsargs[flags_offset + SYN_ARG_CONTAINEDIN_OFFSET].arg.group
+      != NULL) {
+    WS(" containedin=");
+    F(print_group_list,
+      subargsargs[flags_offset + SYN_ARG_CONTAINEDIN_OFFSET].arg.group, ',');
+  }
+  if (subargsargs[flags_offset + SYN_ARG_NEXTGROUP_OFFSET].arg.group != NULL) {
+    WS(" nextgroup=");
+    F(print_group_list,
+      subargsargs[flags_offset + SYN_ARG_NEXTGROUP_OFFSET].arg.group, ',');
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_syn_pattern, const SynPattern syn_pat)
+{
+  FUNCTION_START;
+  WC('/');
+  // TODO Escape /
+  F(print_regex, syn_pat.reg);
+  WC('/');
+  const uint_least32_t *flagss = syn_pat.flagss;
+  const int *offs = syn_pat.offsets;
+#ifndef CH_MACROS_DEFINE_LENGTH
+  static const char *const spos[] = {
+    "ms=",
+    "me=",
+    "hs=",
+    "he=",
+    "rs=",
+    "re=",
+    "lc=",
+  };
+#endif
+  for (size_t i = 0; i < syn_pat.offset_count; flagss++, offs++, i++) {
+    W_LEN(spos[((*flagss) & FLAG_SYN_OFFSET_MASK) - 1], 3);
+    switch ((SynRegOffsetAnchorType)
+            ((*flagss) & (~((uint_least32_t) FLAG_SYN_OFFSET_MASK)))) {
+      case kSynRegOffsetAnchorStart: {
+        WC('s');
+        if (*offs > 0) {
+          WC('+');
+        }
+        break;
+      }
+      case kSynRegOffsetAnchorEnd: {
+        WC('e');
+        if (*offs > 0) {
+          WC('+');
+        }
+        break;
+      }
+      case kSynRegOffsetAnchorLC: {
+        break;
+      }
+    }
+    if (*offs) {
+      F_NOOPT(dump_number, (intmax_t) (*offs));
+    }
+    if (i < syn_pat.offset_count - 1) {
+      WC(',');
+    }
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_syn_patterns, const char *const prefix,
+            const SynPatterns *const syn_pats)
+{
+  FUNCTION_START;
+  const size_t prefix_len = STRLEN(prefix);
+  for (const SynPatterns *cur_syn_pats = syn_pats;
+       cur_syn_pats != NULL;
+       cur_syn_pats = cur_syn_pats->next) {
+    W_LEN(prefix, prefix_len);
+    F(print_syn_pattern, cur_syn_pats->syn_pat);
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_syntax_match, const CommandArg *const subargsargs,
+            const uint_least32_t scope)
+{
+  FUNCTION_START;
+  WC(' ');
+  W(subargsargs[SYN_ARG_MATCH_GROUP].arg.str);
+  WC(' ');
+  F(print_syn_pattern, *subargsargs[SYN_ARG_MATCH_REGEX].arg.syn_pat);
+  F(print_syn_options, SYN_ARG_KEYWORD_FLAGS, subargsargs, scope);
+  FUNCTION_END;
+}
+
+static FDEC(print_syntax_region, const CommandArg *const subargsargs)
+{
+  FUNCTION_START;
+  WC(' ');
+  W(subargsargs[SYN_ARG_REGION_GROUP].arg.str);
+  if (subargsargs[SYN_ARG_REGION_MATCHGROUP].arg.str) {
+    WS(" matchgroup=");
+    W(subargsargs[SYN_ARG_REGION_MATCHGROUP].arg.str);
+  }
+  F(print_syn_patterns, " start=",
+    subargsargs[SYN_ARG_REGION_STARTREG].arg.syn_pats);
+  if (subargsargs[SYN_ARG_REGION_SKIPREG].arg.reg != NULL) {
+    F(print_syn_patterns, " skip=",
+      subargsargs[SYN_ARG_REGION_SKIPREG].arg.syn_pats);
+  }
+  F(print_syn_patterns, " end=",
+    subargsargs[SYN_ARG_REGION_ENDREG].arg.syn_pats);
+  F(print_syn_options, SYN_ARG_KEYWORD_FLAGS, subargsargs, SYN_SCOPE_REGION);
+  FUNCTION_END;
+}
+
+static CMD_FDEC(print_syntax)
+{
+  FUNCTION_START;
+  const CommandSubArgs subargs = node->args[ARG_SUBCMD].arg.args;
+  const CommandArg *const subargsargs = subargs.args;
+  static const char *const syn_command_names[] = {
+    "case",
+    "clear",
+    "cluster",
+    "conceal",
+    "enable",
+    "include",
+    "keyword",
+    "list",
+    "manual",
+    "match",
+    "on",
+    "off",
+    "region",
+    "reset",
+    "spell",
+    "sync",
+  };
+  WC(' ');
+  W(syn_command_names[subargs.type]);
+  switch ((SynArgType) subargs.type) {
+    case kSynEnable:
+    case kSynManual:
+    case kSynOn:
+    case kSynOff:
+    case kSynReset: {
+      assert(subargsargs == NULL);
+      break;
+    }
+    case kSynCase: {
+      if (subargsargs[SYN_ARG_CASE_FLAGS].arg.flags) {
+        W(" match");
+      } else {
+        W(" ignore");
+      }
+      break;
+    }
+    case kSynConceal: {
+      if (subargsargs[SYN_ARG_CONCEAL_FLAGS].arg.flags) {
+        W(" on");
+      } else {
+        W(" off");
+      }
+      break;
+    }
+    case kSynSpell: {
+      switch (subargsargs[SYN_ARG_CONCEAL_FLAGS].arg.flags) {
+        case VAL_SYN_SPELL_TOPLEVEL: {
+          W(" toplevel");
+          break;
+        }
+        case VAL_SYN_SPELL_NOTOPLEVEL: {
+          W(" notoplevel");
+          break;
+        }
+        case VAL_SYN_SPELL_DEFAULT: {
+          W(" default");
+          break;
+        }
+      }
+      break;
+    }
+    case kSynCluster: {
+      static const struct {
+        const int prop_idx;
+        const char *prop_name;
+      } cluster_props[] = {
+        {SYN_ARG_CLUSTER_CONTAINS, " contains"},
+        {SYN_ARG_CLUSTER_ADD, " add"},
+        {SYN_ARG_CLUSTER_REMOVE, " remove"},
+      };
+      WC(' ');
+      W(subargsargs[SYN_ARG_CLUSTER_NAME].arg.str);
+      for (size_t i = 0; i < ARRAY_SIZE(cluster_props); i++) {
+        const SynGroupList *group =
+            subargsargs[cluster_props[i].prop_idx].arg.group;
+        if (group != NULL) {
+          W(cluster_props[i].prop_name);
+          WC('=');
+          F(print_group_list, group, ',');
+        }
+      }
+      break;
+    }
+    case kSynInclude: {
+      WC(' ');
+      if (subargsargs[SYN_ARG_INCLUDE_CLUSTER].arg.str != NULL) {
+        WC('@');
+        W(subargsargs[SYN_ARG_INCLUDE_CLUSTER].arg.str);
+        WC(' ');
+      }
+      F(print_pattern, subargsargs[SYN_ARG_INCLUDE_FILE].arg.pat);
+      break;
+    }
+    case kSynKeyword: {
+      WC(' ');
+      W(subargsargs[SYN_ARG_KEYWORD_GROUP].arg.str);
+      F(print_syn_options, SYN_ARG_KEYWORD_FLAGS, subargsargs,
+        SYN_SCOPE_KEYWORD);
+      // TODO Escape strings
+      F(print_ga_strs, &(subargsargs[SYN_ARG_KEYWORD_KEYWORDS].arg.ga_strs),
+        ' ');
+      break;
+    }
+    case kSynClear:
+    case kSynList: {
+      if (subargsargs == NULL) {
+        break;
+      }
+      const SynGroupList *group = subargsargs[SYN_ARG_LIST_GROUPS].arg.group;
+      if (group) {
+        WC(' ');
+        F(print_group_list, group, ' ');
+      }
+      break;
+    }
+    case kSynMatch: {
+      F(print_syntax_match, subargsargs, SYN_SCOPE_MATCH);
+      break;
+    }
+    case kSynRegion: {
+      F(print_syntax_region, subargsargs);
+      break;
+    }
+    case kSynSync: {
+      const uint_least32_t flags = subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags;
+      if (subargsargs[SYN_ARG_SYNC_CCOMMENT].arg.str != NULL) {
+        WS(" ccomment ");
+        W(subargsargs[SYN_ARG_SYNC_CCOMMENT].arg.str);
+      }
+      if (flags & FLAG_SYN_SYNC_HASMINLINES) {
+        WS(" minlines=");
+        F_NOOPT(dump_unumber,
+                (uintmax_t) subargsargs[SYN_ARG_SYNC_MINLINES].arg.unumber);
+      }
+      if (flags & FLAG_SYN_SYNC_HASMAXLINES) {
+        WS(" maxlines=");
+        F_NOOPT(dump_unumber,
+                (uintmax_t) subargsargs[SYN_ARG_SYNC_MAXLINES].arg.unumber);
+      }
+      if (flags & FLAG_SYN_SYNC_HASLINEBREAKS) {
+        WS(" linebreaks=");
+        F_NOOPT(dump_unumber,
+                (uintmax_t) subargsargs[SYN_ARG_SYNC_LINEBREAKS].arg.unumber);
+      }
+      if (flags & FLAG_SYN_SYNC_FROMSTART) {
+        WS(" fromstart");
+      }
+      if (subargsargs[SYN_ARG_SYNC_REGEX].arg.reg != NULL) {
+        WS(" linecont /");
+        // TODO Escape /
+        F(print_regex, subargsargs[SYN_ARG_SYNC_REGEX].arg.reg);
+        WC('/');
+      }
+      if (subargsargs[SYN_ARG_SYNC_CMD].arg.args.num_args) {
+        switch (subargsargs[SYN_ARG_SYNC_CMD].arg.args.type) {
+          case kSynMatch: {
+            WS(" match");
+            F(print_syntax_match, subargsargs[SYN_ARG_SYNC_CMD].arg.args.args,
+              SYN_SCOPE_MATCH|SYN_SCOPE_SYNC);
+            break;
+          }
+          case kSynRegion: {
+            WS(" region");
+            F(print_syntax_region, subargsargs[SYN_ARG_SYNC_CMD].arg.args.args);
+            break;
+          }
+          case kSynClear: {
+            const SynGroupList *group = (subargsargs[SYN_ARG_SYNC_CMD].arg.args
+                                         .args[SYN_ARG_CLEAR_GROUPS].arg.group);
+            WS(" clear");
+            if (group) {
+              WC(' ');
+              F(print_group_list, group, ' ');
+            }
+            break;
+          }
+          default: {
+            assert(false);
+          }
+        }
+      }
+      break;
+    }
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -2107,6 +2761,14 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_menutranslate);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdCscope).parse) {
     CMD_F(print_cscope);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdSniff).parse) {
+    CMD_F(print_sniff);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHighlight).parse) {
+    CMD_F(print_highlight);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdSign).parse) {
+    CMD_F(print_sign);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdSyntax).parse) {
+    CMD_F(print_syntax);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

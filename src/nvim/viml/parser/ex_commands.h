@@ -12,6 +12,7 @@
 #include "nvim/vim.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/viml/parser/command_definitions.h"
+#include "nvim/viml/parser/command_arguments.h"
 #include "nvim/viml/parser/expressions.h"
 // FIXME Remove the two following includes: only regexp_defs is needed.
 #include "nvim/vim.h"
@@ -198,6 +199,88 @@ typedef struct replacement {
   struct replacement *next;  ///< Next parsed item.
 } Replacement;
 
+/// Possible ways to define highlight color
+typedef enum {
+  kHiColorName,  ///< Name of the color (string).
+  kHiColorRGB,   ///< 24-bit RGB color.
+  kHiColorIdx,   ///< Terminal color index.
+  kHiColorFg,    ///< Same as foreground color.
+  kHiColorBg,    ///< Same as background color.
+  kHiColorNone,  ///< No color needed.
+} HighlightColorType;
+
+/// Structure that contains color definition
+typedef struct {
+  HighlightColorType type;  ///< Type of the definition.
+  union {
+    char *name;             ///< Human-readable name of the color.
+    struct {
+      unsigned red : 8;     ///< Red component of RGB color.
+      unsigned green : 8;   ///< Green component of RGB color.
+      unsigned blue : 8;    ///< Blue component of RGB color.
+    } rgb;                  ///< 24-bit RGB color.
+    uint8_t idx;            ///< Terminal color index.
+  } data;
+} HighlightColor;
+
+/// Possible values in :syn group list (e.g. :syn-contains)
+typedef enum {
+  kSynGroupLiteral,    ///< Literal name.
+  kSynGroupCluster,    ///< Cluster name ("@Name").
+  kSynGroupRegex,      ///< Regular expression.
+  kSynGroupAll,        ///< ALL or ALLBUT argument.
+  kSynGroupTop,        ///< TOP argument.
+  kSynGroupContained,  ///< CONTAINED argument.
+} SynGroupType;
+
+/// Structure holding syntax group list
+typedef struct syn_group SynGroupList;
+struct syn_group {
+  SynGroupType type;   ///< Type of the item.
+  union {
+    char *name;        ///< Name (for kSynGroupLiteral and kSynGroupCluster).
+    Regex *regex;      ///< Regular expression (for kSynGroupRegex).
+  } data;
+  SynGroupList *next;  ///< Next item in the list.
+};
+
+/// :syn-pattern offset types ({what} part of the offset)
+typedef enum {
+  kSynRegNoOffset          = 0x0,  ///< No offset: end of list
+  kSynRegOffsetMatchStart  = 0x1,  ///< `ms`: Match Start
+  kSynRegOffsetMatchEnd    = 0x2,  ///< `me`: Match End
+  kSynRegOffsetHiStart     = 0x3,  ///< `hs`: Highlight Start
+  kSynRegOffsetHiEnd       = 0x4,  ///< `he`: Highlight End
+  kSynRegOffsetRegionStart = 0x5,  ///< `rs`: Region Start
+  kSynRegOffsetRegionEnd   = 0x6,  ///< `re`: Region End
+  kSynRegOffsetLContext    = 0x7,  ///< `lc`: Leading Context
+} SynRegOffsetType;
+#define FLAG_SYN_OFFSET_MASK 0x7
+
+/// :syn-pattern anchors (positions from which offset is counted)
+typedef enum {
+  kSynRegOffsetAnchorStart = 0x00,  ///< Start of the matched pattern.
+  kSynRegOffsetAnchorEnd   = 0x08,  ///< End of the matched pattern.
+  kSynRegOffsetAnchorLC    = 0x10,  ///< Start matching {nr} chars right 
+                                    ///< of the start.
+} SynRegOffsetAnchorType;
+#define FLAG_SYN_OFFSET_ANCHOR_MASK 0x18
+
+/// Structure holding syntax pattern (i.e. pattern + offsets)
+typedef struct {
+  Regex *reg;              ///< Pattern itself.
+  size_t offset_count;     ///< Number of offsets present.
+  uint_least32_t *flagss;  ///< Flags: SynRegOffsetType|SynRegOffsetAnchorType.
+  int *offsets;            ///< Offset values.
+} SynPattern;
+
+/// Structure that holds a list of syntax patterns
+typedef struct syn_pat_list SynPatterns;
+struct syn_pat_list {
+  SynPattern syn_pat;  ///< Current syntax pattern.
+  SynPatterns *next;   ///< Next pattern in the list.
+};
+
 /// Structure for representing one command
 typedef struct command_node {
   CommandType type;               ///< Command type. For built-in commands it 
@@ -253,6 +336,10 @@ typedef struct command_node {
                                   ///< expressions (:echo) (uses expr->next to 
                                   ///< build a linked list)
       Replacement *rep;           ///< Replacement string, parsed.
+      HighlightColor color;       ///< Color definition.
+      SynGroupList *group;        ///< Syntax groups.
+      SynPattern *syn_pat;        ///< Syntax pattern.
+      SynPatterns *syn_pats;      ///< List of syntax patterns.
       struct command_subargs {
         unsigned type;
         size_t num_args;
@@ -292,6 +379,18 @@ typedef int (*CommandArgsParser)(const char **,
                                  CommandPosition,
                                  VimlLineGetter,
                                  void *);
+
+/// Definition of a single highlight attribute
+///
+/// Used for parsing `term=`, `gui=` and `cterm=` attribute lists.
+typedef struct {
+  const char *hl_attr_name;           ///< Attribute name.
+  const size_t hl_attr_name_len;      ///< Cached strlen() of attribute name.
+  const uint_least32_t hl_attr_flag;  ///< Attribute flag.
+} HighlightAttrDef;
+
+/// Table that maps attribute names to corresponding binary flags
+extern const HighlightAttrDef hl_attr_table[];
 
 // flags for parse_one_cmd
 #define FLAG_POC_EXMODE      0x01
@@ -343,6 +442,12 @@ const CommandNode nocmd;
 /// Maximum nesting level for :for/:while/:if/:try blocks
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
 
+/// Characters that end Ex command, except for the comment and NUL characters
+#define ENDS_EXCMD_NOCOMMENT_CHARS "|\n"
+
+/// Characters that end Ex command, except for the NUL character
+#define ENDS_EXCMD_CHARS ENDS_EXCMD_NOCOMMENT_CHARS "\""
+
 /// Macros that checks whether given character ends Ex command
 #define ENDS_EXCMD_NOCOMMENT(ch) ((ch) == NUL || (ch) == '|' || (ch) == '\n')
 
@@ -355,6 +460,9 @@ const CommandNode nocmd;
 #define LAST_MARK_CODE 0x7F
 /// Length of the string that may hold enough marks
 #define MAX_NUM_MARKS (LAST_MARK_CODE - FIRST_MARK_CODE + 1)
+
+#define SIGN_ID_MISSING -1
+#define SIGN_ID_ALL     -2
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.h.generated.h"

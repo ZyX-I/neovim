@@ -18,8 +18,8 @@
 ///
 /// @note If neither #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE 
 ///       macros are defined then functions with `void f(CH_MACROS_OPTIONS_TYPE 
-///       o, ..., char **pp)` signature are defined. They are supposed to write 
-///       resulting string to `**pp` and advance `*pp` to the end of written 
+///       o, ..., char **pp_)` signature are defined. They are supposed to write 
+///       resulting string to `**pp_` and advance `*pp_` to the end of written 
 ///       string. They are not supposed to output trailing NUL though.
 
 /// @def CH_MACROS_INDENT_STR
@@ -49,8 +49,20 @@
 /// @note Function return value is handled by macros itself. You should not 
 ///       expect macros to return anything.
 
+/// @def F_PTR
+/// @brief Call given pointer to the function with some predefined arguments
+///
+/// @param  f    Called function pointer.
+/// @param  ...  Function arguments that are not predefined.
+///
+/// @note Function return value is handled by macros itself. You should not 
+///       expect macros to return anything.
+
 /// @def F_NOOPT
 /// @brief Like #F, but without predefined option argument
+
+/// @def F_PTR_NOOPT
+/// @brief Like #F_PTR, but without predefined option argument
 
 /// @def F_ESCAPED
 /// @brief Like #F(f, ...), but also escapes characters listed in e with '\\'
@@ -172,6 +184,12 @@
 #ifdef F_NOOPT
 # undef F_NOOPT
 #endif
+#ifdef F_PTR_NOOPT
+# undef F_PTR_NOOPT
+#endif
+#ifdef F_PTR
+# undef F_PTR
+#endif
 #ifdef F_ESCAPED
 # undef F_ESCAPED
 #endif
@@ -214,8 +232,8 @@
 
 #ifdef CH_MACROS_DEFINE_LENGTH
 # define FNAME(f) s##f##_len
-# define F_NOOPT(f, ...) \
-    len += FNAME(f)(__VA_ARGS__)
+# define F_PTR_NOOPT(fp, ...) \
+    len += (*(fp))(__VA_ARGS__)
 # define F_ESCAPED(f, e, ...) \
     len += 2 * CALL_LEN(f, __VA_ARGS__)
 # define _FARGS(...) CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__
@@ -251,9 +269,9 @@
       } \
     } while (0)
 #  define FNAME(f) f
-#  define F_NOOPT(f, ...) \
+#  define F_PTR_NOOPT(fp, ...) \
     do { \
-      if (FNAME(f)(__VA_ARGS__, write, cookie) == FAIL) \
+      if ((*(fp))(__VA_ARGS__, write, cookie) == FAIL) \
         return FAIL; \
     } while (0)
 #  define _FARGS(...) CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__, Writer write, \
@@ -300,21 +318,21 @@
     } while (0)
 # else
 #  define FNAME(f) s##f
-#  define F_NOOPT(f, ...) \
-    FNAME(f)(__VA_ARGS__, &p_)
-#  define _FARGS(...) CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__, char **pp
+#  define F_PTR_NOOPT(fp, ...) \
+    (*(fp))(__VA_ARGS__, &p_)
+#  define _FARGS(...) CH_MACROS_OPTIONS_TYPE o, __VA_ARGS__, char **pp_
 #  define FDEC(f, ...) \
     void FNAME(f)(_FARGS(__VA_ARGS__))
 #  define FTYPE(t) t##Str
 #  define FDEC_TYPEDEF(t, ...) \
     void (*FTYPE(t))(_FARGS(__VA_ARGS__))
 #  define FUNCTION_START \
-    char *p_ = *pp
+    char *p_ = *pp_
 #  define EARLY_RETURN \
     return
 #  define FUNCTION_END \
     do { \
-      *pp = p_; \
+      *pp_ = p_; \
       return; \
     } while (0)
 #  define WC(c) \
@@ -369,6 +387,10 @@
 #endif
 
 #ifndef NVIM_SRC_VIML_DUMPERS_CH_MACROS_H
+# define F_PTR(fp, ...) \
+    F_PTR_NOOPT(fp, o, __VA_ARGS__)
+# define F_NOOPT(f, ...) \
+    F_PTR_NOOPT(&(FNAME(f)), __VA_ARGS__)
 # define F(f, ...) \
     F_NOOPT(f, o, __VA_ARGS__)
 # define FDEC_TYPEDEF_ALL(t, ...) \

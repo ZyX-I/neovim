@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
@@ -29,6 +30,7 @@
 #include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/digraph.h"
+#include "nvim/assert.h"
 
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
@@ -41,17 +43,23 @@ int check_nomodeline(char_u **argp);
 #endif
 
 #define getdigits(arg) getdigits((char_u **) (arg))
+#define getdigits_int(arg) getdigits_int((char_u **) (arg))
+#define getdigits_long(arg) getdigits_long((char_u **) (arg))
 #define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
 #define skipdigits(arg) (char *) skipdigits((char_u *) (arg))
 #define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((const char_u *) p) : 1
 #define mb_ptr2len(p) ((size_t) mb_ptr2len((const char_u *) p))
+#define mb_ptr2char(p) (mb_ptr2char((const char_u *) p))
+#define mb_ptr2cells(p) ((size_t) mb_ptr2cells((const char_u *) p))
 #define enc_canonize(p) (char *) enc_canonize((char_u *) (p))
 #define check_ff_value(p) check_ff_value((char_u *) (p))
 #define replace_termcodes(a, b, c, d, e, f, g) \
     (char *) replace_termcodes((const char_u *) a, b, (char_u **) c, d, e, f, g)
 #define lrswap(s) lrswap((char_u *) s)
+#define backslash_halve(s) backslash_halve((char_u *) s)
 #define get_list_range(pp, i1, i2) get_list_range((char_u **)pp, i1, i2)
 #define skiptowhite(p) (const char *) skiptowhite((char_u *) p)
+#define skiptowhite_esc(p) (const char *) skiptowhite_esc((char_u *) p)
 #define check_nomodeline(p) check_nomodeline((char_u **) p)
 #define get_histtype(p, len, d) get_histtype((const char_u *) p, len, d)
 #define find_key_option_len(p, l) find_key_option_len((const char_u *) p, len)
@@ -76,8 +84,58 @@ int check_nomodeline(char_u **argp);
 
 typedef int (*SubCommandParser)(CMD_SUBP_ARGS);
 
+#define SUBARGS(m) \
+    (sizeof((CommandArgType[]) m)/sizeof(CommandArgType)), (CommandArgType[]) m
+#define EMPTY_SUBARGS 0, NULL
+#define SS(s) s, (sizeof(s) - 1)
+
+/// List of syntax options types
+typedef enum {
+  kSynOptFlag,     ///< Bit flag.
+  kSynOptGroups,   ///< Group list.
+  kSynOptSGroups,  ///< Group list with special groups like ALL allowed.
+  kSynOptCharStr,  ///< char * string, containing one character (for cchar).
+  kSynOptGroup,    ///< One group name (for group[t]here).
+} SynOptType;
+
 typedef struct {
   const char *name;
+  SynOptType type;
+  int offset;
+  uint_least32_t flag;
+  uint_least32_t acceted_commands;
+} SynOptDef;
+
+#define SYN_FLAG_OPT(name_str, accepted_in, name) \
+    {name_str, \
+     kSynOptFlag, \
+     SYN_ARG_FLAGS_OFFSET, \
+     FLAG_SYN_##accepted_in##_##name, \
+     SYN_SCOPE_##accepted_in \
+    }
+#define SYN_OPT(name_str, type, accepted_in, name) \
+    {name_str, \
+     kSynOpt##type, \
+     SYN_ARG_##name##_OFFSET, \
+     0, \
+     SYN_SCOPE_##accepted_in \
+    }
+#define SYN_GROUP_OPT(name_str, accepted_in, name) \
+    {name_str, \
+     kSynOptGroup, \
+     SYN_ARG_##name##_OFFSET, \
+     0, \
+     SYN_SCOPE_##accepted_in \
+    }
+
+typedef struct {
+  const char *name;
+  SynRegOffsetType type;
+} SpoDef;
+
+typedef struct {
+  const char *name;
+  size_t name_len;
   unsigned type;
   size_t num_args;
   const CommandArgType *types;
@@ -405,6 +463,56 @@ static void free_range(Range *range)
   free(range);
 }
 
+static void free_syn_group_list(SynGroupList *group)
+{
+  if (group == NULL) {
+    return;
+  }
+
+  switch (group->type) {
+    case kSynGroupLiteral:
+    case kSynGroupCluster: {
+      free(group->data.name);
+      group->data.name = NULL;
+      break;
+    }
+    case kSynGroupRegex: {
+      free_regex(group->data.regex);
+      group->data.regex = NULL;
+      break;
+    }
+    case kSynGroupAll:
+    case kSynGroupTop:
+    case kSynGroupContained: {
+      break;
+    }
+  }
+  free_syn_group_list(group->next);
+  group->next = NULL;
+}
+
+static void free_syn_pattern_data(SynPattern *syn_pat)
+{
+  if (syn_pat == NULL) {
+    return;
+  }
+
+  free_regex(syn_pat->reg);
+  free(syn_pat->flagss);
+  free(syn_pat->offsets);
+}
+
+static void free_syn_patterns(SynPatterns *syn_pats)
+{
+  if (syn_pats == NULL) {
+    return;
+  }
+
+  free_syn_patterns(syn_pats->next);
+  free_syn_pattern_data(&(syn_pats->syn_pat));
+  free(syn_pats);
+}
+
 const char *const empty_string = "";
 
 static void free_cmd_arg(CommandArg *arg, CommandArgType type)
@@ -510,6 +618,29 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       free(subargs);
       arg->arg.args.args = NULL;
       arg->arg.args.num_args = 0;
+      break;
+    }
+    case kArgColor: {
+      if (arg->arg.color.type == kHiColorName) {
+        free(arg->arg.color.data.name);
+        arg->arg.color.data.name = NULL;
+      }
+      break;
+    }
+    case kArgSynGroups: {
+      free_syn_group_list(arg->arg.group);
+      arg->arg.group = NULL;
+      break;
+    }
+    case kArgSynPattern: {
+      free_syn_pattern_data(arg->arg.syn_pat);
+      free(arg->arg.syn_pat);
+      arg->arg.syn_pat = NULL;
+      break;
+    }
+    case kArgSynPatterns: {
+      free_syn_patterns(arg->arg.syn_pats);
+      arg->arg.syn_pats = NULL;
       break;
     }
   }
@@ -658,6 +789,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
         break;
       }
       case '%': {
+        // FIXME Parse filename modifiers after this
         type = kPatCurrent;
         break;
       }
@@ -746,6 +878,10 @@ static int get_pattern(const char **pp, CommandParserError *error,
           type = kPatLiteral;
         }
         break;
+      }
+      case '<': {
+        // FIXME Parse special values like <sfile>
+        // fallthrough
       }
       default: {
         type = kPatLiteral;
@@ -4987,14 +5123,13 @@ static CMD_SUBP_DEF(parse_cscope_find)
 }
 
 static const SubCommandDefinition cscope_commands[] = {
-  {"add", kCscopeAdd, 3, (CommandArgType[]) CSCOPE_ARGS_ADD, &parse_cscope_add},
-  {"find", kCscopeFind, 2, (CommandArgType[]) CSCOPE_ARGS_FIND,
-   &parse_cscope_find},
-  {"help", kCscopeHelp, 0, NULL, NULL},
-  {"kill", kCscopeKill, 0, NULL, NULL},
-  {"reset", kCscopeReset, 0, NULL, NULL},
-  {"show", kCscopeShow, 0, NULL, NULL},
-  {NULL, 0, 0, NULL, NULL},
+  {SS("add"), kCscopeAdd, SUBARGS(CSCOPE_ARGS_ADD), &parse_cscope_add},
+  {SS("find"), kCscopeFind, SUBARGS(CSCOPE_ARGS_FIND), &parse_cscope_find},
+  {SS("help"), kCscopeHelp, EMPTY_SUBARGS, NULL},
+  {SS("kill"), kCscopeKill, EMPTY_SUBARGS, NULL},
+  {SS("reset"), kCscopeReset, EMPTY_SUBARGS, NULL},
+  {SS("show"), kCscopeShow, EMPTY_SUBARGS, NULL},
+  {NULL, 0, 0, 0, NULL, NULL},
 };
 
 static CMD_P_DEF(parse_cscope)
@@ -5018,6 +5153,7 @@ static CMD_P_DEF(parse_cscope)
         CommandArg *subargsargs = NULL;
         if (cur_cmd->num_args) {
           subargsargs = xcalloc(subargs->num_args, sizeof(CommandArg));
+          subargs->args = subargsargs;
         }
         if (cur_cmd->parse) {
           int pret;
@@ -5025,13 +5161,8 @@ static CMD_P_DEF(parse_cscope)
           position.col += (size_t) (p - s);
           if ((pret = cur_cmd->parse(&p, node, error, o, new_position,
                                      subargsargs)) != OK) {
-            free(subargsargs);
-            subargs->num_args = 0;
             return pret;
           }
-        }
-        if (cur_cmd->num_args) {
-          subargs->args = subargsargs;
         }
         break;
       }
@@ -5045,6 +5176,1619 @@ static CMD_P_DEF(parse_cscope)
   return OK;
 }
 
+static CMD_P_DEF(parse_sniff)
+{
+  // Sets:
+  // Case                CMD       SYMBOL    DEF       MSG
+  // List commands       NULL      NULL      NULL      NULL
+  // Define new command  non-NULL  NULL      non-NULL  non-NULL
+  // Run some command    non-NULL  non-NULL  NULL      NULL
+  const char *p = *pp;
+  if (ENDS_EXCMD(*p)) {
+    return OK;
+  }
+  const char *const cmd_end = skiptowhite(p);
+  char *const cmd = xmemdupz(p, (size_t) (cmd_end - p));
+  node->args[ARG_SNIFF_CMD].arg.str = cmd;
+  const char *symbol = skipwhite(cmd_end);
+  if (ENDS_EXCMD(*symbol)) {
+    symbol = NULL;
+  }
+  if (STRCMP(cmd, "addcmd") == 0) {
+    const char *const symbol_end = skiptowhite(symbol);
+    free(node->args[ARG_SNIFF_CMD].arg.str);
+    node->args[ARG_SNIFF_CMD].arg.str =
+        xmemdupz(symbol, (size_t) (symbol_end - symbol));
+    const char *const def = skipwhite(symbol_end);
+    const char *const def_end = skiptowhite(def);
+    node->args[ARG_SNIFF_DEF].arg.str =
+        xmemdupz(def, (size_t) (def_end - def));
+    const char *const msg = skipwhite(def_end);
+    if (ENDS_EXCMD(*msg)) {
+      node->args[ARG_SNIFF_MSG].arg.str =
+          xstrdup(node->args[ARG_SNIFF_CMD].arg.str);
+      *pp = msg;
+    } else {
+      const char *const msg_end = skiptowhite_esc(msg);
+      node->args[ARG_SNIFF_MSG].arg.str =
+          xmemdupz(msg, (size_t) (msg_end - msg));
+      *pp = msg_end;
+    }
+  } else {
+    const size_t len = STRLEN(symbol);
+    node->args[ARG_SNIFF_SYMBOL].arg.str = xmemdupz(symbol, len);
+    *pp = symbol + len;
+  }
+  return OK;
+}
+
+const HighlightAttrDef hl_attr_table[] = {
+  {SS("bold"), FLAG_HI_TERM_BOLD},
+  {SS("underline"), FLAG_HI_TERM_UNDERLINE},
+  {SS("undercurl"), FLAG_HI_TERM_UNDERCURL},
+  {SS("inverse"), FLAG_HI_TERM_REVERSE},
+  {SS("reverse"), FLAG_HI_TERM_REVERSE},
+  {SS("italic"), FLAG_HI_TERM_ITALIC},
+  {SS("standout"), FLAG_HI_TERM_STANDOUT},
+  {SS("none"), FLAG_HI_TERM_NONE},
+  {NULL, 0, 0},
+};
+
+static CMD_P_DEF(parse_highlight)
+{
+  const char *p = *pp;
+  uint_least32_t flags = 0;
+  if (ENDS_EXCMD(*p)) {
+    return OK;
+  }
+  const char *name_start = p;
+  const char *name_end = skiptowhite(name_start);
+  p = skipwhite(name_end);
+
+  if (STRNCMP(name_start, "default", name_end - name_start) == 0) {
+    flags |= FLAG_HI_DEFAULT;
+    name_start = p;
+    name_end = skiptowhite(name_start);
+    p = skipwhite(name_end);
+  }
+
+  if (STRNCMP(name_start, "clear", name_end - name_start) == 0) {
+    flags |= FLAG_HI_CLEAR;
+  } else if (STRNCMP(name_start, "link", name_end - name_start) == 0) {
+    flags |= FLAG_HI_LINK;
+  }
+
+  if (!(flags & (FLAG_HI_CLEAR|FLAG_HI_LINK)) && ENDS_EXCMD(*p)) {
+    node->args[ARG_HI_GROUP].arg.str =
+        xmemdupz(name_start, (size_t) (name_end - name_start));
+    goto parse_highlight_end;
+  }
+
+  if (flags & FLAG_HI_LINK) {
+    const char *const from_start = p;
+    const char *const from_end = skiptowhite(from_start);
+    const char *const to_start = skipwhite(from_end);
+    const char *const to_end = skiptowhite(to_start);
+
+    if (ENDS_EXCMD(*from_start) || ENDS_EXCMD(*to_start)) {
+      error->message = N_("E412: Not enough arguments to :highlight link");
+      error->position = ((ENDS_EXCMD(*from_start))
+                         ? from_start
+                         : to_start);
+      return NOTDONE;
+    }
+
+    p = skipwhite(to_end);
+    if (!ENDS_EXCMD(*p)) {
+      error->message = N_("E413: Too many arguments to :highlight link");
+      error->position = p;
+      return NOTDONE;
+    }
+
+    node->args[ARG_HI_GROUP].arg.str =
+        xmemdupz(from_start, (size_t) (from_end - from_start));
+    node->args[ARG_HI_TGT_GROUP].arg.str =
+        xmemdupz(to_start, (size_t) (to_end - to_start));
+    goto parse_highlight_end;
+  }
+
+  if (flags & FLAG_HI_CLEAR) {
+    if (ENDS_EXCMD(*p)) {
+      goto parse_highlight_end;
+    }
+    name_start = p;
+    name_end = skiptowhite(name_start);
+    p = skipwhite(name_end);
+  }
+
+  node->args[ARG_HI_GROUP].arg.str =
+      xmemdupz(name_start, (size_t) (name_end - name_start));
+
+  if (!(flags & FLAG_HI_CLEAR)) {
+    while (!ENDS_EXCMD(*p)) {
+      const char *const key_start = p;
+      if (*key_start == '=') {
+        error->message = N_("E415: Unexpected equal sign");
+        error->position = key_start;
+        return NOTDONE;
+      }
+
+      // Isolate the key ("c?term|gui", "(term|gui)(fg|bg)")
+      while (*p && !vim_iswhite(*p) && *p != '=') {
+        p++;
+      }
+      const char *const key_end = p;
+
+      if (*p != '=') {
+        error->message = N_("E416: Missing equal sign");
+        error->position = p;
+        return NOTDONE;
+      }
+      p++;
+
+      // Isolate the argument
+      p = skipwhite(p);
+      const char *arg_start = p;
+      if (*p == '\'') {
+        arg_start++;
+        p = strchr(p + 1, '\'');
+        if (p == NULL) {
+          error->message = N_("E475: Missing closing quote");
+          error->position = arg_start - 1;
+          return NOTDONE;
+        }
+      } else {
+        p = skiptowhite(p);
+      }
+      const char *const arg_end = p;
+      const size_t arg_len = (size_t) (arg_end - arg_start);
+
+      if (!arg_len) {
+        error->message = N_("E417: Missing argument");
+        error->position = arg_start;
+        return NOTDONE;
+      }
+
+      if (*p == '\'') {
+        p++;
+      }
+
+      const size_t key_len = (size_t) (key_end - key_start);
+      int prop_idx = -1;
+      switch (key_len) {
+        case 3: {
+          if (STRNICMP(key_start, "gui", 3) == 0) {
+            prop_idx = ARG_HI_GUI;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        case 4: {
+          if (STRNICMP(key_start, "term", 4) == 0) {
+            prop_idx = ARG_HI_TERM;
+          } else if (STRNICMP(key_start, "font", 4) == 0) {
+            prop_idx = ARG_HI_FONT;
+          } else if (STRNICMP(key_start, "stop", 4) == 0) {
+            prop_idx = ARG_HI_STOP;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        case 5: {
+          if (STRNICMP(key_start, "cterm", 5) == 0) {
+            prop_idx = ARG_HI_CTERM;
+          } else if (STRNICMP(key_start, "guifg", 5) == 0) {
+            prop_idx = ARG_HI_GUIFG;
+          } else if (STRNICMP(key_start, "guibg", 5) == 0) {
+            prop_idx = ARG_HI_GUIBG;
+          } else if (STRNICMP(key_start, "guisp", 5) == 0) {
+            prop_idx = ARG_HI_GUISP;
+          } else if (STRNICMP(key_start, "start", 5) == 0) {
+            prop_idx = ARG_HI_START;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        case 7: {
+          if (STRNICMP(key_start, "ctermfg", 7) == 0) {
+            prop_idx = ARG_HI_CTERMFG;
+          } else if (STRNICMP(key_start, "ctermbg", 7) == 0) {
+            prop_idx = ARG_HI_CTERMBG;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        default: {
+          goto parse_highlight_unknown_property;
+        }
+      }
+      if (prop_idx == ARG_HI_GUI
+          || prop_idx == ARG_HI_TERM
+          || prop_idx == ARG_HI_CTERM) {
+        uint_least32_t attr_flags = 0;
+        const char *ap = arg_start;
+        while (ap < arg_end) {
+          const HighlightAttrDef *cur_hl_attr = &(hl_attr_table[0]);
+          for (cur_hl_attr = &(hl_attr_table[0]);
+               cur_hl_attr->hl_attr_name != NULL;
+               cur_hl_attr++) {
+            if (STRNICMP(ap, cur_hl_attr->hl_attr_name,
+                         cur_hl_attr->hl_attr_name_len) == 0) {
+              attr_flags |= cur_hl_attr->hl_attr_flag;
+              ap += cur_hl_attr->hl_attr_name_len;
+              break;
+            }
+          }
+          if (cur_hl_attr->hl_attr_name == NULL) {
+            error->message = N_("E418: Illegal attribute name");
+            error->position = ap;
+            return NOTDONE;
+          }
+          if (*ap == ',') {
+            ap++;
+          }
+        }
+        node->args[prop_idx].arg.flags = attr_flags;
+      } else if (prop_idx == ARG_HI_FONT) {
+        node->args[prop_idx].arg.str = xmemdupz(arg_start, arg_len);
+      } else if (prop_idx == ARG_HI_CTERMFG || prop_idx == ARG_HI_CTERMBG
+                 || prop_idx == ARG_HI_GUIFG || prop_idx == ARG_HI_GUIBG
+                 || prop_idx == ARG_HI_GUISP) {
+        if (VIM_ISDIGIT(*arg_start)
+            && (prop_idx == ARG_HI_CTERMFG || prop_idx == ARG_HI_CTERMBG)) {
+          node->args[prop_idx].arg.color.type = kHiColorIdx;
+          node->args[prop_idx].arg.color.data.idx = (uint8_t) atoi(arg_start);
+        } else if (*arg_start == '#' && arg_len == 7
+                 && (prop_idx == ARG_HI_GUIFG
+                     || prop_idx == ARG_HI_GUIBG
+                     || prop_idx == ARG_HI_GUISP)
+                 && vim_isxdigit(arg_start[1])
+                 && vim_isxdigit(arg_start[2])
+                 && vim_isxdigit(arg_start[3])
+                 && vim_isxdigit(arg_start[4])
+                 && vim_isxdigit(arg_start[5])
+                 && vim_isxdigit(arg_start[6])) {
+          node->args[prop_idx].arg.color.type = kHiColorRGB;
+          union {
+            struct {
+              unsigned rgb : 24;
+            } rgb_1;
+            struct {
+              unsigned blue : 8;
+              unsigned green : 8;
+              unsigned red : 8;
+            } rgb_3;
+          } current_color;
+          current_color.rgb_1.rgb = (unsigned) strtoul(arg_start + 1, NULL, 16);
+          node->args[prop_idx].arg.color.data.rgb.red = current_color.rgb_3.red;
+          node->args[prop_idx].arg.color.data.rgb.green
+              = current_color.rgb_3.green;
+          node->args[prop_idx].arg.color.data.rgb.blue
+              = current_color.rgb_3.blue;
+        } else if (arg_len == 2 && STRNICMP(arg_start, "fg", 2) == 0) {
+          node->args[prop_idx].arg.color.type = kHiColorFg;
+        } else if (arg_len == 2 && STRNICMP(arg_start, "bg", 2) == 0) {
+          node->args[prop_idx].arg.color.type = kHiColorBg;
+        } else if (arg_len == 4 && STRNICMP(arg_start, "none", 4) == 0) {
+          node->args[prop_idx].arg.color.type = kHiColorNone;
+        } else {
+          node->args[prop_idx].arg.color.type = kHiColorName;
+          node->args[prop_idx].arg.color.data.name =
+              xmemdupz(arg_start, arg_len);
+        }
+      } else if (prop_idx == ARG_HI_START || prop_idx == ARG_HI_STOP) {
+        // FIXME Do better parsing.
+        node->args[prop_idx].arg.str = xmemdupz(arg_start, arg_len);
+      } else {
+parse_highlight_unknown_property:
+        error->message = N_("E423: Unknown property name");
+        error->position = key_start;
+        return NOTDONE;
+      }
+      p = skipwhite(p);
+    }
+  } else {
+    p += STRLEN(p);
+  }
+
+parse_highlight_end:
+  node->args[ARG_HI_FLAGS].arg.flags = flags;
+  *pp = p;
+  return OK;
+}
+
+static int parse_sign_undeflist(CMD_SUBP_ARGS, const SignArgType type)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    if (type == kSignList) {
+      // `:sign list` without arguments
+      return OK;
+    } else {
+      error->message = N_("E156: Missing sign name");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else {
+    const char *name_start = p;
+    p = skiptowhite(p);
+    // If sign name is a number then skip leading zeroes.
+    while (name_start < p - 1 && *name_start == '0') {
+      name_start++;
+    }
+    STATIC_ASSERT(SIGN_ARG_DEFINE_NAME == SIGN_ARG_UNDEFINE_NAME,
+                  "Name indexes do not match");
+    STATIC_ASSERT(SIGN_ARG_DEFINE_NAME == SIGN_ARG_LIST_NAME,
+                  "Name indexes do not match");
+    subargsargs[SIGN_ARG_DEFINE_NAME].arg.str =
+        xmemdupz(name_start, (size_t) (p - name_start));
+    if (type != kSignDefine) {
+      p += STRLEN(p);
+      goto parse_sign_undeflist_end;
+    }
+    for (;;) {
+      p = skipwhite(p);
+      if (*p == NUL) {
+        break;
+      }
+      const char *const prop_start = p;
+      p = skiptowhite_esc(p);
+      if (STRNCMP(prop_start, "icon=", 5) == 0) {
+        const char *const val_start = prop_start + 5;
+        char *icon_file = xmemdupz(val_start, (size_t) (p - val_start));
+        backslash_halve(icon_file);
+        subargsargs[SIGN_ARG_DEFINE_ICON].arg.str = icon_file;
+      } else if (STRNCMP(prop_start, "text=", 5) == 0) {
+        const char *const text_start = prop_start + 5;
+        size_t cells = 0;
+        const char *s;
+        if (has_mbyte) {
+          for (s = text_start; s < p; s += (mb_ptr2len(s))) {
+            if (!vim_isprintc(mb_ptr2char(s))) {
+              error->message = N_("E239: Non-printable character in sign text");
+              error->position = s;
+              return NOTDONE;
+            }
+            cells += mb_ptr2cells(s);
+          }
+        } else {
+          for (s = text_start; s < p; s++) {
+            if (!vim_isprintc(*s)) {
+              error->message = N_("E239: Non-printable character in sign text");
+              error->position = s;
+              return NOTDONE;
+            }
+          }
+          cells = (size_t) (s - text_start);
+        }
+        if (s != p) {
+          error->message = N_("E239: Failed to process complete sign text");
+          error->position = s;
+          return NOTDONE;
+        } else if (cells != 2) {
+          error->message = (cells > 2
+                            ? N_("E239: Sign text is too wide")
+                            : N_("E239: Sign text is too narrow"));
+          error->position = text_start;
+          return NOTDONE;
+        }
+      } else if (STRNCMP(prop_start, "linehl=", 7) == 0) {
+        subargsargs[SIGN_ARG_DEFINE_LINEHL].arg.str =
+            xmemdupz(prop_start + 7, (size_t) ((p - prop_start) - 7));
+      } else if (STRNCMP(prop_start, "texthl=", 7) == 0) {
+        subargsargs[SIGN_ARG_DEFINE_TEXTHL].arg.str =
+            xmemdupz(prop_start + 7, (size_t) ((p - prop_start) - 7));
+      } else {
+        error->message = N_("E475: Unknown sign property");
+        error->position = prop_start;
+        return NOTDONE;
+      }
+    }
+  }
+parse_sign_undeflist_end:
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_sign_define)
+{
+  return parse_sign_undeflist(pp, node, error, o, position, subargsargs,
+                              kSignDefine);
+}
+
+static CMD_SUBP_DEF(parse_sign_undefine)
+{
+  return parse_sign_undeflist(pp, node, error, o, position, subargsargs,
+                              kSignUndefine);
+}
+
+static CMD_SUBP_DEF(parse_sign_list)
+{
+  return parse_sign_undeflist(pp, node, error, o, position, subargsargs,
+                              kSignList);
+}
+
+static int parse_sign_unplacejump(CMD_SUBP_ARGS, const SignArgType type)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    if (type == kSignJump) {
+      error->message = (const char *) e_argreq;
+      error->position = p;
+      return NOTDONE;
+    } else {
+      return OK;
+    }
+  }
+  if (type == kSignUnplace && *p == '*' && p[1] == NUL) {
+    subargsargs[SIGN_ARG_UNPLACE_ID].arg.number = SIGN_ID_ALL;
+    *pp = p + 1;
+    return OK;
+  }
+  int id = SIGN_ID_MISSING;
+  if (VIM_ISDIGIT(*p)) {
+    const char *const id_start = p;
+    id = getdigits_int(&p);
+    if (!vim_iswhite(*p) && *p != NUL) {
+      id = SIGN_ID_MISSING;
+      p = id_start;
+    } else if (id == 0) {
+      error->message = N_("E474: Cannot use zero as sign id");
+      error->position = id_start;
+      return NOTDONE;
+    } else  {
+      p = skipwhite(p);
+      if (type == kSignUnplace && *p == NUL) {
+        subargsargs[SIGN_ARG_UNPLACE_ID].arg.number = id;
+        goto parse_sign_unplacejump_end;
+      }
+    }
+  }
+  int lnum = 0;
+  const char *sign_name_start = NULL;
+  const char *sign_name_end = NULL;
+  const char *file_start = NULL;
+  const char *file_end = NULL;
+  const char *lnum_start = NULL;
+  int bufnr = 0;
+  while (*p) {
+    if (STRNCMP(p, "line=", 5) == 0) {
+      p += 5;
+      lnum_start = p;
+      lnum = atoi(p);
+      if (lnum <= 0) {
+        error->message = N_("E885: Can only use positive line numbers");
+        error->position = p;
+        return NOTDONE;
+      }
+      p = skiptowhite(p);
+    } else if (*p == '*' && type == kSignUnplace) {
+      if (id != SIGN_ID_MISSING) {
+        error->message =
+            N_("E474: Cannot use `*' when identifier was already given");
+        error->position = p;
+        return NOTDONE;
+      }
+      id = SIGN_ID_ALL;
+      p = skiptowhite(p + 1);
+    } else if (STRNCMP(p, "name=", 5) == 0) {
+      p += 5;
+      sign_name_start = p;
+      sign_name_end = p = skiptowhite(p);
+      while (sign_name_start[0] == '0' && sign_name_start[1] != NUL) {
+        sign_name_start++;
+      }
+    } else if (STRNCMP(p, "file=", 5) == 0) {
+      p += 5;
+      file_start = p;
+      p += STRLEN(p);
+      file_end = p;
+      break;
+    } else if (STRNCMP(p, "buffer=", 7) == 0) {
+      p += 7;
+      const char *const bufnr_start = p;
+      bufnr = getdigits_int(&p);
+      if (bufnr <= 0) {
+        error->message = N_("E158: Buffer number can only be positive");
+        error->position = bufnr_start;
+        return NOTDONE;
+      }
+      p = skipwhite(p);
+      if (*p != NUL) {
+        error->message = N_("E488: buffer= argument must be the last one");
+        error->position = p;
+        return NOTDONE;
+      }
+      break;
+    } else {
+      assert(*p != NUL);
+      error->message = N_("E474: Unknown property");
+      error->position = p;
+      return NOTDONE;
+    }
+    p = skipwhite(p);
+  }
+  if (bufnr == 0 && file_start == NULL) {
+    error->message =
+        N_("E474: Must provide either buffer= or file= as the last argument");
+    error->position = p;
+    return NOTDONE;
+  }
+  assert(id != 0);
+  if (id < 0 && !(type == kSignUnplace && id == SIGN_ID_ALL)) {
+    if (lnum_start != NULL || sign_name_start != NULL) {
+      error->message = N_("E474: Cannot use line= and name= without a sign id");
+      error->position = (lnum_start != NULL ? lnum_start : sign_name_start);
+      return NOTDONE;
+    }
+  } else if (type == kSignJump) {
+    if (lnum_start != NULL || sign_name_start != NULL) {
+      error->message = N_("E474: Cannot use line= and name= with :sign jump");
+      error->position = (lnum_start != NULL ? lnum_start : sign_name_start);
+      return NOTDONE;
+    }
+  } else if (type == kSignUnplace) {
+    if (lnum_start != NULL || sign_name_start != NULL) {
+      error->message =
+          N_("E474: Cannot use line= and name= with :sign unplace");
+      error->position = (lnum_start != NULL ? lnum_start : sign_name_start);
+      return NOTDONE;
+    }
+  } else if (type == kSignPlace) {
+    if (sign_name_start == NULL) {
+      error->message = N_("E474: Missing sign name");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else {
+    assert(false);
+  }
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_ID == SIGN_ARG_PLACE_ID,
+                "Id indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_ID == SIGN_ARG_JUMP_ID,
+                "Id indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_FILE == SIGN_ARG_PLACE_FILE,
+                "File indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_FILE == SIGN_ARG_JUMP_FILE,
+                "File indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_BUFFER == SIGN_ARG_PLACE_BUFFER,
+                "Buffer indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_BUFFER == SIGN_ARG_JUMP_BUFFER,
+                "Buffer indexes do not match");
+  subargsargs[SIGN_ARG_PLACE_ID].arg.number = id;
+  subargsargs[SIGN_ARG_PLACE_BUFFER].arg.unumber = (unsigned) bufnr;
+  if (file_start != NULL) {
+    subargsargs[SIGN_ARG_PLACE_FILE].arg.str =
+        xmemdupz(file_start, (size_t) (file_end - file_start));
+  }
+  if (lnum_start != NULL) {
+    assert(type == kSignPlace);
+    subargsargs[SIGN_ARG_PLACE_LINE].arg.unumber = (unsigned) lnum;
+  }
+  if (sign_name_start != NULL) {
+    assert(type == kSignPlace);
+    subargsargs[SIGN_ARG_PLACE_NAME].arg.str =
+        xmemdupz(sign_name_start, (size_t) (sign_name_end - sign_name_start));
+  }
+parse_sign_unplacejump_end:
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_sign_place)
+{
+  return parse_sign_unplacejump(pp, node, error, o, position, subargsargs,
+                                kSignPlace);
+}
+
+static CMD_SUBP_DEF(parse_sign_unplace)
+{
+  return parse_sign_unplacejump(pp, node, error, o, position, subargsargs,
+                                kSignUnplace);
+}
+
+static CMD_SUBP_DEF(parse_sign_jump)
+{
+  return parse_sign_unplacejump(pp, node, error, o, position, subargsargs,
+                                kSignJump);
+}
+
+static const SubCommandDefinition sign_commands[] = {
+  {SS("define"), kSignDefine, SUBARGS(SIGN_ARGS_DEFINE), &parse_sign_define},
+  {SS("undefine"), kSignUndefine, SUBARGS(SIGN_ARGS_UNDEFINE),
+   &parse_sign_undefine},
+  {SS("list"), kSignList, SUBARGS(SIGN_ARGS_LIST), &parse_sign_list},
+  {SS("place"), kSignPlace, SUBARGS(SIGN_ARGS_PLACE), &parse_sign_place},
+  {SS("unplace"), kSignUnplace, SUBARGS(SIGN_ARGS_UNPLACE),
+   &parse_sign_unplace},
+  {SS("jump"), kSignJump, SUBARGS(SIGN_ARGS_JUMP), &parse_sign_jump},
+  {NULL, 0, 0, 0, NULL, NULL},
+};
+
+static CMD_P_DEF(parse_sign)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    error->message = (const char *) e_argreq;
+    error->position = p;
+    return NOTDONE;
+  }
+  const char *const s = p;
+  const char *const cmd_end = skiptowhite(s);
+  const size_t cmd_len = (size_t) (cmd_end - s);
+  const SubCommandDefinition *cur_cmd = &(sign_commands[0]);
+  CommandSubArgs *subargs = &(node->args[ARG_SUBCMD].arg.args);
+  if (cmd_len > 0) {
+    while (cur_cmd->name != NULL) {
+      if (cur_cmd->name_len == cmd_len
+          && STRNCMP(s, cur_cmd->name, cmd_len) == 0) {
+        p += cmd_len;
+        p = skipwhite(p);
+        subargs->type = cur_cmd->type;
+        subargs->num_args = cur_cmd->num_args;
+        subargs->types = cur_cmd->types;
+        CommandArg *subargsargs = NULL;
+        if (cur_cmd->num_args) {
+          subargsargs = xcalloc(subargs->num_args, sizeof(CommandArg));
+          subargs->args = subargsargs;
+        }
+        if (cur_cmd->parse) {
+          int pret;
+          CommandPosition new_position = position;
+          position.col += (size_t) (p - s);
+          if ((pret = cur_cmd->parse(&p, node, error, o, new_position,
+                                     subargsargs)) != OK) {
+            return pret;
+          }
+        }
+        break;
+      }
+      cur_cmd++;
+    }
+    if (cur_cmd->name == NULL) {
+      error->message = N_("E160: Unknown sign command");
+      error->position = s;
+      return NOTDONE;
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_syntax_case)
+{
+  const char *const s = *pp;
+  const char *const p = skiptowhite(s);
+  if (p - s == 5 && STRNICMP(s, "match", 5) == 0) {
+    subargsargs[SYN_ARG_CASE_FLAGS].arg.flags = (uint_least32_t) false;
+  } else if (p - s == 6 && STRNICMP(s, "ignore", 6) == 0) {
+    subargsargs[SYN_ARG_CASE_FLAGS].arg.flags = (uint_least32_t) true;
+  } else {
+    error->message = N_("E390: Expected match or ignore");
+    error->position = s;
+    return NOTDONE;
+  }
+  *pp = skipwhite(p);
+  return OK;
+}
+
+/// Parse syntax groups list
+///
+/// @param[out]     error           Structure where errors are saved.
+/// @param[in,out]  pp              Parsed string.
+/// @param[out]     group           Address where parsing result will be saved.
+/// @param[in]      allow_specials  Allow special values ALLBUT, ALL, TOP, 
+///                                 CONTAINED.
+///
+/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+///         FAIL otherwise.
+int parse_group_list(CommandParserError *error, const char **pp,
+                     SynGroupList **group, bool allow_specials)
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  SynGroupList **next = group;
+  while (*next != NULL) {
+    next = &((*next)->next);
+  }
+  group = next;
+  const char *p = *pp;
+  p = skipwhite(p);
+  if (*p != '=') {
+    error->message = N_("E405: Missing equal sign");
+    error->position = p;
+    return NOTDONE;
+  }
+  p = skipwhite(p + 1);
+  if (ENDS_EXCMD(*p)) {
+    error->message = N_("E406: Empty argument");
+    error->position = p;
+    return NOTDONE;
+  }
+  do {
+    const char *const name_start = p;
+    for (; *p && !vim_iswhite(*p) && *p != ','; p++) {
+    }
+    *next = xcalloc(1, sizeof(**next));
+    const size_t name_len = (size_t) (p - name_start);
+    if ((name_len == 6 && STRNCMP(name_start, "ALLBUT", 6) == 0)
+        || (name_len == 3 && STRNCMP(name_start, "ALL", 3) == 0)
+        || (name_len == 3 && STRNCMP(name_start, "TOP", 3) == 0)
+        || (name_len == 9 && STRNCMP(name_start, "CONTAINED", 9) == 0)) {
+      if (!allow_specials) {
+        error->message =
+            N_("E407: Special arguments ALL[BUT], TOP, CONTAINED "
+               "are not allowed here");
+        error->position = name_start;
+        return NOTDONE;
+      }
+      if (next != group) {
+        error->message =
+            N_("E407: Special arguments ALL[BUT], TOP, CONTAINED "
+               "are only allowed in the beginning of the list");
+        error->position = name_start;
+        return NOTDONE;
+      }
+      switch (*name_start) {
+        case 'A': {
+          (*next)->type = kSynGroupAll;
+          break;
+        }
+        case 'T': {
+          (*next)->type = kSynGroupTop;
+          break;
+        }
+        case 'C': {
+          (*next)->type = kSynGroupContained;
+          break;
+        }
+        default: {
+          assert(false);
+        }
+      }
+    } else if (*name_start == '@') {
+      (*next)->type = kSynGroupCluster;
+      (*next)->data.name = xmemdupz(name_start + 1, name_len - 1);
+    } else if (strpbrk(name_start, "\\.*^$~[") == NULL) {
+      (*next)->type = kSynGroupLiteral;
+      (*next)->data.name = xmemdupz(name_start, name_len);
+    } else {
+      char *regstr = xmalloc(name_len + 3);
+      *regstr = '^';
+      memcpy(regstr + 1, name_start, name_len);
+      regstr[name_len + 1] = '$';
+      regstr[name_len + 2] = NUL;
+      (*next)->type = kSynGroupRegex;
+      (*next)->data.regex = regex_alloc(regstr, name_len + 2);
+      free(regstr);
+    }
+    next = &((*next)->next);
+    p = skipwhite(p);
+    if (*p != ',') {
+      break;
+    }
+    p = skipwhite(p + 1);
+  } while (!ENDS_EXCMD(*p));
+  *pp = p;
+  return OK;
+}
+
+/// Get the start of the group name argument
+///
+/// @param[in]   p         Parsed string.
+/// @param[out]  name_end  Location where name end is saved.
+///
+/// @return Pointer to the next argument or NULL if there is no next argument.
+static const char *get_group_name(const char *p, const char **name_end)
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  *name_end = skiptowhite(p);
+  const char *const rest = skipwhite(*name_end);
+  if (ENDS_EXCMD(*p) || *rest == NUL) {
+    return NULL;
+  }
+  return rest;
+}
+
+static CMD_SUBP_DEF(parse_syntax_cluster)
+{
+  const char *p = *pp;
+  const char *const cluster_name_start = p;
+  const char *cluster_name_end = NULL;
+  bool got_clstr = false;
+  p = get_group_name(p, &cluster_name_end);
+  if (p != NULL) {
+    subargsargs[SYN_ARG_CLUSTER_NAME].arg.str =
+        xmemdupz(cluster_name_start,
+                 (size_t) (cluster_name_end - cluster_name_start));
+    int prop_idx = -1;
+    for (;;) {
+      if (STRNICMP(p, "add", 3) == 0 && (vim_iswhite(p[3]) || p[3] == '=')) {
+        p += 3;
+        prop_idx = SYN_ARG_CLUSTER_ADD;
+      } else if (STRNICMP(p, "remove", 6) == 0
+                 && (vim_iswhite(p[6]) || p[6] == '=')) {
+        p += 6;
+        prop_idx = SYN_ARG_CLUSTER_REMOVE;
+      } else if (STRNICMP(p, "contains", 8) == 0
+                 && (vim_iswhite(p[8]) || p[8] == '=')) {
+        p += 8;
+        prop_idx = SYN_ARG_CLUSTER_CONTAINS;
+      } else {
+        break;
+      }
+
+      int pglret = parse_group_list(error, &p,
+                                    &(subargsargs[prop_idx].arg.group), false);
+      if (pglret != OK) {
+        return pglret;
+      }
+      got_clstr = true;
+    }
+    *pp = p;
+  } else {
+    error->message = N_("E475: Expected group name followed by an argument");
+    error->position = cluster_name_end;
+    return NOTDONE;
+  }
+  if (!got_clstr) {
+    error->message = N_("E400: No cluster specified");
+    error->position = p;
+    return NOTDONE;
+  }
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_syntax_conceal)
+{
+  const char *const s = *pp;
+  const char *const p = skiptowhite(s);
+  if (p - s == 2 && STRNICMP(s, "on", 2) == 0) {
+    subargsargs[SYN_ARG_CONCEAL_FLAGS].arg.flags = (uint_least32_t) true;
+  } else if (p - s == 3 && STRNICMP(s, "off", 3) == 0) {
+    subargsargs[SYN_ARG_CONCEAL_FLAGS].arg.flags = (uint_least32_t) false;
+  } else {
+    error->message = N_("E390: Expected on or off");
+    error->position = s;
+    return NOTDONE;
+  }
+  *pp = skipwhite(p);
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_syntax_include)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  const char *cluster_name_end = NULL;
+  if (*p == '@') {
+    p++;
+    const char *const fname_start = get_group_name(p, &cluster_name_end);
+    if (fname_start == NULL) {
+      error->message = N_("E397: Filename required");
+      error->position = cluster_name_end;
+      return NOTDONE;
+    }
+    subargsargs[SYN_ARG_INCLUDE_CLUSTER].arg.str =
+        xmemdupz(p, (size_t) (cluster_name_end - p));
+    p = fname_start;
+  }
+  int pret;
+  if ((pret = get_pattern(&p, error,
+                          &(subargsargs[SYN_ARG_INCLUDE_FILE].arg.pat),
+                          false, false,
+                          (size_t) (p - s) + position.col)) != OK) {
+    return pret;
+  }
+  *pp = p;
+  return OK;
+}
+
+static const SynOptDef synopttab[] = {
+  SYN_FLAG_OPT("cCoOnNtTaAiInNeEdD",     MAIN,   CONTAINED),
+  SYN_FLAG_OPT("oOnNeElLiInNeE",         MAIN,   ONELINE),
+  SYN_FLAG_OPT("kKeEeEpPeEnNdD",         REGION, KEEPEND),
+  SYN_FLAG_OPT("eExXtTeEnNdD",           MR,     EXTEND),
+  SYN_FLAG_OPT("eExXcClLuUdDeEnNlL",     MR,     EXCLUDENL),
+  SYN_FLAG_OPT("tTrRaAnNsSpPaArReEnNtT", MAIN,   TRANSPARENT),
+  SYN_FLAG_OPT("sSkKiIpPnNlL",           MAIN,   SKIPNL),
+  SYN_FLAG_OPT("sSkKiIpPwWhHiItTeE",     MAIN,   SKIPWHITE),
+  SYN_FLAG_OPT("sSkKiIpPeEmMpPtTyY",     MAIN,   SKIPEMPTY),
+  SYN_GROUP_OPT("gGrRoOuUpPhHeErReE",    SYNC,   GROUPHERE),
+  SYN_GROUP_OPT("gGrRoOuUpPtThHeErReE",  SYNC,   GROUPTHERE),
+  SYN_FLAG_OPT("dDiIsSpPlLaAyY",         MAIN,   DISPLAY),
+  SYN_FLAG_OPT("fFoOlLdD",               MAIN,   FOLD),
+  SYN_FLAG_OPT("cCoOnNcCeEaAlL",         MAIN,   CONCEAL),
+  SYN_FLAG_OPT("cCoOnNcCeEaAlLeEnNdDsS", REGION, CONCEALENDS),
+  SYN_OPT("cCcChHaArR",             CharStr, MAIN,   CCHAR),
+  SYN_OPT("cCoOnNtTaAiInNsS",       SGroups, MR,     CONTAINS),
+  SYN_OPT("cCoOnNtTaAiInNeEdDiInN", Groups,  MAIN,   CONTAINEDIN),
+  SYN_OPT("nNeExXtTgGrRoOuUpP",     Groups,  MAIN,   NEXTGROUP),
+  {NULL, 0, 0, 0, 0},
+};
+static const char *first_synopt_letters = "cCoOkKeEtTsSgGdDfFnN";
+
+static const char *get_syn_options(const char *p, CommandParserError *error,
+                                   int flags_offset, uint_least32_t scope,
+                                   CommandArg *subargsargs)
+{
+  if (p == NULL) {
+    return NULL;
+  }
+  for (;;) {
+    // This is used very often when a large number of keywords is defined.
+    // Need to skip quickly when no option name is found.
+    // Also avoid tolower(), it's slow.
+    if (strchr(first_synopt_letters, *p) == NULL) {
+      break;
+    }
+
+    const SynOptDef *cur_def;
+
+    size_t len = 0;
+    for (cur_def = &(synopttab[0]); cur_def->name != NULL; cur_def++) {
+      const char *const name = cur_def->name;
+      size_t i;
+      for (i = 0, len = 0; name[i] != NUL; i += 2, len++) {
+        if (p[len] != name[i] && p[len] != name[i + 1]) {
+          break;
+        }
+      }
+      if (name[i] == NUL && (vim_iswhite(p[len])
+                             || ((cur_def->type == kSynOptFlag
+                                  || cur_def->type == kSynOptGroup)
+                                 ? ENDS_EXCMD(p[len])
+                                 : p[len] == '='))) {
+        if (!(scope & cur_def->acceted_commands)) {
+          if (scope == SYN_SCOPE_KEYWORD) {
+            cur_def = &(synopttab[ARRAY_SIZE(synopttab) - 1]);
+          } else {
+            error->message =
+                N_("E395: This option is not accepted for this command");
+            error->position = p;
+            return NULL;
+          }
+        }
+        break;
+      }
+    }
+    if (cur_def->name == NULL) { // No match found.
+      break;
+    }
+    p += len;
+    const int offset = flags_offset + cur_def->offset;
+    switch (cur_def->type) {
+      case kSynOptFlag: {
+        subargsargs[offset].arg.flags |= cur_def->flag;
+        break;
+      }
+      case kSynOptSGroups:
+      case kSynOptGroups: {
+        int pglret = parse_group_list(error, &p,
+                                      &(subargsargs[offset].arg.group),
+                                      cur_def->type == kSynOptSGroups);
+        if (pglret != OK) {
+          return NULL;
+        }
+        break;
+      }
+      case kSynOptCharStr: {
+        if (*p == '=') {
+          p++;
+          const char *const cchar_start = p;
+          int cchar;
+          size_t cchar_len;
+          if (has_mbyte) {
+            cchar_len = mb_ptr2len(p);
+            cchar = mb_ptr2char(p);
+          } else {
+            cchar_len = 1;
+            cchar = *p;
+          }
+          p += cchar_len;
+          if (!vim_isprintc_strict(cchar)) {
+            error->message = N_("E844: Cchar argument is not printable");
+            error->position = cchar_start;
+            return NULL;
+          }
+          if (subargsargs[offset].arg.str != NULL) {
+            free(subargsargs[offset].arg.str);
+            subargsargs[offset].arg.str = NULL;
+          }
+          subargsargs[offset].arg.str = xmemdupz(cchar_start, cchar_len);
+        }
+        break;
+      }
+      case kSynOptGroup: {
+        p = skipwhite(p);
+        const char *const group_name_start = p;
+        p = skiptowhite(p);
+        if (p == group_name_start) {
+          return NULL;
+        }
+        subargsargs[offset].arg.str =
+            xmemdupz(group_name_start, (size_t) (p - group_name_start));
+        break;
+      }
+    }
+    p = skipwhite(p);
+  }
+  return p;
+}
+
+#define GET_SYN_OPTIONS(p, error, subcmd_name, scope, subargsargs) \
+    do { \
+      p = get_syn_options(p, error, SYN_ARG_##subcmd_name##_FLAGS, \
+                          scope, subargsargs); \
+      STATIC_ASSERT(SYN_ARG_##subcmd_name##_FLAGS == \
+                    (SYN_ARG_##subcmd_name##_FLAGS + SYN_ARG_FLAGS_OFFSET), \
+                    "Flags have incorrect offset for get_syn_options"); \
+      STATIC_ASSERT(SYN_ARG_##subcmd_name##_CCHAR == \
+                    (SYN_ARG_##subcmd_name##_FLAGS + SYN_ARG_CCHAR_OFFSET), \
+                    "Cchar has incorrect offset for get_syn_options"); \
+      STATIC_ASSERT(SYN_ARG_##subcmd_name##_CONTAINS == \
+                    (SYN_ARG_##subcmd_name##_FLAGS \
+                     + SYN_ARG_CONTAINS_OFFSET), \
+                    "Contained has incorrect offset for get_syn_options"); \
+      STATIC_ASSERT(SYN_ARG_##subcmd_name##_CONTAINEDIN == \
+                    (SYN_ARG_##subcmd_name##_FLAGS \
+                     + SYN_ARG_CONTAINEDIN_OFFSET), \
+                    "Containedin has incorrect offset for get_syn_options"); \
+      STATIC_ASSERT(SYN_ARG_##subcmd_name##_NEXTGROUP == \
+                    (SYN_ARG_##subcmd_name##_FLAGS \
+                     + SYN_ARG_NEXTGROUP_OFFSET), \
+                    "Nextgroup has incorrect offset for get_syn_options"); \
+    } while (0)
+
+static CMD_SUBP_DEF(parse_syntax_keyword)
+{
+  const char *p = *pp;
+  const char *group_name_end = NULL;
+
+  const char *const args_start = get_group_name(p, &group_name_end);
+
+  if (args_start != NULL) {
+    subargsargs[SYN_ARG_KEYWORD_GROUP].arg.str =
+        xmemdupz(p, (size_t) (group_name_end - p));
+    p = args_start;
+    const char *rest = p;
+    garray_T *kw_ga = &(subargsargs[SYN_ARG_KEYWORD_KEYWORDS].arg.ga_strs);
+    ga_init(kw_ga, (int) sizeof(char *), 8);
+    for (; rest != NULL && !ENDS_EXCMD(*rest); rest = skipwhite(rest)) {
+      rest = p;
+      GET_SYN_OPTIONS(rest, error, KEYWORD, SYN_SCOPE_KEYWORD, subargsargs);
+      if (error->message != NULL) {
+        return NOTDONE;
+      }
+      p = rest;
+      if (p == NULL || ENDS_EXCMD(*p)) {
+        break;
+      }
+      const char *const kw_start = p;
+      size_t escapes = 0;
+      while (*p && !vim_iswhite(*p)) {
+        if (*p == '\\' && p[1] != NUL) {
+          p++;
+          escapes++;
+        }
+        p++;
+      }
+      const size_t kw_len = (size_t) (p - rest);
+      char *const kw = xmallocz(kw_len - escapes);
+      GA_APPEND(char *, kw_ga, kw);
+      char *kwp = kw;
+      const char *curp = kw_start;
+      while (curp < p) {
+        if (*curp == '\\' && curp[1] != NUL) {
+          curp++;
+        }
+        *kwp++ = *curp++;
+      }
+      p = skipwhite(p);
+    }
+  } else {
+    error->message = (p == group_name_end
+                      ? N_("E475: Expected group name")
+                      : N_("E475: Expected keywords"));
+    error->position = group_name_end;
+    return NOTDONE;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_syntax_list)
+{
+  const char *p = *pp;
+  if (ENDS_EXCMD(*p)) {
+    return OK;
+  }
+  STATIC_ASSERT(SYN_ARG_LIST_GROUPS == SYN_ARG_CLEAR_GROUPS,
+                ":syn-list is not compatible with :syn-clear");
+  SynGroupList **next = &(subargsargs[SYN_ARG_LIST_GROUPS].arg.group);
+  while (!ENDS_EXCMD(*p)) {
+    const char *const arg_end = skiptowhite(p);
+    *next = xcalloc(1, sizeof(**next));
+    if (*p == '@') {
+      (*next)->type = kSynGroupCluster;
+      (*next)->data.name = xmemdupz(p + 1, (size_t) (arg_end - (p + 1)));
+    } else {
+      (*next)->type = kSynGroupLiteral;
+      (*next)->data.name = xmemdupz(p, (size_t) (arg_end - p));
+    }
+    next = &((*next)->next);
+    p = skipwhite(arg_end);
+  }
+  *pp = p;
+  return OK;
+}
+
+static const SpoDef spo_tab[] = {
+  {"ms=", kSynRegOffsetMatchStart},
+  {"me=", kSynRegOffsetMatchEnd},
+  {"hs=", kSynRegOffsetHiStart},
+  {"he=", kSynRegOffsetHiEnd},
+  {"rs=", kSynRegOffsetRegionStart},
+  {"re=", kSynRegOffsetRegionEnd},
+  {"lc=", kSynRegOffsetLContext},
+  {NULL, 0},
+};
+
+static const char *get_syn_pattern(const char *p, CommandParserError *error,
+                                   SynPattern *syn_pat)
+{
+  // Need at least three characters.
+  if (p == NULL || !(*p) || !p[1] || !p[2]) {
+    return NULL;
+  }
+  const char *const pat_start = p;
+  char endch = *p;
+  p++;
+  int rret;
+  if ((rret = get_regex(&p, error, &(syn_pat->reg), endch, NULL)) != OK) {
+    return NULL;
+  }
+  if (p[-1] != endch) {
+    error->message = N_("E401: Pattern delimiter not found");
+    error->position = pat_start;
+    return NULL;
+  }
+  garray_T ga_off_flagss;
+  ga_init(&ga_off_flagss, (int) sizeof(uint_least32_t), 1);
+  garray_T ga_offs;
+  ga_init(&ga_offs, (int) sizeof(int), 1);
+  for (;;) {
+    const SpoDef *cur_def;
+    for (cur_def = &(spo_tab[0]); cur_def->name != NULL; cur_def++) {
+      if (STRNCMP(p, cur_def->name, 3) == 0) {
+        break;
+      }
+    }
+    if (cur_def->name == NULL) {
+      break;
+    }
+    p += 3;
+    uint_least32_t flags = (uint_least32_t) cur_def->type;
+    if (cur_def->type != kSynRegOffsetLContext) {
+      switch (*p) {
+        case 'b':
+        case 's': {
+          flags |= kSynRegOffsetAnchorStart;
+          break;
+        }
+        case 'e': {
+          flags |= kSynRegOffsetAnchorEnd;
+          break;
+        }
+        default: {
+          error->message =
+              N_("E402: Expected offset anchor designator (`s' or `e')");
+          error->position = p;
+          return NULL;
+        }
+      }
+      p++;
+    } else {
+      flags |= kSynRegOffsetAnchorLC;
+    }
+    int offset = getdigits_int(&p);
+    GA_APPEND(uint_least32_t, &ga_off_flagss, flags);
+    GA_APPEND(int, &ga_offs, offset);
+    if (*p != ',') {
+      break;
+    }
+    p++;
+  }
+  syn_pat->offset_count = (size_t) ga_off_flagss.ga_len;
+  syn_pat->flagss = (uint_least32_t *) ga_off_flagss.ga_data;
+  syn_pat->offsets = (int *) ga_offs.ga_data;
+  if (!ENDS_EXCMD(*p) && !vim_iswhite(*p)) {
+    error->message = N_("E402: Garbage after pattern");
+    error->position = p;
+    return NULL;
+  }
+  return skipwhite(p);
+}
+
+static const char *add_syn_pattern(const char *p, CommandParserError *error,
+                                   SynPatterns **syn_pats)
+{
+  SynPatterns **next = syn_pats;
+  while ((*next) != NULL) {
+    next = &((*next)->next);
+  }
+  *next = xcalloc(1, sizeof(**next));
+  return get_syn_pattern(p, error, &((*next)->syn_pat));
+}
+
+static int do_parse_syntax_match(CMD_SUBP_ARGS, uint_least32_t scope)
+{
+  const char *p = *pp;
+  const char *group_name_end;
+  const char *const args_start = get_group_name(p, &group_name_end);
+  if (args_start != NULL) {
+    subargsargs[SYN_ARG_MATCH_GROUP].arg.str =
+        xmemdupz(p, (size_t) (group_name_end - p));
+    p = args_start;
+    GET_SYN_OPTIONS(p, error, MATCH, scope, subargsargs);
+    if (p != NULL) {
+      subargsargs[SYN_ARG_MATCH_REGEX].arg.syn_pat =
+          xcalloc(1, sizeof(SynPattern));
+      p = get_syn_pattern(p, error, subargsargs[SYN_ARG_MATCH_REGEX].arg.syn_pat);
+      GET_SYN_OPTIONS(p, error, MATCH, scope, subargsargs);
+    }
+    if (p == NULL) {
+      if (error->message != NULL) {
+        return NOTDONE;
+      } else {
+        return FAIL;
+      }
+    }
+    p = skipwhite(p);
+    if (!ENDS_EXCMD(*p)) {
+      error->message = N_("E475: Trailing characters");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else {
+    error->message = N_("E475: Expected group name followed by an argument");
+    error->position = group_name_end;
+    return NOTDONE;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_syntax_match)
+{
+  return do_parse_syntax_match(pp, node, error, o, position, subargsargs,
+                               SYN_SCOPE_MATCH);
+}
+
+static CMD_SUBP_DEF(parse_syntax_region)
+{
+  const char *p = *pp;
+  const char *group_name_end;
+  const char *const args_start = get_group_name(p, &group_name_end);
+  if (args_start != NULL) {
+    subargsargs[SYN_ARG_REGION_GROUP].arg.str =
+        xmemdupz(p, (size_t) (group_name_end - p));
+    p = args_start;
+    while (!ENDS_EXCMD(*p)) {
+      const char *rest = p;
+      GET_SYN_OPTIONS(rest, error, REGION, SYN_SCOPE_REGION, subargsargs);
+      if (rest == NULL) {
+        if (error->message != NULL) {
+          return NOTDONE;
+        }
+        break;
+      }
+      p = rest;
+      if (ENDS_EXCMD(*p)) {
+        break;
+      }
+      const char *const key_start = p;
+      while (*p && !vim_iswhite(*p) && *p != '=') {
+        p++;
+      }
+      const size_t key_len = (size_t) (p - key_start);
+      int arg_idx = -1;
+      if (key_len == 10 && STRNICMP(key_start, "matchgroup", 10) == 0) {
+        arg_idx = SYN_ARG_REGION_MATCHGROUP;
+      } else if (key_len == 5 && STRNICMP(key_start, "start", 5) == 0) {
+        arg_idx = SYN_ARG_REGION_STARTREG;
+      } else if (key_len == 3 && STRNICMP(key_start, "end", 3) == 0) {
+        arg_idx = SYN_ARG_REGION_ENDREG;
+      } else if (key_len == 4 && STRNICMP(key_start, "skip", 4) == 0) {
+        arg_idx = SYN_ARG_REGION_SKIPREG;
+      } else {
+        break;
+      }
+      p = skipwhite(p);
+      if (*p != '=') {
+        error->message = N_("E398: Missing `='");
+        error->position = p;
+        return NOTDONE;
+      }
+      p = skipwhite(p + 1);
+      if (*p == NUL) {
+        if (arg_idx == SYN_ARG_REGION_MATCHGROUP) {
+          error->message = N_("E399: Expected group name");
+        } else {
+          error->message = N_("E399: Expected syntax pattern");
+        }
+        error->position = p;
+        return NOTDONE;
+      }
+      if (arg_idx == SYN_ARG_REGION_MATCHGROUP) {
+        const char *const group_name_start = p;
+        p = skiptowhite(group_name_start);
+        if (p - group_name_start != 4
+            || STRNCMP(group_name_start, "NONE", 4) != 0) {
+          subargsargs[arg_idx].arg.str =
+              xmemdupz(group_name_start, (size_t) (p - group_name_start));
+        }
+        p = skipwhite(p);
+      } else {
+        p = add_syn_pattern(p, error, &(subargsargs[arg_idx].arg.syn_pats));
+        if (p == NULL) {
+          if (error->message != NULL) {
+            return NOTDONE;
+          } else {
+            return FAIL;
+          }
+        }
+        p = skipwhite(p);
+      }
+    }
+  }
+  if (!(subargsargs[SYN_ARG_REGION_STARTREG].arg.reg != NULL
+        && subargsargs[SYN_ARG_REGION_ENDREG].arg.reg != NULL)) {
+    error->message = N_("E399: Not enough arguments");
+    error->position = p;
+    return NOTDONE;
+  }
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_syntax_spell)
+{
+  const char *const s = *pp;
+  const char *const p = skiptowhite(s);
+  if (p - s == 8 && STRNICMP(s, "toplevel", 8) == 0) {
+    subargsargs[SYN_ARG_SPELL_FLAGS].arg.flags = VAL_SYN_SPELL_TOPLEVEL;
+  } else if (p - s == 10 && STRNICMP(s, "notoplevel", 10) == 0) {
+    subargsargs[SYN_ARG_SPELL_FLAGS].arg.flags = VAL_SYN_SPELL_NOTOPLEVEL;
+  } else if (p - s == 7 && STRNICMP(s, "default", 7) == 0) {
+    subargsargs[SYN_ARG_SPELL_FLAGS].arg.flags = VAL_SYN_SPELL_DEFAULT;
+  } else {
+    error->message = N_("E390: Expected toplevel, notoplevel or default");
+    error->position = s;
+    return NOTDONE;
+  }
+  *pp = skipwhite(p);
+  return OK;
+}
+
+#define parse_syntax_clear parse_syntax_list
+
+static const SubCommandDefinition syntax_commands[];
+
+static CMD_SUBP_DEF(parse_syntax_sync)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  if (ENDS_EXCMD(*p)) {
+    return OK;
+  }
+  while (!ENDS_EXCMD(*p)) {
+    const char *const arg_start = p;
+    const char *const arg_end = skiptowhite(arg_start);
+    p = skipwhite(arg_end);
+    const size_t arg_len = (size_t) (arg_end - arg_start);
+    if (arg_len == 8 && STRNICMP(arg_start, "ccomment", 8) == 0) {
+      if (!ENDS_EXCMD(*p)) {
+        const char *const group_name_start = p;
+        const char *const group_name_end = skiptowhite(group_name_start);
+        p = skipwhite(group_name_end);
+        subargsargs[SYN_ARG_SYNC_CCOMMENT].arg.str =
+            xmemdupz(group_name_start,
+                     (size_t) (group_name_end - group_name_start));
+      } else {
+        subargsargs[SYN_ARG_SYNC_CCOMMENT].arg.str = xstrdup("Comment");
+      }
+    // Note: it appears that `syn sync lines` is not documented.
+    } else if ((arg_len >= 5 && STRNICMP(arg_start, "lines", 5) == 0)
+               || (arg_len >= 8 && STRNICMP(arg_start, "minlines", 8) == 0)
+               || (arg_len >= 8 && STRNICMP(arg_start, "maxlines", 8) == 0)
+               || (arg_len >= 10 && STRNICMP(arg_start, "linebreaks", 10) == 0)) {
+      const char *num_start =
+          arg_start + (*arg_start == 'm' || *arg_start == 'M'
+                       ? 9
+                       : (arg_start[4] == 's' || arg_start[4] == 'S'
+                          ? 6
+                          : 11));
+      if (num_start[-1] != '=' || !VIM_ISDIGIT(*num_start)) {
+        error->message = N_("E404: Expected `=number'");
+        error->position = (num_start[-1] == '='? num_start - 1: num_start);
+        return NOTDONE;
+      }
+      int prop_idx = -1;
+      if ((arg_len >= 5
+           && (*arg_start == 'l' || *arg_start == 'L')
+           && (arg_start[4] == 's' || arg_start[4] == 'S'))
+          || (arg_len >= 8
+              && (*arg_start == 'm' || *arg_start == 'M')
+              && (arg_start[1] == 'i' || arg_start[1] == 'I'))) {
+        // lines and minlines
+        prop_idx = SYN_ARG_SYNC_MINLINES;
+        subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |= FLAG_SYN_SYNC_HASMINLINES;
+      } else if (arg_len >= 8
+                 && (*arg_start == 'm' || *arg_start == 'M')
+                 && (arg_start[1] == 'a' || arg_start[1] == 'A')) {
+        // maxlines
+        prop_idx = SYN_ARG_SYNC_MAXLINES;
+        subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |= FLAG_SYN_SYNC_HASMAXLINES;
+      } else {
+        prop_idx = SYN_ARG_SYNC_LINEBREAKS;
+        subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |= FLAG_SYN_SYNC_HASLINEBREAKS;
+      }
+      subargsargs[prop_idx].arg.unumber = (unsigned) getdigits_long(&num_start);
+    } else if (arg_len == 9 && STRNICMP(arg_start, "fromstart", 9) == 0) {
+      subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |= FLAG_SYN_SYNC_FROMSTART;
+    } else if (arg_len == 8 && STRNICMP(arg_start, "linecont", 8) == 0) {
+      if (subargsargs[SYN_ARG_SYNC_REGEX].arg.reg != NULL) {
+        error->message =
+            N_("E403: syntax sync: line continuations pattern specified twice");
+        error->position = arg_start;
+        return NOTDONE;
+      }
+      char endch = *p;
+      const char *const reg_start = p;
+      p++;
+      int rret;
+      if ((rret = get_regex(&p, error,
+                            &(subargsargs[SYN_ARG_SYNC_REGEX].arg.reg), endch,
+                            NULL))
+          != OK) {
+        return rret;
+      }
+      if (p[-1] != endch) {
+        error->message = N_("E404: Pattern end not found");
+        error->position = reg_start;
+        return NOTDONE;
+      }
+      p = skipwhite(p);
+    } else {
+      if ((arg_len == 5 && STRNICMP(arg_start, "match", 5) == 0)
+          || (arg_len == 6 && STRNICMP(arg_start, "region", 6) == 0)
+          || (arg_len == 5 && STRNICMP(arg_start, "clear", 5) == 0)) {
+        CommandSubArgs *new_subargs =
+            &(subargsargs[SYN_ARG_SYNC_CMD].arg.args);
+        if (arg_len == 5) {
+          if (*arg_start == 'c' || *arg_start == 'C') {
+            new_subargs->type = kSynClear;
+          } else {
+            new_subargs->type = kSynMatch;
+          }
+        } else {
+          new_subargs->type = kSynRegion;
+        }
+        const SubCommandDefinition *cur_cmd =
+            &(syntax_commands[new_subargs->type]);
+        new_subargs->num_args = cur_cmd->num_args;
+        new_subargs->types = cur_cmd->types;
+        CommandArg *new_subargsargs =
+            xcalloc(new_subargs->num_args, sizeof(CommandArg));
+        new_subargs->args = new_subargsargs;
+        *pp = p;
+        CommandPosition new_position = position;
+        new_position.col += (size_t) (p - s);
+        switch (new_subargs->type) {
+          case kSynClear: {
+            return parse_syntax_clear(pp, node, error, o, new_position,
+                                      new_subargsargs);
+          }
+          case kSynMatch: {
+            return do_parse_syntax_match(pp, node, error, o, new_position,
+                                         new_subargsargs,
+                                         SYN_SCOPE_MATCH|SYN_SCOPE_SYNC);
+          }
+          case kSynRegion: {
+            return parse_syntax_region(pp, node, error, o, new_position,
+                                       new_subargsargs);
+          }
+          default: {
+            assert(false);
+          }
+        }
+      } else {
+        error->message = N_("E404: Unknown argument");
+        error->position = arg_start;
+        return NOTDONE;
+      }
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
+static const SubCommandDefinition syntax_commands[] = {
+  {SS("case"), kSynCase, SUBARGS(SYN_ARGS_CASE), &parse_syntax_case},
+  {SS("clear"), kSynClear, SUBARGS(SYN_ARGS_CLEAR), &parse_syntax_clear},
+  {SS("cluster"), kSynCluster, SUBARGS(SYN_ARGS_CLUSTER),
+   &parse_syntax_cluster},
+  {SS("conceal"), kSynConceal, SUBARGS(SYN_ARGS_CONCEAL),
+   &parse_syntax_conceal},
+  {SS("enable"), kSynEnable, EMPTY_SUBARGS, NULL},
+  {SS("include"), kSynInclude, SUBARGS(SYN_ARGS_INCLUDE),
+   &parse_syntax_include},
+  {SS("keyword"), kSynKeyword, SUBARGS(SYN_ARGS_KEYWORD),
+   &parse_syntax_keyword},
+  {SS("list"), kSynList, SUBARGS(SYN_ARGS_LIST), &parse_syntax_list},
+  {SS("manual"), kSynManual, EMPTY_SUBARGS, NULL},
+  {SS("match"), kSynMatch, SUBARGS(SYN_ARGS_MATCH), &parse_syntax_match},
+  {SS("on"), kSynOn, EMPTY_SUBARGS, NULL},
+  {SS("off"), kSynOff, EMPTY_SUBARGS, NULL},
+  {SS("region"), kSynRegion, SUBARGS(SYN_ARGS_REGION), &parse_syntax_region},
+  {SS("reset"), kSynReset, EMPTY_SUBARGS, NULL},
+  {SS("spell"), kSynSpell, SUBARGS(SYN_ARGS_SPELL), &parse_syntax_spell},
+  {SS("sync"), kSynSync, SUBARGS(SYN_ARGS_SYNC), &parse_syntax_sync},
+  {SS(""), kSynList, EMPTY_SUBARGS, NULL},
+  {NULL, 0, 0, 0, NULL, NULL},
+};
+
+static CMD_P_DEF(parse_syntax)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  const char *cmd_end;
+  for (cmd_end = p; ASCII_ISALPHA(*cmd_end); cmd_end++) {
+  }
+  const size_t cmd_len = (size_t) (cmd_end - s);
+  const SubCommandDefinition *cur_cmd = &(syntax_commands[0]);
+  CommandSubArgs *subargs = &(node->args[ARG_SUBCMD].arg.args);
+  while (cur_cmd->name != NULL) {
+    if (cur_cmd->name_len == cmd_len
+        && STRNCMP(s, cur_cmd->name, cmd_len) == 0) {
+      p += cmd_len;
+      p = skipwhite(p);
+      subargs->type = cur_cmd->type;
+      subargs->num_args = cur_cmd->num_args;
+      subargs->types = cur_cmd->types;
+      CommandArg *subargsargs = NULL;
+      if (cur_cmd->num_args) {
+        subargsargs = xcalloc(subargs->num_args, sizeof(CommandArg));
+        subargs->args = subargsargs;
+      }
+      if (cur_cmd->parse) {
+        int pret;
+        CommandPosition new_position = position;
+        new_position.col += (size_t) (p - s);
+        if ((pret = cur_cmd->parse(&p, node, error, o, new_position,
+                                   subargsargs)) != OK) {
+          return pret;
+        }
+      }
+      break;
+    }
+    cur_cmd++;
+  }
+  if (cur_cmd->name == NULL) {
+    error->message = N_("E410: Invalid :syntax subcommand");
+    error->position = s;
+    return NOTDONE;
+  }
+  *pp = p;
+  return OK;
+}
+
+#undef SUBARGS
+#undef EMPTY_SUBARGS
 #undef CMD_P_DEF
 #undef CMD_SUBP_DEF
 
@@ -5714,7 +7458,7 @@ static int parse_argopt(const char **pp,
     char *e;
     *enc = xmemdupz(arg_start, (size_t) (*pp - arg_start));
     for (e = *enc; *e != NUL; e++)
-      *e = TOLOWER_ASC(*e);
+      *e = (char) TOLOWER_ASC(*e);
   } else if (do_bad) {
     size_t len = (size_t) (*pp - arg_start);
     if (STRNICMP(arg_start, "keep", len) == 0) {

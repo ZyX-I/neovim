@@ -26,6 +26,10 @@ typedef enum {
   kArgArgs,          // for commands with subcommands
   kArgChar,          // :mark {char}
   kArgColumn,        // column (in syntax error)
+  kArgColor,         // Color (in :highlight)
+  kArgSynGroups,     // Syntax groups (in :syn)
+  kArgSynPattern,    // Syntax pattern (:syn match /pattern/)
+  kArgSynPatterns,   // List of syntax patterns (:syn region end=/1/ end=/2/ …)
 } CommandArgType;
 
 #define ARGS_NO       {0}
@@ -66,17 +70,17 @@ typedef enum {
 #define ARGS_HELP     {kArgString, kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
 #define ARGS_HT       {kArgFlags}
-#define ARGS_HI       {kArgFlags,  kArgString, kArgFlags,   kArgString,  \
-                       kArgString, kArgFlags,  kArgUNumber, kArgUNumber, \
-                       kArgFlags,  kArgString, kArgUNumber, kArgUNumber, \
-                       kArgUNumber}
+#define ARGS_HI       {kArgFlags,  kArgString, kArgString,  kArgFlags, \
+                       kArgString, kArgString, kArgFlags,   kArgColor, \
+                       kArgColor,  kArgFlags,  kArgString,  kArgColor, \
+                       kArgColor,  kArgColor}
 #define ARGS_HIST     {kArgFlags, kArgNumber, kArgNumber}
 #define ARGS_LANG     {kArgFlags, kArgString}
 #define ARGS_RESIZE   {kArgFlags, kArgNumber}
 #define ARGS_VIMG     {kArgFlags, kArgRegex, kArgString, kArgGlob}
 #define ARGS_MARK     {kArgChar}
 #define ARGS_POPUP    {kArgMenuName}
-#define ARGS_SIMALT   {kArgChar}
+#define ARGS_SIMALT   {kArgString}
 #define ARGS_LATER    {kArgFlags, kArgUNumber}
 #define ARGS_MATCH    {kArgString, kArgRegex}
 #define ARGS_MT       {kArgMenuName, kArgString, kArgMenuName, kArgString}
@@ -90,7 +94,7 @@ typedef enum {
                        kArgNumbers, kArgStrings}
 #define ARGS_FT       {kArgFlags}
 #define ARGS_SLEEP    {kArgUNumber}
-#define ARGS_SNIFF    {kArgString}
+#define ARGS_SNIFF    {kArgString, kArgString, kArgString, kArgString}
 #define ARGS_SORT     {kArgFlags, kArgRegex}
 #define ARGS_SYNTIME  {kArgFlags}
 #define ARGS_2INTS    {kArgFlags, kArgNumber, kArgNumber}
@@ -288,10 +292,229 @@ enum {
 #define VAL_CMD_COUNT_EMPTY  0x400U
 #define VAL_CMD_COUNT_COUNT  0x800U
 
-// :cscope/:sign
+// :cscope/:sign/:syntax
 enum {
   ARG_SUBCMD        = 0,
 };
+
+// :syntax
+
+typedef enum {
+  kSynCase = 0,
+  kSynClear,
+  kSynCluster,
+  kSynConceal,
+  kSynEnable,
+  kSynInclude,
+  kSynKeyword,
+  kSynList,
+  kSynManual,
+  kSynMatch,
+  kSynOn,
+  kSynOff,
+  kSynRegion,
+  kSynReset,
+  kSynSpell,
+  kSynSync,
+} SynArgType;
+
+enum {
+  SYN_ARG_CASE_FLAGS = 0,
+};
+// Boolean flag (match|ignore).
+#define SYN_ARGS_CASE {kArgFlags}
+
+enum {
+  SYN_ARG_CLUSTER_NAME = 0,
+  SYN_ARG_CLUSTER_CONTAINS,
+  SYN_ARG_CLUSTER_ADD,
+  SYN_ARG_CLUSTER_REMOVE,
+};
+#define SYN_ARGS_CLUSTER {kArgString, kArgSynGroups, kArgSynGroups, \
+                          kArgSynGroups}
+
+enum {
+  SYN_ARG_CONCEAL_FLAGS = 0,
+};
+// Boolean flag (on|off).
+#define SYN_ARGS_CONCEAL {kArgFlags}
+
+enum {
+  SYN_ARG_INCLUDE_CLUSTER = 0,
+  SYN_ARG_INCLUDE_FILE,
+};
+#define SYN_ARGS_INCLUDE {kArgString, kArgPattern}
+
+// :syn-keyword+:syn-match+:syn-region flags
+#define FLAG_SYN_MAIN_CONCEAL        0x0001
+#define FLAG_SYN_MAIN_TRANSPARENT    0x0002
+#define FLAG_SYN_MAIN_SKIPWHITE      0x0004
+#define FLAG_SYN_MAIN_SKIPNL         0x0008
+#define FLAG_SYN_MAIN_SKIPEMPTY      0x0010
+#define FLAG_SYN_MAIN_ONELINE        0x0020
+#define FLAG_SYN_MAIN_FOLD           0x0040
+#define FLAG_SYN_MAIN_DISPLAY        0x0080
+#define FLAG_SYN_MAIN_CONTAINED      0x0100
+
+// :syn-match+:syn-region flags
+#define FLAG_SYN_MR_EXTEND           0x0200
+#define FLAG_SYN_MR_EXCLUDENL        0x0400
+
+// :syn-region-specific flags
+#define FLAG_SYN_REGION_CONCEALENDS  0x0800
+#define FLAG_SYN_REGION_KEEPEND      0x1000
+
+// :syn-sync-specific flags
+#define FLAG_SYN_SYNC_FROMSTART      0x2000
+#define FLAG_SYN_SYNC_HASMINLINES    0x4000
+#define FLAG_SYN_SYNC_HASMAXLINES    0x8000
+#define FLAG_SYN_SYNC_HASLINEBREAKS 0x10000L
+
+enum {
+  SYN_ARG_KEYWORD_GROUP = 0,
+  SYN_ARG_KEYWORD_FLAGS,
+  SYN_ARG_KEYWORD_CCHAR,
+  SYN_ARG_KEYWORD_CONTAINS,
+  SYN_ARG_KEYWORD_CONTAINEDIN,
+  SYN_ARG_KEYWORD_NEXTGROUP,
+  SYN_ARG_KEYWORD_KEYWORDS,
+};
+#define SYN_ARGS_KEYWORD {kArgString, kArgFlags, kArgString, \
+                          kArgSynGroups, kArgSynGroups, kArgSynGroups, \
+                          kArgGaStrings}
+
+#define SYN_ARG_FLAGS_OFFSET       0
+#define SYN_ARG_CCHAR_OFFSET       1
+#define SYN_ARG_CONTAINS_OFFSET    2
+#define SYN_ARG_CONTAINEDIN_OFFSET 3
+#define SYN_ARG_NEXTGROUP_OFFSET   4
+#define SYN_ARG_GROUPHERE_OFFSET   5
+#define SYN_ARG_GROUPTHERE_OFFSET  6
+
+enum {
+  SYN_ARG_LIST_GROUPS = 0,
+};
+#define SYN_ARGS_LIST {kArgSynGroups}
+
+enum {
+  SYN_ARG_CLEAR_GROUPS = 0,
+};
+#define SYN_ARGS_CLEAR {kArgSynGroups}
+
+enum {
+  SYN_ARG_MATCH_GROUP = 0,
+  SYN_ARG_MATCH_FLAGS,
+  SYN_ARG_MATCH_CCHAR,
+  SYN_ARG_MATCH_CONTAINS,
+  SYN_ARG_MATCH_CONTAINEDIN,
+  SYN_ARG_MATCH_NEXTGROUP,
+  SYN_ARG_MATCH_GROUPHERE,
+  SYN_ARG_MATCH_GROUPTHERE,
+  SYN_ARG_MATCH_REGEX,
+};
+#define SYN_ARGS_MATCH {kArgString, kArgFlags, kArgString, \
+                        kArgSynGroups, kArgSynGroups, kArgSynGroups, \
+                        kArgString, kArgString, \
+                        kArgSynPattern}
+
+enum {
+  SYN_ARG_REGION_GROUP = 0,
+  SYN_ARG_REGION_FLAGS,
+  SYN_ARG_REGION_CCHAR,
+  SYN_ARG_REGION_CONTAINS,
+  SYN_ARG_REGION_CONTAINEDIN,
+  SYN_ARG_REGION_NEXTGROUP,
+  SYN_ARG_REGION_GROUPHERE,
+  SYN_ARG_REGION_GROUPTHERE,
+  SYN_ARG_REGION_MATCHGROUP,
+  SYN_ARG_REGION_STARTREG,
+  SYN_ARG_REGION_ENDREG,
+  SYN_ARG_REGION_SKIPREG,
+};
+#define SYN_ARGS_REGION {kArgString, kArgFlags, kArgString, \
+                         kArgSynGroups, kArgSynGroups, kArgSynGroups, \
+                         kArgString, kArgString, \
+                         kArgString, \
+                         kArgSynPatterns, kArgSynPatterns, kArgSynPatterns}
+
+enum {
+  SYN_ARG_SPELL_FLAGS = 0,
+};
+#define SYN_ARGS_SPELL {kArgFlags}
+
+#define VAL_SYN_SPELL_TOPLEVEL   0x0
+#define VAL_SYN_SPELL_NOTOPLEVEL 0x1
+#define VAL_SYN_SPELL_DEFAULT    0x2
+
+enum {
+  SYN_ARG_SYNC_FLAGS = 0,
+  SYN_ARG_SYNC_CCOMMENT,
+  SYN_ARG_SYNC_MAXLINES,
+  SYN_ARG_SYNC_MINLINES,
+  SYN_ARG_SYNC_LINEBREAKS,
+  SYN_ARG_SYNC_REGEX,
+  SYN_ARG_SYNC_CMD,
+};
+#define SYN_ARGS_SYNC {kArgFlags, kArgString, \
+                       kArgUNumber, kArgUNumber, kArgUNumber, \
+                       kArgRegex, kArgArgs}
+
+// :sign
+
+typedef enum {
+  kSignDefine = 0,
+  kSignUndefine,
+  kSignList,
+  kSignPlace,
+  kSignUnplace,
+  kSignJump,
+} SignArgType;
+
+#define SIGN_ARG_DEFINE_NAME   0
+#define SIGN_ARG_DEFINE_ICON   1
+#define SIGN_ARG_DEFINE_LINEHL 2
+#define SIGN_ARG_DEFINE_TEXT   3
+#define SIGN_ARG_DEFINE_TEXTHL 4
+
+#define SIGN_ARGS_DEFINE {kArgString, kArgString, kArgString, kArgString, \
+                          kArgString}
+
+#define SIGN_ARG_UNDEFINE_NAME 0
+
+#define SIGN_ARGS_UNDEFINE {kArgString}
+
+#define SIGN_ARG_LIST_NAME 0
+
+#define SIGN_ARGS_LIST {kArgString}
+
+#define SIGN_ARG_PLACE_ID     0
+#define SIGN_ARG_PLACE_FILE   1
+#define SIGN_ARG_PLACE_BUFFER 2
+#define SIGN_ARG_PLACE_NAME   3
+#define SIGN_ARG_PLACE_LINE   4
+
+#define SIGN_ARGS_PLACE {kArgNumber, kArgString, kArgUNumber, kArgString, \
+                         kArgUNumber}
+
+#define SIGN_ARG_JUMP_ID     0
+#define SIGN_ARG_JUMP_FILE   1
+#define SIGN_ARG_JUMP_BUFFER 2
+
+#define SIGN_ARGS_JUMP {kArgNumber, kArgString, kArgUNumber}
+
+#define SIGN_ARG_UNPLACE_ID     0
+#define SIGN_ARG_UNPLACE_FILE   1
+#define SIGN_ARG_UNPLACE_BUFFER 2
+
+#define SIGN_ARGS_UNPLACE {kArgNumber, kArgString, kArgUNumber}
+
+#define SYN_SCOPE_KEYWORD 0x01
+#define SYN_SCOPE_MATCH   0x02
+#define SYN_SCOPE_REGION  0x04
+#define SYN_SCOPE_SYNC    0x08
+
+#define SYN_SCOPE_MAIN (SYN_SCOPE_KEYWORD|SYN_SCOPE_MATCH|SYN_SCOPE_REGION)
+#define SYN_SCOPE_MR   (SYN_SCOPE_MATCH|SYN_SCOPE_REGION)
 
 // :cscope
 typedef enum {
@@ -430,6 +653,7 @@ enum {
 enum {
   ARG_HI_FLAGS      = 0,
   ARG_HI_GROUP,
+  ARG_HI_TGT_GROUP,
   ARG_HI_TERM,
   ARG_HI_START,
   ARG_HI_STOP,
@@ -519,7 +743,7 @@ enum {
 
 // :simalt
 enum {
-  ARG_SIMALT_CHAR   = 0,
+  ARG_SIMALT_KEYS   = 0,
 };
 
 // :earlier/:later
@@ -668,7 +892,10 @@ enum {
 
 // :sniff
 enum {
-  ARG_SNIFF_SYMBOL  = 0,
+  ARG_SNIFF_CMD     = 0,
+  ARG_SNIFF_SYMBOL,
+  ARG_SNIFF_DEF,
+  ARG_SNIFF_MSG,
 };
 
 // :sort
