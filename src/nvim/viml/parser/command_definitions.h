@@ -46,6 +46,98 @@
 # undef RANGE                   /* SASC on Amiga defines it */
 #endif
 
+#ifdef RANGE
+# undef RANGE
+#endif
+#ifdef BANG
+# undef BANG
+#endif
+#ifdef EXTRA
+# undef EXTRA
+#endif
+#ifdef XFILE
+# undef XFILE
+#endif
+#ifdef NOSPC
+# undef NOSPC
+#endif
+#ifdef DFLALL
+# undef DFLALL
+#endif
+#ifdef WHOLEFOLD
+# undef WHOLEFOLD
+#endif
+#ifdef NEEDARG
+# undef NEEDARG
+#endif
+#ifdef TRLBAR
+# undef TRLBAR
+#endif
+#ifdef REGSTR
+# undef REGSTR
+#endif
+#ifdef COUNT
+# undef COUNT
+#endif
+#ifdef NOTRLCOM
+# undef NOTRLCOM
+#endif
+#ifdef ZEROR
+# undef ZEROR
+#endif
+#ifdef USECTRLV
+# undef USECTRLV
+#endif
+#ifdef NOTADR
+# undef NOTADR
+#endif
+#ifdef EDITCMD
+# undef EDITCMD
+#endif
+#ifdef BUFNAME
+# undef BUFNAME
+#endif
+#ifdef BUFUNL
+# undef BUFUNL
+#endif
+#ifdef ARGOPT
+# undef ARGOPT
+#endif
+#ifdef SBOXOK
+# undef SBOXOK
+#endif
+#ifdef CMDWIN
+# undef CMDWIN
+#endif
+#ifdef MODIFY
+# undef MODIFY
+#endif
+#ifdef EXFLAGS
+# undef EXFLAGS
+#endif
+#ifdef ISMODIFIER
+# undef ISMODIFIER
+#endif
+#ifdef ISGREP
+# undef ISGREP
+#endif
+#ifdef ISEXPR
+# undef ISEXPR
+#endif
+#ifdef LITERAL
+# undef LITERAL
+#endif
+
+#ifdef FILES
+# undef FILES
+#endif
+#ifdef WORD1
+# undef WORD1
+#endif
+#ifdef FILE1
+# undef FILE1
+#endif
+
 #define RANGE           0x001   // allow a linespecs
 #define BANG            0x002   // allow a ! after the command name
 #define EXTRA           0x004   // allow extra args after command name
