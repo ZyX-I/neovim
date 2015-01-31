@@ -2903,7 +2903,7 @@ static CMD_P_DEF(parse_delmarks)
           error->position = p + 2;
           return NOTDONE;
         }
-        memset(&(marks[from - FIRST_MARK_CODE]), 'Y', (to - from + 1));
+        memset(&(marks[from - FIRST_MARK_CODE]), 'Y', ((size_t) (to - from) + 1));
         p += 2;
       } else {
         marks[*p - FIRST_MARK_CODE] = 'Y';
@@ -2962,7 +2962,7 @@ static CMD_P_DEF(parse_display)
   char *cur_regname = regnames;
   for (uint8_t i = 0; i < REGNUM; i++) {
     if (regtab[i]) {
-      *cur_regname++ = TOLOWER_ASC((char) (i + REGSTART));
+      *cur_regname++ = (char) TOLOWER_ASC(i + REGSTART);
     }
   }
   node->args[ARG_NAME_NAME].arg.str = regnames;
@@ -4056,7 +4056,7 @@ static CMD_P_DEF(parse_sub)
                 case '9': {
                   (*next) = replacement_alloc(kRepGroup, P_COL(p2 - 1),
                                               P_COL(p2));
-                  (*next)->data.group = (uint8_t) *p2 - '0';
+                  (*next)->data.group = (uint8_t) (*p2 - '0');
                   p2++;
                   break;
                 }
@@ -6694,7 +6694,9 @@ const CommandNode nocmd = {
                                 line_start) \
               == FAIL) { \
             free_cmd(result); \
-            free(line_start); \
+            if (can_free) { \
+              free(line_start); \
+            } \
             return FAIL; \
           } \
           if (prev_node != NULL) \

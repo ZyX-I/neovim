@@ -230,7 +230,7 @@ static FDEC(print_replacement, const Replacement *rep)
       case kRepGroup: {
         WC('\\');
         assert(rep->data.group > 0 && rep->data.group < 10);
-        WC('0' + (char) rep->data.group);
+        WC((char) ('0' + rep->data.group));
         break;
       }
       case kRepLiteral: {
@@ -1237,7 +1237,7 @@ static CMD_FDEC(print_delmarks)
       switch (*p) {
         case 'Y': {
           if (from == 0) {
-            from = FIRST_MARK_CODE + (uint8_t) (p - s);
+            from = (uint8_t) FIRST_MARK_CODE + (uint8_t) (p - s);
           }
           break;
         }
@@ -1246,7 +1246,7 @@ static CMD_FDEC(print_delmarks)
           if (from == 0) {
             break;
           }
-          const uint8_t to = FIRST_MARK_CODE + (uint8_t) (p - s) - 1;
+          const uint8_t to = (uint8_t) FIRST_MARK_CODE + (uint8_t) (p - s) - 1;
           WC((char) from);
           if (from != to) {
             WC('-');
@@ -1721,7 +1721,7 @@ static CMD_FDEC(print_wincmd)
   if (action) {
     WC(' ');
     if (action & 0x80) {
-      action &= ~((uint8_t) 0x80);
+      action &= (uint8_t) (~((uint8_t) 0x80));
       WC('g');
     }
     WC((char) action);

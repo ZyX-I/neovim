@@ -796,13 +796,13 @@ static FDEC(translate_string, ExpressionNodeType type, const char *const s,
                 case '6':
                 case '7': {
                   char c;
-                  c = *curp - '0';
+                  c = (char) (*curp - '0');
                   if ('0' <= curp[1] && curp[1] <= '7') {
                     curp++;
-                    c = (char) (c << 3) + (*curp - '0');
+                    c = (char) ((c << 3) + (*curp - '0'));
                     if ('0' <= curp[1] && curp[1] <= '7') {
                       curp++;
-                      c = (char) (c << 3) + (*curp - '0');
+                      c = (char) ((c << 3) + (*curp - '0'));
                     }
                   }
                   F(dump_char, c);
