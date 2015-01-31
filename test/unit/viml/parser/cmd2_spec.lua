@@ -728,6 +728,9 @@ describe('parse_one_cmd', function()
       itn(full .. ' show', trunc .. ' s')
     end
   end)
+  describe(':simalt', function()
+    itn('simalt ~a~b~c~', 'sim ~a~b~c~')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF

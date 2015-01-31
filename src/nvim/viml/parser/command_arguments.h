@@ -76,7 +76,7 @@ typedef enum {
 #define ARGS_VIMG     {kArgFlags, kArgRegex, kArgString, kArgGlob}
 #define ARGS_MARK     {kArgChar}
 #define ARGS_POPUP    {kArgMenuName}
-#define ARGS_SIMALT   {kArgChar}
+#define ARGS_SIMALT   {kArgString}
 #define ARGS_LATER    {kArgFlags, kArgUNumber}
 #define ARGS_MATCH    {kArgString, kArgRegex}
 #define ARGS_MT       {kArgMenuName, kArgString, kArgMenuName, kArgString}
@@ -519,7 +519,7 @@ enum {
 
 // :simalt
 enum {
-  ARG_SIMALT_CHAR   = 0,
+  ARG_SIMALT_KEYS   = 0,
 };
 
 // :earlier/:later
