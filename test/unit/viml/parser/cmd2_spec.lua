@@ -504,6 +504,7 @@ describe('parse_one_cmd', function()
           trunc .. [[-\(abc\)\(def\)\(ghi\)-\u\L\1\E\l\U\2\E\t-ciren]])
       itn(full .. '//\\=abc . def/cI#', trunc .. '//\\=abc. def/cI#')
     end
+    itn('substitute///i', 'si')
     itn('&&10', '&10')
     itn('&&10', '&&10')
     itn('&&r', '&r')
