@@ -1,6 +1,7 @@
 #ifndef NVIM_VIML_PRINTER_PRINTER_H
 #define NVIM_VIML_PRINTER_PRINTER_H
 
+#include <stddef.h>
 #include "nvim/viml/parser/expressions.h"
 
 typedef struct {
