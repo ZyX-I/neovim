@@ -12,6 +12,7 @@
 #include "nvim/vim.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/viml/parser/command_definitions.h"
+#include "nvim/viml/parser/command_arguments.h"
 #include "nvim/viml/parser/expressions.h"
 // FIXME Remove the two following includes: only regexp_defs is needed.
 #include "nvim/vim.h"
@@ -198,6 +199,30 @@ typedef struct replacement {
   struct replacement *next;  ///< Next parsed item.
 } Replacement;
 
+/// Possible ways to define highlight color
+typedef enum {
+  kHiColorName,  ///< Name of the color (string).
+  kHiColorRGB,   ///< 24-bit RGB color.
+  kHiColorIdx,   ///< Terminal color index.
+  kHiColorFg,    ///< Same as foreground color.
+  kHiColorBg,    ///< Same as background color.
+  kHiColorNone,  ///< No color needed.
+} HighlightColorType;
+
+/// Structure that contains color definition
+typedef struct {
+  HighlightColorType type;  ///< Type of the definition.
+  union {
+    char *name;             ///< Human-readable name of the color.
+    struct {
+      unsigned red : 8;     ///< Red component of RGB color.
+      unsigned green : 8;   ///< Green component of RGB color.
+      unsigned blue : 8;    ///< Blue component of RGB color.
+    } rgb;                  ///< 24-bit RGB color.
+    uint8_t idx;            ///< Terminal color index.
+  } data;
+} HighlightColor;
+
 /// Structure for representing one command
 typedef struct command_node {
   CommandType type;               ///< Command type. For built-in commands it 
@@ -253,6 +278,7 @@ typedef struct command_node {
                                   ///< expressions (:echo) (uses expr->next to 
                                   ///< build a linked list)
       Replacement *rep;           ///< Replacement string, parsed.
+      HighlightColor color;       ///< Color definition.
       struct command_subargs {
         unsigned type;
         size_t num_args;
@@ -292,6 +318,18 @@ typedef int (*CommandArgsParser)(const char **,
                                  CommandPosition,
                                  VimlLineGetter,
                                  void *);
+
+/// Definition of a single highlight attribute
+///
+/// Used for parsing `term=`, `gui=` and `cterm=` attribute lists.
+typedef struct {
+  const char *hl_attr_name;           ///< Attribute name.
+  const size_t hl_attr_name_len;      ///< Cached strlen() of attribute name.
+  const uint_least32_t hl_attr_flag;  ///< Attribute flag.
+} HighlightAttrDef;
+
+/// Table that maps attribute names to corresponding binary flags
+extern const HighlightAttrDef hl_attr_table[];
 
 // flags for parse_one_cmd
 #define FLAG_POC_EXMODE      0x01
@@ -342,6 +380,12 @@ const CommandNode nocmd;
 
 /// Maximum nesting level for :for/:while/:if/:try blocks
 #define MAX_NEST_BLOCKS   CSTACK_LEN * 3
+
+/// Characters that end Ex command, except for the comment and NUL characters
+#define ENDS_EXCMD_NOCOMMENT_CHARS "|\n"
+
+/// Characters that end Ex command, except for the NUL character
+#define ENDS_EXCMD_CHARS ENDS_EXCMD_NOCOMMENT_CHARS "\""
 
 /// Macros that checks whether given character ends Ex command
 #define ENDS_EXCMD_NOCOMMENT(ch) ((ch) == NUL || (ch) == '|' || (ch) == '\n')

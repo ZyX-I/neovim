@@ -14,6 +14,7 @@
 
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/printer/expressions.h"
+#include "nvim/viml/printer/ex_commands.h"
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
 #include "nvim/viml/dumpers/dumpers.h"
@@ -1988,6 +1989,153 @@ static CMD_FDEC(print_sniff)
   FUNCTION_END;
 }
 
+static FDEC(print_prop_str_p, const char *const p)
+{
+  FUNCTION_START;
+  bool needs_quote = false;
+  if (strpbrk(p, " \t" ENDS_EXCMD_CHARS) != NULL) {
+    WC('\'');
+    needs_quote = true;
+  }
+  // TODO Escape argument
+  W(p);
+  if (needs_quote) {
+    WC('\'');
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_prop_str, const CommandArg arg)
+{
+  FUNCTION_START;
+  F(print_prop_str_p, arg.arg.str);
+  FUNCTION_END;
+}
+
+static FDEC(print_color, const CommandArg arg)
+{
+  FUNCTION_START;
+  const HighlightColor color = arg.arg.color;
+  switch (color.type) {
+    case kHiColorName: {
+      F(print_prop_str_p, color.data.name);
+      break;
+    }
+    case kHiColorRGB: {
+      char color_repr[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+#ifndef CH_MACROS_DEFINE_LENGTH
+      snprintf(&(color_repr[0]), 8, "#%02X%02X%02X",
+               color.data.rgb.red, color.data.rgb.green, color.data.rgb.blue);
+#endif
+      W_LEN(color_repr, sizeof(color_repr) - 1);
+      break;
+    }
+    case kHiColorIdx: {
+      F_NOOPT(dump_unumber, (uintmax_t) color.data.idx);
+      break;
+    }
+    case kHiColorFg: {
+      WS("fg");
+      break;
+    }
+    case kHiColorBg: {
+      WS("bg");
+      break;
+    }
+    case kHiColorNone: {
+      WS("None");
+      break;
+    }
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_attr_flags, const CommandArg arg)
+{
+  FUNCTION_START;
+  const uint_least32_t attr_flags = arg.arg.flags;
+  if (attr_flags == 0) {
+    EARLY_RETURN;
+  }
+  bool did_comma = true;
+  for (const HighlightAttrDef *cur_hl_attr = &(hl_attr_table[0]);
+       cur_hl_attr->hl_attr_name != NULL;
+       cur_hl_attr++) {
+    if (attr_flags & cur_hl_attr->hl_attr_flag
+        // Protect from printing both inverse and reverse.
+        && cur_hl_attr->hl_attr_flag != (cur_hl_attr + 1)->hl_attr_flag) {
+      if (!did_comma) {
+        WC(',');
+      }
+      W_LEN(cur_hl_attr->hl_attr_name, cur_hl_attr->hl_attr_name_len);
+      did_comma = false;
+    }
+  }
+  FUNCTION_END;
+}
+
+typedef FDEC_TYPEDEF(HiPropertyDumperFunc, CommandArg arg);
+
+static CMD_FDEC(print_highlight)
+{
+  FUNCTION_START;
+  const uint_least32_t flags = node->args[ARG_HI_FLAGS].arg.flags;
+  if (flags & FLAG_HI_DEFAULT) {
+    WS(" default");
+  }
+  if (flags & FLAG_HI_CLEAR) {
+    WS(" clear");
+  }
+  if (flags & FLAG_HI_LINK) {
+    WS(" link");
+  }
+  if (node->args[ARG_HI_GROUP].arg.str != NULL) {
+    WC(' ');
+    W(node->args[ARG_HI_GROUP].arg.str);
+  }
+  if (flags & FLAG_HI_LINK) {
+    assert(node->args[ARG_HI_TGT_GROUP].arg.str != NULL);
+    WC(' ');
+    W(node->args[ARG_HI_TGT_GROUP].arg.str);
+    FUNCTION_END;
+  } else {
+    assert(node->args[ARG_HI_TGT_GROUP].arg.str == NULL);
+  }
+  if (flags & FLAG_HI_CLEAR) {
+    FUNCTION_END;
+  }
+  static const PropertyDef prop_table[] = {
+    {(VoidFuncRef) FNAME(print_attr_flags), "term", ARG_HI_TERM},
+    {(VoidFuncRef) FNAME(print_attr_flags), "cterm", ARG_HI_CTERM},
+    {(VoidFuncRef) FNAME(print_color), "ctermfg", ARG_HI_CTERMFG},
+    {(VoidFuncRef) FNAME(print_color), "ctermbg", ARG_HI_CTERMBG},
+    {(VoidFuncRef) FNAME(print_attr_flags), "gui", ARG_HI_GUI},
+    {(VoidFuncRef) FNAME(print_color), "guifg", ARG_HI_GUIFG},
+    {(VoidFuncRef) FNAME(print_color), "guibg", ARG_HI_GUIBG},
+    {(VoidFuncRef) FNAME(print_color), "guisp", ARG_HI_GUISP},
+    {(VoidFuncRef) FNAME(print_prop_str), "font", ARG_HI_FONT},
+    {(VoidFuncRef) FNAME(print_prop_str), "start", ARG_HI_START},
+    {(VoidFuncRef) FNAME(print_prop_str), "stop", ARG_HI_STOP},
+    {NULL, NULL, -1},
+  };
+  CommandArg reference;
+  memset(&reference, 0, sizeof(reference));
+  for (const PropertyDef *prop_def = &(prop_table[0]);
+       prop_def->prop_dump != NULL;
+       prop_def++) {
+    const CommandArg arg = node->args[prop_def->prop_idx];
+    if (memcmp(&reference, &arg, sizeof(CommandArg)) == 0) {
+      continue;
+    } else {
+      WC(' ');
+      W(prop_def->prop_name);
+      WC('=');
+      F_PTR(((FTYPE(HiPropertyDumperFunc)) (prop_def->prop_dump)), arg);
+    }
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -2119,6 +2267,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_cscope);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdSniff).parse) {
     CMD_F(print_sniff);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHighlight).parse) {
+    CMD_F(print_highlight);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

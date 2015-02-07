@@ -703,7 +703,7 @@ typedef enum
   EX(kCmdHardcopy,        "hardcopy",     &parse_rest_allow_empty,
      ARG_NAME_NAME, ARGS_NAME,
      RANGE|COUNT|EXTRA|TRLBAR|DFLALL|BANG),
-  EX(kCmdHighlight,       "highlight",    NULL,
+  EX(kCmdHighlight,       "highlight",    &parse_highlight,
      ARG_HI_GUISP, ARGS_HI,
      BANG|EXTRA|TRLBAR|SBOXOK|CMDWIN),
   EX(kCmdHide,            "hide",         NOFUNC,

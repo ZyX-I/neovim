@@ -26,6 +26,7 @@ typedef enum {
   kArgArgs,          // for commands with subcommands
   kArgChar,          // :mark {char}
   kArgColumn,        // column (in syntax error)
+  kArgColor,         // Color (in :highlight)
 } CommandArgType;
 
 #define ARGS_NO       {0}
@@ -66,10 +67,10 @@ typedef enum {
 #define ARGS_HELP     {kArgString, kArgString}
 #define ARGS_HELPG    {kArgRegex, kArgString}
 #define ARGS_HT       {kArgFlags}
-#define ARGS_HI       {kArgFlags,  kArgString, kArgFlags,   kArgString,  \
-                       kArgString, kArgFlags,  kArgUNumber, kArgUNumber, \
-                       kArgFlags,  kArgString, kArgUNumber, kArgUNumber, \
-                       kArgUNumber}
+#define ARGS_HI       {kArgFlags,  kArgString, kArgString,  kArgFlags, \
+                       kArgString, kArgString, kArgFlags,   kArgColor, \
+                       kArgColor,  kArgFlags,  kArgString,  kArgColor, \
+                       kArgColor,  kArgColor}
 #define ARGS_HIST     {kArgFlags, kArgNumber, kArgNumber}
 #define ARGS_LANG     {kArgFlags, kArgString}
 #define ARGS_RESIZE   {kArgFlags, kArgNumber}
@@ -430,6 +431,7 @@ enum {
 enum {
   ARG_HI_FLAGS      = 0,
   ARG_HI_GROUP,
+  ARG_HI_TGT_GROUP,
   ARG_HI_TERM,
   ARG_HI_START,
   ARG_HI_STOP,

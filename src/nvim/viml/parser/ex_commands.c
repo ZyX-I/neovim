@@ -7,6 +7,7 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
@@ -511,6 +512,13 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
       free(subargs);
       arg->arg.args.args = NULL;
       arg->arg.args.num_args = 0;
+      break;
+    }
+    case kArgColor: {
+      if (arg->arg.color.type == kHiColorName) {
+        free(arg->arg.color.data.name);
+        arg->arg.color.data.name = NULL;
+      }
       break;
     }
   }
@@ -5092,6 +5100,285 @@ static CMD_P_DEF(parse_sniff)
   return OK;
 }
 
+const HighlightAttrDef hl_attr_table[] = {
+  {"bold", 4, FLAG_HI_TERM_BOLD},
+  {"underline", 9, FLAG_HI_TERM_UNDERLINE},
+  {"undercurl", 9, FLAG_HI_TERM_UNDERCURL},
+  {"inverse", 7, FLAG_HI_TERM_REVERSE},
+  {"reverse", 7, FLAG_HI_TERM_REVERSE},
+  {"italic", 6, FLAG_HI_TERM_ITALIC},
+  {"standout", 8, FLAG_HI_TERM_STANDOUT},
+  {"none", 4, FLAG_HI_TERM_NONE},
+  {NULL, 0, 0},
+};
+
+static CMD_P_DEF(parse_highlight)
+{
+  const char *p = *pp;
+  uint_least32_t flags = 0;
+  if (ENDS_EXCMD(*p)) {
+    return OK;
+  }
+  const char *name_start = p;
+  const char *name_end = skiptowhite(name_start);
+  p = skipwhite(name_end);
+
+  if (STRNCMP(name_start, "default", name_end - name_start) == 0) {
+    flags |= FLAG_HI_DEFAULT;
+    name_start = p;
+    name_end = skiptowhite(name_start);
+    p = skipwhite(name_end);
+  }
+
+  if (STRNCMP(name_start, "clear", name_end - name_start) == 0) {
+    flags |= FLAG_HI_CLEAR;
+  } else if (STRNCMP(name_start, "link", name_end - name_start) == 0) {
+    flags |= FLAG_HI_LINK;
+  }
+
+  if (!(flags & (FLAG_HI_CLEAR|FLAG_HI_LINK)) && ENDS_EXCMD(*p)) {
+    node->args[ARG_HI_GROUP].arg.str =
+        xmemdupz(name_start, (size_t) (name_end - name_start));
+    goto parse_highlight_end;
+  }
+
+  if (flags & FLAG_HI_LINK) {
+    const char *const from_start = p;
+    const char *const from_end = skiptowhite(from_start);
+    const char *const to_start = skipwhite(from_end);
+    const char *const to_end = skiptowhite(to_start);
+
+    if (ENDS_EXCMD(*from_start) || ENDS_EXCMD(*to_start)) {
+      error->message = N_("E412: Not enough arguments to :highlight link");
+      error->position = ((ENDS_EXCMD(*from_start))
+                         ? from_start
+                         : to_start);
+      return NOTDONE;
+    }
+
+    p = skipwhite(to_end);
+    if (!ENDS_EXCMD(*p)) {
+      error->message = N_("E413: Too many arguments to :highlight link");
+      error->position = p;
+      return NOTDONE;
+    }
+
+    node->args[ARG_HI_GROUP].arg.str =
+        xmemdupz(from_start, (size_t) (from_end - from_start));
+    node->args[ARG_HI_TGT_GROUP].arg.str =
+        xmemdupz(to_start, (size_t) (to_end - to_start));
+    goto parse_highlight_end;
+  }
+
+  if (flags & FLAG_HI_CLEAR) {
+    if (ENDS_EXCMD(*p)) {
+      goto parse_highlight_end;
+    }
+    name_start = p;
+    name_end = skiptowhite(name_start);
+    p = skipwhite(name_end);
+  }
+
+  node->args[ARG_HI_GROUP].arg.str =
+      xmemdupz(name_start, (size_t) (name_end - name_start));
+
+  if (!(flags & FLAG_HI_CLEAR)) {
+    while (!ENDS_EXCMD(*p)) {
+      const char *const key_start = p;
+      if (*key_start == '=') {
+        error->message = N_("E415: Unexpected equal sign");
+        error->position = key_start;
+        return NOTDONE;
+      }
+
+      // Isolate the key ("c?term|gui", "(term|gui)(fg|bg)")
+      while (*p && !vim_iswhite(*p) && *p != '=') {
+        p++;
+      }
+      const char *const key_end = p;
+
+      if (*p != '=') {
+        error->message = N_("E416: Missing equal sign");
+        error->position = p;
+        return NOTDONE;
+      }
+      p++;
+
+      // Isolate the argument
+      p = skipwhite(p);
+      const char *arg_start = p;
+      if (*p == '\'') {
+        arg_start++;
+        p = strchr(p + 1, '\'');
+        if (p == NULL) {
+          error->message = N_("E475: Missing closing quote");
+          error->position = arg_start - 1;
+          return NOTDONE;
+        }
+      } else {
+        p = skiptowhite(p);
+      }
+      const char *const arg_end = p;
+      const size_t arg_len = (size_t) (arg_end - arg_start);
+
+      if (!arg_len) {
+        error->message = N_("E417: Missing argument");
+        error->position = arg_start;
+        return NOTDONE;
+      }
+
+      if (*p == '\'') {
+        p++;
+      }
+
+      const size_t key_len = (size_t) (key_end - key_start);
+      int prop_idx = -1;
+      switch (key_len) {
+        case 3: {
+          if (STRNICMP(key_start, "gui", 3) == 0) {
+            prop_idx = ARG_HI_GUI;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        case 4: {
+          if (STRNICMP(key_start, "term", 4) == 0) {
+            prop_idx = ARG_HI_TERM;
+          } else if (STRNICMP(key_start, "font", 4) == 0) {
+            prop_idx = ARG_HI_FONT;
+          } else if (STRNICMP(key_start, "stop", 4) == 0) {
+            prop_idx = ARG_HI_STOP;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        case 5: {
+          if (STRNICMP(key_start, "cterm", 5) == 0) {
+            prop_idx = ARG_HI_CTERM;
+          } else if (STRNICMP(key_start, "guifg", 5) == 0) {
+            prop_idx = ARG_HI_GUIFG;
+          } else if (STRNICMP(key_start, "guibg", 5) == 0) {
+            prop_idx = ARG_HI_GUIBG;
+          } else if (STRNICMP(key_start, "guisp", 5) == 0) {
+            prop_idx = ARG_HI_GUISP;
+          } else if (STRNICMP(key_start, "start", 5) == 0) {
+            prop_idx = ARG_HI_START;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        case 7: {
+          if (STRNICMP(key_start, "ctermfg", 7) == 0) {
+            prop_idx = ARG_HI_CTERMFG;
+          } else if (STRNICMP(key_start, "ctermbg", 7) == 0) {
+            prop_idx = ARG_HI_CTERMBG;
+          } else {
+            goto parse_highlight_unknown_property;
+          }
+          break;
+        }
+        default: {
+          goto parse_highlight_unknown_property;
+        }
+      }
+      if (prop_idx == ARG_HI_GUI
+          || prop_idx == ARG_HI_TERM
+          || prop_idx == ARG_HI_CTERM) {
+        uint_least32_t attr_flags = 0;
+        const char *ap = arg_start;
+        while (ap < arg_end) {
+          const HighlightAttrDef *cur_hl_attr = &(hl_attr_table[0]);
+          for (cur_hl_attr = &(hl_attr_table[0]);
+               cur_hl_attr->hl_attr_name != NULL;
+               cur_hl_attr++) {
+            if (STRNICMP(ap, cur_hl_attr->hl_attr_name,
+                         cur_hl_attr->hl_attr_name_len) == 0) {
+              attr_flags |= cur_hl_attr->hl_attr_flag;
+              ap += cur_hl_attr->hl_attr_name_len;
+              break;
+            }
+          }
+          if (cur_hl_attr->hl_attr_name == NULL) {
+            error->message = N_("E418: Illegal attribute name");
+            error->position = ap;
+            return NOTDONE;
+          }
+          if (*ap == ',') {
+            ap++;
+          }
+        }
+        node->args[prop_idx].arg.flags = attr_flags;
+      } else if (prop_idx == ARG_HI_FONT) {
+        node->args[prop_idx].arg.str = xmemdupz(arg_start, arg_len);
+      } else if (prop_idx == ARG_HI_CTERMFG || prop_idx == ARG_HI_CTERMBG
+                 || prop_idx == ARG_HI_GUIFG || prop_idx == ARG_HI_GUIBG
+                 || prop_idx == ARG_HI_GUISP) {
+        if (VIM_ISDIGIT(*arg_start)
+            && (prop_idx == ARG_HI_CTERMFG || prop_idx == ARG_HI_CTERMBG)) {
+          node->args[prop_idx].arg.color.type = kHiColorIdx;
+          node->args[prop_idx].arg.color.data.idx = (uint8_t) atoi(arg_start);
+        } else if (*arg_start == '#' && arg_len == 7
+                 && (prop_idx == ARG_HI_GUIFG
+                     || prop_idx == ARG_HI_GUIBG
+                     || prop_idx == ARG_HI_GUISP)
+                 && vim_isxdigit(arg_start[1])
+                 && vim_isxdigit(arg_start[2])
+                 && vim_isxdigit(arg_start[3])
+                 && vim_isxdigit(arg_start[4])
+                 && vim_isxdigit(arg_start[5])
+                 && vim_isxdigit(arg_start[6])) {
+          node->args[prop_idx].arg.color.type = kHiColorRGB;
+          union {
+            struct {
+              unsigned rgb : 24;
+            } rgb_1;
+            struct {
+              unsigned blue : 8;
+              unsigned green : 8;
+              unsigned red : 8;
+            } rgb_3;
+          } current_color;
+          current_color.rgb_1.rgb = (unsigned) strtoul(arg_start + 1, NULL, 16);
+          node->args[prop_idx].arg.color.data.rgb.red = current_color.rgb_3.red;
+          node->args[prop_idx].arg.color.data.rgb.green
+              = current_color.rgb_3.green;
+          node->args[prop_idx].arg.color.data.rgb.blue
+              = current_color.rgb_3.blue;
+        } else if (arg_len == 2 && STRNICMP(arg_start, "fg", 2) == 0) {
+          node->args[prop_idx].arg.color.type = kHiColorFg;
+        } else if (arg_len == 2 && STRNICMP(arg_start, "bg", 2) == 0) {
+          node->args[prop_idx].arg.color.type = kHiColorBg;
+        } else if (arg_len == 4 && STRNICMP(arg_start, "none", 4) == 0) {
+          node->args[prop_idx].arg.color.type = kHiColorNone;
+        } else {
+          node->args[prop_idx].arg.color.type = kHiColorName;
+          node->args[prop_idx].arg.color.data.name =
+              xmemdupz(arg_start, arg_len);
+        }
+      } else if (prop_idx == ARG_HI_START || prop_idx == ARG_HI_STOP) {
+        // FIXME Do better parsing.
+        node->args[prop_idx].arg.str = xmemdupz(arg_start, arg_len);
+      } else {
+parse_highlight_unknown_property:
+        error->message = N_("E423: Unknown property name");
+        error->position = key_start;
+        return NOTDONE;
+      }
+      p = skipwhite(p);
+    }
+  } else {
+    p += STRLEN(p);
+  }
+
+parse_highlight_end:
+  node->args[ARG_HI_FLAGS].arg.flags = flags;
+  *pp = p;
+  return OK;
+}
+
 #undef CMD_P_DEF
 #undef CMD_SUBP_DEF
 
@@ -5761,7 +6048,7 @@ static int parse_argopt(const char **pp,
     char *e;
     *enc = xmemdupz(arg_start, (size_t) (*pp - arg_start));
     for (e = *enc; *e != NUL; e++)
-      *e = TOLOWER_ASC(*e);
+      *e = (char) TOLOWER_ASC(*e);
   } else if (do_bad) {
     size_t len = (size_t) (*pp - arg_start);
     if (STRNICMP(arg_start, "keep", len) == 0) {
