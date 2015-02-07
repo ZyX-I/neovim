@@ -30,6 +30,7 @@
 #include "nvim/ops.h"
 #include "nvim/option.h"
 #include "nvim/digraph.h"
+#include "nvim/assert.h"
 
 #include "nvim/viml/parser/expressions.h"
 #include "nvim/viml/parser/ex_commands.h"
@@ -42,15 +43,19 @@ int check_nomodeline(char_u **argp);
 #endif
 
 #define getdigits(arg) getdigits((char_u **) (arg))
+#define getdigits_int(arg) getdigits_int((char_u **) (arg))
 #define skipwhite(arg) (char *) skipwhite((char_u *) (arg))
 #define skipdigits(arg) (char *) skipdigits((char_u *) (arg))
 #define mb_ptr_adv_(p) p += has_mbyte ? (*mb_ptr2len)((const char_u *) p) : 1
 #define mb_ptr2len(p) ((size_t) mb_ptr2len((const char_u *) p))
+#define mb_ptr2char(p) (mb_ptr2char((const char_u *) p))
+#define mb_ptr2cells(p) ((size_t) mb_ptr2cells((const char_u *) p))
 #define enc_canonize(p) (char *) enc_canonize((char_u *) (p))
 #define check_ff_value(p) check_ff_value((char_u *) (p))
 #define replace_termcodes(a, b, c, d, e, f, g) \
     (char *) replace_termcodes((const char_u *) a, b, (char_u **) c, d, e, f, g)
 #define lrswap(s) lrswap((char_u *) s)
+#define backslash_halve(s) backslash_halve((char_u *) s)
 #define get_list_range(pp, i1, i2) get_list_range((char_u **)pp, i1, i2)
 #define skiptowhite(p) (const char *) skiptowhite((char_u *) p)
 #define skiptowhite_esc(p) (const char *) skiptowhite_esc((char_u *) p)
@@ -5027,6 +5032,7 @@ static CMD_P_DEF(parse_cscope)
         CommandArg *subargsargs = NULL;
         if (cur_cmd->num_args) {
           subargsargs = xcalloc(subargs->num_args, sizeof(CommandArg));
+          subargs->args = subargsargs;
         }
         if (cur_cmd->parse) {
           int pret;
@@ -5034,13 +5040,8 @@ static CMD_P_DEF(parse_cscope)
           position.col += (size_t) (p - s);
           if ((pret = cur_cmd->parse(&p, node, error, o, new_position,
                                      subargsargs)) != OK) {
-            free(subargsargs);
-            subargs->num_args = 0;
             return pret;
           }
-        }
-        if (cur_cmd->num_args) {
-          subargs->args = subargsargs;
         }
         break;
       }
@@ -5375,6 +5376,367 @@ parse_highlight_unknown_property:
 
 parse_highlight_end:
   node->args[ARG_HI_FLAGS].arg.flags = flags;
+  *pp = p;
+  return OK;
+}
+
+static int parse_sign_undeflist(CMD_SUBP_ARGS, const SignArgType type)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    if (type == kSignList) {
+      // `:sign list` without arguments
+      return OK;
+    } else {
+      error->message = N_("E156: Missing sign name");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else {
+    const char *name_start = p;
+    p = skiptowhite(p);
+    // If sign name is a number then skip leading zeroes.
+    while (name_start < p - 1 && *name_start == '0') {
+      name_start++;
+    }
+    STATIC_ASSERT(SIGN_ARG_DEFINE_NAME == SIGN_ARG_UNDEFINE_NAME,
+                  "Name indexes do not match");
+    STATIC_ASSERT(SIGN_ARG_DEFINE_NAME == SIGN_ARG_LIST_NAME,
+                  "Name indexes do not match");
+    subargsargs[SIGN_ARG_DEFINE_NAME].arg.str =
+        xmemdupz(name_start, (size_t) (p - name_start));
+    if (type != kSignDefine) {
+      p += STRLEN(p);
+      goto parse_sign_undeflist_end;
+    }
+    for (;;) {
+      p = skipwhite(p);
+      if (*p == NUL) {
+        break;
+      }
+      const char *const prop_start = p;
+      p = skiptowhite_esc(p);
+      if (STRNCMP(prop_start, "icon=", 5) == 0) {
+        const char *const val_start = prop_start + 5;
+        char *icon_file = xmemdupz(val_start, (size_t) (p - val_start));
+        backslash_halve(icon_file);
+        subargsargs[SIGN_ARG_DEFINE_ICON].arg.str = icon_file;
+      } else if (STRNCMP(prop_start, "text=", 5) == 0) {
+        const char *const text_start = prop_start + 5;
+        size_t cells = 0;
+        const char *s;
+        if (has_mbyte) {
+          for (s = text_start; s < p; s += (mb_ptr2len(s))) {
+            if (!vim_isprintc(mb_ptr2char(s))) {
+              error->message = N_("E239: Non-printable character in sign text");
+              error->position = s;
+              return NOTDONE;
+            }
+            cells += mb_ptr2cells(s);
+          }
+        } else {
+          for (s = text_start; s < p; s++) {
+            if (!vim_isprintc(*s)) {
+              error->message = N_("E239: Non-printable character in sign text");
+              error->position = s;
+              return NOTDONE;
+            }
+          }
+          cells = (size_t) (s - text_start);
+        }
+        if (s != p) {
+          error->message = N_("E239: Failed to process complete sign text");
+          error->position = s;
+          return NOTDONE;
+        } else if (cells != 2) {
+          error->message = (cells > 2
+                            ? N_("E239: Sign text is too wide")
+                            : N_("E239: Sign text is too narrow"));
+          error->position = text_start;
+          return NOTDONE;
+        }
+      } else if (STRNCMP(prop_start, "linehl=", 7) == 0) {
+        subargsargs[SIGN_ARG_DEFINE_LINEHL].arg.str =
+            xmemdupz(prop_start + 7, (size_t) ((p - prop_start) - 7));
+      } else if (STRNCMP(prop_start, "texthl=", 7) == 0) {
+        subargsargs[SIGN_ARG_DEFINE_TEXTHL].arg.str =
+            xmemdupz(prop_start + 7, (size_t) ((p - prop_start) - 7));
+      } else {
+        error->message = N_("E475: Unknown sign property");
+        error->position = prop_start;
+        return NOTDONE;
+      }
+    }
+  }
+parse_sign_undeflist_end:
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_sign_define)
+{
+  return parse_sign_undeflist(pp, node, error, o, position, subargsargs,
+                              kSignDefine);
+}
+
+static CMD_SUBP_DEF(parse_sign_undefine)
+{
+  return parse_sign_undeflist(pp, node, error, o, position, subargsargs,
+                              kSignUndefine);
+}
+
+static CMD_SUBP_DEF(parse_sign_list)
+{
+  return parse_sign_undeflist(pp, node, error, o, position, subargsargs,
+                              kSignList);
+}
+
+static int parse_sign_unplacejump(CMD_SUBP_ARGS, const SignArgType type)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    if (type == kSignJump) {
+      error->message = (const char *) e_argreq;
+      error->position = p;
+      return NOTDONE;
+    } else {
+      return OK;
+    }
+  }
+  if (type == kSignUnplace && *p == '*' && p[1] == NUL) {
+    subargsargs[SIGN_ARG_UNPLACE_ID].arg.number = SIGN_ID_ALL;
+    *pp = p + 1;
+    return OK;
+  }
+  int id = SIGN_ID_MISSING;
+  if (VIM_ISDIGIT(*p)) {
+    const char *const id_start = p;
+    id = getdigits_int(&p);
+    if (!vim_iswhite(*p) && *p != NUL) {
+      id = SIGN_ID_MISSING;
+      p = id_start;
+    } else if (id == 0) {
+      error->message = N_("E474: Cannot use zero as sign id");
+      error->position = id_start;
+      return NOTDONE;
+    } else  {
+      p = skipwhite(p);
+      if (type == kSignUnplace && *p == NUL) {
+        subargsargs[SIGN_ARG_UNPLACE_ID].arg.number = id;
+        goto parse_sign_unplacejump_end;
+      }
+    }
+  }
+  int lnum = 0;
+  const char *sign_name_start = NULL;
+  const char *sign_name_end = NULL;
+  const char *file_start = NULL;
+  const char *file_end = NULL;
+  const char *lnum_start = NULL;
+  int bufnr = 0;
+  while (*p) {
+    if (STRNCMP(p, "line=", 5) == 0) {
+      p += 5;
+      lnum_start = p;
+      lnum = atoi(p);
+      if (lnum <= 0) {
+        error->message = N_("E885: Can only use positive line numbers");
+        error->position = p;
+        return NOTDONE;
+      }
+      p = skiptowhite(p);
+    } else if (*p == '*' && type == kSignUnplace) {
+      if (id != SIGN_ID_MISSING) {
+        error->message =
+            N_("E474: Cannot use `*' when identifier was already given");
+        error->position = p;
+        return NOTDONE;
+      }
+      id = SIGN_ID_ALL;
+      p = skiptowhite(p + 1);
+    } else if (STRNCMP(p, "name=", 5) == 0) {
+      p += 5;
+      sign_name_start = p;
+      sign_name_end = p = skiptowhite(p);
+      while (sign_name_start[0] == '0' && sign_name_start[1] != NUL) {
+        sign_name_start++;
+      }
+    } else if (STRNCMP(p, "file=", 5) == 0) {
+      p += 5;
+      file_start = p;
+      p += STRLEN(p);
+      file_end = p;
+      break;
+    } else if (STRNCMP(p, "buffer=", 7) == 0) {
+      p += 7;
+      const char *const bufnr_start = p;
+      bufnr = getdigits_int(&p);
+      if (bufnr <= 0) {
+        error->message = N_("E158: Buffer number can only be positive");
+        error->position = bufnr_start;
+        return NOTDONE;
+      }
+      p = skipwhite(p);
+      if (*p != NUL) {
+        error->message = N_("E488: buffer= argument must be the last one");
+        error->position = p;
+        return NOTDONE;
+      }
+      break;
+    } else {
+      assert(*p != NUL);
+      error->message = N_("E474: Unknown property");
+      error->position = p;
+      return NOTDONE;
+    }
+    p = skipwhite(p);
+  }
+  if (bufnr == 0 && file_start == NULL) {
+    error->message =
+        N_("E474: Must provide either buffer= or file= as the last argument");
+    error->position = p;
+    return NOTDONE;
+  }
+  assert(id != 0);
+  if (id < 0 && !(type == kSignUnplace && id == SIGN_ID_ALL)) {
+    if (lnum_start != NULL || sign_name_start != NULL) {
+      error->message = N_("E474: Cannot use line= and name= without a sign id");
+      error->position = (lnum_start != NULL ? lnum_start : sign_name_start);
+      return NOTDONE;
+    }
+  } else if (type == kSignJump) {
+    if (lnum_start != NULL || sign_name_start != NULL) {
+      error->message = N_("E474: Cannot use line= and name= with :sign jump");
+      error->position = (lnum_start != NULL ? lnum_start : sign_name_start);
+      return NOTDONE;
+    }
+  } else if (type == kSignUnplace) {
+    if (lnum_start != NULL || sign_name_start != NULL) {
+      error->message =
+          N_("E474: Cannot use line= and name= with :sign unplace");
+      error->position = (lnum_start != NULL ? lnum_start : sign_name_start);
+      return NOTDONE;
+    }
+  } else if (type == kSignPlace) {
+    if (sign_name_start == NULL) {
+      error->message = N_("E474: Missing sign name");
+      error->position = p;
+      return NOTDONE;
+    }
+  } else {
+    assert(false);
+  }
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_ID == SIGN_ARG_PLACE_ID,
+                "Id indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_ID == SIGN_ARG_JUMP_ID,
+                "Id indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_FILE == SIGN_ARG_PLACE_FILE,
+                "File indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_FILE == SIGN_ARG_JUMP_FILE,
+                "File indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_BUFFER == SIGN_ARG_PLACE_BUFFER,
+                "Buffer indexes do not match");
+  STATIC_ASSERT(SIGN_ARG_UNPLACE_BUFFER == SIGN_ARG_JUMP_BUFFER,
+                "Buffer indexes do not match");
+  subargsargs[SIGN_ARG_PLACE_ID].arg.number = id;
+  subargsargs[SIGN_ARG_PLACE_BUFFER].arg.unumber = (unsigned) bufnr;
+  if (file_start != NULL) {
+    subargsargs[SIGN_ARG_PLACE_FILE].arg.str =
+        xmemdupz(file_start, (size_t) (file_end - file_start));
+  }
+  if (lnum_start != NULL) {
+    assert(type == kSignPlace);
+    subargsargs[SIGN_ARG_PLACE_LINE].arg.unumber = (unsigned) lnum;
+  }
+  if (sign_name_start != NULL) {
+    assert(type == kSignPlace);
+    subargsargs[SIGN_ARG_PLACE_NAME].arg.str =
+        xmemdupz(sign_name_start, (size_t) (sign_name_end - sign_name_start));
+  }
+parse_sign_unplacejump_end:
+  *pp = p;
+  return OK;
+}
+
+static CMD_SUBP_DEF(parse_sign_place)
+{
+  return parse_sign_unplacejump(pp, node, error, o, position, subargsargs,
+                                kSignPlace);
+}
+
+static CMD_SUBP_DEF(parse_sign_unplace)
+{
+  return parse_sign_unplacejump(pp, node, error, o, position, subargsargs,
+                                kSignUnplace);
+}
+
+static CMD_SUBP_DEF(parse_sign_jump)
+{
+  return parse_sign_unplacejump(pp, node, error, o, position, subargsargs,
+                                kSignJump);
+}
+
+static const SubCommandDefinition sign_commands[] = {
+  {"define", kSignDefine, 5, (CommandArgType[]) SIGN_ARGS_DEFINE,
+    &parse_sign_define},
+  {"undefine", kSignUndefine, 1, (CommandArgType[]) SIGN_ARGS_UNDEFINE,
+    &parse_sign_undefine},
+  {"list", kSignList, 1, (CommandArgType[]) SIGN_ARGS_LIST, &parse_sign_list},
+  {"place", kSignPlace, 5, (CommandArgType[]) SIGN_ARGS_PLACE,
+    &parse_sign_place},
+  {"unplace", kSignUnplace, 3, (CommandArgType[]) SIGN_ARGS_UNPLACE,
+      &parse_sign_unplace},
+  {"jump", kSignJump, 3, (CommandArgType[]) SIGN_ARGS_JUMP, &parse_sign_jump},
+  {NULL, 0, 0, NULL, NULL},
+};
+
+static CMD_P_DEF(parse_sign)
+{
+  const char *p = *pp;
+  if (*p == NUL) {
+    error->message = (const char *) e_argreq;
+    error->position = p;
+    return NOTDONE;
+  }
+  const char *const s = p;
+  const char *const cmd_end = skiptowhite(s);
+  const size_t cmd_len = (size_t) (cmd_end - s);
+  const SubCommandDefinition *cur_cmd = &(sign_commands[0]);
+  CommandSubArgs *subargs = &(node->args[ARG_SUBCMD].arg.args);
+  subargs->type = kCscopeHelp;
+  if (cmd_len > 0) {
+    while (cur_cmd->name != NULL) {
+      if (STRLEN(cur_cmd->name) == cmd_len
+          && STRNCMP(s, cur_cmd->name, cmd_len) == 0) {
+        p += cmd_len;
+        p = skipwhite(p);
+        subargs->type = cur_cmd->type;
+        subargs->num_args = cur_cmd->num_args;
+        subargs->types = cur_cmd->types;
+        CommandArg *subargsargs = NULL;
+        if (cur_cmd->num_args) {
+          subargsargs = xcalloc(subargs->num_args, sizeof(CommandArg));
+          subargs->args = subargsargs;
+        }
+        if (cur_cmd->parse) {
+          int pret;
+          CommandPosition new_position = position;
+          position.col += (size_t) (p - s);
+          if ((pret = cur_cmd->parse(&p, node, error, o, new_position,
+                                     subargsargs)) != OK) {
+            return pret;
+          }
+        }
+        break;
+      }
+      cur_cmd++;
+    }
+    if (cur_cmd->name == NULL) {
+      error->message = N_("E160: Unknown sign command");
+      error->position = s;
+      return NOTDONE;
+    }
+  }
   *pp = p;
   return OK;
 }

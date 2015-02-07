@@ -400,6 +400,9 @@ const CommandNode nocmd;
 /// Length of the string that may hold enough marks
 #define MAX_NUM_MARKS (LAST_MARK_CODE - FIRST_MARK_CODE + 1)
 
+#define SIGN_ID_MISSING -1
+#define SIGN_ID_ALL     -2
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.h.generated.h"
 #endif

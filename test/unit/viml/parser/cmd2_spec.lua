@@ -779,6 +779,27 @@ describe('parse_one_cmd', function()
     -- Tests like `itn(…, ':…')` (with colon at the start of the second 
     -- argument) are taken from syntax.txt.
   end)
+  describe(':sign', function()
+    itn('sign unplace', 'sign unplace')
+    itn('sign unplace *', 'sign unplace *')
+    itn('sign place', 'sig place')
+    itn('sign place buffer=10', 'sig place buffer=10')
+    itn('sign define Foo texthl=Bar linehl=Baz icon=foo/bar.png', 'sign define Foo icon=foo/bar.png text=<> texthl=Bar linehl=Baz')
+    itn('sign undefine Foo', 'sig undefine Foo')
+    itn('sign list', 'sign list')
+    itn('sign list Foo', 'sign list Foo')
+    itn('sign list Foo', 'sign list Foo garbage | echo "garbage"')
+    itn('sign place file=abc/def', 'sign place file=abc/def')
+    itn('sign place 10 line=10 name=Foo buffer=1', 'sign place 10 line=10 name=Foo buffer=1')
+    itn('sign place 10 line=10 name=Foo buffer=1', 'sign place 10 name=Foo line=10 buffer=1')
+    itn('sign unplace 10', 'sign unplace 10')
+    itn('sign unplace 10 buffer=10', 'sign unplace 10 buffer=10')
+    itn('sign unplace 10 file=10', 'sign unplace 10 file=10')
+    -- This form is actually :sign place. May be a Vim bug.
+    itn('sign jump buffer=10', 'sign jump buffer=10')
+    itn('sign jump 10 buffer=10', 'sign jump 10 buffer=10')
+    itn('sign jump 10 file=10', 'sign jump 10 file=10')
+  end)
   describe('script commands', function()
     itn([[
 perl << EOFEOFEOFEOF

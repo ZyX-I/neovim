@@ -2136,6 +2136,90 @@ static CMD_FDEC(print_highlight)
   FUNCTION_END;
 }
 
+static CMD_FDEC(print_sign)
+{
+  FUNCTION_START;
+  static const char *const sign_command_names[] = {
+    "define",
+    "undefine",
+    "list",
+    "place",
+    "unplace",
+    "jump",
+  };
+
+  const CommandSubArgs subargs = node->args[ARG_SUBCMD].arg.args;
+  const CommandArg *subargsargs = subargs.args;
+  WC(' ');
+  W(sign_command_names[subargs.type]);
+  if (subargs.num_args) {
+    SignArgType subargs_type = (SignArgType) subargs.type;
+    switch (subargs_type) {
+      case kSignList:
+      case kSignUndefine:
+      case kSignDefine: {
+        if (subargsargs[SIGN_ARG_DEFINE_NAME].arg.str != NULL) {
+          WC(' ');
+          W(subargsargs[SIGN_ARG_DEFINE_NAME].arg.str);
+        }
+        if (subargs_type == kSignDefine) {
+          if (subargsargs[SIGN_ARG_DEFINE_TEXTHL].arg.str != NULL) {
+            WS(" texthl=");
+            W(subargsargs[SIGN_ARG_DEFINE_TEXTHL].arg.str);
+          }
+          if (subargsargs[SIGN_ARG_DEFINE_LINEHL].arg.str != NULL) {
+            WS(" linehl=");
+            W(subargsargs[SIGN_ARG_DEFINE_LINEHL].arg.str);
+          }
+          if (subargsargs[SIGN_ARG_DEFINE_TEXT].arg.str != NULL) {
+            WS(" text=");
+            W(subargsargs[SIGN_ARG_DEFINE_TEXT].arg.str);
+          }
+          if (subargsargs[SIGN_ARG_DEFINE_ICON].arg.str != NULL) {
+            WS(" icon=");
+            W(subargsargs[SIGN_ARG_DEFINE_ICON].arg.str);
+          }
+        }
+        break;
+      }
+      case kSignPlace:
+      case kSignUnplace:
+      case kSignJump: {
+        if (subargsargs[SIGN_ARG_PLACE_ID].arg.number != SIGN_ID_MISSING) {
+          if (subargsargs[SIGN_ARG_PLACE_ID].arg.number == SIGN_ID_ALL) {
+            WS(" *");
+          } else if (subargsargs[SIGN_ARG_PLACE_ID].arg.number) {
+            WC(' ');
+            F_NOOPT(dump_unumber,
+                    (uintmax_t) subargsargs[SIGN_ARG_PLACE_ID].arg.number);
+          }
+        }
+        if (subargs_type == kSignPlace) {
+          if (subargsargs[SIGN_ARG_PLACE_LINE].arg.unumber) {
+            WS(" line=");
+            F_NOOPT(dump_unumber,
+                    (uintmax_t) subargsargs[SIGN_ARG_PLACE_LINE].arg.unumber);
+          }
+          if (subargsargs[SIGN_ARG_PLACE_NAME].arg.str != NULL) {
+            WS(" name=");
+            W(subargsargs[SIGN_ARG_PLACE_NAME].arg.str);
+          }
+        }
+        if (subargsargs[SIGN_ARG_PLACE_FILE].arg.str != NULL) {
+          WS(" file=");
+          W(subargsargs[SIGN_ARG_PLACE_FILE].arg.str);
+        } else if (subargsargs[SIGN_ARG_PLACE_BUFFER].arg.unumber) {
+          WS(" buffer=");
+          F_NOOPT(dump_unumber,
+                  (uintmax_t) subargsargs[SIGN_ARG_PLACE_BUFFER].arg.unumber);
+        }
+        break;
+      }
+    }
+  }
+  FUNCTION_END;
+}
+
 #undef PRINT_FLAG
 #undef CMD_FDEC
 
@@ -2269,6 +2353,8 @@ static FDEC(print_node, const CommandNode *const node,
     CMD_F(print_sniff);
   } else if (CMDDEF(node->type).parse == CMDDEF(kCmdHighlight).parse) {
     CMD_F(print_highlight);
+  } else if (CMDDEF(node->type).parse == CMDDEF(kCmdSign).parse) {
+    CMD_F(print_sign);
   } else if (CMDDEF(node->type).flags & ISMODIFIER) {
     CMD_F(print_modifier);
   } else {

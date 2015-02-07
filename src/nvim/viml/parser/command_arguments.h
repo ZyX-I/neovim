@@ -294,6 +294,55 @@ enum {
   ARG_SUBCMD        = 0,
 };
 
+// :sign
+
+typedef enum {
+  kSignDefine = 0,
+  kSignUndefine,
+  kSignList,
+  kSignPlace,
+  kSignUnplace,
+  kSignJump,
+} SignArgType;
+
+#define SIGN_ARG_DEFINE_NAME   0
+#define SIGN_ARG_DEFINE_ICON   1
+#define SIGN_ARG_DEFINE_LINEHL 2
+#define SIGN_ARG_DEFINE_TEXT   3
+#define SIGN_ARG_DEFINE_TEXTHL 4
+
+#define SIGN_ARGS_DEFINE {kArgString, kArgString, kArgString, kArgString, \
+                          kArgString}
+
+#define SIGN_ARG_UNDEFINE_NAME 0
+
+#define SIGN_ARGS_UNDEFINE {kArgString}
+
+#define SIGN_ARG_LIST_NAME 0
+
+#define SIGN_ARGS_LIST {kArgString}
+
+#define SIGN_ARG_PLACE_ID     0
+#define SIGN_ARG_PLACE_FILE   1
+#define SIGN_ARG_PLACE_BUFFER 2
+#define SIGN_ARG_PLACE_NAME   3
+#define SIGN_ARG_PLACE_LINE   4
+
+#define SIGN_ARGS_PLACE {kArgNumber, kArgString, kArgUNumber, kArgString, \
+                         kArgUNumber}
+
+#define SIGN_ARG_JUMP_ID     0
+#define SIGN_ARG_JUMP_FILE   1
+#define SIGN_ARG_JUMP_BUFFER 2
+
+#define SIGN_ARGS_JUMP {kArgNumber, kArgString, kArgUNumber}
+
+#define SIGN_ARG_UNPLACE_ID     0
+#define SIGN_ARG_UNPLACE_FILE   1
+#define SIGN_ARG_UNPLACE_BUFFER 2
+
+#define SIGN_ARGS_UNPLACE {kArgNumber, kArgString, kArgUNumber}
+
 // :cscope
 typedef enum {
   kCscopeAdd = 0,
