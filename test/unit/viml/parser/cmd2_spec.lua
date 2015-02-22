@@ -1074,6 +1074,9 @@ return describe('parse_cmd_sequence', function()
       "abc"
     ]], 'put =echo"abc"')
     t([[
+      put =echo . \"abc\"
+    ]], 'put =echo.\\"abc\\"')
+    t([[
       put =def
       print
       abclear

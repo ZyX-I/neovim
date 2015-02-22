@@ -188,9 +188,15 @@ static FDEC(print_replacement, const Replacement *rep)
       // TODO Depending on the option, prefer \0 or &
       REP_ATOM("\\0", kRepMatched)
       REP_ATOM("\\r", kRepNewLine)
-      // FIXME Respect &magic option
-      REP_ATOM("~", kRepPrevSub)
 #undef REP_ATOM
+      case kRepPrevSub: {
+        if (p_magic) {
+          WC('~');
+        } else {
+          WS("\\~");
+        }
+        break;
+      }
       case kRepEscaped: {
         switch (rep->data.ch) {
           case NUL: {
@@ -483,8 +489,7 @@ static FDEC(print_register, const Register reg)
     WC(' ');
     WC(reg.name);
     if (reg.name == '=' && reg.expr != NULL) {
-      // TODO Escape expression when needed
-      F(print_expr, reg.expr);
+      F_ESCAPED(print_expr, "\n|\"", reg.expr);
     } else {
       assert(reg.expr == NULL);
     }
