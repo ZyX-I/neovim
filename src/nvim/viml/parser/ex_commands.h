@@ -223,6 +223,64 @@ typedef struct {
   } data;
 } HighlightColor;
 
+/// Possible values in :syn group list (e.g. :syn-contains)
+typedef enum {
+  kSynGroupLiteral,    ///< Literal name.
+  kSynGroupCluster,    ///< Cluster name ("@Name").
+  kSynGroupRegex,      ///< Regular expression.
+  kSynGroupAll,        ///< ALL or ALLBUT argument.
+  kSynGroupTop,        ///< TOP argument.
+  kSynGroupContained,  ///< CONTAINED argument.
+} SynGroupType;
+
+/// Structure holding syntax group list
+typedef struct syn_group SynGroupList;
+struct syn_group {
+  SynGroupType type;   ///< Type of the item.
+  union {
+    char *name;        ///< Name (for kSynGroupLiteral and kSynGroupCluster).
+    Regex *regex;      ///< Regular expression (for kSynGroupRegex).
+  } data;
+  SynGroupList *next;  ///< Next item in the list.
+};
+
+/// :syn-pattern offset types ({what} part of the offset)
+typedef enum {
+  kSynRegNoOffset          = 0x0,  ///< No offset: end of list
+  kSynRegOffsetMatchStart  = 0x1,  ///< `ms`: Match Start
+  kSynRegOffsetMatchEnd    = 0x2,  ///< `me`: Match End
+  kSynRegOffsetHiStart     = 0x3,  ///< `hs`: Highlight Start
+  kSynRegOffsetHiEnd       = 0x4,  ///< `he`: Highlight End
+  kSynRegOffsetRegionStart = 0x5,  ///< `rs`: Region Start
+  kSynRegOffsetRegionEnd   = 0x6,  ///< `re`: Region End
+  kSynRegOffsetLContext    = 0x7,  ///< `lc`: Leading Context
+} SynRegOffsetType;
+#define FLAG_SYN_OFFSET_MASK 0x7
+
+/// :syn-pattern anchors (positions from which offset is counted)
+typedef enum {
+  kSynRegOffsetAnchorStart = 0x00,  ///< Start of the matched pattern.
+  kSynRegOffsetAnchorEnd   = 0x08,  ///< End of the matched pattern.
+  kSynRegOffsetAnchorLC    = 0x10,  ///< Start matching {nr} chars right 
+                                    ///< of the start.
+} SynRegOffsetAnchorType;
+#define FLAG_SYN_OFFSET_ANCHOR_MASK 0x18
+
+/// Structure holding syntax pattern (i.e. pattern + offsets)
+typedef struct {
+  Regex *reg;              ///< Pattern itself.
+  size_t offset_count;     ///< Number of offsets present.
+  uint_least32_t *flagss;  ///< Flags: SynRegOffsetType|SynRegOffsetAnchorType.
+  int *offsets;            ///< Offset values.
+} SynPattern;
+
+/// Structure that holds a list of syntax patterns
+typedef struct syn_pat_list SynPatterns;
+struct syn_pat_list {
+  SynPattern syn_pat;  ///< Current syntax pattern.
+  SynPatterns *next;   ///< Next pattern in the list.
+};
+
 /// Structure for representing one command
 typedef struct command_node {
   CommandType type;               ///< Command type. For built-in commands it 
@@ -279,6 +337,9 @@ typedef struct command_node {
                                   ///< build a linked list)
       Replacement *rep;           ///< Replacement string, parsed.
       HighlightColor color;       ///< Color definition.
+      SynGroupList *group;        ///< Syntax groups.
+      SynPattern *syn_pat;        ///< Syntax pattern.
+      SynPatterns *syn_pats;      ///< List of syntax patterns.
       struct command_subargs {
         unsigned type;
         size_t num_args;
