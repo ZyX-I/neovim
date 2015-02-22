@@ -257,8 +257,22 @@ static FDEC(print_regex, const Regex *const regex, const char endch)
     WC(endch);
   }
   assert(regex->string != NULL);
-  // TODO: Escape endch if endch
-  W(regex->string);
+  if (endch) {
+    size_t numslashes = 0;
+    for (const char *p = regex->string; *p; p++) {
+      if (*p == '\\') {
+        numslashes++;
+      } else {
+        numslashes = 0;
+      }
+      if (*p == endch && numslashes % 2 == 0) {
+        WC('\\');
+      }
+      WC(*p);
+    }
+  } else {
+    W(regex->string);
+  }
   if (endch) {
     WC(endch);
   }
