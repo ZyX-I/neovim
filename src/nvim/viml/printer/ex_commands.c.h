@@ -250,11 +250,18 @@ static FDEC(print_replacement, const Replacement *rep)
   FUNCTION_END;
 }
 
-static FDEC(print_regex, const Regex *const regex)
+static FDEC(print_regex, const Regex *const regex, const char endch)
 {
   FUNCTION_START;
+  if (endch) {
+    WC(endch);
+  }
   assert(regex->string != NULL);
+  // TODO: Escape endch if endch
   W(regex->string);
+  if (endch) {
+    WC(endch);
+  }
   FUNCTION_END;
 }
 
@@ -278,14 +285,10 @@ static FDEC(print_address_followup, const AddressFollowup *const followup)
     }
     case kAddressFollowupForwardPattern:
     case kAddressFollowupBackwardPattern: {
-#ifndef CH_MACROS_DEFINE_LENGTH
       char ch = (followup->type == kAddressFollowupForwardPattern
                  ? '/'
                  : '?');
-#endif
-      WC(ch);
-      F(print_regex, followup->data.regex);
-      WC(ch);
+      F(print_regex, followup->data.regex, ch);
       break;
     }
   }
@@ -325,14 +328,10 @@ static FDEC(print_address, const Address *const address)
     }
     case kAddrForwardSearch:
     case kAddrBackwardSearch: {
-#ifndef CH_MACROS_DEFINE_LENGTH
       char ch = (address->type == kAddrForwardSearch
                  ? '/'
                  : '?');
-#endif
-      WC(ch);
-      F(print_regex, address->data.regex);
-      WC(ch);
+      F(print_regex, address->data.regex, ch);
       break;
     }
     case kAddrForwardPreviousSearch: {
@@ -632,11 +631,10 @@ static FDEC(print_args, const CommandType type,
       }
       case kArgRegex: {
         if (arg->arg.reg != NULL) {
-          WS(" /");
-          // FIXME: Escape "/" in regex
-          // TODO: Make it possible to print some patterns without surrounding "/"
-          F(print_regex, arg->arg.reg);
-          WS("/");
+          WC(' ');
+          // TODO: Make it possible to print some patterns without surrounding 
+          // "/"
+          F(print_regex, arg->arg.reg, '/');
         }
         break;
       }
@@ -1509,9 +1507,8 @@ static CMD_FDEC(print_vimgrep)
 {
   FUNCTION_START;
   assert(node->args[ARG_VIMG_REG].arg.reg != NULL);
-  WS(" /");
-  F(print_regex, node->args[ARG_VIMG_REG].arg.reg);
-  WC('/');
+  WC(' ');
+  F(print_regex, node->args[ARG_VIMG_REG].arg.reg, '/');
   if (node->args[ARG_VIMG_FLAGS].arg.flags & FLAG_VIMG_EVERY) {
     WC('g');
   }
@@ -1622,12 +1619,12 @@ static CMD_FDEC(print_sub)
              || node->type == kCmdSmagic
              || node->type == kCmdSnomagic) {
     delim = '/';
-    // TODO Escape pattern
-    WC(delim);
     if (node->args[ARG_S_REG].arg.reg != NULL) {
-      F(print_regex, node->args[ARG_S_REG].arg.reg);
+      F(print_regex, node->args[ARG_S_REG].arg.reg, delim);
+    } else {
+      WC(delim);
+      WC(delim);
     }
-    WC(delim);
   } else {
     delim = '&';
     assert(node->args[ARG_S_REG].arg.reg == NULL);
@@ -1794,7 +1791,7 @@ static CMD_FDEC(print_helpgrep)
   FUNCTION_START;
   assert(node->args[ARG_HELPG_REG].arg.reg != NULL);
   WC(' ');
-  F(print_regex, node->args[ARG_HELPG_REG].arg.reg);
+  F(print_regex, node->args[ARG_HELPG_REG].arg.reg, NUL);
   if (node->args[ARG_HELPG_LANG].arg.str != NULL) {
     assert(STRLEN(node->args[ARG_HELPG_LANG].arg.str) == 2);
     WC('@');
@@ -2246,7 +2243,7 @@ static FDEC(print_group_list, const SynGroupList *const group, const char delim)
         break;
       }
       case kSynGroupRegex: {
-        F(print_regex, cur_group->data.regex);
+        F(print_regex, cur_group->data.regex, NUL);
         break;
       }
       case kSynGroupAll: {
@@ -2343,10 +2340,7 @@ static FDEC(print_syn_options, const int flags_offset,
 static FDEC(print_syn_pattern, const SynPattern syn_pat)
 {
   FUNCTION_START;
-  WC('/');
-  // TODO Escape /
-  F(print_regex, syn_pat.reg);
-  WC('/');
+  F(print_regex, syn_pat.reg, '/');
   const uint_least32_t *flagss = syn_pat.flagss;
   const int *offs = syn_pat.offsets;
 #ifndef CH_MACROS_DEFINE_LENGTH
@@ -2593,10 +2587,8 @@ static CMD_FDEC(print_syntax)
         WS(" fromstart");
       }
       if (subargsargs[SYN_ARG_SYNC_REGEX].arg.reg != NULL) {
-        WS(" linecont /");
-        // TODO Escape /
-        F(print_regex, subargsargs[SYN_ARG_SYNC_REGEX].arg.reg);
-        WC('/');
+        WS(" linecont ");
+        F(print_regex, subargsargs[SYN_ARG_SYNC_REGEX].arg.reg, '/');
       }
       if (subargsargs[SYN_ARG_SYNC_CMD].arg.args.num_args) {
         switch (subargsargs[SYN_ARG_SYNC_CMD].arg.args.type) {
