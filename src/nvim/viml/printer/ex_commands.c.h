@@ -7,9 +7,8 @@
 
 #include "nvim/memory.h"
 #include "nvim/ascii.h"
-// FIXME The following two includes must not be here, they are for option.h
+// FIXME The following include must not be here, they are for option.h
 #include "nvim/vim.h"
-#include "nvim/buffer.h"
 #include "nvim/option.h"
 
 #include "nvim/viml/printer/printer.h"
