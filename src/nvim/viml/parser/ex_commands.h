@@ -29,6 +29,40 @@ typedef struct {
   char string[1];   ///< Original string
 } Regex;
 
+/// Possible replacement types
+///
+/// @note Special "%" is not listed below because it is the only atom that works 
+///       depending on an option.
+typedef enum {
+  kRepLiteral,       ///< Literal string.
+  kRepExpr,          ///< "\\=" expression.
+  kRepEscLiteral,    ///< Escaped character.
+  kRepEscaped,       ///< Special character in escaped form (e.g. "\\t").
+  kRepMatched,       ///< Whole matched pattern ("\\0", "&").
+  kRepGroup,         ///< Capturing group index ("\\1"…"\\9").
+  kRepPrevSub,       ///< Previous :s replacement string ("~").
+  kRepCharUpCase,    ///< Next character made uppercase ("\\u").
+  kRepUpCase,        ///< Following characters made uppercase ("\\U").
+  kRepCharDownCase,  ///< Next character made lowercase ("\\l").
+  kRepDownCase,      ///< Following characters made lowercase ("\\L").
+  kRepCaseEnd,       ///< End of kRep*Case ("\\e", "\\E").
+  kRepNewLine,       ///< New line ("\\r").
+} ReplacementType;
+
+/// Structure representing :s replacement string
+typedef struct replacement {
+  ReplacementType type;  ///< Item type.
+  size_t start_col;      ///< Offset of the first character of the item.
+  size_t end_col;        ///< Offset of the last character of the item.
+  union {
+    uint8_t group;       ///< Group number, for kRepGroup. Is always in [1, 9].
+    uint32_t ch;         ///< Escaped character, kRepEscaped and kRepEscLiteral.
+    char *str;           ///< Literal replacement string, for kRepLiteral.
+    Expression *expr;    ///< Replacement expression, for kRepExpr.
+  } data;
+  struct replacement *next;  ///< Next parsed item.
+} Replacement;
+
 typedef enum {
   kPatMissing = 0,
   kPatLiteral,      ///< Literal string (char *str)
@@ -42,7 +76,7 @@ typedef enum {
   kPatCharacter,    ///< "?" expansion (no data)
   kPatAnything,     ///< "*" expansion (no data)
   kPatAnyRecurse,   ///< "**" expansion (no data)
-  kPatCollection,   ///< [abc] expansion (char *str)
+  kPatCollection,   ///< [abc] expansion (struct collection)
   kPatBranch,       ///< {a,b} expansion (Glob *glob)
   // The following arguments are only valid for Glob and not for Pattern
   kGlobShell,       ///< Shell backtick expansion (char *str)
@@ -51,6 +85,91 @@ typedef enum {
   kPatAuList        ///< :autocmd pattern list
 } PatternType;
 
+/// Possible filename modifiers
+typedef enum {
+  kFnameModFullPath,  ///< Make full path (:p).
+  kFnameMod8_3,       ///< Convert path to 8.3 short format (:8).
+  kFnameModHome,      ///< Make path relative to home directory (:~).
+  kFnameModHead,      ///< Leave only the directory name (:h).
+  kFnameModTail,      ///< Leave only the last component of the path (:t).
+  kFnameModRoot,      ///< Remove the last extension from the path (:r).
+  kFnameModExtension, ///< Leave only the last extension (:e).
+  kFnameModSub,       ///< Substitute (:s).
+  kFnameModGSub,      ///< Substitute all occurrences (:gs).
+  kFnameModEscape,    ///< Escape for use in shell (:S).
+} FnameModType;
+
+/// Structure that describes filename modifier
+typedef struct filename_modifier {
+  FnameModType type;       ///< Type of the modifier.
+  Regex *reg;              ///< Regex (for :s and :gs modifiers).
+  Replacement *rep;        ///< Replacement (for :s and :gs modifiers).
+  struct modifier *next;   ///< Next modifier in sequence.
+} FilenameModifier;
+
+/// Character classes recognized in collections (all ASCII)
+typedef enum {
+  kColCharClassAlnum,      ///< Letters and digits.
+  kColCharClassAlpha,      ///< Letters.
+  kColCharClassBlank,      ///< Space and tab characters.
+  kColCharClassCntrl,      ///< Control characters.
+  kColCharClassDigit,      ///< Decimal digits.
+  kColCharClassGraph,      ///< Printable characters excluding space.
+  kColCharClassLower,      ///< Lowercase letters.
+  kColCharClassPrint,      ///< Printable characters including space.
+  kColCharClassPunct,      ///< Punctuation characters.
+  kColCharClassSpace,      ///< Whitespace characters.
+  kColCharClassUpper,      ///< Uppercase letters.
+  kColCharClassXdigit,     ///< Hexadecimal digits.
+  kColCharClassReturn,     ///< The CR character.
+  kColCharClassTab,        ///< The Tab character.
+  kColCharClassEscape,     ///< The Escape character.
+  kColCharClassBackspace,  ///< The Backslash character.
+} CollectionCharacterClassType;
+
+/// Structure defining a single character class
+typedef struct {
+  const char *const str;  ///< String representation (inner part of [::]).
+  const size_t len;       ///< The above string length.
+} CollectionCharacterClassDef;
+
+/// Array mapping CollectionCharacterClassType enum members to their definitions
+extern const CollectionCharacterClassDef pattern_character_classes[];
+
+/// List of characters that have special meaning after "\\"
+extern const char *pattern_collection_escapes;
+
+/// List of actual meanings of characters in pattern_collection_escapes
+extern const char *pattern_collection_escape_chars;
+
+/// List of characters, if escaped in collection, mean themselves
+extern const char *pattern_collection_escapable_chars;
+
+/// Possible types of collection items
+///
+/// @note In Vim kPatColItemLiteral like [\x80] or [\u0080] matches *both* byte 
+///       0x80 and unicode character U+0080.
+typedef enum {
+  kPatColItemLiteral,  ///< Literal character.
+  kPatColItemRange,    ///< Character range.
+  kPatColItemClass,    ///< Character class.
+} PatternCollectionItemType;
+
+/// Structure representing one collection item (item in [a])
+typedef struct pattern_collection_item {
+  PatternCollectionItemType type;   ///< Item type.
+  union {
+    u8char_T ch;                    ///< Single (unicode) character.
+    char byte;                      ///< Single non-unicode character.
+    struct {
+      u8char_T ch1;                 ///< Start of the range.
+      u8char_T ch2;                 ///< End of the range.
+    } range;                        ///< Character range.
+    CollectionCharacterClassType class; ///< Character class (e.g. [:alnum:]).
+  } data;                           ///< Item data.
+  struct pattern_collection_item *next; ///< Next item.
+} PatternCollectionItem;
+
 /// Structure representing glob pattern
 typedef struct pattern {
   PatternType type;        ///< Type of the pattern chunk
@@ -58,14 +177,20 @@ typedef struct pattern {
     char *str;             ///< String argument (for most types)
     Expression *expr;      ///< Expression (for "`=expr`")
     int number;            ///< Buffer name or old file number
+    FilenameModifier *mod; ///< Filename modifier (for %, <sfile>, …)
     struct patterns {
       struct pattern *pat;
       struct patterns *next;
     } pats;                ///< Pattern used for branch ({a,b,c})
+    struct collection {
+      bool inverse;        ///< Inverted collection ([^]).
+      PatternCollectionItem *colitem;  ///< First item in the collection.
+    } collection;          ///< Collection definition.
   } data;                  ///< Pattern data
   struct pattern *next;    ///< Next chunk
 } Pattern;
 
+typedef struct collection PatternCollection;
 typedef struct patterns Patterns;
 
 typedef struct glob {
@@ -164,40 +289,6 @@ typedef struct {
 #define FLAG_EX_LIST  0x01
 #define FLAG_EX_LNR   0x02
 #define FLAG_EX_PRINT 0x04
-
-/// Possible replacement types
-///
-/// @note Special "%" is not listed below because it is the only atom that works 
-///       depending on an option.
-typedef enum {
-  kRepLiteral,       ///< Literal string.
-  kRepExpr,          ///< "\\=" expression.
-  kRepEscLiteral,    ///< Escaped character.
-  kRepEscaped,       ///< Special character in escaped form (e.g. "\\t").
-  kRepMatched,       ///< Whole matched pattern ("\\0", "&").
-  kRepGroup,         ///< Capturing group index ("\\1"…"\\9").
-  kRepPrevSub,       ///< Previous :s replacement string ("~").
-  kRepCharUpCase,    ///< Next character made uppercase ("\\u").
-  kRepUpCase,        ///< Following characters made uppercase ("\\U").
-  kRepCharDownCase,  ///< Next character made lowercase ("\\l").
-  kRepDownCase,      ///< Following characters made lowercase ("\\L").
-  kRepCaseEnd,       ///< End of kRep*Case ("\\e", "\\E").
-  kRepNewLine,       ///< New line ("\\r").
-} ReplacementType;
-
-/// Structure representing :s replacement string
-typedef struct replacement {
-  ReplacementType type;  ///< Item type.
-  size_t start_col;      ///< Offset of the first character of the item.
-  size_t end_col;        ///< Offset of the last character of the item.
-  union {
-    uint8_t group;       ///< Group number, for kRepGroup. Is always in [1, 9].
-    uint32_t ch;         ///< Escaped character, kRepEscaped and kRepEscLiteral.
-    char *str;           ///< Literal replacement string, for kRepLiteral.
-    Expression *expr;    ///< Replacement expression, for kRepExpr.
-  } data;
-  struct replacement *next;  ///< Next parsed item.
-} Replacement;
 
 /// Possible ways to define highlight color
 typedef enum {

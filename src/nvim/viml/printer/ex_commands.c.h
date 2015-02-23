@@ -10,6 +10,7 @@
 // FIXME The following include must not be here, they are for option.h
 #include "nvim/vim.h"
 #include "nvim/option.h"
+#include "nvim/charset.h"
 
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/printer/expressions.h"
@@ -47,15 +48,8 @@
 #ifndef NVIM_VIML_PRINTER_EX_COMMANDS_C_H_MACROS
 # define NVIM_VIML_PRINTER_EX_COMMANDS_C_H_MACROS
 # define mb_char2bytes(n, b) ((size_t) mb_char2bytes(n, (char_u *) b))
+# define mb_char2len(n) ((size_t) mb_char2len(n))
 #endif
-
-static FDEC(print_pattern, const Pattern *const pat)
-{
-  FUNCTION_START;
-  const Pattern *cur_pat;
-
-  if (pat == NULL)
-    EARLY_RETURN;
 
 #define IF_AST(s1, s2) \
   do { \
@@ -66,6 +60,105 @@ static FDEC(print_pattern, const Pattern *const pat)
     } \
   } while (0)
 #define IF_AST_END(s2) IF_AST(")", s2)
+
+static FDEC(print_collection_ch, const u8char_T ch)
+{
+  FUNCTION_START;
+  if (ch && ch < 0x80
+      && strchr(pattern_collection_escape_chars, (char) ch) != NULL) {
+    WC('\\');
+    W_LEN(pattern_collection_escapes + (
+            strchr(pattern_collection_escape_chars, (char) ch)
+            - pattern_collection_escape_chars), 1);
+  } else if (ch && ch < 0x80
+             && strchr(pattern_collection_escapable_chars, (char) ch)) {
+    WC('\\');
+    WC((char) ch);
+  } else if (vim_isprintc_strict((int) ch)) {
+    char ch_repr[MAX_CHAR_LEN];
+    const size_t ch_len = mb_char2len((int) ch);
+    mb_char2bytes((int) ch, &(ch_repr[0]));
+    W_LEN(ch_repr, ch_len);
+  } else {
+    if (ch <= 0xFF) {
+      WS("\\x");
+      WC((char) nr2hex((unsigned) ((ch >> 4) & 0xF)));
+      WC((char) nr2hex((unsigned) (ch & 0xF)));
+    } else if (ch <= 0xFFFF) {
+      WS("\\u");
+      WC((char) nr2hex((unsigned) ((ch >> 12) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >>  8) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >>  4) & 0xF)));
+      WC((char) nr2hex((unsigned) (ch & 0xF)));
+    } else if (ch <= 0xFFFFFFFFL) {
+      WS("\\U");
+      WC((char) nr2hex((unsigned) ((ch >> 28) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >> 24) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >> 20) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >> 16) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >> 12) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >>  8) & 0xF)));
+      WC((char) nr2hex((unsigned) ((ch >>  4) & 0xF)));
+      WC((char) nr2hex((unsigned) (ch & 0xF)));
+    } else {
+      assert(false);
+    }
+  }
+  FUNCTION_END;
+}
+
+static FDEC(print_collection, const PatternCollection collection)
+{
+  FUNCTION_START;
+  IF_AST("col(", "[");
+  if (collection.inverse) {
+    IF_AST("inverse, ", "^");
+  } else {
+    IF_AST("regular, ", "");
+  }
+  const PatternCollectionItem *next = collection.colitem;
+  assert(next != NULL);
+  while (next != NULL) {
+    switch (next->type) {
+      case kPatColItemLiteral: {
+        IF_AST("ch(", "");
+        F(print_collection_ch, next->data.ch);
+        IF_AST_END("");
+        break;
+      }
+      case kPatColItemRange: {
+        IF_AST("rng(", "");
+        F(print_collection_ch, next->data.range.ch1);
+        IF_AST(", ", "-");
+        F(print_collection_ch, next->data.range.ch2);
+        IF_AST_END("");
+        break;
+      }
+      case kPatColItemClass: {
+        IF_AST("class(", "[:");
+        W_LEN(pattern_character_classes[next->data.class].str,
+              pattern_character_classes[next->data.class].len);
+        IF_AST_END(":]");
+        break;
+      }
+    }
+    next = next->next;
+    if (next) {
+      IF_AST(", ", "");
+    }
+  }
+  IF_AST_END("]");
+  FUNCTION_END;
+}
+
+static FDEC(print_pattern, const Pattern *const pat)
+{
+  FUNCTION_START;
+  const Pattern *cur_pat;
+
+  if (pat == NULL)
+    EARLY_RETURN;
+
   for (cur_pat = pat; cur_pat != NULL; cur_pat = cur_pat->next) {
     switch (cur_pat->type) {
       case kGlobExpression: {
@@ -121,7 +214,7 @@ static FDEC(print_pattern, const Pattern *const pat)
         break;
       }
       case kPatCollection: {
-        // FIXME
+        F(print_collection, cur_pat->data.collection);
         break;
       }
       case kPatEnviron: {
@@ -164,11 +257,12 @@ static FDEC(print_pattern, const Pattern *const pat)
       WS(".");
     }
   }
-#undef IF_AST
-#undef IF_AST_END
 
   FUNCTION_END;
 }
+
+#undef IF_AST
+#undef IF_AST_END
 
 static FDEC(print_replacement, const Replacement *rep)
 {

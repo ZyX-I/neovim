@@ -352,6 +352,15 @@ static void free_patterns(Patterns *pats)
   free(pats->next);
 }
 
+static void free_colitem(PatternCollectionItem *colitem)
+{
+  if (colitem == NULL) {
+    return;
+  }
+  free_colitem(colitem->next);
+  free(colitem);
+}
+
 static void free_pattern(Pattern *pat)
 {
   if (pat == NULL)
@@ -372,9 +381,12 @@ static void free_pattern(Pattern *pat)
     }
     case kPatLiteral:
     case kPatEnviron:
-    case kPatCollection:
     case kGlobShell: {
       free(pat->data.str);
+      break;
+    }
+    case kPatCollection: {
+      free_colitem(pat->data.collection.colitem);
       break;
     }
     case kGlobExpression: {
@@ -749,6 +761,207 @@ static int get_comma_separated_patterns(const char **pp,
   return OK;
 }
 
+const CollectionCharacterClassDef pattern_character_classes[] = {
+  [kColCharClassAlnum] = {"alnum", 5},
+  [kColCharClassAlpha] = {"alpha", 5},
+  [kColCharClassBlank] = {"blank", 5},
+  [kColCharClassCntrl] = {"cntrl", 5},
+  [kColCharClassDigit] = {"digit", 5},
+  [kColCharClassGraph] = {"graph", 5},
+  [kColCharClassLower] = {"lower", 5},
+  [kColCharClassPrint] = {"print", 5},
+  [kColCharClassPunct] = {"punct", 5},
+  [kColCharClassSpace] = {"space", 5},
+  [kColCharClassUpper] = {"upper", 5},
+  [kColCharClassXdigit] = {"xdigit", 6},
+  [kColCharClassReturn] = {"return", 6},
+  [kColCharClassTab] = {"tab", 3},
+  [kColCharClassEscape] = {"escape", 6},
+  [kColCharClassBackspace] = {"backspace", 9},
+};
+const char *pattern_collection_escapes = "etrbn";
+const char *pattern_collection_escape_chars = "\033\t\r\b\n";
+const char *pattern_collection_escapable_chars = "]\\^-";
+
+/// Parse [] collection in a pattern
+///
+/// @param[in,out]  pp          Pointer to the parsed string. Should point to 
+///                             the first character *inside* the collection. Is 
+///                             advanced to the end of the pattern or to the 
+///                             closing `]` character.
+/// @param[out]     error       Address where error will be saved.
+/// @param[out]     collection  Location where results are saved.
+///
+/// @return OK in case of success, NOTDONE if there was an error with the error 
+///         message and FAIL in case of non-recoverable error.
+static int get_pattern_collection(const char **pp, CommandParserError *error,
+                                  PatternCollection *collection)
+  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
+{
+  const char *p = *pp;
+  if (*p == '^') {
+    collection->inverse = true;
+    p++;
+  }
+  PatternCollectionItem *prev = NULL;
+  PatternCollectionItem **next = &(collection->colitem);
+  u8char_T literal_char = 0;
+  bool is_range = false;
+  const char *range_dash;
+  while (*p != ']') {
+    switch (*p) {
+      case '-': {
+        if (prev == NULL || prev->type != kPatColItemLiteral || p[1] == ']') {
+          goto get_pattern_collection_fetch_literal_character;
+        }
+        is_range = true;
+        range_dash = p;
+        p++;
+        break;
+      }
+      case '[': {
+        if (p[1] == ':') {
+          const char *e = p + 2;
+          while (ASCII_ISLOWER(*e)) {
+            e++;
+          }
+          if (*e != ':' || e[1] != ']') {
+            goto get_pattern_collection_fetch_literal_character;
+          }
+          const size_t class_len = (size_t) (e - (p + 2));
+          bool found = false;
+          size_t i;
+          for (i = 0; i < ARRAY_SIZE(pattern_character_classes); i++) {
+            if (class_len == pattern_character_classes[i].len
+                && STRNCMP(pattern_character_classes[i].str, p + 2,
+                           class_len) == 0) {
+              found = true;
+              break;
+            }
+          }
+          if (found) {
+            if (is_range) {
+              // Destroy the collection
+              free_colitem(collection->colitem);
+              collection->colitem = NULL;
+              return OK;
+            }
+            *next = xcalloc(1, sizeof(**next));
+            (*next)->type = kPatColItemClass;
+            (*next)->data.class = (CollectionCharacterClassType) i;
+            prev = *next;
+            next = &((*next)->next);
+            p = e + 2;
+          } else {
+            goto get_pattern_collection_fetch_literal_character;
+          }
+        } else {
+          goto get_pattern_collection_fetch_literal_character;
+        }
+        break;
+      }
+      case '\\': {
+        if (p[1]) {
+          if (strchr(pattern_collection_escapable_chars, p[1]) != NULL) {
+            // Include p[1] literally
+            p++;
+            goto get_pattern_collection_fetch_literal_character;
+          } else if (strchr(pattern_collection_escapes, p[1]) != NULL) {
+            // Some special escape sequences
+            p++;
+            literal_char =
+                (u8char_T) pattern_collection_escape_chars[
+                  strchr(pattern_collection_escapes, *p) -
+                  pattern_collection_escapes];
+            p++;
+            goto get_pattern_collection_process_literal_character;
+          } else if (p[1] == 'd' && VIM_ISDIGIT(p[2])) {
+            size_t char_len = 1;
+            p += 2;
+            literal_char = (u8char_T) (*p - '0');
+            p++;
+            while (VIM_ISDIGIT(*p) && char_len < 3) {
+              literal_char = literal_char * 10 + (u8char_T) (*p - '0');
+              char_len++;
+              p++;
+            }
+            goto get_pattern_collection_process_literal_character;
+          } else if (p[1] == 'o' && VIM_ISDIGIT(p[2]) && p['2'] < '8') {
+            // \oN octal escape
+            size_t char_len = 1;
+            p += 2;
+            literal_char = (u8char_T) (*p - '0');
+            p++;
+            while (VIM_ISDIGIT(*p) && (*p < '8')
+                   && char_len < 3 && literal_char < 0377) {
+              literal_char = literal_char * 8 + (u8char_T) (*p - '0');
+              char_len++;
+              p++;
+            }
+            goto get_pattern_collection_process_literal_character;
+          } else if (p[1] == 'x' && vim_isxdigit(p[2])) {
+            // \xN hexadecimal escape
+            if (vim_isxdigit(p[3])) {
+              literal_char = (u8char_T) (16 * hex2nr(p[2]) + hex2nr(p[3]));
+              p += 4;
+            } else {
+              literal_char = (u8char_T) hex2nr(p[2]);
+              p += 3;
+            }
+            goto get_pattern_collection_process_literal_character;
+          } else if ((p[1] == 'u' || p[1] == 'U') && vim_isxdigit(p[2])) {
+            // \uN/\UN unicode character escape
+            size_t char_len = 1;
+            const size_t max_char_len = (p[1] == 'u' ? 4 : 8);
+            p += 2;
+            literal_char = (u8char_T) hex2nr(*p);
+            p++;
+            while (vim_isxdigit(*p) && char_len <= max_char_len) {
+              literal_char = literal_char * 16 + (u8char_T) hex2nr(*p);
+              char_len++;
+              p++;
+            }
+            goto get_pattern_collection_process_literal_character;
+          }
+          break;
+        }
+        // fallthrough
+      }
+      default: {
+        // literal character
+get_pattern_collection_fetch_literal_character:
+        ;
+        size_t char_len = mb_ptr2len(p);
+        literal_char = (u8char_T) mb_ptr2char(p);
+        p += char_len;
+get_pattern_collection_process_literal_character:
+        if (is_range) {
+          if (literal_char < prev->data.ch) {
+            error->message =
+                N_("E16: Invalid range: end is greater then start");
+            error->position = range_dash;
+            return NOTDONE;
+          }
+          prev->type = kPatColItemRange;
+          prev->data.range.ch1 = prev->data.ch;
+          prev->data.range.ch2 = literal_char;
+          is_range = false;
+        } else {
+          *next = xcalloc(1, sizeof(**next));
+          (*next)->type = kPatColItemLiteral;
+          (*next)->data.ch = literal_char;
+          prev = *next;
+          next = &((*next)->next);
+        }
+        literal_char = 0;
+        break;
+      }
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
 static int get_pattern(const char **pp, CommandParserError *error,
                        Pattern **pat, const bool is_branch, const bool is_glob,
                        const size_t col)
@@ -961,7 +1174,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
           }
           break;
         }
-        case kPatHome:
+        case kPatHome: // FIXME Other users’ homes
         case kPatCurrent:
         case kPatAlternate:
         case kPatCharacter:
@@ -984,8 +1197,26 @@ static int get_pattern(const char **pp, CommandParserError *error,
           break;
         }
         case kPatCollection: {
+          const char *const init_p = p;
           p++;
-          // FIXME
+          int pcret;
+          if ((pcret = get_pattern_collection(&p, error,
+                                              &((*next)->data.collection)))
+              != OK) {
+            ret = pcret;
+            goto get_glob_error_return;
+          }
+          if (*p == ']' && (*next)->data.collection.colitem != NULL) {
+            p++;
+          } else {
+            p = init_p;
+            free_colitem((*next)->data.collection.colitem);
+            memset(*next, 0, sizeof(**next));
+            literal_start = p;
+            p++;
+            literal_length = 1;
+            continue;
+          }
           break;
         }
         case kPatEnviron: {
