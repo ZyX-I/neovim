@@ -167,6 +167,8 @@ typedef enum {
                     ///< treat <C-v> as "\\".
 } MenuNameParsingOptions;
 
+static const Replacement prev_rep;
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "viml/parser/ex_commands.c.generated.h"
 #endif
@@ -361,18 +363,43 @@ static void free_colitem(PatternCollectionItem *colitem)
   free(colitem);
 }
 
+static void free_modifiers(FilenameModifier *mod)
+{
+  if (mod == NULL) {
+    return;
+  }
+  free_regex(mod->reg);
+  free_replacement(mod->rep);
+  free_modifiers(mod->next);
+  free(mod);
+}
+
 static void free_pattern(Pattern *pat)
 {
   if (pat == NULL)
     return;
 
   switch (pat->type) {
-    case kPatMissing:
-    case kPatHome:
+    case kPatFnameMod:
+    case kPatSourcedLnum:
+    case kPatCurWord:
+    case kPatCurWORD:
+    case kPatClient:
     case kPatCurrent:
     case kPatAlternate:
+    case kPatCurFile:
+    case kPatSourcedFile:
+    case kPatAuFile:
+    case kPatAuBuf:
+    case kPatAuMatch: {
+      free_modifiers(pat->data.mod);
+      pat->data.mod = NULL;
+      break;
+    }
     case kPatBufname:
     case kPatOldFile:
+    case kPatMissing:
+    case kPatHome:
     case kPatArguments:
     case kPatCharacter:
     case kPatAnything:
@@ -387,15 +414,18 @@ static void free_pattern(Pattern *pat)
     }
     case kPatCollection: {
       free_colitem(pat->data.collection.colitem);
+      pat->data.collection.colitem = NULL;
       break;
     }
     case kGlobExpression: {
       free_expr(pat->data.expr);
+      pat->data.expr = NULL;
       break;
     }
     case kPatAuList:
     case kPatBranch: {
       free_patterns(&(pat->data.pats));
+      pat->data.pats = (Patterns) {NULL, NULL};
       break;
     }
   }
@@ -962,6 +992,135 @@ get_pattern_collection_process_literal_character:
   return OK;
 }
 
+static int parse_filename_modifiers(const char **pp, CommandParserError *error,
+                                    FilenameModifier **mod)
+{
+  FilenameModifier **next = mod;
+  const char *p = *pp;
+parse_filename_modifiers_repeat:
+#define RECORD_MODIFIER(mod_type) \
+  do { \
+    *next = xcalloc(1, sizeof(**next)); \
+    (*next)->type = mod_type; \
+    next = &((*next)->next); \
+  } while (0)
+  // ":p": full path
+  if (*p == ':' && p[1] == 'p') {
+    RECORD_MODIFIER(kFnameModFullPath);
+    p += 2;
+  }
+  // ":.": path relative to the current directory
+  // ":~": path relative to the home directory
+  // ":8": shortname path
+  while (*p == ':' && (p[1] == '.' || p[1] == '~' || p[1] == '8')) {
+    p += 2;
+    switch (p[-1]) {
+      case '.': {
+        RECORD_MODIFIER(kFnameModRelative);
+        break;
+      }
+      case '~': {
+        RECORD_MODIFIER(kFnameModHome);
+        break;
+      }
+      case '8': {
+        RECORD_MODIFIER(kFnameMod8_3);
+        break;
+      }
+    }
+  }
+  // ":h": head, remove "/file_name", can be repeated
+  while (*p == ':' && p[1] == 'h') {
+    p += 2;
+    RECORD_MODIFIER(kFnameModHead);
+  }
+  // ":8": shortname
+  if (*p == ':' && p[1] == '8') {
+    p += 2;
+    RECORD_MODIFIER(kFnameMod8_3);
+  }
+  // ":t": tail, just the basename
+  if (*p == ':' && p[1] == 't') {
+    p += 2;
+    RECORD_MODIFIER(kFnameModTail);
+  }
+  // ":e": extension, can be repeated
+  // ":r": root, without extension, can be repeated
+  while (*p == ':' && (p[1] == 'e' || p[1] == 'r')) {
+    p += 2;
+    switch (p[-1]) {
+      case 'e': {
+        RECORD_MODIFIER(kFnameModExtension);
+        break;
+      }
+      case 'r': {
+        RECORD_MODIFIER(kFnameModRoot);
+        break;
+      }
+    }
+  }
+  if (*p == ':' && (p[1] == 's' || (p[1] == 'g' && p[2] == 's'))) {
+    bool is_gsub = false;
+    if (p[1] == 'g') {
+      is_gsub = true;
+    }
+    const char *const reg_start = p + 3 + is_gsub;
+    const char sep = reg_start[-1];
+    const char *const reg_end = strchr(reg_start, sep);
+    if (sep && reg_end != NULL) {
+      const char *const rep_start = reg_end + 1;
+      const char *const rep_end = strchr(rep_start, sep);
+      if (rep_end != NULL) {
+        p = rep_end + 1;
+        *next = xcalloc(1, sizeof(**next));
+        (*next)->type = is_gsub? kFnameModGSub: kFnameModSub;
+        (*next)->reg = regex_alloc(reg_start, (size_t) (reg_end - reg_start));
+        char *const rep_copy =
+            xmemdupz(rep_start, (size_t) (rep_end - rep_start));
+        const char *rep_p = rep_copy;
+        int pr_ret;
+        if ((pr_ret = parse_replacement(&rep_p, error,
+                                        ((CommandPosition) {0, 0}),
+                                        &((*next)->rep), NUL, false, true))
+            != OK) {
+          if (error->position != NULL) {
+            error->position = rep_start + (error->position - rep_copy);
+          }
+          free(rep_copy);
+          return pr_ret;
+        }
+        assert(*rep_p == NUL);
+        assert((*next)->rep != &prev_rep);
+        next = &((*next)->next);
+        free(rep_copy);
+        // After using :s, repeat all the modifiers
+        goto parse_filename_modifiers_repeat;
+      }
+    }
+  }
+  // ":S": shellescape string
+  if (*p == ':' && p[1] == 'S') {
+    p += 2;
+    RECORD_MODIFIER(kFnameModEscape);
+  }
+#undef RECORD_MODIFIER
+  *pp = p;
+  return OK;
+}
+
+const CmdlineSpecialDescription cmdline_specials[] = {
+  {"cword", 5, kPatCurWord},
+  {"cWORD", 5, kPatCurWORD},
+  {"cfile", 5, kPatCurFile},
+  {"afile", 5, kPatAuFile},
+  {"abuf", 4, kPatAuBuf},
+  {"amatch", 6, kPatAuMatch},
+  {"sfile", 5, kPatSourcedFile},
+  {"slnum", 5, kPatSourcedLnum},
+  {"client", 6, kPatClient},
+  {NULL, 0, 0},
+};
+
 static int get_pattern(const char **pp, CommandParserError *error,
                        Pattern **pat, const bool is_branch, const bool is_glob,
                        const size_t col)
@@ -1002,7 +1161,6 @@ static int get_pattern(const char **pp, CommandParserError *error,
         break;
       }
       case '%': {
-        // FIXME Parse filename modifiers after this
         type = kPatCurrent;
         break;
       }
@@ -1093,7 +1251,21 @@ static int get_pattern(const char **pp, CommandParserError *error,
         break;
       }
       case '<': {
-        // FIXME Parse special values like <sfile>
+        size_t len;
+        for (len = 0; ASCII_ISALPHA(p[len + 1]); len++) {
+        }
+        if (p[len] != '>') {
+          const CmdlineSpecialDescription *sp_desc;
+          for (sp_desc = &(cmdline_specials[0]); sp_desc->str; sp_desc++) {
+            if (len == sp_desc->len && STRNCMP(p + 1, sp_desc->str, len) == 0) {
+              break;
+            }
+          }
+          if (sp_desc->str != NULL) {
+            type = sp_desc->type;
+            break;
+          }
+        }
         // fallthrough
       }
       default: {
@@ -1135,6 +1307,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
       if (type == kPatMissing)
         break;
       *next = pattern_alloc(type);
+      bool parse_fmods = false;
       switch (type) {
         case kGlobExpression: {
           ExpressionParserError expr_error;
@@ -1174,12 +1347,36 @@ static int get_pattern(const char **pp, CommandParserError *error,
           }
           break;
         }
-        case kPatHome: // FIXME Other users’ homes
         case kPatCurrent:
-        case kPatAlternate:
+        case kPatAlternate: {
+          parse_fmods = true;
+          p++;
+          break;
+        }
+        case kPatHome: // FIXME Other users’ homes
         case kPatCharacter:
         case kPatAnything: {
           p++;
+          break;
+        }
+        case kPatCurWord:
+        case kPatCurWORD:
+        case kPatCurFile:
+        case kPatAuFile:
+        case kPatAuBuf:
+        case kPatAuMatch:
+        case kPatSourcedFile:
+        case kPatSourcedLnum:
+        case kPatClient: {
+          parse_fmods = true;
+          for (const CmdlineSpecialDescription *sp_desc = &(cmdline_specials[0])
+               ;;
+               sp_desc++) {
+            if (sp_desc->type == type) {
+              p += 2 + sp_desc->len;
+              break;
+            }
+          }
           break;
         }
         case kPatArguments:
@@ -1194,6 +1391,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
         case kPatBufname: {
           p++;
           (*next)->data.number = (int) getdigits(&p);
+          parse_fmods = true;
           break;
         }
         case kPatCollection: {
@@ -1255,10 +1453,23 @@ static int get_pattern(const char **pp, CommandParserError *error,
           }
           break;
         }
+        case kPatFnameMod:
         case kPatAuList:
         case kPatMissing:
         case kPatLiteral: {
           assert(false);
+        }
+      }
+      if (parse_fmods) {
+        int pfm_ret;
+        if (type == kPatOldFile || type == kPatBufname) {
+          next = &((*next)->next);
+          *next = pattern_alloc(kPatFnameMod);
+        }
+        if ((pfm_ret = parse_filename_modifiers(&p, error,
+                                                &((*next)->data.mod))) != OK) {
+          ret = pfm_ret;
+          goto get_glob_error_return;
         }
       }
       next = &((*next)->next);
@@ -4283,9 +4494,188 @@ static CMD_P_DEF(parse_sleep)
   return OK;
 }
 
+static const Replacement prev_rep = {
+  .type = kRepPrevSub,
+};
+
+#define P_COL(p) ((size_t) ((p) - s) + position.col)
+static int parse_replacement(const char **pp, CommandParserError *error,
+                             CommandPosition position,
+                             Replacement **rep, const char delim,
+                             const bool cpo_subpc_enabled,
+                             const bool magic)
+{
+  const char *p = *pp;
+  const char *const s = p;
+  const char *const sub_start = p;
+  Replacement **next = rep;
+  while (*p) {
+    if (*p == delim) {
+      break;
+    }
+    if (*p == '\\' && p[1]) {
+      p++;
+    }
+    mb_ptr_adv_(p);
+  }
+  if (p - sub_start == 1 && *sub_start == '%' && cpo_subpc_enabled) {
+    *next = (Replacement *) &prev_rep;
+  } else {
+    if (*sub_start == '\\' && sub_start[1] == '=') {
+      char *const expr_str_start = xmemdupz(sub_start + 2,
+                                            (size_t) (p - sub_start) - 2);
+      const char *expr_str = expr_str_start;
+      Expression *expr;
+      ExpressionParserError expr_error;
+
+      expr = parse_one_expression(&expr_str, &expr_error, &parse0_err,
+                                  P_COL(sub_start + 2));
+      if (expr == NULL) {
+        if (expr_error.message == NULL) {
+          return FAIL;
+        }
+        error->message = expr_error.message;
+        error->position = sub_start + 2
+            + (expr_error.position - expr_str_start);
+        return NOTDONE;
+      }
+      if (*expr_str) {
+        // Expected expression to end here. Early return will result in 
+        // e_trailing error message.
+        *pp = sub_start + (expr_str - expr_str_start);
+        free(expr_str_start);
+        return OK;
+      }
+      free(expr_str_start);
+      *next = replacement_alloc(kRepExpr, P_COL(sub_start), P_COL(p - 1));
+      (*next)->data.expr = expr;
+    } else {
+      const char *p2 = sub_start;
+      while (p2 < p) {
+        switch (*p2) {
+          case '\\': {
+            p2++;
+            switch (*p2) {
+#define REP_ATOM(ch, rep_type) \
+              case ch: { \
+                (*next) = replacement_alloc(rep_type, P_COL(p2 - 1), \
+                                            P_COL(p2)); \
+                p2++; \
+                break; \
+              }
+              REP_ATOM('u', kRepCharUpCase)
+              REP_ATOM('l', kRepCharDownCase)
+              REP_ATOM('U', kRepUpCase)
+              REP_ATOM('L', kRepDownCase)
+              case 'e':
+              REP_ATOM('E', kRepCaseEnd)
+              REP_ATOM('0', kRepMatched)
+              REP_ATOM('r', kRepNewLine)
+#undef REP_ATOM
+#define REP_ESC_ATOM(c, res) \
+              case c: { \
+                (*next) = replacement_alloc(kRepEscaped, P_COL(p2 - 1), \
+                                            P_COL(p2)); \
+                (*next)->data.ch = (uint32_t) (res); \
+                p2++; \
+                break; \
+              }
+              REP_ESC_ATOM('n', NUL)
+              REP_ESC_ATOM('b', BS)
+              REP_ESC_ATOM('t', TAB)
+              // May as well use literal escapes for the characters below, but 
+              // these ones are explicitly mentioned in help.
+              REP_ESC_ATOM('\\', '\\')
+              REP_ESC_ATOM(CAR, CAR)
+#undef REP_ESC_ATOM
+              case '1':
+              case '2':
+              case '3':
+              case '4':
+              case '5':
+              case '6':
+              case '7':
+              case '8':
+              case '9': {
+                (*next) = replacement_alloc(kRepGroup, P_COL(p2 - 1),
+                                            P_COL(p2));
+                (*next)->data.group = (uint8_t) (*p2 - '0');
+                p2++;
+                break;
+              }
+              case '&': {
+                if (!magic) {
+                  (*next) = replacement_alloc(kRepMatched,
+                                              P_COL(p2 - 1), P_COL(p2));
+                  p2++;
+                  break;
+                }
+                // fallthrough
+              }
+              case '~': {
+                if (!magic) {
+                  (*next) = replacement_alloc(kRepPrevSub,
+                                              P_COL(p2 - 1), P_COL(p2));
+                  p2++;
+                  break;
+                }
+                // fallthrough
+              }
+              default: {
+                const char *const p2_s = p2;
+                uint32_t ch = (uint32_t) mb_cptr2char_adv(&p2);
+                (*next) = replacement_alloc(kRepEscLiteral,
+                                            P_COL(p2_s - 1),
+                                            P_COL(p2 - 1));
+                (*next)->data.ch = ch;
+                // TODO: Give a warning in most cases because \x is reserved.
+                break;
+              }
+            }
+            break;
+          }
+          case '&': {
+            if (magic) {
+              (*next) = replacement_alloc(kRepMatched,
+                                          P_COL(p2 - 1), P_COL(p2));
+              p2++;
+              break;
+            }
+            // fallthrough
+          }
+          case '~': {
+            if (magic) {
+              (*next) = replacement_alloc(kRepPrevSub,
+                                          P_COL(p2 - 1), P_COL(p2));
+              p2++;
+              break;
+            }
+            // fallthrough
+          }
+          default: {
+            const char *const p2_s = p2;
+            while (p2 < p && *p2 != '\\'
+                   && ((*p2 != '~' && *p2 != '&')
+                       || !magic)) {
+              assert(*p2 != NUL);
+              p2++;
+            }
+            (*next) = replacement_alloc(kRepLiteral, P_COL(p2_s), P_COL(p2));
+            (*next)->data.str = xmemdupz(p2_s, (size_t) (p2 - p2_s));
+            break;
+          }
+        }
+        assert(*next != NULL);
+        next = &((*next)->next);
+      }
+    }
+  }
+  *pp = p;
+  return OK;
+}
+
 static CMD_P_DEF(parse_sub)
 {
-#define P_COL(p) ((size_t) ((p) - s) + position.col)
   const char *p = *pp;
   const char *const s = p;
   uint_least32_t flags = 0;
@@ -4329,170 +4719,19 @@ static CMD_P_DEF(parse_sub)
         return rret;
       }
     }
-    const char *const sub_start = p;
-    while (*p) {
-      if (*p == delim) {
-        break;
-      }
-      if (*p == '\\' && p[1]) {
-        p++;
-      }
-      mb_ptr_adv_(p);
+    CommandPosition new_position = position;
+    new_position.col += (size_t) (p - s);
+    int pr_ret;
+    if ((pr_ret = parse_replacement(&p, error, new_position,
+                                    &(node->args[ARG_S_REP].arg.rep),
+                                    delim, o.flags & FLAG_POC_CPO_SUBPC,
+                                    o.flags & FLAG_POC_MAGIC))
+        != OK) {
+      return pr_ret;
     }
-    if (p - sub_start == 1 && *sub_start == '%'
-        && (o.flags & FLAG_POC_CPO_SUBPC)) {
+    if (node->args[ARG_S_REP].arg.rep == &prev_rep) {
+      node->args[ARG_S_REP].arg.rep = NULL;
       flags |= FLAG_S_SUB_PREV;
-    } else {
-      if (*sub_start == '\\' && sub_start[1] == '=') {
-        char *const expr_str_start = xmemdupz(sub_start + 2,
-                                              (size_t) (p - sub_start) - 2);
-        const char *expr_str = expr_str_start;
-        Expression *expr;
-        ExpressionParserError expr_error;
-
-        expr = parse_one_expression(&expr_str, &expr_error, &parse0_err,
-                                    P_COL(sub_start + 2));
-        if (expr == NULL) {
-          if (expr_error.message == NULL) {
-            return FAIL;
-          }
-          error->message = expr_error.message;
-          error->position = sub_start + 2
-              + (expr_error.position - expr_str_start);
-          return NOTDONE;
-        }
-        if (*expr_str) {
-          // Expected expression to end here. Early return will result in 
-          // e_trailing error message.
-          *pp = sub_start + (expr_str - expr_str_start);
-          free(expr_str_start);
-          return OK;
-        }
-        free(expr_str_start);
-        Replacement *rep = node->args[ARG_S_REP].arg.rep
-            = replacement_alloc(kRepExpr, P_COL(sub_start), P_COL(p - 1));
-        rep->data.expr = expr;
-      } else {
-        const char *p2 = sub_start;
-        Replacement **next = &(node->args[ARG_S_REP].arg.rep);
-        while (p2 < p) {
-          switch (*p2) {
-            case '\\': {
-              p2++;
-              switch (*p2) {
-#define REP_ATOM(ch, rep_type) \
-                case ch: { \
-                  (*next) = replacement_alloc(rep_type, P_COL(p2 - 1), \
-                                              P_COL(p2)); \
-                  p2++; \
-                  break; \
-                }
-                REP_ATOM('u', kRepCharUpCase)
-                REP_ATOM('l', kRepCharDownCase)
-                REP_ATOM('U', kRepUpCase)
-                REP_ATOM('L', kRepDownCase)
-                case 'e':
-                REP_ATOM('E', kRepCaseEnd)
-                REP_ATOM('0', kRepMatched)
-                REP_ATOM('r', kRepNewLine)
-#undef REP_ATOM
-#define REP_ESC_ATOM(c, res) \
-                case c: { \
-                  (*next) = replacement_alloc(kRepEscaped, P_COL(p2 - 1), \
-                                              P_COL(p2)); \
-                  (*next)->data.ch = (uint32_t) (res); \
-                  p2++; \
-                  break; \
-                }
-                REP_ESC_ATOM('n', NUL)
-                REP_ESC_ATOM('b', BS)
-                REP_ESC_ATOM('t', TAB)
-                // May as well use literal escapes for the characters below, but 
-                // these ones are explicitly mentioned in help.
-                REP_ESC_ATOM('\\', '\\')
-                REP_ESC_ATOM(CAR, CAR)
-#undef REP_ESC_ATOM
-                case '1':
-                case '2':
-                case '3':
-                case '4':
-                case '5':
-                case '6':
-                case '7':
-                case '8':
-                case '9': {
-                  (*next) = replacement_alloc(kRepGroup, P_COL(p2 - 1),
-                                              P_COL(p2));
-                  (*next)->data.group = (uint8_t) (*p2 - '0');
-                  p2++;
-                  break;
-                }
-                case '&': {
-                  if (!(o.flags & FLAG_POC_MAGIC)) {
-                    (*next) = replacement_alloc(kRepMatched,
-                                                P_COL(p2 - 1), P_COL(p2));
-                    p2++;
-                    break;
-                  }
-                  // fallthrough
-                }
-                case '~': {
-                  if (!(o.flags & FLAG_POC_MAGIC)) {
-                    (*next) = replacement_alloc(kRepPrevSub,
-                                                P_COL(p2 - 1), P_COL(p2));
-                    p2++;
-                    break;
-                  }
-                  // fallthrough
-                }
-                default: {
-                  const char *const p2_s = p2;
-                  uint32_t ch = (uint32_t) mb_cptr2char_adv(&p2);
-                  (*next) = replacement_alloc(kRepEscLiteral,
-                                              P_COL(p2_s - 1),
-                                              P_COL(p2 - 1));
-                  (*next)->data.ch = ch;
-                  // TODO: Give a warning in most cases because \x is reserved.
-                  break;
-                }
-              }
-              break;
-            }
-            case '&': {
-              if (o.flags & FLAG_POC_MAGIC) {
-                (*next) = replacement_alloc(kRepMatched,
-                                            P_COL(p2 - 1), P_COL(p2));
-                p2++;
-                break;
-              }
-              // fallthrough
-            }
-            case '~': {
-              if (o.flags & FLAG_POC_MAGIC) {
-                (*next) = replacement_alloc(kRepPrevSub,
-                                            P_COL(p2 - 1), P_COL(p2));
-                p2++;
-                break;
-              }
-              // fallthrough
-            }
-            default: {
-              const char *const p2_s = p2;
-              while (p2 < p && *p2 != '\\'
-                     && ((*p2 != '~' && *p2 != '&')
-                         || !(o.flags & FLAG_POC_MAGIC))) {
-                assert(*p2 != NUL);
-                p2++;
-              }
-              (*next) = replacement_alloc(kRepLiteral, P_COL(p2_s), P_COL(p2));
-              (*next)->data.str = xmemdupz(p2_s, (size_t) (p2 - p2_s));
-              break;
-            }
-          }
-          assert(*next != NULL);
-          next = &((*next)->next);
-        }
-      }
     }
   } else {
     delim = '&';
@@ -4556,9 +4795,9 @@ static CMD_P_DEF(parse_sub)
   node->args[ARG_S_FLAGS].arg.flags = flags;
   p = skipwhite(p);
   *pp = p;
-#undef P_COL
   return OK;
 }
+#undef P_COL
 
 static CMD_P_DEF(parse_sort)
 {

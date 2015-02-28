@@ -70,6 +70,15 @@ typedef enum {
   kPatEnviron,      ///< Environment variable (char *str)
   kPatCurrent,      ///< Current file name (no data)
   kPatAlternate,    ///< Alternate file name (no data)
+  kPatCurFile,      ///< File name under cursor.
+  kPatAuFile,       ///< Autocommand file name.
+  kPatSourcedFile,  ///< Currently sourced script.
+  kPatAuBuf,        ///< Autocommand buffer name.
+  kPatAuMatch,      ///< Autocommand matched name.
+  kPatSourcedLnum,  ///< Sourced line number.
+  kPatCurWord,      ///< Word under cursor.
+  kPatCurWORD,      ///< WORD under cursor.
+  kPatClient,       ///< Client ID of the last received message.
   kPatBufname,      ///< Buffer name ("#N") expansion (int number)
   kPatOldFile,      ///< Old file expansion ("#<N") (int number)
   kPatArguments,    ///< Arguments list expansion ("##") (no data)
@@ -78,6 +87,7 @@ typedef enum {
   kPatAnyRecurse,   ///< "**" expansion (no data)
   kPatCollection,   ///< [abc] expansion (struct collection)
   kPatBranch,       ///< {a,b} expansion (Glob *glob)
+  kPatFnameMod,     ///< Filename modifier
   // The following arguments are only valid for Glob and not for Pattern
   kGlobShell,       ///< Shell backtick expansion (char *str)
   kGlobExpression,  ///< "`=expr`" expansion (Expression *expr)
@@ -85,26 +95,37 @@ typedef enum {
   kPatAuList        ///< :autocmd pattern list
 } PatternType;
 
+/// Description of one <cmdline special>
+typedef struct {
+  const char *const str;  ///< String.
+  const size_t len;       ///< String length.
+  const PatternType type; ///< Corresponding pattern type.
+} CmdlineSpecialDescription;
+
+/// List of all cmdline specials like <sfile>
+extern const CmdlineSpecialDescription cmdline_specials[];
+
 /// Possible filename modifiers
 typedef enum {
   kFnameModFullPath,  ///< Make full path (:p).
   kFnameMod8_3,       ///< Convert path to 8.3 short format (:8).
   kFnameModHome,      ///< Make path relative to home directory (:~).
+  kFnameModRelative,  ///< Make path relative to the current directory.
   kFnameModHead,      ///< Leave only the directory name (:h).
   kFnameModTail,      ///< Leave only the last component of the path (:t).
   kFnameModRoot,      ///< Remove the last extension from the path (:r).
   kFnameModExtension, ///< Leave only the last extension (:e).
+  kFnameModEscape,    ///< Escape for use in shell (:S).
   kFnameModSub,       ///< Substitute (:s).
   kFnameModGSub,      ///< Substitute all occurrences (:gs).
-  kFnameModEscape,    ///< Escape for use in shell (:S).
 } FnameModType;
 
 /// Structure that describes filename modifier
 typedef struct filename_modifier {
-  FnameModType type;       ///< Type of the modifier.
-  Regex *reg;              ///< Regex (for :s and :gs modifiers).
-  Replacement *rep;        ///< Replacement (for :s and :gs modifiers).
-  struct modifier *next;   ///< Next modifier in sequence.
+  FnameModType type;               ///< Type of the modifier.
+  Regex *reg;                      ///< Regex (for :s and :gs modifiers).
+  Replacement *rep;                ///< Replacement (for :s and :gs modifiers).
+  struct filename_modifier *next;  ///< Next modifier in sequence.
 } FilenameModifier;
 
 /// Character classes recognized in collections (all ASCII)

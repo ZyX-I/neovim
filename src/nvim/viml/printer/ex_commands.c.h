@@ -107,6 +107,72 @@ static FDEC(print_collection_ch, const u8char_T ch)
   FUNCTION_END;
 }
 
+static FDEC(print_filename_modifiers, const FilenameModifier *const mod)
+{
+  FUNCTION_START;
+  if (mod == NULL) {
+    EARLY_RETURN;
+  }
+  const FilenameModifier *next;
+#ifndef CH_MACROS_DEFINE_LENGTH
+  static const char modifier_chars[] = {
+    [kFnameModFullPath] = 'p',
+    [kFnameMod8_3] = '8',
+    [kFnameModHome] = '~',
+    [kFnameModRelative] = '.',
+    [kFnameModHead] = 'h',
+    [kFnameModTail] = 't',
+    [kFnameModRoot] = 'r',
+    [kFnameModExtension] = 'e',
+    [kFnameModEscape] = 'S',
+    [kFnameModSub] = 's',
+  };
+#endif
+  for (next = mod; next != NULL; next = next->next) {
+    if (next->type == kFnameModGSub) {
+      WS(":gs");
+    } else {
+      WC(':');
+      WC(modifier_chars[next->type]);
+    }
+    if (next->type == kFnameModSub || next->type == kFnameModGSub) {
+      // Possible delimiter characters, in order of preference
+      static const char rechars[] = {
+        // Characters that have no special meaning in regex, not even escaped
+        '/', '-', ':', ';', ',', '!', '"', '`',
+        // Characters that have special meaning, but are used rarely
+        '\'', '=', '#', '_', '%',
+        // Common characters with special meaning
+        '~', '@', '+', '|', '&', '?', '^', '$', '.', '*', '\\',
+        // Paired characters (substitutions with them will look strange)
+        '<', '>', '(', ')', '[', ']', '{', '}',
+      };
+      // FIXME this code only considers regex, but not replacement.
+      // Make sure that delimiter character is not present in regex: there is no 
+      // way to escape it.
+      char delim = rechars[0];
+      size_t i;
+      for (i = 0; i < ARRAY_SIZE(rechars); i++) {
+        if (strchr(&(next->reg->string[0]), rechars[i]) == NULL) {
+          // FIXME What to do if all characters from rechars appear in regex or 
+          //       replacement? Is it possible?
+          delim = rechars[i];
+          break;
+        }
+      }
+      WC(delim);
+      F(print_regex, next->reg, NUL);
+      WC(delim);
+      F(print_replacement, next->rep);
+      WC(delim);
+    }
+    if (next->next) {
+      IF_AST(", ", "");
+    }
+  }
+  FUNCTION_END;
+}
+
 static FDEC(print_collection, const PatternCollection collection)
 {
   FUNCTION_START;
@@ -178,11 +244,15 @@ static FDEC(print_pattern, const Pattern *const pat)
         break;
       }
       case kPatCurrent: {
-        IF_AST("cur()", "%");
+        IF_AST("cur(", "%");
+        F(print_filename_modifiers, cur_pat->data.mod);
+        IF_AST_END("");
         break;
       }
       case kPatAlternate: {
-        IF_AST("alt()", "#");
+        IF_AST("alt(", "#");
+        F(print_filename_modifiers, cur_pat->data.mod);
+        IF_AST_END("");
         break;
       }
       case kPatCharacter: {
@@ -194,7 +264,9 @@ static FDEC(print_pattern, const Pattern *const pat)
         break;
       }
       case kPatArguments: {
-        IF_AST("args()", "##");
+        IF_AST("args(", "##");
+        F(print_filename_modifiers, cur_pat->data.mod);
+        IF_AST_END("");
         break;
       }
       case kPatAnyRecurse: {
@@ -204,12 +276,20 @@ static FDEC(print_pattern, const Pattern *const pat)
       case kPatOldFile: {
         IF_AST("old(", "#<");
         F_NOOPT(dump_unumber, (uintmax_t) cur_pat->data.number);
-        IF_AST_END("");
+        assert(cur_pat->next != NULL && cur_pat->next->type == kPatFnameMod);
         break;
       }
       case kPatBufname: {
         IF_AST("buf(", "#");
         F_NOOPT(dump_unumber, (uintmax_t) cur_pat->data.number);
+        assert(cur_pat->next != NULL && cur_pat->next->type == kPatFnameMod);
+        break;
+      }
+      case kPatFnameMod: {
+        if (cur_pat->data.mod) {
+          IF_AST(", ", "");
+          F(print_filename_modifiers, cur_pat->data.mod);
+        }
         IF_AST_END("");
         break;
       }
@@ -249,11 +329,35 @@ static FDEC(print_pattern, const Pattern *const pat)
         IF_AST_END("");
         break;
       }
+      case kPatSourcedLnum:
+      case kPatCurWord:
+      case kPatCurWORD:
+      case kPatClient:
+      case kPatCurFile:
+      case kPatSourcedFile:
+      case kPatAuFile:
+      case kPatAuBuf:
+      case kPatAuMatch: {
+        IF_AST("", "<");
+        for (const CmdlineSpecialDescription *sp_desc = &(cmdline_specials[0]);;
+             sp_desc++) {
+          if (sp_desc->type == cur_pat->type) {
+            W_LEN(sp_desc->str, sp_desc->len);
+            break;
+          }
+          assert(sp_desc->str != NULL);
+        }
+        IF_AST("(", ">");
+        F(print_filename_modifiers, cur_pat->data.mod);
+        IF_AST_END("");
+        break;
+      }
       case kPatMissing: {
         assert(false);
       }
     }
-    if (GLOB_AST && cur_pat->next != NULL) {
+    if (GLOB_AST && cur_pat->next != NULL
+        && cur_pat->next->type != kPatFnameMod) {
       WS(".");
     }
   }
@@ -334,6 +438,7 @@ static FDEC(print_replacement, const Replacement *rep)
         break;
       }
       case kRepLiteral: {
+        // TODO: Escape
         W(rep->data.str);
         break;
       }
