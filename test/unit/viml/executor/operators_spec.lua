@@ -992,7 +992,7 @@ describe('List tests', function()
         let l[0] = l
         let l2 = [0, 0]
         let l2[0] = l2
-        let l3 = [[0, 0], 0]
+        let l3 = [ [0, 0], 0]
         let l3[0][0] = l3
 
         echo l == l2
@@ -1382,7 +1382,7 @@ describe('Dictionary tests', function()
         let d2.l[0] = d2.l
         let d2.l[1] = d2
         let d2.d = d2
-        let d3 = {'l': [[0, 1], {'l': [[0, 0], 0], 'd': {'v': 0}, 'v':0}],'v':0}
+        let d3 = {'l': [ [0, 1], {'l': [ [0, 0], 0], 'd': {'v': 0}, 'v':0}],'v':0}
         let d3.l[1].l[0][0] = d3.l
         let d3.l[0][0] = d3.l
         let d3.l[0][1] = d3.l[1]
