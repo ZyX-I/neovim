@@ -15,7 +15,7 @@
 
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
-# include "viml/executor/vim_module.generated.c"
+# include "viml/executor/vim_module.generated.h"
 # include "viml/executor/executor.c.generated.h"
 #endif
 
