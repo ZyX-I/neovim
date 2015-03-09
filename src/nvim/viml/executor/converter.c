@@ -7,6 +7,7 @@
 #include "nvim/api/private/helpers.h"
 #include "nvim/func_attr.h"
 #include "nvim/memory.h"
+#include "nvim/assert.h"
 
 #include "nvim/viml/executor/converter.h"
 #include "nvim/viml/executor/executor.h"
@@ -17,8 +18,8 @@
 
 #define NLUA_PUSH_IDX(lstate, type, idx) \
   do { \
-    /* FIXME Use STATIC_ASSERT */ \
-    assert(sizeof(type) == sizeof(lua_Number)); \
+    STATIC_ASSERT(sizeof(type) == sizeof(lua_Number), \
+                  "Number sizes do not match"); \
     union { \
       type src; \
       lua_Number tgt; \
@@ -29,8 +30,8 @@
 
 #define NLUA_POP_IDX(lstate, type, stack_idx, idx) \
   do { \
-    /* FIXME Use STATIC_ASSERT */ \
-    assert(sizeof(type) == sizeof(lua_Number)); \
+    STATIC_ASSERT(sizeof(type) == sizeof(lua_Number), \
+                  "Number sizes do not match"); \
     union { \
       type tgt; \
       lua_Number src; \
