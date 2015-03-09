@@ -457,6 +457,11 @@ describe('parse_one_cmd errors', function()
   describe(':edit patterns', function()
     itn('\\ error: E16: Invalid range: end is greater then start: e [z!!-!!a]', 'e [z-a]')
   end)
+  describe('errors in expressions', function()
+    -- Regression test: used to report wrong location of the quote paired with 
+    -- missing.
+    itn('\\ error: E114: Missing quote: call A3v(\'a3v_1\', \'a3v_2\', \'a3v_3\', \'a3v_4\', !!\'!!a3v_5)', 'call A3v(\'a3v_1\', \'a3v_2\', \'a3v_3\', \'a3v_4\', \'a3v_5)')
+  end)
 end)
 return describe('parse_cmd_sequence errors', function()
   local t, itn
