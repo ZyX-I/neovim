@@ -97,19 +97,19 @@ typedef enum {
 /// Structure to represent VimL expressions
 typedef struct expression_node {
   ExpressionNodeType type;  ///< Node type.
-  size_t start;             ///< Position of expression token start inside 
+  size_t start;             ///< Position of expression token start inside
                             ///< a parsed string.
-  size_t end;               ///< Position of last character of expression 
+  size_t end;               ///< Position of last character of expression
                             ///< token.
-  CaseCompareStrategy ignore_case;   ///< Determines whether case should be 
-                                     ///< ignored while comparing. Only valid 
-                                     ///< for comparison operators: 
-                                     ///< kExpr(Greater|Less)*, 
+  CaseCompareStrategy ignore_case;   ///< Determines whether case should be
+                                     ///< ignored while comparing. Only valid
+                                     ///< for comparison operators:
+                                     ///< kExpr(Greater|Less)*,
                                      ///< kExpr[Not]Matches, kExpr[Not]Equals.
   struct expression_node *children;  ///< Subexpressions: valid for operators,
-                                     ///< subscripts (including kExprCall), 
+                                     ///< subscripts (including kExprCall),
                                      ///< complex variable names.
-  struct expression_node *next;  ///< Next node: expression nodes are arranged 
+  struct expression_node *next;  ///< Next node: expression nodes are arranged
                                  ///< as a linked list.
 } ExpressionNode;
 
@@ -128,8 +128,8 @@ typedef struct error {
 
 /// Defines scope in which expressions are parsed
 typedef enum {
-  kExprRvalue = 0,  ///< Rvalue: value that can be accessed
-  kExprLvalue,      ///< Lvalue: left side of an assignment
+  kExprRvalue = 0,  ///< Rvalue: value that can be accessed.
+  kExprLvalue,      ///< Lvalue: left side of an assignment.
 } ExpressionType;
 
 typedef struct {

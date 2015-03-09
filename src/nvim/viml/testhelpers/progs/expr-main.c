@@ -1,6 +1,7 @@
-//FIXME!!!
+// FIXME!!!
 #ifdef COMPILE_TEST_VERSION
 
+#include <stdio.h>
 #include "nvim/vim.h"
 #include "nvim/strings.h"
 #include "nvim/misc2.h"
@@ -12,7 +13,6 @@
 #include "nvim/viml/printer/printer.h"
 #include "nvim/viml/testhelpers/parser.h"
 #include "nvim/viml/dumpers/dumpers.h"
-#include <stdio.h>
 
 #ifdef COMPILE_KLEE
 #include "klee/klee.h"
@@ -147,7 +147,7 @@ size_t sprint_cmd_len(const StyleOptions *const po, const CommandNode *node)
 int vim_isIDc(int c)
 {
   return ASCII_ISALNUM(c);
-  //return c > 0 && c < 0x100 && (chartab[c] & CT_ID_CHAR);
+  // return c > 0 && c < 0x100 && (chartab[c] & CT_ID_CHAR);
 }
 
 /*
@@ -175,7 +175,8 @@ void *xmemdup(const void *data, size_t len)
   return memcpy(malloc(len), data, len);
 }
 
-_Bool do_log(int log_level, const char *func_name, int line_num, const char *fmt, ...)
+_Bool do_log(int log_level, const char *func_name, int line_num,
+             const char *fmt, ...)
 {
   return true;
 }

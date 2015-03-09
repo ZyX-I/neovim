@@ -57,10 +57,10 @@ static void set_lua_error(lua_State *lstate, Error *err) FUNC_ATTR_NONNULL_ALL
 
 /// Compare two strings, ignoring case
 ///
-/// Expects two values on the stack: compared strings. Returns one of the 
+/// Expects two values on the stack: compared strings. Returns one of the
 /// following numbers: 0, -1 or 1.
 ///
-/// Does no error handling: never call it with non-string or with some arguments 
+/// Does no error handling: never call it with non-string or with some arguments
 /// omitted.
 static int nlua_stricmp(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 {
@@ -74,8 +74,8 @@ static int nlua_stricmp(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 
 /// Evaluate lua string
 ///
-/// Expects three values on the stack: string to evaluate, pointer to the 
-/// location where result is saved, pointer to the location where error is 
+/// Expects three values on the stack: string to evaluate, pointer to the
+/// location where result is saved, pointer to the location where error is
 /// saved. Always returns nothing (from the lua point of view).
 static int nlua_eval_lua_string(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 {
@@ -115,7 +115,7 @@ static int nlua_state_init(lua_State *lstate) FUNC_ATTR_NONNULL_ALL
 
 /// Initialize lua interpreter
 ///
-/// Crashes NeoVim if initialization fails. Should be called once per lua 
+/// Crashes NeoVim if initialization fails. Should be called once per lua
 /// interpreter instance.
 static lua_State *init_lua(void)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT

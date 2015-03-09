@@ -14,7 +14,7 @@
 
 /// Length of a buffer capable of holding decimal intmax_t representation
 ///
-/// @note Size of the buffer may be actually a few characters off compared to 
+/// @note Size of the buffer may be actually a few characters off compared to
 ///       minimum required size.
 #define MAXNUMBUFLEN (sizeof(STRINGIFY(INTMAX_MAX)) - 1 + 1)
 
@@ -40,7 +40,7 @@ int write_string_len(const char *const s, size_t len, Writer write,
 /// @param[in]  s       String that will be written.
 /// @param[in]  len     Length of this string.
 /// @param[in]  write   Function used to write the string.
-/// @param[in]  cookie  Pointer to the structure with last argument to that 
+/// @param[in]  cookie  Pointer to the structure with last argument to that
 ///                     function and characters that need to be escaped.
 ///
 /// @return Number of characters written.

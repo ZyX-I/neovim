@@ -7,9 +7,9 @@
 
 /// Lists possible sources of the translated strings
 typedef enum {
-  kTransUser = 0,  ///< Typed Ex command argument
-  kTransScript,    ///< .vim file
-  kTransFunc,      ///< :function definition
+  kTransUser = 0,  ///< Typed Ex command argument.
+  kTransScript,    ///< .vim file.
+  kTransFunc,      ///< :function definition.
 } TranslationSource;
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS

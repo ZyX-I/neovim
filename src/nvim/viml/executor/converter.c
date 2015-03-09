@@ -351,7 +351,7 @@ Array nlua_pop_Array(lua_State *lstate, Error *err)
 /// Convert lua table to dictionary
 ///
 /// Always pops one value from the stack. Does not check whether
-/// `vim.is_dict(table[type_idx])` or whether topmost value on the stack is 
+/// `vim.is_dict(table[type_idx])` or whether topmost value on the stack is
 /// a table.
 Dictionary nlua_pop_Dictionary_unchecked(lua_State *lstate, Error *err)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT

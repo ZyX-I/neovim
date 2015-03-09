@@ -22,12 +22,12 @@ static const char *const out_str = "<written to stdout>";
 ///
 /// @param[in]  arg    Parsed string.
 /// @param[in]  flags  Flags for setting CommandParserOptions.flags.
-/// @param[in]  one    Determines whether to parse one Ex command or all 
+/// @param[in]  one    Determines whether to parse one Ex command or all
 ///                    commands in given string.
 /// @param[in]  out    Determines whether result should be output to stdout.
 ///
-/// @return NULL in case of error, non-NULL pointer to some string if out 
-///         argument is true and represented result in allocated memory 
+/// @return NULL in case of error, non-NULL pointer to some string if out
+///         argument is true and represented result in allocated memory
 ///         otherwise.
 char *parse_cmd_test(const char *arg, const uint_least16_t flags,
                      const bool one, const bool out)
@@ -80,7 +80,7 @@ char *parse_cmd_test(const char *arg, const uint_least16_t flags,
 /// Parse and then represent parsed expression
 ///
 /// @param[in]  arg            Expression to parse.
-/// @param[in]  print_as_expr  Determines whether dumped output should look as 
+/// @param[in]  print_as_expr  Determines whether dumped output should look as
 ///                            a VimL expression or as a syntax tree.
 ///
 /// @return Represented string or NULL in case of error (*not* parsing error).
@@ -149,7 +149,7 @@ char *srepresent_parse0(const char *arg, const bool print_as_expr)
 /// Parse and then represent parsed expression, dumping it to stdout
 ///
 /// @param[in]  arg            Expression to parse.
-/// @param[in]  print_as_expr  Determines whether dumped output should look as 
+/// @param[in]  print_as_expr  Determines whether dumped output should look as
 ///                            a VimL expression or as a syntax tree.
 ///
 /// @return OK in case of success, FAIL otherwise.

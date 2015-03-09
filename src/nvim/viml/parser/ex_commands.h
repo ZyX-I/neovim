@@ -14,9 +14,6 @@
 #include "nvim/viml/parser/command_definitions.h"
 #include "nvim/viml/parser/command_arguments.h"
 #include "nvim/viml/parser/expressions.h"
-// FIXME Remove the two following includes: only regexp_defs is needed.
-#include "nvim/vim.h"
-#include "nvim/buffer_defs.h"
 #include "nvim/regexp_defs.h"
 #include "nvim/ex_docmd.h"
 
@@ -31,7 +28,7 @@ typedef struct {
 
 /// Possible replacement types
 ///
-/// @note Special "%" is not listed below because it is the only atom that works 
+/// @note Special "%" is not listed below because it is the only atom that works
 ///       depending on an option.
 typedef enum {
   kRepLiteral,       ///< Literal string.
@@ -97,9 +94,9 @@ typedef enum {
 
 /// Description of one <cmdline special>
 typedef struct {
-  const char *const str;  ///< String.
-  const size_t len;       ///< String length.
-  const PatternType type; ///< Corresponding pattern type.
+  const char *const str;   ///< String.
+  const size_t len;        ///< String length.
+  const PatternType type;  ///< Corresponding pattern type.
 } CmdlineSpecialDescription;
 
 /// List of all cmdline specials like <sfile>
@@ -107,17 +104,17 @@ extern const CmdlineSpecialDescription cmdline_specials[];
 
 /// Possible filename modifiers
 typedef enum {
-  kFnameModFullPath,  ///< Make full path (:p).
-  kFnameMod8_3,       ///< Convert path to 8.3 short format (:8).
-  kFnameModHome,      ///< Make path relative to home directory (:~).
-  kFnameModRelative,  ///< Make path relative to the current directory.
-  kFnameModHead,      ///< Leave only the directory name (:h).
-  kFnameModTail,      ///< Leave only the last component of the path (:t).
-  kFnameModRoot,      ///< Remove the last extension from the path (:r).
-  kFnameModExtension, ///< Leave only the last extension (:e).
-  kFnameModEscape,    ///< Escape for use in shell (:S).
-  kFnameModSub,       ///< Substitute (:s).
-  kFnameModGSub,      ///< Substitute all occurrences (:gs).
+  kFnameModFullPath,   ///< Make full path (:p).
+  kFnameMod8_3,        ///< Convert path to 8.3 short format (:8).
+  kFnameModHome,       ///< Make path relative to home directory (:~).
+  kFnameModRelative,   ///< Make path relative to the current directory.
+  kFnameModHead,       ///< Leave only the directory name (:h).
+  kFnameModTail,       ///< Leave only the last component of the path (:t).
+  kFnameModRoot,       ///< Remove the last extension from the path (:r).
+  kFnameModExtension,  ///< Leave only the last extension (:e).
+  kFnameModEscape,     ///< Escape for use in shell (:S).
+  kFnameModSub,        ///< Substitute (:s).
+  kFnameModGSub,       ///< Substitute all occurrences (:gs).
 } FnameModType;
 
 /// Structure that describes filename modifier
@@ -168,7 +165,7 @@ extern const char *pattern_collection_escapable_chars;
 
 /// Possible types of collection items
 ///
-/// @note In Vim kPatColItemLiteral like [\x80] or [\u0080] matches *both* byte 
+/// @note In Vim kPatColItemLiteral like [\x80] or [\u0080] matches *both* byte
 ///       0x80 and unicode character U+0080.
 typedef enum {
   kPatColItemLiteral,  ///< Literal character.
@@ -186,29 +183,29 @@ typedef struct pattern_collection_item {
       u8char_T ch1;                 ///< Start of the range.
       u8char_T ch2;                 ///< End of the range.
     } range;                        ///< Character range.
-    CollectionCharacterClassType class; ///< Character class (e.g. [:alnum:]).
+    CollectionCharacterClassType class;  ///< Character class (e.g. [:alnum:]).
   } data;                           ///< Item data.
-  struct pattern_collection_item *next; ///< Next item.
+  struct pattern_collection_item *next;  ///< Next item.
 } PatternCollectionItem;
 
 /// Structure representing glob pattern
 typedef struct pattern {
-  PatternType type;        ///< Type of the pattern chunk
+  PatternType type;         ///< Type of the pattern chunk.
   union {
-    char *str;             ///< String argument (for most types)
-    Expression *expr;      ///< Expression (for "`=expr`")
-    int number;            ///< Buffer name or old file number
-    FilenameModifier *mod; ///< Filename modifier (for %, <sfile>, …)
+    char *str;              ///< String argument (for most types).
+    Expression *expr;       ///< Expression (for "`=expr`").
+    int number;             ///< Buffer name or old file number.
+    FilenameModifier *mod;  ///< Filename modifier (for %, <sfile>, …).
     struct patterns {
       struct pattern *pat;
       struct patterns *next;
-    } pats;                ///< Pattern used for branch ({a,b,c})
+    } pats;                 ///< Pattern used for branch ({a,b,c})
     struct collection {
-      bool inverse;        ///< Inverted collection ([^]).
+      bool inverse;         ///< Inverted collection ([^]).
       PatternCollectionItem *colitem;  ///< First item in the collection.
-    } collection;          ///< Collection definition.
-  } data;                  ///< Pattern data
-  struct pattern *next;    ///< Next chunk
+    } collection;           ///< Collection definition.
+  } data;                   ///< Pattern data.
+  struct pattern *next;     ///< Next chunk.
 } Pattern;
 
 typedef struct collection PatternCollection;
@@ -229,18 +226,18 @@ typedef enum {
 
 /// A structure to represent Ex address followup
 ///
-/// Ex address followup is a part of address that follows the first token: e.g. 
+/// Ex address followup is a part of address that follows the first token: e.g.
 /// "+1" in "/foo/+1", "?bar?" in "/foo/?bar?", etc.
 typedef struct address_followup {
   AddressFollowupType type;       ///< Type of the followup
   union {
     int shift;                    ///< Exact offset: "+1", "-1" (for
-                                  ///< kAddressFollowupShift)
+                                  ///< kAddressFollowupShift).
     Regex *regex;                 ///< Regular expression (for
-                                  ///< kAddressFollowupForwardPattern and 
-                                  ///< kAddressFollowupBackwardPattern)
-  } data;                         ///< Address followup data
-  struct address_followup *next;  ///< Next followup in a sequence
+                                  ///< kAddressFollowupForwardPattern and
+                                  ///< kAddressFollowupBackwardPattern).
+  } data;                         ///< Address followup data.
+  struct address_followup *next;  ///< Next followup in a sequence.
 } AddressFollowup;
 
 /// Ex address types
@@ -261,25 +258,25 @@ typedef enum {
 typedef struct {
   AddressType type;  ///< Ex address type
   union {
-    Regex *regex;              ///< Regular expression (for kAddrForwardSearch 
-                               ///< and kAddrBackwardSearch address types)
-    char mark;                 ///< Address mark (for kAddrMark type)
-    linenr_T lnr;              ///< Exact line (for kAddrFixed type)
-  } data;                      ///< Address data (not for kAddrMissing, 
-                               ///< kAddrEnd, kAddrCurrent, 
-                               ///< kAddrForwardPreviousSearch, 
-                               ///< kAddrBackwardPreviousSearch and 
-                               ///< kAddrSubstituteSearch)
-  AddressFollowup *followups;  ///< Ex address followups data
+    Regex *regex;              ///< Regular expression (for kAddrForwardSearch
+                               ///< and kAddrBackwardSearch address types).
+    char mark;                 ///< Address mark (for kAddrMark type).
+    linenr_T lnr;              ///< Exact line (for kAddrFixed type).
+  } data;                      ///< Address data (not for kAddrMissing,
+                               ///< kAddrEnd, kAddrCurrent,
+                               ///< kAddrForwardPreviousSearch,
+                               ///< kAddrBackwardPreviousSearch and
+                               ///< kAddrSubstituteSearch).
+  AddressFollowup *followups;  ///< Ex address followups data.
 } Address;
 
 /// A structure to represent line range
 typedef struct range {
-  Address address;     ///< Ex address
-  bool setpos;         ///< true if next address in range was separated from 
-                       ///< this address by ';'
-  struct range *next;  ///< Next address in range. There is no limit in 
-                       ///< a number of consequent addresses
+  Address address;     ///< Ex address.
+  bool setpos;         ///< True if next address in range was separated from
+                       ///< this address by ';'.
+  struct range *next;  ///< Next address in range. There is no limit in
+                       ///< a number of consequent addresses.
 } Range;
 
 /// A structure to represent GUI menu item
@@ -373,7 +370,7 @@ typedef enum {
 typedef enum {
   kSynRegOffsetAnchorStart = 0x00,  ///< Start of the matched pattern.
   kSynRegOffsetAnchorEnd   = 0x08,  ///< End of the matched pattern.
-  kSynRegOffsetAnchorLC    = 0x10,  ///< Start matching {nr} chars right 
+  kSynRegOffsetAnchorLC    = 0x10,  ///< Start matching {nr} chars right
                                     ///< of the start.
 } SynRegOffsetAnchorType;
 #define FLAG_SYN_OFFSET_ANCHOR_MASK 0x18
@@ -395,58 +392,58 @@ struct syn_pat_list {
 
 /// Structure for representing one command
 typedef struct command_node {
-  CommandType type;               ///< Command type. For built-in commands it 
-                                  ///< replaces name
-  char *name;                     ///< Name of the user command, unresolved
-  struct command_node *prev;      ///< Previous command of the same level
-  struct command_node *next;      ///< Next command of the same level
-  struct command_node *children;  ///< Block (if/while/for/try/function), 
-                                  ///< modifier (like leftabove or silent) or 
+  CommandType type;               ///< Command type. For built-in commands it
+                                  ///< replaces name.
+  char *name;                     ///< Name of the user command, unresolved.
+  struct command_node *prev;      ///< Previous command of the same level.
+  struct command_node *next;      ///< Next command of the same level.
+  struct command_node *children;  ///< Block (if/while/for/try/function),
+                                  ///< modifier (like leftabove or silent) or
                                   ///< iterator (tabdo/windo/bufdo/argdo etc)
-                                  ///< subcommands
-  Range range;                    ///< Ex address range, if any
-  size_t *skips;                  ///< Array of positions where characters from 
-                                  ///< “real” string were removed (shows the 
-                                  ///< former positions of <C-v> characters and 
-                                  ///< backslashes, useful for computing real 
-                                  ///< column number)
+                                  ///< subcommands.
+  Range range;                    ///< Ex address range, if any.
+  size_t *skips;                  ///< Array of positions where characters from
+                                  ///< “real” string were removed (shows the
+                                  ///< former positions of <C-v> characters and
+                                  ///< backslashes, useful for computing real
+                                  ///< column number).
   size_t skips_count;             ///< Number of items in the above array.
-  CommandPosition position;       ///< Position of the start of the command
-  size_t end_col;                 ///< Last column occupied by this command
+  CommandPosition position;       ///< Position of the start of the command.
+  size_t end_col;                 ///< Last column occupied by this command.
   bool has_count;                 ///< True if there is a count.
   int count;                      ///< Count.
   Register reg;                   ///< Register.
-  uint_least8_t exflags;          ///< Ex flags (for :print command and like)
-  uint_least32_t optflags;        ///< ++opt flags
-  char *enc;                      ///< Encoding from ++enc
-  Glob glob;                      ///< File name(s)
-  bool bang;                      ///< true if command was used with a bang
+  uint_least8_t exflags;          ///< Ex flags (for :print command and like).
+  uint_least32_t optflags;        ///< ++opt flags.
+  char *enc;                      ///< Encoding from ++enc.
+  Glob glob;                      ///< File name(s).
+  bool bang;                      ///< True if command was used with a bang.
   struct command_argument {
     union {
-      // least32 is essential to hold 24-bit color and additional 4 flag bits 
+      // least32 is essential to hold 24-bit color and additional 4 flag bits
       // for :hi guifg/guibg/guisp
-      uint_least32_t flags;       ///< Command flags
-      unsigned unumber;           ///< Unsigned integer
-      size_t col;                 ///< Column number (for syntax error)
-      int number;                 ///< Signed integer
+      uint_least32_t flags;       ///< Command flags.
+      unsigned unumber;           ///< Unsigned integer.
+      size_t col;                 ///< Column number (for syntax error).
+      int number;                 ///< Signed integer.
       int *numbers;               ///< An array of signed integers.
-      uint_least32_t *unumbers;   ///< An array of unsigned integers in 
-                                  ///< allocated memory. At least 32 bits are 
+      uint_least32_t *unumbers;   ///< An array of unsigned integers in
+                                  ///< allocated memory. At least 32 bits are
                                   ///< needed to hold any unicode codepoint.
-      char ch;                    ///< A single character
-      char *str;                  ///< String in allocated memory
+      char ch;                    ///< A single character.
+      char *str;                  ///< String in allocated memory.
       char **strs;                ///< NULL-terminated strings array.
       garray_T ga_strs;           ///< Growarray containing char * strings.
-      Pattern *pat;               ///< Pattern (like in :au)
-      Glob *glob;                 ///< Glob (like in :e)
-      Regex *reg;                 ///< Regular expression (like in :catch)
-      AuEvent *events;            ///< A sequence of autocommand events
-      MenuItem *menu_item;        ///< Menu item
-      Range *range;               ///< Ex mode address
-      CmdComplete *complete;
-      Expression *expr;           ///< Expression (:if) or a list of 
-                                  ///< expressions (:echo) (uses expr->next to 
-                                  ///< build a linked list)
+      Pattern *pat;               ///< Pattern (like in :au).
+      Glob *glob;                 ///< Glob (like in :e).
+      Regex *reg;                 ///< Regular expression (like in :catch).
+      AuEvent *events;            ///< A sequence of autocommand events.
+      MenuItem *menu_item;        ///< Menu item.
+      Range *range;               ///< Ex mode address.
+      CmdComplete *complete;      ///< Command completion definition.
+      Expression *expr;           ///< Expression (:if) or a list of
+                                  ///< expressions (:echo) (uses expr->next to
+                                  ///< build a linked list).
       Replacement *rep;           ///< Replacement string, parsed.
       HighlightColor color;       ///< Color definition.
       SynGroupList *group;        ///< Syntax groups.
@@ -459,7 +456,7 @@ typedef struct command_node {
         struct command_argument *args;
       } args;
     } arg;
-  } args[1];                      ///< Command arguments
+  } args[1];                      ///< Command arguments.
 } CommandNode;
 
 typedef struct {
@@ -536,7 +533,7 @@ extern VimlCommandDefinition cmddefs[kCmdREAL_SIZE];
 
 /// Static empty string
 ///
-/// Is used to replace NULL (i.e. “no value”) in NULL-terminated list of 
+/// Is used to replace NULL (i.e. “no value”) in NULL-terminated list of
 /// strings.
 extern const char *const empty_string;
 
@@ -544,7 +541,7 @@ extern const char *const empty_string;
 ///
 /// @param[in]  type  Command node type.
 ///
-/// @return CommandDefinition structure with the definition of the given 
+/// @return CommandDefinition structure with the definition of the given
 ///         command.
 #define CMDDEF(type) cmddefs[type - 1]
 

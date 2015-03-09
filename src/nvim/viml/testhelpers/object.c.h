@@ -1,3 +1,4 @@
+#ifndef NVIM_VIML_TESTHELPERS_OBJECT_C_H
 #include <stdint.h>
 
 #include "nvim/api/private/defs.h"
@@ -10,13 +11,13 @@
 #elif !defined(CH_MACROS_DEFINE_FWRITE)
 # undef CH_MACROS_DEFINE_LENGTH
 # define CH_MACROS_DEFINE_FWRITE
-# include "nvim/viml/testhelpers/object.c.h"
+# include "nvim/viml/testhelpers/object.c.h"  // NOLINT
 # undef CH_MACROS_DEFINE_FWRITE
 # define CH_MACROS_DEFINE_LENGTH
 #endif
-#define NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
+#define NVIM_VIML_TESTHELPERS_OBJECT_C_H
 
-#ifndef NVIM_VIML_DUMPERS_CH_MACROS
+#if !defined(NVIM_VIML_DUMPERS_CH_MACROS)
 # define CH_MACROS_OPTIONS_TYPE const int
 # define CH_MACROS_INDENT_STR "  "
 #endif
@@ -51,7 +52,7 @@ static FDEC(dump_obj, const Object obj, size_t indent)
     case kObjectTypeFloat: {
       char buf[10];
       WS("float: ");
-      snprintf(buf, 10, "%+.2e", obj.data.floating);
+      snprintf(&(buf[0]), sizeof(buf), "%+.2e", obj.data.floating);
       W_LEN(buf, 9);
       break;
     }
@@ -64,7 +65,7 @@ static FDEC(dump_obj, const Object obj, size_t indent)
     }
 #define DUMP_ID_TYPE(type, member) \
     case type: { \
-      WS( #member ": "); \
+      WS(#member ": "); \
       F_NOOPT(dump_unumber, (uintmax_t) obj.data.member); \
       break; \
     }
@@ -100,3 +101,4 @@ static FDEC(dump_obj, const Object obj, size_t indent)
   WS("\n");
   FUNCTION_END;
 }
+#endif  // NVIM_VIML_TESTHELPERS_OBJECT_C_H

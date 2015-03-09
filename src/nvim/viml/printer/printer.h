@@ -14,7 +14,7 @@ typedef struct {
   size_t before_end;
 } _StartEndSpaces;
 
-// XXX Never defined: not needed: it should crash in case branch with 
+// XXX Never defined: not needed: it should crash in case branch with
 //     _error_spaces is reached.
 const _BeforeAfterSpaces _error_spaces;
 typedef struct {

@@ -1,3 +1,8 @@
+#ifndef NVIM_VIML_DUMPERS_CH_MACROS_H
+#define NVIM_VIML_DUMPERS_CH_MACROS_H
+#undef NVIM_VIML_DUMPERS_CH_MACROS_H
+// ^ Guard is never used. Makes linter happy.
+
 #include <stddef.h>
 #include "nvim/vim.h"
 #include "nvim/viml/dumpers/dumpers.h"
@@ -5,21 +10,21 @@
 /// @def CH_MACROS_DEFINE_LENGTH
 /// @brief If set, `s*_len` functions will be defined
 ///
-/// Defined functions will have signature `size_t f(CH_MACROS_OPTIONS_TYPE o, 
-/// ...)`. They are supposed to return a value that is greater then or equal to 
+/// Defined functions will have signature `size_t f(CH_MACROS_OPTIONS_TYPE o,
+/// ...)`. They are supposed to return a value that is greater then or equal to
 /// the amount of bytes resulting string will occupy.
 
 /// @def CH_MACROS_DEFINE_FWRITE
 /// @brief If set, `*` functions will be defined
 ///
-/// Defined functions will have signature `int f(CH_MACROS_OPTIONS_TYPE o, ..., 
-/// Writer write, void *cookie)`. They are supposed to write resulting string 
+/// Defined functions will have signature `int f(CH_MACROS_OPTIONS_TYPE o, ...,
+/// Writer write, void *cookie)`. They are supposed to write resulting string
 /// using given `write` function.
 ///
-/// @note If neither #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE 
-///       macros are defined then functions with `void f(CH_MACROS_OPTIONS_TYPE 
-///       o, ..., char **pp_)` signature are defined. They are supposed to write 
-///       resulting string to `**pp_` and advance `*pp_` to the end of written 
+/// @note If neither #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE
+///       macros are defined then functions with `void f(CH_MACROS_OPTIONS_TYPE
+///       o, ..., char **pp_)` signature are defined. They are supposed to write
+///       resulting string to `**pp_` and advance `*pp_` to the end of written
 ///       string. They are not supposed to output trailing NUL though.
 
 /// @def CH_MACROS_INDENT_STR
@@ -35,7 +40,7 @@
 ///
 /// Expands to
 ///
-/// - `s{f}` if neither of #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE 
+/// - `s{f}` if neither of #CH_MACROS_DEFINE_LENGTH and #CH_MACROS_DEFINE_FWRITE
 ///   macros are defined,
 /// - to `s{f}_len` if #CH_MACROS_DEFINE_LENGTH macros is defined and
 /// - to `{f}` if #CH_MACROS_DEFINE_FWRITE macros is defined.
@@ -46,7 +51,7 @@
 /// @param  f    Called function.
 /// @param  ...  Function arguments that are not predefined.
 ///
-/// @note Function return value is handled by macros itself. You should not 
+/// @note Function return value is handled by macros itself. You should not
 ///       expect macros to return anything.
 
 /// @def F_PTR
@@ -55,7 +60,7 @@
 /// @param  f    Called function pointer.
 /// @param  ...  Function arguments that are not predefined.
 ///
-/// @note Function return value is handled by macros itself. You should not 
+/// @note Function return value is handled by macros itself. You should not
 ///       expect macros to return anything.
 
 /// @def F_NOOPT
@@ -72,13 +77,13 @@
 /// @def FDEC
 /// @brief Generate function declaration
 ///
-/// @param  f    Function name. Passed to #FNAME(f) to construct actual function 
+/// @param  f    Function name. Passed to #FNAME(f) to construct actual function
 ///              name.
 
 /// @def FDEC_TYPEDEF
 /// @brief Like #FDEC, but generates pointer declaration for typedef
 ///
-/// As it generates type name then `s` prefix is replaced with `Str` suffix, 
+/// As it generates type name then `s` prefix is replaced with `Str` suffix,
 /// `_len` suffix is replaced with `Len` prefix.
 ///
 /// See also #FTYPE and #FDEC_TYPEDEF_ALL.
@@ -97,8 +102,8 @@
 /// @def EARLY_RETURN
 /// @brief Macros that should be used to return when function does nothing
 ///
-/// @warning Do not use this macros to return when function has written 
-///          something. It should be used only when function has nothing to do 
+/// @warning Do not use this macros to return when function has written
+///          something. It should be used only when function has nothing to do
 ///          and thus may early return.
 
 /// @def FUNCTION_END
@@ -114,7 +119,7 @@
 ///
 /// May be used with any string for which `sizeof(s) - 1` returns its length.
 ///
-/// @param  s  String which will be written. @warning {May be substituted more 
+/// @param  s  String which will be written. @warning {May be substituted more
 ///            then once.}
 
 /// @def W
@@ -232,7 +237,7 @@
     size_t FNAME(f)(_FARGS(__VA_ARGS__))
 # define FTYPE(t) t##StrLen
 # define FDEC_TYPEDEF(t, ...) \
-    size_t (*FTYPE(t))(_FARGS(__VA_ARGS__))
+    size_t (*FTYPE(t))(_FARGS(__VA_ARGS__))  // NOLINT
 # define FUNCTION_START \
     size_t len = 0
 # define EARLY_RETURN \
@@ -271,7 +276,7 @@
      int FNAME(f)(_FARGS(__VA_ARGS__))
 #  define FTYPE(t) t
 #  define FDEC_TYPEDEF(t, ...) \
-     int (*FTYPE(t))(_FARGS(__VA_ARGS__))
+     int (*FTYPE(t))(_FARGS(__VA_ARGS__))  // NOLINT
 #  define FUNCTION_START
 #  define EARLY_RETURN \
     return OK
@@ -317,7 +322,7 @@
     void FNAME(f)(_FARGS(__VA_ARGS__))
 #  define FTYPE(t) t##Str
 #  define FDEC_TYPEDEF(t, ...) \
-    void (*FTYPE(t))(_FARGS(__VA_ARGS__))
+    void (*FTYPE(t))(_FARGS(__VA_ARGS__))  // NOLINT
 #  define FUNCTION_START \
     char *p_ = *pp_
 #  define EARLY_RETURN \
@@ -427,3 +432,4 @@
 #define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
 #define GLOB_AST                         o->command.glob.ast_glob
 #define SET_SHOW_SHORT                   o->command.set.display_short
+#endif  // NVIM_VIML_DUMPERS_CH_MACROS_H

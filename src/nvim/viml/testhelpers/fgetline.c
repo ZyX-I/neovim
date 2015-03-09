@@ -14,7 +14,7 @@
 ///
 /// @param[in]  file  File from which line will be obtained.
 ///
-/// @return String in allocated memory or NULL in case of error or when there 
+/// @return String in allocated memory or NULL in case of error or when there
 ///         are no more lines.
 char *fgetline_file(int _, FILE *file, int indent)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -47,7 +47,7 @@ char *fgetline_file(int _, FILE *file, int indent)
 ///
 /// @param[in]  arg  Pointer to the next character.
 ///
-/// @return String in allocated memory or NULL in case of error or when there 
+/// @return String in allocated memory or NULL in case of error or when there
 ///         are no more lines.
 char *fgetline_string(int c, char **arg, int indent)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT

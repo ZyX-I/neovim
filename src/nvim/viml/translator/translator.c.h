@@ -1,4 +1,8 @@
 #ifndef NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
+#define NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
+#undef NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H
+// ^ Make linter happy. Actual define is placed later.
+
 #define __STDC_LIMIT_MACROS
 #define __STDC_FORMAT_MACROS
 #include <stdbool.h>
@@ -30,7 +34,7 @@
 #elif !defined(CH_MACROS_DEFINE_FWRITE)
 # undef CH_MACROS_DEFINE_LENGTH
 # define CH_MACROS_DEFINE_FWRITE
-# include "nvim/viml/translator/translator.c.h"
+# include "nvim/viml/translator/translator.c.h"  // NOLINT
 # undef CH_MACROS_DEFINE_FWRITE
 # define CH_MACROS_DEFINE_LENGTH
 #endif
@@ -48,20 +52,20 @@
 #define _STRINGIFY(x) #x
 #define STRINGIFY(x) _STRINGIFY(x)
 
-// XXX -1 removes space for trailing zero. Note: STRINGIFY(INTMAX_MAX) may 
-//     return something like "(dddddL)": three or more characters wider then 
+// XXX -1 removes space for trailing zero. Note: STRINGIFY(INTMAX_MAX) may
+//     return something like "(dddddL)": three or more characters wider then
 //     actually needed.
 //     +1 is for minus sign.
 
 /// Length of a buffer capable of holding decimal intmax_t representation
 ///
-/// @note Size of the buffer may be actually a few characters off compared to 
+/// @note Size of the buffer may be actually a few characters off compared to
 ///       minimum required size.
 #define MAXNUMBUFLEN (sizeof(STRINGIFY(INTMAX_MAX)) - 1 + 1)
 
 /// Length of a buffer capable of holding decimal size_t representation
 ///
-/// @note Size of the buffer may be actually a few characters off compared to 
+/// @note Size of the buffer may be actually a few characters off compared to
 ///       minimum required size.
 #define SIZETBUFLEN  (sizeof(STRINGIFY(SIZE_MAX)) - 1)
 
@@ -626,7 +630,7 @@ static FDEC(translate_number, ExpressionNodeType type, const char *s,
       }
 
       if (length > (ptrdiff_t) MAXOCTALNUMBUFLEN || length == 0) {
-        // Integer overflow is an undefined behavior, but we do not emit any 
+        // Integer overflow is an undefined behavior, but we do not emit any
         // errors for overflow in other arguments, so just write zero
         memcpy(num_s, "0", 2);
       } else {
@@ -634,9 +638,9 @@ static FDEC(translate_number, ExpressionNodeType type, const char *s,
         num_s[length] = NUL;
       }
       if (sscanf(num_s, "%" PRIoMAX, &unumber) != 1) {
-        // TODO: check errno
-        // TODO: check %n output?
-        // TODO: give error message
+        // TODO(ZyX-I): check errno
+        // TODO(ZyX-I): check %n output?
+        // TODO(ZyX-I): give error message
 #ifdef CH_MACROS_DEFINE_FWRITE
         return FAIL;
 #else
@@ -713,7 +717,7 @@ static FDEC(translate_string, ExpressionNodeType type, const char *const s,
             case 'b':
             case '\\':
             case '\"':
-            // Escaping single quote, "[" and "]" result in the escaped 
+            // Escaping single quote, "[" and "]" result in the escaped
             // character both in lua and in VimL.
             case '\'':
             case '[':
@@ -852,32 +856,32 @@ static FDEC(translate_string, ExpressionNodeType type, const char *const s,
 
 /// Dumps scope variable
 ///
-/// @param[in]   s      String that holds original representation of translated 
+/// @param[in]   s      String that holds original representation of translated
 ///                     variable name.
 /// @param[in]   node   Translated variable name.
-/// @param[out]  start  Is set to the start of variable name, just after the 
-///                     scope. If function failed to detect scope it is set to 
+/// @param[out]  start  Is set to the start of variable name, just after the
+///                     scope. If function failed to detect scope it is set to
 ///                     NULL.
 /// @param[in]   flags  Flags.
 /// @parblock
 ///   Supported flags:
 ///
 ///   TS_LAST_SEGMENT
-///   :   Determines whether currently dumped segment is the last one: if it is 
-///       then single character name like "a" may only refer to the variable in 
-///       the current scope, if it is not it may be a construct like 
+///   :   Determines whether currently dumped segment is the last one: if it is
+///       then single character name like "a" may only refer to the variable in
+///       the current scope, if it is not it may be a construct like
 ///       "a{':abc'}" which refers to "a:abc" variable.
 ///
 ///   TS_ONLY_SEGMENT
 ///   :   Determines whether this segment is the only one.
 ///
 ///   TS_FUNCCALL
-///   :   Use "vim.functions" in place of "state.current_scope" in some cases. 
-///       Note that vim.call implementation should still be able to use 
+///   :   Use "vim.functions" in place of "state.current_scope" in some cases.
+///       Note that vim.call implementation should still be able to use
 ///       "state.global.user_functions" if appropriate.
 ///
 ///   TS_FUNCASSIGN
-///   :   Use "state.global.user_functions" in place of "state.current_scope" in 
+///   :   Use "state.global.user_functions" in place of "state.current_scope" in
 ///       some cases.
 /// @endparblock
 static FDEC(translate_scope, const char *const s,
@@ -969,8 +973,8 @@ static FDEC(translate_scope, const char *const s,
 
 /// Translate subscript child node
 ///
-/// Dumps four or six function arguments: indexed value, its position, index, 
-/// its position, second index and its position as well. Second index with its 
+/// Dumps four or six function arguments: indexed value, its position, index,
+/// its position, second index and its position as well. Second index with its
 /// position may be absent.
 ///
 /// @param[in]  s     String holding initial expression representation.
@@ -1070,7 +1074,7 @@ static FDEC(translate_expr_node, const char *const s,
             break;
           }
           default: {
-            // Option may only be boolean, string or numeric, not a combination 
+            // Option may only be boolean, string or numeric, not a combination
             // of these
             assert(false);
           }
@@ -1147,14 +1151,14 @@ static FDEC(translate_expr_node, const char *const s,
     }
     case kExprVariableName: {
       WS("vim.subscript.subscript(state, false, ");
-      F(translate_varname, s, node, FALSE);
+      F(translate_varname, s, node, false);
       WS(")");
       break;
     }
     case kExprCurlyName:
     case kExprIdentifier: {
       // Should have been handled by translate_varname above
-      assert(FALSE);
+      assert(false);
     }
     case kExprConcatOrSubscript: {
       WS("vim.concat_or_subscript(state, ");
@@ -1276,7 +1280,7 @@ static FDEC(translate_expr_node, const char *const s,
         }
         current_node = current_node->next;
       }
-      for (; current_node != NULL; current_node=current_node->next) {
+      for (; current_node != NULL; current_node = current_node->next) {
         WS(", ");
         F(translate_expr_node, s, current_node, false);
         if (dump_positions) {
@@ -1321,7 +1325,7 @@ static FDEC(translate_expr_nodes, const char *const s,
 
 /// Dump a VimL function definition
 ///
-/// @param[in]  args  Function node and indentation that was used for function 
+/// @param[in]  args  Function node and indentation that was used for function
 ///                   definition.
 static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 {
@@ -1362,7 +1366,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
   }
   if (args->node->children != NULL) {
     size_t indent = args->indent + 1;
-    // TODO; dump information about function call
+    // TODO(ZyX-I): dump information about function call
     WINDENT(indent);
     WS("state = vim.state.enter_function(state, self, {}, ");
     F(dump_bool, (bool) (flags & FLAG_FUNC_ABORT));
@@ -1406,13 +1410,11 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
       WINDENT(indent);
       WS("end\n");
     }
-    // TODO Assign a:firstline and a:lastline
-    // These variables are always present even if function is defined without 
+    // TODO(ZyX-I): Assign a:firstline and a:lastline
+    // These variables are always present even if function is defined without
     // range modifier.
-    OVERRIDE_CONTEXT(
-      tsrc, kTransFunc,
-      F(translate_nodes, args->node->children, indent);
-    );
+    OVERRIDE_CONTEXT(tsrc, kTransFunc,
+                     F(translate_nodes, args->node->children, indent););
     if (flags & FLAG_FUNC_ABORT) {
       indent--;
       WINDENT(indent);
@@ -1427,7 +1429,7 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
       WS("return ret\n");
     }
   } else {
-    // Empty function: do not bother creating scope dictionaries, just return 
+    // Empty function: do not bother creating scope dictionaries, just return
     // zero
     WINDENT(args->indent + 1);
     WS("return " VIM_ZERO "\n");
@@ -1476,14 +1478,14 @@ static FDEC(translate_function_definition, const TranslateFuncArgs *const args)
 
 /// Translate complex VimL variable name (i.e. name with curly brace expansion)
 ///
-/// Translates to two arguments: scope and variable name in this scope. Must be 
-/// the last arguments to the outer function because it may translate to one 
+/// Translates to two arguments: scope and variable name in this scope. Must be
+/// the last arguments to the outer function because it may translate to one
 /// argument: a call of get_scope_and_key which will return two values.
 ///
 /// @note This function is responsible for adding position as well.
 ///
 /// @param[in]  s            String holding initial expression representation.
-/// @param[in]  node         Translated variable name. Must be a node with 
+/// @param[in]  node         Translated variable name. Must be a node with
 ///                          kExprVariableName type.
 /// @param[in]  is_funccall  True if translating name of a called function.
 static FDEC(translate_varname, const char *const s,
@@ -1504,7 +1506,6 @@ static FDEC(translate_varname, const char *const s,
                                                  ? TS_FUNCASSIGN
                                                  : 0));
     if (start == NULL) {
-
       WS("vim.get_scope_and_key(state");
       close_parenthesis = true;
     } else {
@@ -1569,17 +1570,17 @@ static FDEC(translate_varname, const char *const s,
 /// @param[in]  s            String holding initial expression representation.
 /// @param[in]  node         Translated expression.
 /// @param[in]  is_funccall  True if it translates :function definition.
-/// @param[in]  bang         True if function must not be unique when 
-///                          is_funccall is set and true if errors about missing 
+/// @param[in]  bang         True if function must not be unique when
+///                          is_funccall is set and true if errors about missing
 ///                          values are to be ignored.
-/// @param[in]  dump_bang    True if the above value should be dumped. Ignored 
-///                          if is_funccall is true: in this case it is also 
+/// @param[in]  dump_bang    True if the above value should be dumped. Ignored
+///                          if is_funccall is true: in this case it is also
 ///                          considered true.
-/// @param[in]  prefix       Function prefix (check out functions in 
+/// @param[in]  prefix       Function prefix (check out functions in
 ///                          `vim.assign` table).
-/// @param[in]  dump         Function used to dump value that will be assigned. 
-///                          When NULL use commands for undefining variable and 
-///                          function definitions (backs :unlet and 
+/// @param[in]  dump         Function used to dump value that will be assigned.
+///                          When NULL use commands for undefining variable and
+///                          function definitions (backs :unlet and
 ///                          :delfunction).
 /// @param[in]  dump_cookie  First argument to the above function.
 static FDEC(translate_lval, const char *const s,
@@ -1695,10 +1696,10 @@ static FDEC(translate_unumber, const void *const unumber)
 ///
 /// List is located in indentvar described in args.
 ///
-/// Indentvar is a variable with name based on indentation level. It is used to 
+/// Indentvar is a variable with name based on indentation level. It is used to
 /// make variable name unique in some scope.
 ///
-/// @param[in]  args  Indentvar description and number of first element in 
+/// @param[in]  args  Indentvar description and number of first element in
 ///                   dumped list.
 static FDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
 {
@@ -1719,10 +1720,8 @@ static FDEC(translate_let_list_rest, const LetListItemAssArgs *const args)
 static FDEC(translate_rval_expr, const Expression *const expr)
 {
   FUNCTION_START;
-  OVERRIDE_CONTEXT(
-    start_col, expr->col,
-    F(translate_expr_node, TRANS_EXPR_ARGS(expr), false);
-  );
+  OVERRIDE_CONTEXT(start_col, expr->col,
+                   F(translate_expr_node, TRANS_EXPR_ARGS(expr), false););
   FUNCTION_END;
 }
 
@@ -1778,12 +1777,12 @@ static FDEC(dump_raw_string, const char *const str)
 
 /// Translate assignment
 ///
-/// @note It is assumed that this function is called with indent for the first 
+/// @note It is assumed that this function is called with indent for the first
 ///       line already written.
 ///
 /// @param[in]  lval_expr    Value being assigned to.
 /// @param[in]  indent       Current level of indentation.
-/// @param[in]  err_line     Line that should be run when error occurred. May be 
+/// @param[in]  err_line     Line that should be run when error occurred. May be
 ///                          NULL.
 /// @param[in]  dump         Function used to dump value that will be assigned.
 /// @param[in]  dump_cookie  First argument to the above function.
@@ -1808,8 +1807,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
         OVERRIDE_CONTEXT( \
           start_col, new_start_col, \
           F(translate_lval, s, node, false, false, false, "ass_", dump, \
-                            dump_cookie); \
-        ); \
+                            dump_cookie);); \
         break; \
       } \
       case VAL_LET_ADD: \
@@ -1829,8 +1827,7 @@ static FDEC(translate_assignment, const Expression *const lval_expr,
             false, "ass_", \
             ((FTYPE(AssignmentValueDump)) \
                                       &FNAME(translate_modifying_assignment)), \
-            (void *) &new_args); \
-        ); \
+            (void *) &new_args);); \
         break; \
       } \
       default: { \
@@ -1967,22 +1964,17 @@ static CMD_FDEC(translate_call)
   F(translate_range, &(node->range));
   WS(", ");
   const Expression *expr = node->args[ARG_EXPR_EXPR].arg.expr;
-  OVERRIDE_CONTEXT(
-    start_col, expr->col,
-
-    F(translate_expr_node, expr->string, expr->node->children, true);
-  );
+  OVERRIDE_CONTEXT(start_col, expr->col,
+                   F(translate_expr_node, expr->string, expr->node->children,
+                     true););
   WS(", ");
   F(dump_position, o.lnr, expr->col + expr->node->children->start, o.name);
   for (const ExpressionNode *arg_node = expr->node->children->next;
        arg_node != NULL;
        arg_node = arg_node->next) {
     WS(", ");
-    OVERRIDE_CONTEXT(
-      start_col, expr->col,
-
-      F(translate_expr_node, expr->string, arg_node, true);
-    );
+    OVERRIDE_CONTEXT(start_col, expr->col,
+                     F(translate_expr_node, expr->string, arg_node, true););
     WS(", ");
     F(dump_position, o.lnr, expr->col + arg_node->start, o.name);
   }
@@ -2346,11 +2338,10 @@ static CMD_FDEC(translate_unlet)
   const ExpressionNode *current_node = lval_expr->node;
   for (; current_node != NULL; current_node = current_node->next) {
     OVERRIDE_CONTEXT(
-      start_col, lval_expr->col,
-      F(translate_lval, lval_expr->string, current_node, false, node->bang,
-                        true, "del_", NULL, NULL);
-      WS("\n");
-    );
+        start_col, lval_expr->col,
+        F(translate_lval, lval_expr->string, current_node, false, node->bang,
+                          true, "del_", NULL, NULL);
+        WS("\n"););
   }
   FUNCTION_END;
 }
@@ -2370,8 +2361,7 @@ static CMD_FDEC(translate_lockvar)
       F(translate_lval, lval_expr->string, current_node, false, node->bang,
                         true, "lock_", &FNAME(translate_unumber),
                         (void *) unumber);
-      WS("\n");
-    );
+      WS("\n"););
   }
   FUNCTION_END;
 }
@@ -2391,8 +2381,7 @@ static CMD_FDEC(translate_unlockvar)
       F(translate_lval, lval_expr->string, current_node, false, node->bang,
                         true, "unlock_", &FNAME(translate_unumber),
                         (void *) unumber);
-      WS("\n");
-    );
+      WS("\n"););
   }
   FUNCTION_END;
 }
@@ -2407,8 +2396,7 @@ static CMD_FDEC(translate_delfunction)
       start_col, lval_expr->col,
       F(translate_lval, lval_expr->string, current_node, true, node->bang,
                         true, "del_", NULL, NULL);
-      WS("\n");
-    );
+      WS("\n"););
   }
   FUNCTION_END;
 }
@@ -2504,18 +2492,16 @@ static FDEC(translate_node, const CommandNode *const node,
       add_comma = false;
       switch (CMDDEF(node->type).arg_types[i]) {
         case kArgExpression: {
-          OVERRIDE_CONTEXT(
-            start_col, node->args[i].arg.expr->col,
-            F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, i), false);
-          );
+          OVERRIDE_CONTEXT(start_col, node->args[i].arg.expr->col,
+                           F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, i),
+                                                  false););
           add_comma = true;
           break;
         }
         case kArgExpressions: {
-          OVERRIDE_CONTEXT(
-            start_col, node->args[i].arg.expr->col,
-            F(translate_expr_nodes, TRANS_NODE_EXPR_ARGS(node, i));
-          );
+          OVERRIDE_CONTEXT(start_col, node->args[i].arg.expr->col,
+                           F(translate_expr_nodes, TRANS_NODE_EXPR_ARGS(node,
+                                                                        i)););
           add_comma = true;
           break;
         }
@@ -2591,8 +2577,7 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
               current_node->position.lnr,
               node->args[ARG_EXPR_EXPR].arg.expr->col, name,
               F(translate_expr_node, TRANS_NODE_EXPR_ARGS(node, ARG_EXPR_EXPR),
-                false);
-            );
+                false););
             WS("\n");
             break;
           }
@@ -2638,13 +2623,11 @@ static FDEC(translate_nodes, const CommandNode *const node, size_t indent)
 #undef SET_HANDLER
 #define SET_LOOP_HANDLER(cmd_type, handler, inloop_value) \
       case cmd_type: { \
-        OVERRIDE_CONTEXT( \
-          inloop, inloop_value, \
-          CMD_F(handler); \
-        ); \
+        OVERRIDE_CONTEXT(inloop, inloop_value, \
+                         CMD_F(handler);); \
         continue; \
       }
-      // Function body may not be treated as located inside the loop: this 
+      // Function body may not be treated as located inside the loop: this
       // affects :break/:continue commands handling resulting in lua error.
       SET_LOOP_HANDLER(kCmdFunction, translate_function, false)
       SET_LOOP_HANDLER(kCmdFor, translate_for, true)
@@ -2683,13 +2666,9 @@ static FDEC(translate_parser_result, const ParserResult *const pres,
   WS(")\n");
   OVERRIDE_CONTEXT(
     inloop, false,
-
     OVERRIDE_CONTEXT(
       lines, (const char *const *) pres->lines,
-
-      F(translate_nodes, pres->node, indent);
-    );
-  );
+      F(translate_nodes, pres->node, indent);););
   FUNCTION_END;
 }
 
@@ -2714,8 +2693,7 @@ static FDEC(translate_script, const ParserResult *const pres)
     F(translate_parser_result, pres, 2);
 
     WS("  end\n"
-       "}\n");
-  );
+       "}\n"););
   FUNCTION_END;
 }
 
@@ -2731,8 +2709,7 @@ static FDEC(translate_input, const ParserResult *const pres)
     tsrc, kTransUser,
 
     WS("local state = vim.state.get_top()\n");
-    F(translate_parser_result, pres, 0);
-  );
+    F(translate_parser_result, pres, 0););
   FUNCTION_END;
 }
 #endif  // NVIM_VIML_TRANSLATOR_TRANSLATOR_C_H

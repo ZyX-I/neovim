@@ -141,7 +141,7 @@ void free_expr(Expression *expr)
 ///
 /// @param[in]  c  Tested character.
 ///
-/// @return true if character can be used in a variable of function name, 
+/// @return true if character can be used in a variable of function name,
 ///         false otherwise. Does not include '{' or '}' for magic braces.
 static bool isnamechar(int c)
   FUNC_ATTR_CONST
@@ -151,10 +151,10 @@ static bool isnamechar(int c)
 
 /// Find the end of the name of a function or internal variable
 ///
-/// @param[in,out]  arg  Searched argument. It is advanced to the first 
+/// @param[in,out]  arg  Searched argument. It is advanced to the first
 ///                      non-white character after the name.
 ///
-/// @return Last character of the name if name was found (i.e. *arg - 1). NULL 
+/// @return Last character of the name if name was found (i.e. *arg - 1). NULL
 ///         if name was not found
 static const char *find_id_end(const char **arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -190,16 +190,16 @@ static int get_fname_script_len(const char *p)
 
 /// Parse variable/function name
 ///
-/// @param[in,out]  arg          Parsed string. Is advanced to the first 
+/// @param[in,out]  arg          Parsed string. Is advanced to the first
 ///                              character after the name.
 /// @param[out]     node         Location where results are saved.
 /// @param[out]     error        Structure where errors are saved.
-/// @param[in]      parse1_node  Cached results of parsing first expression in 
-///                              curly-braces-name ({expr}). Only expected if 
-///                              '{' is the first symbol (i.e. *arg == '{'). 
+/// @param[in]      parse1_node  Cached results of parsing first expression in
+///                              curly-braces-name ({expr}). Only expected if
+///                              '{' is the first symbol (i.e. *arg == '{').
 ///                              Must be NULL if it is not the first symbol.
-/// @param[in]      parse1_arg   Cached end of curly braces expression. Only 
-///                              expected under the same conditions with 
+/// @param[in]      parse1_arg   Cached end of curly braces expression. Only
+///                              expected under the same conditions with
 ///                              parse1_node.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
@@ -301,7 +301,7 @@ static EDEC(parse_name, ExpressionNode *parse1_node, const char *parse1_arg)
 
 /// Parse list literal
 ///
-/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character
 ///                        after the list. Must point to the opening bracket.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -353,18 +353,18 @@ static EDEC_NOARGS(parse_list)
 
 /// Parse dictionary literal
 ///
-/// @param[in,out]  arg          Parsed string. Is advanced to the first 
-///                              character after the dictionary. Must point to 
+/// @param[in,out]  arg          Parsed string. Is advanced to the first
+///                              character after the dictionary. Must point to
 ///                              the opening curly brace.
 /// @param[out]     node         Location where parsing results are saved.
 /// @param[out]     error        Structure where errors are saved.
-/// @param[out]     parse1_node  Location where parsing results are saved if 
-///                              expression proved to be curly braces name 
+/// @param[out]     parse1_node  Location where parsing results are saved if
+///                              expression proved to be curly braces name
 ///                              part.
-/// @param[out]     parse1_arg   Location where end of curly braces name 
+/// @param[out]     parse1_arg   Location where end of curly braces name
 ///                              expression is saved.
 ///
-/// @return FAIL if parsing failed, NOTDONE if curly braces name found, OK 
+/// @return FAIL if parsing failed, NOTDONE if curly braces name found, OK
 ///         otherwise.
 static EDEC(parse_dictionary, ExpressionNode **parse1_node,
                               const char **parse1_arg)
@@ -439,11 +439,11 @@ static EDEC(parse_dictionary, ExpressionNode **parse1_node,
 
 /// Skip over the name of an option ("&option", "&g:option", "&l:option")
 ///
-/// @param[in,out]  arg  Start of the option name. It must point to option 
-///                      sigil (i.e. '&' or '+'). Advanced to the first 
+/// @param[in,out]  arg  Start of the option name. It must point to option
+///                      sigil (i.e. '&' or '+'). Advanced to the first
 ///                      character after the option name.
 ///
-/// @return NULL if no option name found, pointer to the last character of the 
+/// @return NULL if no option name found, pointer to the last character of the
 ///         option name otherwise (i.e. *arg - 1).
 static const char *find_option_end(const char **arg)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -472,8 +472,8 @@ static const char *find_option_end(const char **arg)
 
 /// Parse an option literal
 ///
-/// @param[in,out]  arg    Parsed string. It should point to "&" before the 
-///                        option name. Advanced to the first character after 
+/// @param[in,out]  arg    Parsed string. It should point to "&" before the
+///                        option name. Advanced to the first character after
 ///                        the option name.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -497,10 +497,10 @@ static EDEC_NOARGS(parse_option)
 
 /// Skip over the name of an environment variable
 ///
-/// @param[in,out]  arg  Start of the variable name. Advanced to the first 
+/// @param[in,out]  arg  Start of the variable name. Advanced to the first
 ///                      character after the variable name.
 ///
-/// @return NULL if no variable name found, pointer to the last character of 
+/// @return NULL if no variable name found, pointer to the last character of
 ///         the variable name otherwise (i.e. *arg - 1).
 ///
 /// @note Uses vim_isIDc() function: depends on &isident option.
@@ -520,10 +520,10 @@ const char *find_env_end(const char **arg)
 
 /// Parse an environment variable literal
 ///
-/// @param[in,out]  arg    Parsed string. Is expected to point to the sigil 
+/// @param[in,out]  arg    Parsed string. Is expected to point to the sigil
 ///                        ('$'). Is advanced after the variable name.
 /// @parblock
-///   @note If there is no variable name after '$' it is simply assumed that 
+///   @note If there is no variable name after '$' it is simply assumed that
 ///         this name is empty.
 /// @endparblock
 /// @param[out]     node   Location where parsing results are saved.
@@ -548,12 +548,12 @@ static EDEC_NOARGS(parse_environment_variable)
 
 /// Parse .key subscript
 ///
-/// @param[in,out]  arg    Parsed string. Is advanced to the first non-white 
+/// @param[in,out]  arg    Parsed string. Is advanced to the first non-white
 ///                        character after the subscript.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
 ///
-/// @return FAIL when out of memory, NOTDONE if subscript was found, OK 
+/// @return FAIL when out of memory, NOTDONE if subscript was found, OK
 ///         otherwise.
 static EDEC_NOARGS(parse_dot_subscript)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -583,9 +583,9 @@ static EDEC_NOARGS(parse_dot_subscript)
 
 /// Parse function call arguments
 ///
-/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
-///                        after the closing parenthesis of given function 
-///                        call. 
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character
+///                        after the closing parenthesis of given function
+///                        call.
 ///                        Should point to the opening parenthesis.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -629,8 +629,8 @@ static EDEC_NOARGS(parse_func_call)
 
 /// Parse "[expr]" or "[expr : expr]" subscript
 ///
-/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
-///                        after the subscript. Is expected to point to the 
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character
+///                        after the subscript. Is expected to point to the
 ///                        opening bracket.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -674,7 +674,7 @@ static EDEC_NOARGS(parse_subscript)
 
 /// Parse all following "[...]" subscripts, .key subscripts and function calls
 ///
-/// @param[in,out]  arg    Parsed string. Is advanced to the first character 
+/// @param[in,out]  arg    Parsed string. Is advanced to the first character
 ///                        after the last subscript.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -720,7 +720,7 @@ static EDEC(handle_subscript, bool parse_funccall)
 /// @param[in,out]  arg    Parsed string.
 /// @param[out]     type   Type of the resulting number.
 /// @param[in]      dooct  If true allow function to recognize octal numbers.
-/// @param[in]      dohex  If true allow function to recognize hexadecimal 
+/// @param[in]      dohex  If true allow function to recognize hexadecimal
 ///                        numbers.
 static void find_nr_end(const char **arg, ExpressionNodeType *type,
                         bool dooct, bool dohex)
@@ -795,24 +795,24 @@ static void find_nr_end(const char **arg, ExpressionNodeType *type,
 /// [expr, expr]         | List
 /// {key: val, key: val} | Dictionary
 ///
-/// Also handles unary operators (logical NOT, unary minus, unary plus) and 
+/// Also handles unary operators (logical NOT, unary minus, unary plus) and
 /// subscripts ([], .key, func()).
 ///
-/// @param[in,out]  arg             Parsed string. Must point to the first 
-///                                 non-white character. Advanced to the next 
+/// @param[in,out]  arg             Parsed string. Must point to the first
+///                                 non-white character. Advanced to the next
 ///                                 non-white after the recognized expression.
 /// @param[out]     node            Location where parsing results are saved.
 /// @param[out]     error           Structure where errors are saved.
-/// @param[in]      want_string     True if the result should be string. Is 
-///                                 used to preserve compatibility with vim: 
-///                                 "a".1.2 is a string "a12" (uses string 
-///                                 concat), not floating-point value. This 
-///                                 flag is set in parse5 that handles 
+/// @param[in]      want_string     True if the result should be string. Is
+///                                 used to preserve compatibility with vim:
+///                                 "a".1.2 is a string "a12" (uses string
+///                                 concat), not floating-point value. This
+///                                 flag is set in parse5 that handles
 ///                                 concats.
-/// @param[in]      parse_funccall  Determines whether function calls should 
-///                                 be parsed. I.e. if this is true then 
-///                                 "abc(def)" will be parsed as "call(abc, 
-///                                 def)", if this is false it will parse this 
+/// @param[in]      parse_funccall  Determines whether function calls should
+///                                 be parsed. I.e. if this is true then
+///                                 "abc(def)" will be parsed as "call(abc,
+///                                 def)", if this is false it will parse this
 ///                                 as "abc" and stop at opening parenthesis.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
@@ -915,7 +915,7 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
         }
       }
       if (*p == NUL) {
-        // TODO: also report which quote is missing
+        // TODO(ZyX-I): also report which quote is missing
         error->message = N_("E114: Missing quote");
         error->position = s;
         return FAIL;
@@ -964,8 +964,8 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
       if (**arg != NUL)
         ++*arg;
       // XXX Sigil is included: `:echo @` does the same as `:echo @"`
-      // But Vim does not bother itself checking whether next character is 
-      // a valid register name so you cannot just use `@` in place of `@"` 
+      // But Vim does not bother itself checking whether next character is
+      // a valid register name so you cannot just use `@` in place of `@"`
       // everywhere: only at the end of string.
       VALUE_NODE(kExprRegister, error, node, s, *arg - 1)
       break;
@@ -1000,7 +1000,7 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
     *arg = skipwhite(*arg);
 
     if (**arg == '(' && parse_funccall)
-      // Function call. First function call is not handled by handle_subscript 
+      // Function call. First function call is not handled by handle_subscript
       // for whatever reasons. Allows expressions like "tr   (1, 2, 3)"
       ret = RAW_CALL(parse_func_call, arg, node, error);
   }
@@ -1050,8 +1050,8 @@ static EDEC(parse7, bool want_string, bool parse_funccall)
 ///   "/"    | Number division
 ///   "%"    | Number modulo
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -1112,8 +1112,8 @@ static EDEC(parse6, bool want_string)
 ///   "/"    | Number subtraction
 ///   "%"    | String concatenation
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -1181,12 +1181,12 @@ static EDEC_NOARGS(parse5)
 ///   "is"   | Is identical to
 ///  "isnot" | Is not identical to
 ///
-/// Accepts "#" or "?" after each operator to designate case compare strategy 
-/// (by default it is taken from &ignore case option, trailing "#" means that 
+/// Accepts "#" or "?" after each operator to designate case compare strategy
+/// (by default it is taken from &ignore case option, trailing "#" means that
 /// case is respected, trailing "?" means that it is ignored).
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -1282,12 +1282,12 @@ static EDEC_NOARGS(parse4)
 ///   "&&"   | Logical AND (level==3)
 ///   "||"   | Logical OR  (level==2)
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
-/// @param[in]      level  Expression level: determines which logical operator 
+/// @param[in]      level  Expression level: determines which logical operator
 ///                        should be handled.
 ///
 /// @return FAIL if parsing failed, OK otherwise.
@@ -1329,8 +1329,8 @@ static EDEC(parse23, uint8_t level)
 
 /// Handle third level expression: logical AND
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -1344,8 +1344,8 @@ static EDEC_NOARGS(parse3)
 
 /// Handle second level expression: logical OR
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -1360,8 +1360,8 @@ static EDEC_NOARGS(parse2)
 ///
 /// Handles expr2 ? expr1 : expr1
 ///
-/// @param[in,out]  arg    Parsed string. Must point to the first non-white 
-///                        character. Advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. Must point to the first non-white
+///                        character. Advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     node   Location where parsing results are saved.
 /// @param[out]     error  Structure where errors are saved.
@@ -1403,12 +1403,12 @@ static EDEC_NOARGS(parse1)
 /// Parse expression
 ///
 /// @param[in]      s      Start of the parsed string.
-/// @param[in,out]  arg    Parsed string. May point to whitespace character. 
-///                        Is advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. May point to whitespace character.
+///                        Is advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     error  Structure where errors are saved.
 ///
-/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+/// @return NULL if parsing failed or memory was exhausted, pointer to the
 ///         allocated expression node otherwise.
 ExpressionNode *parse0_err(const char *const s, const char **arg,
                            ExpressionParserError *error)
@@ -1435,12 +1435,12 @@ ExpressionNode *parse0_err(const char *const s, const char **arg,
 /// Parse value (actually used for lvals)
 ///
 /// @param[in]      s      Start of the parsed string.
-/// @param[in,out]  arg    Parsed string. May point to whitespace character. 
-///                        Is advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed string. May point to whitespace character.
+///                        Is advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     error  Structure where errors are saved.
 ///
-/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+/// @return NULL if parsing failed or memory was exhausted, pointer to the
 ///         allocated expression node otherwise.
 ExpressionNode *parse7_nofunc(const char *const s, const char **arg,
                               ExpressionParserError *error)
@@ -1466,15 +1466,15 @@ ExpressionNode *parse7_nofunc(const char *const s, const char **arg,
 
 /// Parse one expression and wrap result in Expression structure
 ///
-/// @param[in,out]  arg    Parsed expression. May point to whitespace character. 
-///                        Is advanced to the next non-white after the 
+/// @param[in,out]  arg    Parsed expression. May point to whitespace character.
+///                        Is advanced to the next non-white after the
 ///                        recognized expression.
 /// @param[out]     error  Structure where errors are saved.
 /// @param[in]      parse  Parser used to parse one expression in sequence.
-/// @param[in]      col    Position of the start of the parsed string in the 
+/// @param[in]      col    Position of the start of the parsed string in the
 ///                        parsed line.
 ///
-/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+/// @return NULL if parsing failed or memory was exhausted, pointer to the
 ///         allocated expression node otherwise.
 Expression *parse_one_expression(const char **arg, ExpressionParserError *error,
                                  ExpressionParser parse, const size_t col)
@@ -1497,19 +1497,19 @@ Expression *parse_one_expression(const char **arg, ExpressionParserError *error,
 
 /// Parse a whitespace-separated sequence of expressions
 ///
-/// @param[in,out]  arg       Parsed string. May point to whitespace character. 
-///                           Is advanced to the next non-white after the 
+/// @param[in,out]  arg       Parsed string. May point to whitespace character.
+///                           Is advanced to the next non-white after the
 ///                           recognized expression.
 /// @param[out]     error     Structure where errors are saved.
 /// @param[in]      parse     Parser used to parse one expression in sequence.
-/// @param[in]      col       Position of the start of the parsed string in the 
+/// @param[in]      col       Position of the start of the parsed string in the
 ///                           parsed line.
-/// @param[in]      listends  Determines whether list literal should end 
+/// @param[in]      listends  Determines whether list literal should end
 ///                           parsing process.
-/// @param[in]      endwith   Determines what characters are allowed to stop 
+/// @param[in]      endwith   Determines what characters are allowed to stop
 ///                           parsing. NUL byte always stops parsing.
 ///
-/// @return NULL if parsing failed or memory was exhausted, pointer to the 
+/// @return NULL if parsing failed or memory was exhausted, pointer to the
 ///         allocated expression node otherwise.
 Expression *parse_many_expressions(const char **arg,
                                    ExpressionParserError *error,

@@ -26,6 +26,11 @@
  *    long name of the command.
  */
 
+#ifndef NVIM_VIML_PARSER_COMMAND_DEFINITIONS_H
+#define NVIM_VIML_PARSER_COMMAND_DEFINITIONS_H
+#undef NVIM_VIML_PARSER_COMMAND_DEFINITIONS_H
+// ^ Guard is never used. Makes linter happy.
+
 #if (defined(DO_DECLARE_EXCMD) \
      && !defined(NVIM_VIML_PARSER_COMMAND_DEFINITIONS_H_DECLARED)) \
     || \
@@ -573,8 +578,8 @@ typedef enum
   EX(kCmdEchoerr,         "echoerr",      &parse_expr_seq_cmd,
      ARG_EXPRS_EXPRS, ARGS_EXPRS,
      EXTRA|NOTRLCOM|SBOXOK|CMDWIN | ISEXPR),
-  // XXX Allowing :echohl to accept no arguments or not filter out group names 
-  //     that contain characters like bar makes no sense, but it is how it was 
+  // XXX Allowing :echohl to accept no arguments or not filter out group names
+  //     that contain characters like bar makes no sense, but it is how it was
   //     implemented in Vim.
   EX(kCmdEchohl,          "echohl",       &parse_rest_allow_empty,
      ARG_NAME_NAME, ARGS_NAME,
@@ -1773,7 +1778,7 @@ typedef enum
   EX(kCmdTilde,           "~",            &parse_sub,
      ARG_S_FLAGS, ARGS_S,
      RANGE|WHOLEFOLD|EXTRA|CMDWIN|MODIFY),
-  // XXX If you add real command just above this line (i.e. after kCmdTilde) 
+  // XXX If you add real command just above this line (i.e. after kCmdTilde)
   //     you should update kCmdSIZE
 #ifndef DO_DECLARE_EXCMD
 # define kCmdSIZE (((size_t)kCmdTilde) + 1)
@@ -1796,14 +1801,15 @@ typedef enum
   EX(kCmdMissing,         NULL,           NOFUNC,
      ARG_NO_ARGS, ARGS_NO,
      0),
-  // XXX If you add any command just above this line (i.e. after kCmdMissing) 
+  // XXX If you add any command just above this line (i.e. after kCmdMissing)
   //     you should update kCmdREAL_SIZE
 #ifndef DO_DECLARE_EXCMD
 # define kCmdREAL_SIZE (((size_t)kCmdMissing))
 #endif
-}
-#ifndef DO_DECLARE_EXCMD
-CommandType
+#ifdef DO_DECLARE_EXCMD
+};
+#else
+} CommandType;
 #endif
-;
 #endif
+#endif  // NVIM_VIML_PARSER_COMMAND_DEFINITIONS_H

@@ -12,7 +12,7 @@
 /// @param[in]  pres  Parsing result.
 /// @param[in]  o     Context in which command will be translated.
 ///
-/// @return Amount of memory that is greater then or equal to the minimum amount 
+/// @return Amount of memory that is greater then or equal to the minimum amount
 ///         of memory needed to translate given script.
 size_t stranslate_len(TranslationSource o, const ParserResult *const pres)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -42,7 +42,7 @@ size_t stranslate_len(TranslationSource o, const ParserResult *const pres)
 ///
 /// @param[in]   pres  Parsing result.
 /// @param[in]   o     Context in which command will be translated.
-/// @param[out]  pp    Pointer to the memory where script should be translated 
+/// @param[out]  pp    Pointer to the memory where script should be translated
 ///                    to.
 void stranslate(TranslationSource o, const ParserResult *const pres, char **pp)
   FUNC_ATTR_NONNULL_ALL

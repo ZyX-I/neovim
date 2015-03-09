@@ -19,7 +19,7 @@
 #elif !defined(CH_MACROS_DEFINE_FWRITE)
 # undef CH_MACROS_DEFINE_LENGTH
 # define CH_MACROS_DEFINE_FWRITE
-# include "nvim/viml/printer/expressions.c.h"
+# include "nvim/viml/printer/expressions.c.h"  // NOLINT
 # undef CH_MACROS_DEFINE_FWRITE
 # define CH_MACROS_DEFINE_LENGTH
 #endif

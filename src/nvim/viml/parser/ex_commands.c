@@ -22,7 +22,6 @@
 #include "nvim/getchar.h"
 #include "nvim/farsi.h"
 #include "nvim/menu.h"
-#include "nvim/option.h"
 #include "nvim/regexp.h"
 #include "nvim/ascii.h"
 #include "nvim/ex_getln.h"
@@ -107,26 +106,23 @@ typedef struct {
 } SynOptDef;
 
 #define SYN_FLAG_OPT(name_str, accepted_in, name) \
-    {name_str, \
-     kSynOptFlag, \
-     SYN_ARG_FLAGS_OFFSET, \
-     FLAG_SYN_##accepted_in##_##name, \
-     SYN_SCOPE_##accepted_in \
-    }
+    { name_str, \
+      kSynOptFlag, \
+      SYN_ARG_FLAGS_OFFSET, \
+      FLAG_SYN_##accepted_in##_##name, \
+      SYN_SCOPE_##accepted_in }
 #define SYN_OPT(name_str, type, accepted_in, name) \
-    {name_str, \
-     kSynOpt##type, \
-     SYN_ARG_##name##_OFFSET, \
-     0, \
-     SYN_SCOPE_##accepted_in \
-    }
+    { name_str, \
+      kSynOpt##type, \
+      SYN_ARG_##name##_OFFSET, \
+      0, \
+      SYN_SCOPE_##accepted_in }
 #define SYN_GROUP_OPT(name_str, accepted_in, name) \
-    {name_str, \
-     kSynOptGroup, \
-     SYN_ARG_##name##_OFFSET, \
-     0, \
-     SYN_SCOPE_##accepted_in \
-    }
+    { name_str, \
+      kSynOptGroup, \
+      SYN_ARG_##name##_OFFSET, \
+      0, \
+      SYN_SCOPE_##accepted_in }
 
 typedef struct {
   const char *name;
@@ -175,7 +171,7 @@ static const Replacement prev_rep;
 
 #include "nvim/viml/parser/command_definitions.h"
 #define DO_DECLARE_EXCMD
-#include "nvim/viml/parser/command_definitions.h"
+#include "nvim/viml/parser/command_definitions.h"  // NOLINT
 #undef DO_DECLARE_EXCMD
 
 #define NODE_IS_ALLOCATED(node) ((node) != NULL && (node) != &nocmd)
@@ -191,7 +187,7 @@ static const Replacement prev_rep;
 static CommandNode *cmd_alloc(CommandType type, CommandPosition position)
   FUNC_ATTR_NONNULL_RET
 {
-  // XXX May allocate less space then needed to hold the whole struct: less by 
+  // XXX May allocate less space then needed to hold the whole struct: less by
   // one size of CommandArg.
   size_t size = offsetof(CommandNode, args);
   CommandNode *node;
@@ -209,7 +205,7 @@ static CommandNode *cmd_alloc(CommandType type, CommandPosition position)
 /// Allocate new regex definition and assign all its properties
 ///
 /// @param[in]  string  Regular expression string.
-/// @param[in]  len     String length. It is not required for string[len] to be 
+/// @param[in]  len     String length. It is not required for string[len] to be
 ///                     a NUL byte.
 ///
 /// @return Pointer to allocated block of memory.
@@ -221,7 +217,7 @@ static Regex *regex_alloc(const char *string, size_t len)
   memcpy(regex->string, string, len);
   regex->string[len] = NUL;
   regex->prog = NULL;
-  // FIXME: use vim_regcomp, but make it save errors in place of throwing 
+  // FIXME: use vim_regcomp, but make it save errors in place of throwing
   //        them right away.
   // regex->prog = vim_regcomp(reg->string, 0);
 
@@ -230,7 +226,7 @@ static Regex *regex_alloc(const char *string, size_t len)
 
 /// Allocate new replacement atom
 ///
-/// @note Does not zero memory when allocating, but does assign NULL to next 
+/// @note Does not zero memory when allocating, but does assign NULL to next
 ///       field.
 ///
 /// @param[in]  type       Type of the replacement.
@@ -285,7 +281,7 @@ static AddressFollowup *address_followup_alloc(AddressFollowupType type)
 
 static void free_complete(CmdComplete *compl)
 {
-  if (compl == NULL) {
+  if ((compl) == NULL) {
     return;
   }
 
@@ -425,7 +421,7 @@ static void free_pattern(Pattern *pat)
     case kPatAuList:
     case kPatBranch: {
       free_patterns(&(pat->data.pats));
-      pat->data.pats = (Patterns) {NULL, NULL};
+      pat->data.pats = (Patterns) { NULL, NULL };
       break;
     }
   }
@@ -743,20 +739,20 @@ void free_cmd(CommandNode *node)
 
 /// Get a list of comma separated patterns
 ///
-/// Useful for branches (src/{foo,bar}.c) and autocommand pattern list 
+/// Useful for branches (src/{foo,bar}.c) and autocommand pattern list
 /// (src/foo.c,src/bar.c).
 ///
-/// @param[in,out]  pp       Parsed string. Warning: it expects one character 
+/// @param[in,out]  pp       Parsed string. Warning: it expects one character
 ///                          before the actual pattern.
 /// @param[out]     error    Address where error will be saved.
 /// @param[out]     pat      Address where pattern will be saved.
-/// @param[in]      is_glob  True if parsing fully qualified globs (i.e. `` 
-///                          `shell command` `` and `` `=VimL.Expression()` `` 
+/// @param[in]      is_glob  True if parsing fully qualified globs (i.e. ``
+///                          `shell command` `` and `` `=VimL.Expression()` ``
 ///                          are allowed).
 /// @param[in]      col      Column number (for error reporting).
 ///
-/// @return OK if everything is good, NOTDONE if there was an error (in this 
-///         case error structure must be populated), FAIL if there was error 
+/// @return OK if everything is good, NOTDONE if there was an error (in this
+///         case error structure must be populated), FAIL if there was error
 ///         without error message.
 static int get_comma_separated_patterns(const char **pp,
                                         CommandParserError *error,
@@ -792,22 +788,22 @@ static int get_comma_separated_patterns(const char **pp,
 }
 
 const CollectionCharacterClassDef pattern_character_classes[] = {
-  [kColCharClassAlnum] = {"alnum", 5},
-  [kColCharClassAlpha] = {"alpha", 5},
-  [kColCharClassBlank] = {"blank", 5},
-  [kColCharClassCntrl] = {"cntrl", 5},
-  [kColCharClassDigit] = {"digit", 5},
-  [kColCharClassGraph] = {"graph", 5},
-  [kColCharClassLower] = {"lower", 5},
-  [kColCharClassPrint] = {"print", 5},
-  [kColCharClassPunct] = {"punct", 5},
-  [kColCharClassSpace] = {"space", 5},
-  [kColCharClassUpper] = {"upper", 5},
-  [kColCharClassXdigit] = {"xdigit", 6},
-  [kColCharClassReturn] = {"return", 6},
-  [kColCharClassTab] = {"tab", 3},
-  [kColCharClassEscape] = {"escape", 6},
-  [kColCharClassBackspace] = {"backspace", 9},
+  [kColCharClassAlnum] = { "alnum", 5 },
+  [kColCharClassAlpha] = { "alpha", 5 },
+  [kColCharClassBlank] = { "blank", 5 },
+  [kColCharClassCntrl] = { "cntrl", 5 },
+  [kColCharClassDigit] = { "digit", 5 },
+  [kColCharClassGraph] = { "graph", 5 },
+  [kColCharClassLower] = { "lower", 5 },
+  [kColCharClassPrint] = { "print", 5 },
+  [kColCharClassPunct] = { "punct", 5 },
+  [kColCharClassSpace] = { "space", 5 },
+  [kColCharClassUpper] = { "upper", 5 },
+  [kColCharClassXdigit] = { "xdigit", 6 },
+  [kColCharClassReturn] = { "return", 6 },
+  [kColCharClassTab] = { "tab", 3 },
+  [kColCharClassEscape] = { "escape", 6 },
+  [kColCharClassBackspace] = { "backspace", 9 },
 };
 const char *pattern_collection_escapes = "etrbn";
 const char *pattern_collection_escape_chars = "\033\t\r\b\n";
@@ -815,14 +811,14 @@ const char *pattern_collection_escapable_chars = "]\\^-";
 
 /// Parse [] collection in a pattern
 ///
-/// @param[in,out]  pp          Pointer to the parsed string. Should point to 
-///                             the first character *inside* the collection. Is 
-///                             advanced to the end of the pattern or to the 
+/// @param[in,out]  pp          Pointer to the parsed string. Should point to
+///                             the first character *inside* the collection. Is
+///                             advanced to the end of the pattern or to the
 ///                             closing `]` character.
 /// @param[out]     error       Address where error will be saved.
 /// @param[out]     collection  Location where results are saved.
 ///
-/// @return OK in case of success, NOTDONE if there was an error with the error 
+/// @return OK in case of success, NOTDONE if there was an error with the error
 ///         message and FAIL in case of non-recoverable error.
 static int get_pattern_collection(const char **pp, CommandParserError *error,
                                   PatternCollection *collection)
@@ -960,7 +956,7 @@ static int get_pattern_collection(const char **pp, CommandParserError *error,
       default: {
         // literal character
 get_pattern_collection_fetch_literal_character:
-        ;
+        {}
         size_t char_len = mb_ptr2len(p);
         literal_char = (u8char_T) mb_ptr2char(p);
         p += char_len;
@@ -1080,7 +1076,7 @@ parse_filename_modifiers_repeat:
         const char *rep_p = rep_copy;
         int pr_ret;
         if ((pr_ret = parse_replacement(&rep_p, error,
-                                        ((CommandPosition) {0, 0}),
+                                        ((CommandPosition) { 0, 0 }),
                                         &((*next)->rep), NUL, false, true))
             != OK) {
           if (error->position != NULL) {
@@ -1109,16 +1105,16 @@ parse_filename_modifiers_repeat:
 }
 
 const CmdlineSpecialDescription cmdline_specials[] = {
-  {"cword", 5, kPatCurWord},
-  {"cWORD", 5, kPatCurWORD},
-  {"cfile", 5, kPatCurFile},
-  {"afile", 5, kPatAuFile},
-  {"abuf", 4, kPatAuBuf},
-  {"amatch", 6, kPatAuMatch},
-  {"sfile", 5, kPatSourcedFile},
-  {"slnum", 5, kPatSourcedLnum},
-  {"client", 6, kPatClient},
-  {NULL, 0, 0},
+  { "cword", 5, kPatCurWord },
+  { "cWORD", 5, kPatCurWORD },
+  { "cfile", 5, kPatCurFile },
+  { "afile", 5, kPatAuFile },
+  { "abuf", 4, kPatAuBuf },
+  { "amatch", 6, kPatAuMatch },
+  { "sfile", 5, kPatSourcedFile },
+  { "slnum", 5, kPatSourcedLnum },
+  { "client", 6, kPatClient },
+  { NULL, 0, 0 },
 };
 
 static int get_pattern(const char **pp, CommandParserError *error,
@@ -1279,7 +1275,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
       literal_length++;
 #define GLOB_SPECIAL_CHARS "`#*?%\\[{}]$ \t"
 #define IS_GLOB_SPECIAL(c) (strchr(GLOB_SPECIAL_CHARS, c) != NULL)
-      // TODO Compare with vim
+      // TODO(ZyX-I): Compare with vim
       if (*p == '\\' && IS_GLOB_SPECIAL(p[1]))
         p += 2;
       else
@@ -1333,7 +1329,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
           while (!ENDS_EXCMD(*p) && !(*p == '`' && p[-1] != '\\')) {
             p++;
           }
-          if(*p != '`' || p == init_p + 1) {
+          if (*p != '`' || p == init_p + 1) {
             free_pattern(*next);
             memset(*next, 0, sizeof(**next));
             p = init_p + 1;
@@ -1353,7 +1349,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
           p++;
           break;
         }
-        case kPatHome: // FIXME Other users’ homes
+        case kPatHome:  // FIXME Other users’ homes
         case kPatCharacter:
         case kPatAnything: {
           p++;
@@ -1488,7 +1484,7 @@ get_glob_error_return:
 /// Create new syntax error node
 ///
 /// @param[out]  node      Place where created node will be saved.
-/// @param[in]   error     Structure that describes the error. Is used to 
+/// @param[in]   error     Structure that describes the error. Is used to
 ///                        populate node fields.
 /// @param[in]   position  Position of errorred command.
 /// @param[in]   s         Start of the string of errorred command.
@@ -1508,10 +1504,10 @@ static int create_error_node(CommandNode **node, CommandParserError *error,
 
 /// Get virtual column for the first non-blank character
 ///
-/// Tabs are considered to be 8 cells wide. Spaces are 1 cell wide. Other 
+/// Tabs are considered to be 8 cells wide. Spaces are 1 cell wide. Other
 /// characters are considered non-blank.
 ///
-/// @param[in,out]  pp  String for which indentation should be updated. Is 
+/// @param[in,out]  pp  String for which indentation should be updated. Is
 ///                     advanced to the first non-white character.
 ///
 /// @return Offset of the first non-white character.
@@ -1544,30 +1540,30 @@ static int get_vcol(const char **pp)
 
 /// Get regular expression
 ///
-/// @param[in,out]  pp     String searched for a regular expression. Should 
-///                        point to the first character of the regular 
-///                        expression, *not* to the first character before it. 
+/// @param[in,out]  pp     String searched for a regular expression. Should
+///                        point to the first character of the regular
+///                        expression, *not* to the first character before it.
 ///                        Is advanced to the character just after endch.
 /// @param[out]     error  Structure where errors are saved.
 /// @param[out]     regex  Location where regex is saved.
-/// @param[in]      endch  Last character of the regex: character at which 
-///                        regular expression should end (unless it was 
-///                        escaped). Is expected to be either '?', '/' or NUL 
-///                        (note: regex will in any case end on NUL, but using 
-///                        NUL here will result in a faster code: NULs cannot 
-///                        be escaped, so it just uses STRLEN to find regex 
+/// @param[in]      endch  Last character of the regex: character at which
+///                        regular expression should end (unless it was
+///                        escaped). Is expected to be either '?', '/' or NUL
+///                        (note: regex will in any case end on NUL, but using
+///                        NUL here will result in a faster code: NULs cannot
+///                        be escaped, so it just uses STRLEN to find regex
 ///                        end).
 /// @param[in]      no_end_message
-///                        Error message which should be thrown if string ended, 
-///                        but endch was not found. If NULL this situation is 
+///                        Error message which should be thrown if string ended,
+///                        but endch was not found. If NULL this situation is
 ///                        considered to be OK.
 ///
-/// @return FAIL in case of non-recoverable failure, NOTDONE in case of error, 
+/// @return FAIL in case of non-recoverable failure, NOTDONE in case of error,
 ///         OK otherwise.
 static int get_regex(const char **pp, CommandParserError *error,
                      Regex **regex, const char endch,
                      const char *const no_end_message)
-  FUNC_ATTR_NONNULL_ARG(1,2,3) FUNC_ATTR_WARN_UNUSED_RESULT
+  FUNC_ATTR_NONNULL_ARG(1, 2, 3) FUNC_ATTR_WARN_UNUSED_RESULT
 {
   assert(endch != NUL || no_end_message == NULL);
   const char *p = *pp;
@@ -1637,15 +1633,15 @@ static CMD_P_DEF(parse_append)
 /// @param[in]      rhs      Right hand side of the command.
 /// @param[in]      rhs_idx  Offset of RHS argument in node->args array.
 /// @parblock
-///   @note rhs_idx + 1 is expected to point to parsed variant of RHS (for 
-///         <expr>-type mappings)). If parser error occurred during running 
+///   @note rhs_idx + 1 is expected to point to parsed variant of RHS (for
+///         <expr>-type mappings)). If parser error occurred during running
 ///         expression node->children will point to syntax error node.
 /// @endparblock
 /// @param[in,out]  node     Node whose argument rhs should be saved to.
 /// @param[in]      special  true if explicit <special> was supplied.
 /// @param[in]      is_expr  true if it is <expr>-type mapping.
 /// @parblock
-///   @note If this argument is always false then you do not need to care about 
+///   @note If this argument is always false then you do not need to care about
 ///         rhs_idx + 1 and node->children.
 /// @endparblock
 /// @param[in]      o         Options that control parsing behavior.
@@ -1715,8 +1711,8 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
 
 /// Parse :*map/:*abbrev/:*unmap/:*unabbrev commands
 ///
-/// @param[in,out]  pp        Parsed string. Is advanced to the end of the 
-///                           string unless a error occurred. Must point to the 
+/// @param[in,out]  pp        Parsed string. Is advanced to the end of the
+///                           string unless a error occurred. Must point to the
 ///                           first non-white character of the command argument.
 /// @param[out]     node      Location where parsing results are saved.
 /// @param[out]     error     Structure where errors are saved.
@@ -1724,7 +1720,7 @@ static int set_node_rhs(const char *rhs, size_t rhs_idx, CommandNode *node,
 /// @param[in]      position  Position of input.
 /// @param[in]      fgetline  Function used to obtain the next line. Not used.
 /// @param[in,out]  cookie    Argument to the above function. Not used.
-/// @param[in]      unmap     Determines whether :*map/:*abbrev or 
+/// @param[in]      unmap     Determines whether :*map/:*abbrev or
 ///                           :*unmap/:*unabbrev command is being parsed.
 ///
 /// @return FAIL when out of memory, OK otherwise.
@@ -1825,10 +1821,10 @@ static int do_parse_map(CMD_P_ARGS, bool unmap)
   p += STRLEN(p);
 
   if (*lhs != NUL) {
-    // Note: type of the abbreviation is not checked because it depends on the 
-    //       &iskeyword option. Unlike $ENV parsing (which depends on the 
-    //       options too) it is not unlikely that both 1. file will be parsed 
-    //       before result is actually used and 2. option value at the execution 
+    // Note: type of the abbreviation is not checked because it depends on the
+    //       &iskeyword option. Unlike $ENV parsing (which depends on the
+    //       options too) it is not unlikely that both 1. file will be parsed
+    //       before result is actually used and 2. option value at the execution
     //       stage will make results invalid.
     lhs = replace_termcodes(lhs, (size_t) (lhs_end - lhs), &lhs_buf, true, true,
                             map_flags&FLAG_MAP_SPECIAL,
@@ -1880,8 +1876,8 @@ static CMD_P_DEF(parse_mapclear)
 
 /// Unescape characters
 ///
-/// It is expected to be called on a string in allocated memory that is safe to 
-/// alter. This function only removes "\\" charaters from the string, modifying 
+/// It is expected to be called on a string in allocated memory that is safe to
+/// alter. This function only removes "\\" charaters from the string, modifying
 /// memory in-place.
 ///
 /// @param[in,out]  p        String being unescaped.
@@ -1903,7 +1899,7 @@ static void str_unescape(char *p, bool unctrlv)
 /// @param[out]     menu_item  Address where allocated menu is saved.
 /// @param[out]     menu_text  Address where left text is saved.
 ///
-/// @return OK in case of success, NOTDONE in case of error, FAIL in case of 
+/// @return OK in case of success, NOTDONE in case of error, FAIL in case of
 ///         unrecoverable error.
 static int parse_menu_name(const char **pp, CommandParserError *error,
                            MenuNameParsingOptions mnpo, MenuItem **menu_item,
@@ -1982,8 +1978,8 @@ static int parse_menu_name(const char **pp, CommandParserError *error,
 
 /// Parse :*menu/:*unmenu
 ///
-/// @param[in,out]  pp        Parsed string. Is advanced to the end of the 
-///                           string unless a error occurred. Must point to the 
+/// @param[in,out]  pp        Parsed string. Is advanced to the end of the
+///                           string unless a error occurred. Must point to the
 ///                           first non-white character of the command argument.
 /// @param[out]     node      Location where parsing results are saved.
 /// @param[out]     error     Structure where errors are saved.
@@ -1991,7 +1987,7 @@ static int parse_menu_name(const char **pp, CommandParserError *error,
 /// @param[in]      position  Position of input.
 /// @param[in]      fgetline  Function used to obtain the next line. Not used.
 /// @param[in,out]  cookie    Argument to the above function. Not used.
-/// @param[in]      unmenu    Determines whether :*menu or :*unmenu command is 
+/// @param[in]      unmenu    Determines whether :*menu or :*unmenu command is
 ///                           being parsed.
 ///
 /// @return FAIL when out of memory, OK otherwise.
@@ -2131,7 +2127,7 @@ static int do_parse_menu(CMD_P_ARGS, bool unmenu)
       error->position = menu_path;
       return NOTDONE;
     }
-    if (set_node_rhs(map_to, ARG_MENU_RHS, node, menu_flags&FLAG_MENU_SPECIAL, 
+    if (set_node_rhs(map_to, ARG_MENU_RHS, node, menu_flags&FLAG_MENU_SPECIAL,
                      false, o, position) == FAIL)
       return FAIL;
   }
@@ -2154,15 +2150,15 @@ static CMD_P_DEF(parse_unmenu)
 ///
 /// Used for ":execute" and ":echo*"
 ///
-/// @param[in,out]  pp        Parsed string. Is advanced to the end of the last 
-///                           expression. Should point to the first character of 
-///                           the expression (may point to whitespace 
+/// @param[in,out]  pp        Parsed string. Is advanced to the end of the last
+///                           expression. Should point to the first character of
+///                           the expression (may point to whitespace
 ///                           character).
 /// @param[out]     node      Location where parsing results are saved.
 /// @param[out]     error     Structure where errors are saved.
 /// @param[in]      o         Options that control parsing behavior.
 /// @param[in]      position  Position of input.
-/// @param[in]      multi     Determines whether parsed expression is actually 
+/// @param[in]      multi     Determines whether parsed expression is actually
 ///                           a sequence of expressions.
 ///
 /// @return FAIL if out of memory, NOTDONE in case of error, OK otherwise.
@@ -2290,15 +2286,15 @@ static CMD_P_DEF(parse_do)
 
 /// Check whether given expression node is a valid lvalue
 ///
-/// @param[in]   s            String that holds original representation of 
+/// @param[in]   s            String that holds original representation of
 ///                           parsed expression.
 /// @param[in]   node         Checked expression.
 /// @param[out]  error        Structure where error information is saved.
 /// @param[in]   allow_list   Determines whether list nodes are allowed.
-/// @param[in]   allow_lower  Determines whether simple variable names are 
+/// @param[in]   allow_lower  Determines whether simple variable names are
 ///                           allowed to start with a lowercase letter.
-/// @param[in]   allow_env    Determines whether it is allowed to contain 
-///                           kExprOption, kExprRegister and 
+/// @param[in]   allow_env    Determines whether it is allowed to contain
+///                           kExprOption, kExprRegister and
 ///                           kExprEnvironmentVariable nodes.
 ///
 /// @return true if check failed, false otherwise.
@@ -2310,12 +2306,12 @@ static bool check_lval(const char *const s, ExpressionNode *node,
     case kExprSimpleVariableName: {
       if (!allow_lower
           && ASCII_ISLOWER(s[node->start])
-          && s[node->start + 1] != ':'  // Fast check: most functions 
-                                        // containing colon contain it in the 
+          && s[node->start + 1] != ':'  // Fast check: most functions
+                                        // containing colon contain it in the
                                         // second character
           && memchr((void *) (s + node->start), '#',
                     node->end - node->start + 1) == NULL
-          // FIXME? Though foo:bar works in Vim Bram said it was never 
+          // FIXME? Though foo:bar works in Vim Bram said it was never
           //        intended to work.
           && memchr((void *) (s + node->start), ':',
                     node->end - node->start + 1) == NULL) {
@@ -2421,7 +2417,7 @@ static bool check_lval(const char *const s, ExpressionNode *node,
 
 /// Parse left value of assignment
 ///
-/// @param[in,out]  pp          Parsed string. Is advanced to the next 
+/// @param[in,out]  pp          Parsed string. Is advanced to the next
 ///                             character after parsed expression.
 /// @param[out]     error       Structure where errors are saved.
 /// @param[in]      o           Options that control parsing behavior.
@@ -2436,12 +2432,12 @@ static bool check_lval(const char *const s, ExpressionNode *node,
 ///   FLAG_PLVAL_NOLOWER   | Do not allow name to start with a lowercase letter
 ///   FLAG_PLVAL_ALLOW_ENV | Allow options, env variables and registers
 ///
-///   @note If both FLAG_PLVAL_LISTMULT and FLAG_PLVAL_SPACEMULT were 
-///         specified then only either space-separated values or list will be 
+///   @note If both FLAG_PLVAL_LISTMULT and FLAG_PLVAL_SPACEMULT were
+///         specified then only either space-separated values or list will be
 ///         allowed, but not both.
 /// @endparblock
 ///
-/// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when 
+/// @return OK if parsing was successfull, NOTDONE if it was not, FAIL when
 ///         out of memory.
 static int parse_lval(const char **pp,
                       CommandParserError *error,
@@ -2811,7 +2807,7 @@ static CMD_P_DEF(parse_scriptencoding)
 {
   if (**pp == NUL)
     return OK;
-  // TODO Setup conversion from parsed encoding
+  // TODO(ZyX-I): Setup conversion from parsed encoding
   if ((node->args[0].arg.str = enc_canonize(*pp)) == NULL)
     return FAIL;
   *pp += STRLEN(*pp);
@@ -2863,7 +2859,7 @@ static AuEvent *parse_events(const char **pp, CommandParserError *error)
 /// @param[out]     events  Address where found events are saved.
 /// @param[out]     group   Address where group name is saved.
 ///
-/// @return OK in case of success, NOTDONE in case of syntax error and FAIL in 
+/// @return OK in case of success, NOTDONE in case of syntax error and FAIL in
 ///         case of non-recoverable error.
 static int parse_group_and_event(const char **pp,
                                  CommandParserError *error,
@@ -3188,7 +3184,8 @@ static CMD_P_DEF(parse_address)
       error->position = p;
       return NOTDONE;
     }
-    if (get_address_followups(&p, error, &((*next)->address.followups)) == FAIL) {
+    if (get_address_followups(&p, error, &((*next)->address.followups))
+        == FAIL) {
       free_range(range);
       return FAIL;
     }
@@ -3211,10 +3208,10 @@ static CMD_P_DEF(parse_address)
 /// @param[in]   p       Pointer to the first character of the parsed value.
 /// @param[in]   vallen  Length of the parsed value.
 /// @param[out]  error   Address where error is saved.
-/// @param[out]  comp    Address where parsing results are saved. Must be zeroed 
+/// @param[out]  comp    Address where parsing results are saved. Must be zeroed
 ///                      before passing here.
 ///
-/// @return OK in case of success, NOTDONE in case of failure if error was set, 
+/// @return OK in case of success, NOTDONE in case of failure if error was set,
 ///         FAIL in case of non-recoverable error.
 static int parse_completion_argument(const char *p, const size_t vallen,
                                      CommandParserError *error,
@@ -3298,7 +3295,7 @@ static CMD_P_DEF(parse_command)
       }
 
       if (STRNICMP(p, "nargs", attrlen) == 0) {
-        // If vallen != 1 then argument is definitely invalid. NUL value skips 
+        // If vallen != 1 then argument is definitely invalid. NUL value skips
         // to default: case.
         flags &= ~FLAG_CMD_NARGS_MASK;
         switch (vallen == 1 ? *val : NUL) {
@@ -3347,7 +3344,7 @@ static CMD_P_DEF(parse_command)
           }
           flags &= ~FLAG_CMD_RANGE_MASK;
           flags |= VAL_CMD_RANGE_COUNT;
-          // Do not alter has_count so that printer does not dump count without 
+          // Do not alter has_count so that printer does not dump count without
           // special-casing it.
           node->count = count;
         }
@@ -3367,7 +3364,7 @@ static CMD_P_DEF(parse_command)
           }
           flags &= ~FLAG_CMD_COUNT_MASK;
           flags |= VAL_CMD_COUNT_COUNT;
-          // Do not alter has_count so that printer does not dump count without 
+          // Do not alter has_count so that printer does not dump count without
           // special-casing it.
           node->count = count;
         }
@@ -3377,7 +3374,7 @@ static CMD_P_DEF(parse_command)
           error->position = p + attrlen;
           goto parse_command_error_return;
         }
-        compl = xcalloc(1, sizeof(CmdComplete));
+        (compl) = xcalloc(1, sizeof(CmdComplete));
         int cret;
         if ((cret = parse_completion_argument(val, vallen, error, compl))
             != OK) {
@@ -3481,7 +3478,8 @@ static CMD_P_DEF(parse_delmarks)
           error->position = p + 2;
           return NOTDONE;
         }
-        memset(&(marks[from - FIRST_MARK_CODE]), 'Y', ((size_t) (to - from) + 1));
+        memset(&(marks[from - FIRST_MARK_CODE]), 'Y',
+               ((size_t) (to - from) + 1));
         p += 2;
       } else {
         marks[*p - FIRST_MARK_CODE] = 'Y';
@@ -3594,7 +3592,8 @@ static CMD_P_DEF(parse_digraphs)
   p = s;
 
   char **const digraphs = xmalloc(sizeof(char *) * (dig_count + 1));
-  uint_least32_t *const codepoints = xmalloc(sizeof(uint_least32_t) * dig_count);
+  uint_least32_t *const codepoints =
+      xmalloc(sizeof(uint_least32_t) * dig_count);
 
   char **cur_dig = digraphs;
   uint_least32_t *cur_cp = codepoints;
@@ -3789,7 +3788,7 @@ static CMD_P_DEF(parse_popup)
 
 static CMD_P_DEF(parse_make)
 {
-  // Warning: Vim redirects parsing to :vimgrep if &grepprg is "internal". 
+  // Warning: Vim redirects parsing to :vimgrep if &grepprg is "internal".
   // Parser cannot do this.
   return parse_rest_allow_empty(pp, node, error, o, position, fgetline, cookie);
 }
@@ -4375,7 +4374,7 @@ static CMD_P_DEF(parse_set)
             } else if (*p == '-' || VIM_ISDIGIT(*p)) {
               (*next)->flags |= FLAG_SET_IVALUE|FLAG_SET_ASSIGN;
               int ilen = 0;
-              vim_str2nr(p, NULL, &ilen, TRUE, TRUE, &((*next)->ivalue), NULL);
+              vim_str2nr(p, NULL, &ilen, true, true, &((*next)->ivalue), NULL);
               if (p[ilen] != NUL && !vim_iswhite(p[ilen])) {
                 error->message = N_("E474: Only numbers are allowed");
                 error->position = p;
@@ -4425,13 +4424,13 @@ static CMD_P_DEF(parse_set)
     p = skipwhite(p);
     next = &((*next)->next);
   }
-  // Note: using num_options + 1 here to have place for NULL which indicates 
+  // Note: using num_options + 1 here to have place for NULL which indicates
   //       number of options set. It is not indicated anywhere else.
   char **const names = node->args[ARG_SET_OPTIONS].arg.strs =
       xmalloc(sizeof(char *) * (num_options + 1));
   // Note: using xcalloc so that NULLs will appear where appropriate.
-  // Note: using num_options + 1 here because trailing NULL is needed for 
-  //       free_cmd_arg(). One should not use it to determine whether option 
+  // Note: using num_options + 1 here because trailing NULL is needed for
+  //       free_cmd_arg(). One should not use it to determine whether option
   //       list ended.
   char **const values = node->args[ARG_SET_VALUES].arg.strs =
       xcalloc(num_options + 1, sizeof(char *));
@@ -4454,7 +4453,7 @@ static CMD_P_DEF(parse_set)
     }
     flagss[i] = cur->flags;
     keys[i] = (uint_least32_t) cur->key;
-    // TODO Hold long?
+    // TODO(ZyX-I): Hold long?
     ivalues[i] = (int) cur->ivalue;
     opt_idxs[i] = cur->opt_idx;
     SetArg *prev = cur;
@@ -4540,7 +4539,7 @@ static int parse_replacement(const char **pp, CommandParserError *error,
         return NOTDONE;
       }
       if (*expr_str) {
-        // Expected expression to end here. Early return will result in 
+        // Expected expression to end here. Early return will result in
         // e_trailing error message.
         *pp = sub_start + (expr_str - expr_str_start);
         free(expr_str_start);
@@ -4583,7 +4582,7 @@ static int parse_replacement(const char **pp, CommandParserError *error,
               REP_ESC_ATOM('n', NUL)
               REP_ESC_ATOM('b', BS)
               REP_ESC_ATOM('t', TAB)
-              // May as well use literal escapes for the characters below, but 
+              // May as well use literal escapes for the characters below, but
               // these ones are explicitly mentioned in help.
               REP_ESC_ATOM('\\', '\\')
               REP_ESC_ATOM(CAR, CAR)
@@ -4628,7 +4627,8 @@ static int parse_replacement(const char **pp, CommandParserError *error,
                                             P_COL(p2_s - 1),
                                             P_COL(p2 - 1));
                 (*next)->data.ch = ch;
-                // TODO: Give a warning in most cases because \x is reserved.
+                // TODO(ZyX-I): Give a warning in most cases because \x is
+                //              reserved.
                 break;
               }
             }
@@ -4779,7 +4779,8 @@ static CMD_P_DEF(parse_sub)
     break;
   }
   if (flags & FLAG_S_COUNT) {
-    // TODO Give a warning here if COUNT and CONFIRM flags are both enabled.
+    // TODO(ZyX-I): Give a warning here if COUNT and CONFIRM flags are both
+    //              enabled.
     flags &= ~FLAG_S_CONFIRM;
   }
   p = skipwhite(p);
@@ -5034,7 +5035,7 @@ static CMD_P_DEF(parse_wincmd)
     case 'F':
     case Ctrl_F:
     WINCMD_ACTION('f')
-    // Go to the first occurrence of the identifier under cursor along path in 
+    // Go to the first occurrence of the identifier under cursor along path in
     // a new window -- webb
     //
     // Go to any match
@@ -5149,11 +5150,11 @@ static CMD_P_DEF(parse_at)
 /// Get :help language
 ///
 /// @param[in]      s    Start of the checked string.
-/// @param[in,out]  end  Pointer to the end (e.g. NUL character) of the checked 
-///                      string. Will be moved to the "@" sign if language was 
+/// @param[in,out]  end  Pointer to the end (e.g. NUL character) of the checked
+///                      string. Will be moved to the "@" sign if language was
 ///                      found.
 ///
-/// @return Help language (NUL-terminated string with length equal to 2) or 
+/// @return Help language (NUL-terminated string with length equal to 2) or
 ///         NULL.
 static inline char *get_help_lang(const char *const s, const char **end)
 {
@@ -5374,7 +5375,7 @@ static CMD_P_DEF(parse_loadkeymap)
   }
   return OK;
 parse_loadkeymap_error:
-  ;
+  {}
   CommandParserError new_error = {
     .message = error_message,
     .position = error_position,
@@ -5593,13 +5594,13 @@ static CMD_SUBP_DEF(parse_cscope_find)
 }
 
 static const SubCommandDefinition cscope_commands[] = {
-  {SS("add"), kCscopeAdd, SUBARGS(CSCOPE_ARGS_ADD), &parse_cscope_add},
-  {SS("find"), kCscopeFind, SUBARGS(CSCOPE_ARGS_FIND), &parse_cscope_find},
-  {SS("help"), kCscopeHelp, EMPTY_SUBARGS, NULL},
-  {SS("kill"), kCscopeKill, EMPTY_SUBARGS, NULL},
-  {SS("reset"), kCscopeReset, EMPTY_SUBARGS, NULL},
-  {SS("show"), kCscopeShow, EMPTY_SUBARGS, NULL},
-  {NULL, 0, 0, 0, NULL, NULL},
+  { SS("add"), kCscopeAdd, SUBARGS(CSCOPE_ARGS_ADD), &parse_cscope_add },
+  { SS("find"), kCscopeFind, SUBARGS(CSCOPE_ARGS_FIND), &parse_cscope_find },
+  { SS("help"), kCscopeHelp, EMPTY_SUBARGS, NULL },
+  { SS("kill"), kCscopeKill, EMPTY_SUBARGS, NULL },
+  { SS("reset"), kCscopeReset, EMPTY_SUBARGS, NULL },
+  { SS("show"), kCscopeShow, EMPTY_SUBARGS, NULL },
+  { NULL, 0, 0, 0, NULL, NULL },
 };
 
 static CMD_P_DEF(parse_cscope)
@@ -5693,15 +5694,15 @@ static CMD_P_DEF(parse_sniff)
 }
 
 const HighlightAttrDef hl_attr_table[] = {
-  {SS("bold"), FLAG_HI_TERM_BOLD},
-  {SS("underline"), FLAG_HI_TERM_UNDERLINE},
-  {SS("undercurl"), FLAG_HI_TERM_UNDERCURL},
-  {SS("inverse"), FLAG_HI_TERM_REVERSE},
-  {SS("reverse"), FLAG_HI_TERM_REVERSE},
-  {SS("italic"), FLAG_HI_TERM_ITALIC},
-  {SS("standout"), FLAG_HI_TERM_STANDOUT},
-  {SS("none"), FLAG_HI_TERM_NONE},
-  {NULL, 0, 0},
+  { SS("bold"), FLAG_HI_TERM_BOLD },
+  { SS("underline"), FLAG_HI_TERM_UNDERLINE },
+  { SS("undercurl"), FLAG_HI_TERM_UNDERCURL },
+  { SS("inverse"), FLAG_HI_TERM_REVERSE },
+  { SS("reverse"), FLAG_HI_TERM_REVERSE },
+  { SS("italic"), FLAG_HI_TERM_ITALIC },
+  { SS("standout"), FLAG_HI_TERM_STANDOUT },
+  { SS("none"), FLAG_HI_TERM_NONE },
+  { NULL, 0, 0 },
 };
 
 static CMD_P_DEF(parse_highlight)
@@ -6270,15 +6271,15 @@ static CMD_SUBP_DEF(parse_sign_jump)
 }
 
 static const SubCommandDefinition sign_commands[] = {
-  {SS("define"), kSignDefine, SUBARGS(SIGN_ARGS_DEFINE), &parse_sign_define},
-  {SS("undefine"), kSignUndefine, SUBARGS(SIGN_ARGS_UNDEFINE),
-   &parse_sign_undefine},
-  {SS("list"), kSignList, SUBARGS(SIGN_ARGS_LIST), &parse_sign_list},
-  {SS("place"), kSignPlace, SUBARGS(SIGN_ARGS_PLACE), &parse_sign_place},
-  {SS("unplace"), kSignUnplace, SUBARGS(SIGN_ARGS_UNPLACE),
-   &parse_sign_unplace},
-  {SS("jump"), kSignJump, SUBARGS(SIGN_ARGS_JUMP), &parse_sign_jump},
-  {NULL, 0, 0, 0, NULL, NULL},
+  { SS("define"), kSignDefine, SUBARGS(SIGN_ARGS_DEFINE), &parse_sign_define },
+  { SS("undefine"), kSignUndefine, SUBARGS(SIGN_ARGS_UNDEFINE),
+    &parse_sign_undefine },
+  { SS("list"), kSignList, SUBARGS(SIGN_ARGS_LIST), &parse_sign_list },
+  { SS("place"), kSignPlace, SUBARGS(SIGN_ARGS_PLACE), &parse_sign_place },
+  { SS("unplace"), kSignUnplace, SUBARGS(SIGN_ARGS_UNPLACE),
+    &parse_sign_unplace },
+  { SS("jump"), kSignJump, SUBARGS(SIGN_ARGS_JUMP), &parse_sign_jump },
+  { NULL, 0, 0, 0, NULL, NULL },
 };
 
 static CMD_P_DEF(parse_sign)
@@ -6353,10 +6354,10 @@ static CMD_SUBP_DEF(parse_syntax_case)
 /// @param[out]     error           Structure where errors are saved.
 /// @param[in,out]  pp              Parsed string.
 /// @param[out]     group           Address where parsing result will be saved.
-/// @param[in]      allow_specials  Allow special values ALLBUT, ALL, TOP, 
+/// @param[in]      allow_specials  Allow special values ALLBUT, ALL, TOP,
 ///                                 CONTAINED.
 ///
-/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+/// @return OK if everything was parsed correctly, NOTDONE in case of error,
 ///         FAIL otherwise.
 int parse_group_list(CommandParserError *error, const char **pp,
                      SynGroupList **group, bool allow_specials)
@@ -6579,7 +6580,7 @@ static const SynOptDef synopttab[] = {
   SYN_OPT("cCoOnNtTaAiInNsS",       SGroups, MR,     CONTAINS),
   SYN_OPT("cCoOnNtTaAiInNeEdDiInN", Groups,  MAIN,   CONTAINEDIN),
   SYN_OPT("nNeExXtTgGrRoOuUpP",     Groups,  MAIN,   NEXTGROUP),
-  {NULL, 0, 0, 0, 0},
+  { NULL, 0, 0, 0, 0 },
 };
 static const char *first_synopt_letters = "cCoOkKeEtTsSgGdDfFnN";
 
@@ -6627,7 +6628,7 @@ static const char *get_syn_options(const char *p, CommandParserError *error,
         break;
       }
     }
-    if (cur_def->name == NULL) { // No match found.
+    if (cur_def->name == NULL) {  // No match found.
       break;
     }
     p += len;
@@ -6799,14 +6800,14 @@ static CMD_SUBP_DEF(parse_syntax_list)
 }
 
 static const SpoDef spo_tab[] = {
-  {"ms=", kSynRegOffsetMatchStart},
-  {"me=", kSynRegOffsetMatchEnd},
-  {"hs=", kSynRegOffsetHiStart},
-  {"he=", kSynRegOffsetHiEnd},
-  {"rs=", kSynRegOffsetRegionStart},
-  {"re=", kSynRegOffsetRegionEnd},
-  {"lc=", kSynRegOffsetLContext},
-  {NULL, 0},
+  { "ms=", kSynRegOffsetMatchStart },
+  { "me=", kSynRegOffsetMatchEnd },
+  { "hs=", kSynRegOffsetHiStart },
+  { "he=", kSynRegOffsetHiEnd },
+  { "rs=", kSynRegOffsetRegionStart },
+  { "re=", kSynRegOffsetRegionEnd },
+  { "lc=", kSynRegOffsetLContext },
+  { NULL, 0 },
 };
 
 static const char *get_syn_pattern(const char *p, CommandParserError *error,
@@ -6909,7 +6910,8 @@ static int do_parse_syntax_match(CMD_SUBP_ARGS, uint_least32_t scope)
     if (p != NULL) {
       subargsargs[SYN_ARG_MATCH_REGEX].arg.syn_pat =
           xcalloc(1, sizeof(SynPattern));
-      p = get_syn_pattern(p, error, subargsargs[SYN_ARG_MATCH_REGEX].arg.syn_pat);
+      p = get_syn_pattern(p, error,
+                          subargsargs[SYN_ARG_MATCH_REGEX].arg.syn_pat);
       GET_SYN_OPTIONS(p, error, MATCH, scope, subargsargs);
     }
     if (p == NULL) {
@@ -7049,28 +7051,28 @@ static CMD_SUBP_DEF(parse_syntax_spell)
 #define parse_syntax_clear parse_syntax_list
 
 static const SubCommandDefinition syntax_commands[] = {
-  {SS("case"), kSynCase, SUBARGS(SYN_ARGS_CASE), &parse_syntax_case},
-  {SS("clear"), kSynClear, SUBARGS(SYN_ARGS_CLEAR), &parse_syntax_clear},
-  {SS("cluster"), kSynCluster, SUBARGS(SYN_ARGS_CLUSTER),
-   &parse_syntax_cluster},
-  {SS("conceal"), kSynConceal, SUBARGS(SYN_ARGS_CONCEAL),
-   &parse_syntax_conceal},
-  {SS("enable"), kSynEnable, EMPTY_SUBARGS, NULL},
-  {SS("include"), kSynInclude, SUBARGS(SYN_ARGS_INCLUDE),
-   &parse_syntax_include},
-  {SS("keyword"), kSynKeyword, SUBARGS(SYN_ARGS_KEYWORD),
-   &parse_syntax_keyword},
-  {SS("list"), kSynList, SUBARGS(SYN_ARGS_LIST), &parse_syntax_list},
-  {SS("manual"), kSynManual, EMPTY_SUBARGS, NULL},
-  {SS("match"), kSynMatch, SUBARGS(SYN_ARGS_MATCH), &parse_syntax_match},
-  {SS("on"), kSynOn, EMPTY_SUBARGS, NULL},
-  {SS("off"), kSynOff, EMPTY_SUBARGS, NULL},
-  {SS("region"), kSynRegion, SUBARGS(SYN_ARGS_REGION), &parse_syntax_region},
-  {SS("reset"), kSynReset, EMPTY_SUBARGS, NULL},
-  {SS("spell"), kSynSpell, SUBARGS(SYN_ARGS_SPELL), &parse_syntax_spell},
-  {SS("sync"), kSynSync, SUBARGS(SYN_ARGS_SYNC), &parse_syntax_sync},
-  {SS(""), kSynList, EMPTY_SUBARGS, NULL},
-  {NULL, 0, 0, 0, NULL, NULL},
+  { SS("case"), kSynCase, SUBARGS(SYN_ARGS_CASE), &parse_syntax_case },
+  { SS("clear"), kSynClear, SUBARGS(SYN_ARGS_CLEAR), &parse_syntax_clear },
+  { SS("cluster"), kSynCluster, SUBARGS(SYN_ARGS_CLUSTER),
+    &parse_syntax_cluster },
+  { SS("conceal"), kSynConceal, SUBARGS(SYN_ARGS_CONCEAL),
+    &parse_syntax_conceal },
+  { SS("enable"), kSynEnable, EMPTY_SUBARGS, NULL },
+  { SS("include"), kSynInclude, SUBARGS(SYN_ARGS_INCLUDE),
+    &parse_syntax_include },
+  { SS("keyword"), kSynKeyword, SUBARGS(SYN_ARGS_KEYWORD),
+    &parse_syntax_keyword },
+  { SS("list"), kSynList, SUBARGS(SYN_ARGS_LIST), &parse_syntax_list },
+  { SS("manual"), kSynManual, EMPTY_SUBARGS, NULL },
+  { SS("match"), kSynMatch, SUBARGS(SYN_ARGS_MATCH), &parse_syntax_match },
+  { SS("on"), kSynOn, EMPTY_SUBARGS, NULL },
+  { SS("off"), kSynOff, EMPTY_SUBARGS, NULL },
+  { SS("region"), kSynRegion, SUBARGS(SYN_ARGS_REGION), &parse_syntax_region },
+  { SS("reset"), kSynReset, EMPTY_SUBARGS, NULL },
+  { SS("spell"), kSynSpell, SUBARGS(SYN_ARGS_SPELL), &parse_syntax_spell },
+  { SS("sync"), kSynSync, SUBARGS(SYN_ARGS_SYNC), &parse_syntax_sync },
+  { SS(""), kSynList, EMPTY_SUBARGS, NULL },
+  { NULL, 0, 0, 0, NULL, NULL },
 };
 
 static CMD_SUBP_DEF(parse_syntax_sync)
@@ -7100,7 +7102,8 @@ static CMD_SUBP_DEF(parse_syntax_sync)
     } else if ((arg_len >= 5 && STRNICMP(arg_start, "lines", 5) == 0)
                || (arg_len >= 8 && STRNICMP(arg_start, "minlines", 8) == 0)
                || (arg_len >= 8 && STRNICMP(arg_start, "maxlines", 8) == 0)
-               || (arg_len >= 10 && STRNICMP(arg_start, "linebreaks", 10) == 0)) {
+               || (arg_len >= 10 && STRNICMP(arg_start, "linebreaks", 10) == 0)
+               ) {
       const char *num_start =
           arg_start + (*arg_start == 'm' || *arg_start == 'M'
                        ? 9
@@ -7130,7 +7133,8 @@ static CMD_SUBP_DEF(parse_syntax_sync)
         subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |= FLAG_SYN_SYNC_HASMAXLINES;
       } else {
         prop_idx = SYN_ARG_SYNC_LINEBREAKS;
-        subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |= FLAG_SYN_SYNC_HASLINEBREAKS;
+        subargsargs[SYN_ARG_SYNC_FLAGS].arg.flags |=
+            FLAG_SYN_SYNC_HASLINEBREAKS;
       }
       subargsargs[prop_idx].arg.unumber = (unsigned) getdigits_long(&num_start);
     } else if (arg_len == 9 && STRNICMP(arg_start, "fromstart", 9) == 0) {
@@ -7264,7 +7268,7 @@ static CMD_P_DEF(parse_syntax)
 
 /// Check for an Ex command with optional tail.
 ///
-/// @param[in,out]  pp   Start of the command. Is advanced to the command 
+/// @param[in,out]  pp   Start of the command. Is advanced to the command
 ///                      argument if requested command was found.
 /// @param[in]      cmd  Name of the command which is checked for.
 /// @param[in]      len  Minimal length required to accept a match.
@@ -7288,7 +7292,7 @@ static bool check_for_cmd(const char **pp, const char *cmd, size_t len)
 
 /// Get a single Ex adress
 ///
-/// @param[in,out]  pp       Parsed string. Is advanced to the next character 
+/// @param[in,out]  pp       Parsed string. Is advanced to the next character
 ///                          after parsed address. May point at whitespace.
 /// @param[out]     address  Structure where result will be saved.
 /// @param[out]     error    Structure where errors are saved.
@@ -7445,7 +7449,7 @@ static int get_address_followups(const char **pp, CommandParserError *error,
 ///
 /// @param[in]  p  Checked string
 ///
-/// @return First character of next command (last character after command 
+/// @return First character of next command (last character after command
 ///         separator), NULL if no separator was found.
 static const char *check_next_cmd(const char *p)
   FUNC_ATTR_CONST
@@ -7491,16 +7495,16 @@ static CommandType cmdidxs[27] =
 
 /// Find a built-in Ex command by its name or find user command name
 ///
-/// @param[in,out]  pp     Parsed string. Is advanced to the next character 
+/// @param[in,out]  pp     Parsed string. Is advanced to the next character
 ///                        after the command.
-/// @param[out]     type   Command type: for built-in commands the only value 
+/// @param[out]     type   Command type: for built-in commands the only value
 ///                        returned.
-/// @param[out]     name   For user commands: command name in allocated memory 
-///                        (not resolved because parser does not know about 
+/// @param[out]     name   For user commands: command name in allocated memory
+///                        (not resolved because parser does not know about
 ///                        defined user commands). For built-in commands: NULL.
 /// @param[out]     error  Structure where errors are saved.
 ///
-/// @return OK if parsing was successfull, FAIL otherwise. Use error->message 
+/// @return OK if parsing was successfull, FAIL otherwise. Use error->message
 ///         value to distinguish out-of-memory and failing parsing cases.
 static int find_command(const char **pp, CommandType *type,
                         const char **name, CommandParserError *error)
@@ -7598,22 +7602,22 @@ static int find_command(const char **pp, CommandType *type,
 
 /// Get command argument
 ///
-/// Not used for commands with complex relations with bar or comment symbol: 
-/// e.g. :echo (it allows things like "echo 'abc|def'") or :write 
+/// Not used for commands with complex relations with bar or comment symbol:
+/// e.g. :echo (it allows things like "echo 'abc|def'") or :write
 /// (":w`='abc|def'`").
 ///
 /// @param[in]   type             Command type.
-/// @param[in]   o                Parser options. See parse_one_cmd 
+/// @param[in]   o                Parser options. See parse_one_cmd
 ///                               documentation.
 /// @param[in]   start            Start of the command-line arguments.
-/// @param[in]   arg_start        Offset of the first character in start. Is 
+/// @param[in]   arg_start        Offset of the first character in start. Is
 ///                               added to each value in skips.
 /// @param[out]  arg              Resulting command-line argument.
 /// @param[out]  next_cmd_offset  Offset of next command.
-/// @param[out]  skips            List of the offsets used to compute real 
-///                               character positions after unescaping string. 
-///                               Is populated with offsets of characters which 
-///                               were omitted from output (namely <C-v> and 
+/// @param[out]  skips            List of the offsets used to compute real
+///                               character positions after unescaping string.
+///                               Is populated with offsets of characters which
+///                               were omitted from output (namely <C-v> and
 ///                               backslashes, depending on options).
 /// @param[out]  skips_count      Number of items in the skips array.
 ///
@@ -7728,7 +7732,7 @@ static int get_cmd_arg(CommandType type, CommandParserOptions o,
 ///
 /// Useful for :execute, :*do, etc.
 ///
-/// @param[in,out]  arg  Pointer to pointer to the start of string which will be 
+/// @param[in,out]  arg  Pointer to pointer to the start of string which will be
 ///                      returned. This string must live in an allocated memory.
 const char *do_fgetline_allocated(int c, const char **arg, int indent)
 {
@@ -7747,7 +7751,7 @@ const char *do_fgetline_allocated(int c, const char **arg, int indent)
 /// @param[out]     next_node  Location where parsing results are saved.
 /// @param[in]      o          Options that control parsing behavior.
 /// @param[in]      position   Position of input.
-/// @param[in]      s          Address of position.col. Used to adjust position 
+/// @param[in]      s          Address of position.col. Used to adjust position
 ///                            in case of error.
 ///
 /// @return OK if everything was parsed correctly, FAIL if out of memory.
@@ -7786,17 +7790,17 @@ static int parse_argcmd(const char **pp,
 
       arg_start = arg;
 
-      // TODO Record skips and adjust positions
+      // TODO(ZyX-I): Record skips and adjust positions
       while (*arg) {
         if (*arg == '\\' && arg[1] != NUL)
           STRMOVE(arg, arg + 1);
         mb_ptr_adv_(arg);
       }
 
-      if ((*next_node = parse_cmd_sequence(o, new_position,
-                                           (VimlLineGetter) &do_fgetline_allocated,
-                                           &arg_start, true))
-          == NULL) {
+      if ((*next_node =
+           parse_cmd_sequence(o, new_position,
+                              (VimlLineGetter) &do_fgetline_allocated,
+                              &arg_start, true)) == NULL) {
         return FAIL;
       }
 
@@ -7815,7 +7819,7 @@ static int parse_argcmd(const char **pp,
 /// @param[in]      o          Options that control parsing behavior.
 /// @param[out]     error      Structure where errors are saved.
 ///
-/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+/// @return OK if everything was parsed correctly, NOTDONE in case of error,
 ///         FAIL if out of memory.
 static int parse_argopt(const char **pp,
                         uint_least32_t *optflags,
@@ -7889,7 +7893,7 @@ static int parse_argopt(const char **pp,
   }
 
   if (do_ff) {
-    // XXX check_ff_value requires NUL-terminated string. Thus I duplicate list 
+    // XXX check_ff_value requires NUL-terminated string. Thus I duplicate list
     //     of accepted strings here
     switch (*arg_start) {
       case 'd': {
@@ -7979,15 +7983,15 @@ parse_argopt_ff_error:
 ///   `?re?`   | Search for `re` before `main`.
 ///
 /// @param[in,out]  pp           Command to parse.
-/// @param[out]     node         Location where parsing results are saved. Only 
+/// @param[out]     node         Location where parsing results are saved. Only
 ///                              applicable if parser errors need to be saved.
 /// @param[in]      o            Options that control parsing behavior.
 /// @param[in]      position     Position of input.
 /// @param[out]     range        Location where to save resulting range.
-/// @param[out]     range_start  Location where to save pointer to the first 
+/// @param[out]     range_start  Location where to save pointer to the first
 ///                              character of the range.
 ///
-/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+/// @return OK if everything was parsed correctly, NOTDONE in case of error,
 ///         FAIL otherwise.
 int parse_range(const char **pp, CommandNode **node, CommandParserOptions o,
                 CommandPosition position, Range *range,
@@ -8078,11 +8082,11 @@ int parse_range(const char **pp, CommandNode **node, CommandParserOptions o,
 /// @param[out]     node      Location where parsing results are saved.
 /// @param[in]      o         Options that control parsing behavior.
 /// @param[in]      position  Position of input.
-/// @param[in]      pstart    Position of the first leading digit, if any. 
+/// @param[in]      pstart    Position of the first leading digit, if any.
 ///                           Points to the same location pp does otherwise.
 /// @param[out]     type      Resulting command type.
 ///
-/// @return OK if everything was parsed correctly, NOTDONE in case of error, 
+/// @return OK if everything was parsed correctly, NOTDONE in case of error,
 ///         FAIL otherwise.
 int parse_modifiers(const char **pp, CommandNode ***node,
                     CommandParserOptions o, CommandPosition position,
@@ -8092,7 +8096,7 @@ int parse_modifiers(const char **pp, CommandNode ***node,
   const char *mod_start = p;
   const char *const s = p;
 
-  // FIXME (genex_cmds.lua): Iterate over precomputed table with only modifier 
+  // FIXME (genex_cmds.lua): Iterate over precomputed table with only modifier
   //                         commands
   for (int i = cmdidxs[(int) (*p - 'a')]; *(CMDDEF(i).name) == *p; i++) {
     if (CMDDEF(i).flags & ISMODIFIER) {
@@ -8152,17 +8156,17 @@ int parse_modifiers(const char **pp, CommandNode ***node,
 
 /// Add comment node
 ///
-/// @param[in,out]  pp            Parsed string, points to the start of the 
+/// @param[in,out]  pp            Parsed string, points to the start of the
 ///                               comment.
-/// @param[in]      comment_type  Comment type (there are hashbang comments and 
+/// @param[in]      comment_type  Comment type (there are hashbang comments and
 ///                               '"' comments).
 /// @param[out]     node          Address where node should be saved.
 /// @param[in]      position      Node position.
-/// @param[in]      s             Start of the string (position pointed by 
+/// @param[in]      s             Start of the string (position pointed by
 ///                               `position` argument).
 ///
 /// @return OK
-static int set_comment_node(const char **pp, CommandType comment_type, 
+static int set_comment_node(const char **pp, CommandType comment_type,
                             CommandNode **node, CommandPosition position,
                             const char *const s)
   FUNC_ATTR_NONNULL_ALL
@@ -8183,18 +8187,18 @@ static int set_comment_node(const char **pp, CommandType comment_type,
 /// - `:3|…` prints line 3
 /// - `:|` prints current line
 ///
-/// Is also responsible for creating comment nodes (unless they were created 
+/// Is also responsible for creating comment nodes (unless they were created
 /// earlier).
 ///
 /// @param[in,out]  pp            String being parsed.
 /// @param[out]     node          Address where parsed node will be saved.
-/// @param[in]      o             Parser options, as described in parse_one_cmd 
+/// @param[in]      o             Parser options, as described in parse_one_cmd
 ///                               documentation.
 /// @param[in]      position      Position where parsing started.
-/// @param[in]      s             Start of the string (position pointed to by 
+/// @param[in]      s             Start of the string (position pointed to by
 ///                               `position` argument).
-/// @param[in]      prev_cmd_end  End of the previous command. Will be saved to 
-///                               the current node’s end_col member if there is 
+/// @param[in]      prev_cmd_end  End of the previous command. Will be saved to
+///                               the current node’s end_col member if there is
 ///                               current node.
 /// @param[in]      range         Previously parsed range.
 /// @param[in]      nextcmd       Start of the next command.
@@ -8246,7 +8250,7 @@ static int parse_no_cmd(const char **pp,
 /// @param[in]      col    Column number of the first parsed character.
 /// @param[out]     glob   Address where result will be saved.
 ///
-/// @return FAIL in case of failure, NOTDONE in case of error, OK in case of 
+/// @return FAIL in case of failure, NOTDONE in case of error, OK in case of
 ///         success.
 static int parse_files(const char **pp, CommandParserError *error,
                        const size_t col, Glob *glob)
@@ -8307,7 +8311,7 @@ static int parse_files(const char **pp, CommandParserError *error,
 /// @param[in]      fgetline  Function used to obtain the next line.
 /// @param[in,out]  cookie    Second argument to fgetline.
 ///
-/// @return OK if everything was parsed correctly, FAIL if out of memory, 
+/// @return OK if everything was parsed correctly, FAIL if out of memory,
 ///         NOTDONE for parser error.
 int parse_one_cmd(const char **pp,
                   CommandNode **node,
@@ -8321,20 +8325,20 @@ int parse_one_cmd(const char **pp,
   // Node options, populated before allocation
   CommandType type = kCmdUnknown;
   bool bang = false;
-  Range range = {{kAddrMissing, {NULL}, NULL}, false, NULL};
+  Range range = { { kAddrMissing, { NULL }, NULL }, false, NULL };
   uint_least8_t exflags = 0;
   const char *name = NULL;
   bool has_count = false;
   int count = 0;
-  Register reg = {NUL, NULL};
+  Register reg = { NUL, NULL };
   CommandNode *children = NULL;
   uint_least32_t optflags = 0;
   char *enc = NULL;
-  Glob glob = {{kPatMissing, {NULL}, NULL}, NULL};
+  Glob glob = { { kPatMissing, { NULL }, NULL }, NULL };
   size_t *skips = NULL;
   size_t skips_count = 0;
 
-  CommandParserError error = {NULL, NULL};
+  CommandParserError error = { NULL, NULL };
 
   const char *p;
   // Start of the command: position pointed to by `position` argument
@@ -8515,7 +8519,7 @@ int parse_one_cmd(const char **pp,
         // Adjust p according to cmd_arg adjustment
         p += (cmd_arg - cmd_arg_start);
         if (skips_count) {
-          // TODO Test behavior when skip occurs at the very end
+          // TODO(ZyX-I): Test behavior when skip occurs at the very end
           cur_skip = skips;
           while (*cur_skip < (size_t) (p - expr_start)) {
             p++;
@@ -8616,7 +8620,7 @@ int parse_one_cmd(const char **pp,
     if (used_get_cmd_arg) {
       cmd_arg += (p - real_cmd_arg);
       if (skips_count) {
-        // TODO Test behavior when skip occurs at the very end
+        // TODO(ZyX-I): Test behavior when skip occurs at the very end
         while (*cur_skip < (size_t) (p - real_cmd_arg)) {
           cmd_arg--;
           cur_skip++;
@@ -8803,10 +8807,10 @@ static void get_block_options(CommandType type, CommandBlockOptions *bo)
 
 /// Get message for missing block command ends
 ///
-/// @param[in]  type  Command for which message should be obtained. Must be one 
-///                   of the commands that starts block or separates it (i.e. 
-///                   if, else, elseif, function, finally, catch, try, for, 
-///                   while). Behavior is undefined if called for other 
+/// @param[in]  type  Command for which message should be obtained. Must be one
+///                   of the commands that starts block or separates it (i.e.
+///                   if, else, elseif, function, finally, catch, try, for,
+///                   while). Behavior is undefined if called for other
 ///                   commands.
 ///
 /// @return Pointer to the error message. Must not be freed.
@@ -8854,7 +8858,7 @@ const CommandNode nocmd = {
   .range = {
     .address = {
       .type = kAddrMissing,
-      .data = {.regex = NULL},
+      .data = { .regex = NULL },
       .followups = NULL,
     },
     .setpos = false,
@@ -8879,7 +8883,7 @@ const CommandNode nocmd = {
   .glob = {
     .pat = {
       .type = kPatMissing,
-      .data = {.pats = {.pat = NULL, .next = NULL}},
+      .data = { .pats = { .pat = NULL, .next = NULL } },
       .next = NULL,
     },
     .next = NULL,
@@ -8951,9 +8955,9 @@ const CommandNode nocmd = {
 
 /// Parses sequence of commands
 ///
-/// @param[in]      o         Options that control parsing behavior. In addition 
-///                           to flags documented in parse_one_cmd documentation 
-///                           it accepts o.early_return option that makes in not 
+/// @param[in]      o         Options that control parsing behavior. In addition
+///                           to flags documented in parse_one_cmd documentation
+///                           it accepts o.early_return option that makes in not
 ///                           call fgetline once there is something to execute.
 /// @param[in]      position  Position of input.
 /// @param[in]      fgetline  Function used to obtain the next line.
@@ -9007,9 +9011,12 @@ CommandNode *parse_cmd_sequence(CommandParserOptions o,
 
       get_block_options(block_type, &bo);
 
-      if (block_type == kCmdFunction)
-        if (block_command_node->args[ARG_FUNC_ARGS].arg.ga_strs.ga_growsize == 0)
+      if (block_type == kCmdFunction) {
+        if (block_command_node->args[ARG_FUNC_ARGS].arg.ga_strs.ga_growsize
+            == 0) {
           memset(&bo, 0, sizeof(CommandBlockOptions));
+        }
+      }
 
       if (bo.find_in_stack != kCmdUnknown) {
         size_t initial_blockstack_len = blockstack_len;
@@ -9159,20 +9166,20 @@ void free_parser_result(ParserResult *pres)
 
 /// Return a pair (AST, lines that were parsed)
 ///
-/// Parsed lines are supposed to be used for implementing `:function Func` 
+/// Parsed lines are supposed to be used for implementing `:function Func`
 /// introspection and error reporting.
 ///
 /// @param[in]  o         Parser options.
-/// @param[in]  fname     Path to the parsed file or a string enclosed in `<` to 
+/// @param[in]  fname     Path to the parsed file or a string enclosed in `<` to
 ///                       indicate that current input is not from any file.
 /// @param[in]  fgetline  Function used to obtain the next line.
 ///
 ///                       @par
-///                       This function should return NULL when there are no 
+///                       This function should return NULL when there are no
 ///                       more lines.
 ///
-///                       @note This function must return string in allocated 
-///                             memory. Only parser thread must have access to 
+///                       @note This function must return string in allocated
+///                             memory. Only parser thread must have access to
 ///                             strings returned by fgetline.
 /// @param      cookie    Second argument to the above function.
 ParserResult *parse_string(CommandParserOptions o, const char *fname,
