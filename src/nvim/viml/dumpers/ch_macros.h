@@ -181,14 +181,8 @@
 #ifdef F
 # undef F
 #endif
-#ifdef F_NOOPT
-# undef F_NOOPT
-#endif
 #ifdef F_PTR_NOOPT
 # undef F_PTR_NOOPT
-#endif
-#ifdef F_PTR
-# undef F_PTR
 #endif
 #ifdef F_ESCAPED
 # undef F_ESCAPED
@@ -219,9 +213,6 @@
 #endif
 #ifdef W_LEN
 # undef W_LEN
-#endif
-#ifdef W_ESCAPED
-# undef W_ESCAPED
 #endif
 #ifdef FILL
 # undef FILL
@@ -299,9 +290,10 @@
     _WRITE(s, length)
 #  define FILL(c, length) \
     do { \
-      char s[length]; \
-      memset(s, c, length); \
-      _WRITE(s, length); \
+      size_t i = length; \
+      while (i--) { \
+        WC(c); \
+      } \
     } while (0)
 #  define F_ESCAPED(f, e, ...) \
     do { \
@@ -386,56 +378,52 @@
     } while (0)
 #endif
 
-#ifndef NVIM_SRC_VIML_DUMPERS_CH_MACROS_H
-# define F_PTR(fp, ...) \
+#define F_PTR(fp, ...) \
     F_PTR_NOOPT(fp, o, __VA_ARGS__)
-# define F_NOOPT(f, ...) \
+#define F_NOOPT(f, ...) \
     F_PTR_NOOPT(&(FNAME(f)), __VA_ARGS__)
-# define F(f, ...) \
+#define F(f, ...) \
     F_NOOPT(f, o, __VA_ARGS__)
-# define FDEC_TYPEDEF_ALL(t, ...) \
+#define FDEC_TYPEDEF_ALL(t, ...) \
     typedef size_t (*t##StrLen)(CH_MACROS_OPTIONS_TYPE, __VA_ARGS__); \
     typedef void (*t##Str)(CH_MACROS_OPTIONS_TYPE, __VA_ARGS__, char **); \
     typedef int (*t)(CH_MACROS_OPTIONS_TYPE, __VA_ARGS__, Writer, void *)
-# define W_END(s, e) \
+#define W_END(s, e) \
     W_LEN(s, (size_t) (e - s) + 1)
-# define W_EXPR_POS(s, node) \
+#define W_EXPR_POS(s, node) \
     W_LEN(s + node->start, node->end - node->start + 1)
-# define W_ESCAPED(s, escchars) \
-   do { \
-     const char *const escchars_ = escchars; \
-     for (const char *s_ = s; *s_; s_++) { \
-       if (strchr(escchars_, *s_) != NULL) { \
-         WC('\\'); \
-       } \
-       WC(*s_); \
-     } \
-   } while (false)
-# define SPACES(length) \
+#define W_ESCAPED(s, escchars) \
+    do { \
+      const char *const escchars_ = escchars; \
+      for (const char *s_ = s; *s_; s_++) { \
+        if (strchr(escchars_, *s_) != NULL) { \
+          WC('\\'); \
+        } \
+        WC(*s_); \
+      } \
+    } while (false)
+#define SPACES(length) \
     do { \
       if (length) { \
         FILL(' ', length); \
       } \
     } while (0)
-# define CALL_LEN(f, ...) s##f##_len(o, __VA_ARGS__)
+#define CALL_LEN(f, ...) s##f##_len(o, __VA_ARGS__)
 
-# define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(o->a1.a2.before_subscript)
-# define SPACES_BEFORE_TEXT2(a1, a2)      SPACES(o->a1.a2.before_text)
-# define SPACES_BEFORE_ATTRIBUTE2(a1, a2) SPACES(o->a1.a2.before_attribute)
-# define SPACES_BEFORE_END2(a1, a2)       SPACES(o->a1.a2.before_end)
-# define SPACES_AFTER_START2(a1, a2)      SPACES(o->a1.a2.after_start)
+#define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(o->a1.a2.before_subscript)
+#define SPACES_BEFORE_TEXT2(a1, a2)      SPACES(o->a1.a2.before_text)
+#define SPACES_BEFORE_ATTRIBUTE2(a1, a2) SPACES(o->a1.a2.before_attribute)
+#define SPACES_BEFORE_END2(a1, a2)       SPACES(o->a1.a2.before_end)
+#define SPACES_AFTER_START2(a1, a2)      SPACES(o->a1.a2.after_start)
 
-# define SPACES_BEFORE_END3(a1, a2, a3)   SPACES(o->a1.a2.a3.before_end)
-# define SPACES_BEFORE3(a1, a2, a3)       SPACES(o->a1.a2.a3.before)
-# define SPACES_AFTER_START3(a1, a2, a3)  SPACES(o->a1.a2.a3.after_start)
-# define SPACES_AFTER3(a1, a2, a3)        SPACES(o->a1.a2.a3.after)
+#define SPACES_BEFORE_END3(a1, a2, a3)   SPACES(o->a1.a2.a3.before_end)
+#define SPACES_BEFORE3(a1, a2, a3)       SPACES(o->a1.a2.a3.before)
+#define SPACES_AFTER_START3(a1, a2, a3)  SPACES(o->a1.a2.a3.after_start)
+#define SPACES_AFTER3(a1, a2, a3)        SPACES(o->a1.a2.a3.after)
 
-# define SPACES_BEFORE4(a1, a2, a3, a4)   SPACES(o->a1.a2.a3.a4.before)
-# define SPACES_AFTER4(a1, a2, a3, a4)    SPACES(o->a1.a2.a3.a4.after)
+#define SPACES_BEFORE4(a1, a2, a3, a4)   SPACES(o->a1.a2.a3.a4.before)
+#define SPACES_AFTER4(a1, a2, a3, a4)    SPACES(o->a1.a2.a3.a4.after)
 
-# define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
-# define GLOB_AST                         o->command.glob.ast_glob
-# define SET_SHOW_SHORT                   o->command.set.display_short
-#endif
-
-#define NVIM_VIML_DUMPERS_CH_MACROS_H
+#define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
+#define GLOB_AST                         o->command.glob.ast_glob
+#define SET_SHOW_SHORT                   o->command.set.display_short
