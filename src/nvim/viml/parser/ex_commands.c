@@ -6776,7 +6776,7 @@ static CMD_SUBP_DEF(parse_syntax_list)
   if (ENDS_EXCMD(*p)) {
     return OK;
   }
-  STATIC_ASSERT(SYN_ARG_LIST_GROUPS == SYN_ARG_CLEAR_GROUPS,
+  STATIC_ASSERT((int) SYN_ARG_LIST_GROUPS == (int) SYN_ARG_CLEAR_GROUPS,
                 ":syn-list is not compatible with :syn-clear");
   SynGroupList **next = &(subargsargs[SYN_ARG_LIST_GROUPS].arg.group);
   while (!ENDS_EXCMD(*p)) {
@@ -7046,7 +7046,30 @@ static CMD_SUBP_DEF(parse_syntax_spell)
 
 #define parse_syntax_clear parse_syntax_list
 
-static const SubCommandDefinition syntax_commands[];
+static const SubCommandDefinition syntax_commands[] = {
+  {SS("case"), kSynCase, SUBARGS(SYN_ARGS_CASE), &parse_syntax_case},
+  {SS("clear"), kSynClear, SUBARGS(SYN_ARGS_CLEAR), &parse_syntax_clear},
+  {SS("cluster"), kSynCluster, SUBARGS(SYN_ARGS_CLUSTER),
+   &parse_syntax_cluster},
+  {SS("conceal"), kSynConceal, SUBARGS(SYN_ARGS_CONCEAL),
+   &parse_syntax_conceal},
+  {SS("enable"), kSynEnable, EMPTY_SUBARGS, NULL},
+  {SS("include"), kSynInclude, SUBARGS(SYN_ARGS_INCLUDE),
+   &parse_syntax_include},
+  {SS("keyword"), kSynKeyword, SUBARGS(SYN_ARGS_KEYWORD),
+   &parse_syntax_keyword},
+  {SS("list"), kSynList, SUBARGS(SYN_ARGS_LIST), &parse_syntax_list},
+  {SS("manual"), kSynManual, EMPTY_SUBARGS, NULL},
+  {SS("match"), kSynMatch, SUBARGS(SYN_ARGS_MATCH), &parse_syntax_match},
+  {SS("on"), kSynOn, EMPTY_SUBARGS, NULL},
+  {SS("off"), kSynOff, EMPTY_SUBARGS, NULL},
+  {SS("region"), kSynRegion, SUBARGS(SYN_ARGS_REGION), &parse_syntax_region},
+  {SS("reset"), kSynReset, EMPTY_SUBARGS, NULL},
+  {SS("spell"), kSynSpell, SUBARGS(SYN_ARGS_SPELL), &parse_syntax_spell},
+  {SS("sync"), kSynSync, SUBARGS(SYN_ARGS_SYNC), &parse_syntax_sync},
+  {SS(""), kSynList, EMPTY_SUBARGS, NULL},
+  {NULL, 0, 0, 0, NULL, NULL},
+};
 
 static CMD_SUBP_DEF(parse_syntax_sync)
 {
@@ -7186,31 +7209,6 @@ static CMD_SUBP_DEF(parse_syntax_sync)
   *pp = p;
   return OK;
 }
-
-static const SubCommandDefinition syntax_commands[] = {
-  {SS("case"), kSynCase, SUBARGS(SYN_ARGS_CASE), &parse_syntax_case},
-  {SS("clear"), kSynClear, SUBARGS(SYN_ARGS_CLEAR), &parse_syntax_clear},
-  {SS("cluster"), kSynCluster, SUBARGS(SYN_ARGS_CLUSTER),
-   &parse_syntax_cluster},
-  {SS("conceal"), kSynConceal, SUBARGS(SYN_ARGS_CONCEAL),
-   &parse_syntax_conceal},
-  {SS("enable"), kSynEnable, EMPTY_SUBARGS, NULL},
-  {SS("include"), kSynInclude, SUBARGS(SYN_ARGS_INCLUDE),
-   &parse_syntax_include},
-  {SS("keyword"), kSynKeyword, SUBARGS(SYN_ARGS_KEYWORD),
-   &parse_syntax_keyword},
-  {SS("list"), kSynList, SUBARGS(SYN_ARGS_LIST), &parse_syntax_list},
-  {SS("manual"), kSynManual, EMPTY_SUBARGS, NULL},
-  {SS("match"), kSynMatch, SUBARGS(SYN_ARGS_MATCH), &parse_syntax_match},
-  {SS("on"), kSynOn, EMPTY_SUBARGS, NULL},
-  {SS("off"), kSynOff, EMPTY_SUBARGS, NULL},
-  {SS("region"), kSynRegion, SUBARGS(SYN_ARGS_REGION), &parse_syntax_region},
-  {SS("reset"), kSynReset, EMPTY_SUBARGS, NULL},
-  {SS("spell"), kSynSpell, SUBARGS(SYN_ARGS_SPELL), &parse_syntax_spell},
-  {SS("sync"), kSynSync, SUBARGS(SYN_ARGS_SYNC), &parse_syntax_sync},
-  {SS(""), kSynList, EMPTY_SUBARGS, NULL},
-  {NULL, 0, 0, 0, NULL, NULL},
-};
 
 static CMD_P_DEF(parse_syntax)
 {

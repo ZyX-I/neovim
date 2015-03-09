@@ -90,7 +90,12 @@ static FDEC(print_collection_ch, const u8char_T ch)
       WC((char) nr2hex((unsigned) ((ch >>  8) & 0xF)));
       WC((char) nr2hex((unsigned) ((ch >>  4) & 0xF)));
       WC((char) nr2hex((unsigned) (ch & 0xF)));
-    } else if (ch <= 0xFFFFFFFFL) {
+    } else
+// GCC emits a warning that comparison is always true if I don’t #if it.
+#if SIZEOF_INT > 4
+      if (ch <= 0xFFFFFFFFL)
+#endif
+    {
       WS("\\U");
       WC((char) nr2hex((unsigned) ((ch >> 28) & 0xF)));
       WC((char) nr2hex((unsigned) ((ch >> 24) & 0xF)));
@@ -100,8 +105,10 @@ static FDEC(print_collection_ch, const u8char_T ch)
       WC((char) nr2hex((unsigned) ((ch >>  8) & 0xF)));
       WC((char) nr2hex((unsigned) ((ch >>  4) & 0xF)));
       WC((char) nr2hex((unsigned) (ch & 0xF)));
+#if SIZEOF_INT > 4
     } else {
       assert(false);
+#endif
     }
   }
   FUNCTION_END;
@@ -136,6 +143,7 @@ static FDEC(print_filename_modifiers, const FilenameModifier *const mod)
       WC(modifier_chars[next->type]);
     }
     if (next->type == kFnameModSub || next->type == kFnameModGSub) {
+#ifndef CH_MACROS_DEFINE_LENGTH
       // Possible delimiter characters, in order of preference
       static const char rechars[] = {
         // Characters that have no special meaning in regex, not even escaped
@@ -160,6 +168,7 @@ static FDEC(print_filename_modifiers, const FilenameModifier *const mod)
           break;
         }
       }
+#endif
       WC(delim);
       F(print_regex, next->reg, NUL);
       WC(delim);
@@ -1460,7 +1469,7 @@ static CMD_FDEC(print_delmarks)
       switch (*p) {
         case 'Y': {
           if (from == 0) {
-            from = (uint8_t) FIRST_MARK_CODE + (uint8_t) (p - s);
+            from = (uint8_t) (FIRST_MARK_CODE + (uint8_t) (p - s));
           }
           break;
         }
@@ -1469,7 +1478,8 @@ static CMD_FDEC(print_delmarks)
           if (from == 0) {
             break;
           }
-          const uint8_t to = (uint8_t) FIRST_MARK_CODE + (uint8_t) (p - s) - 1;
+          const uint8_t to = (uint8_t) ((uint8_t) FIRST_MARK_CODE
+                                        + (uint8_t) (p - s) - 1);
           WC((char) from);
           if (from != to) {
             WC('-');
