@@ -129,3 +129,4 @@ src/nvim/version.h
 src/nvim/vim.h
 src/nvim/window.c
 src/nvim/window.h
+src/nvim/viml/dumpers/ch_macros.h
