@@ -5933,7 +5933,9 @@ static CMD_P_DEF(parse_highlight)
               unsigned red : 8;
             } rgb_3;
           } current_color;
-          current_color.rgb_1.rgb = (unsigned) strtoul(arg_start + 1, NULL, 16);
+          // & 0xFFFFFF is not needed: it is there to silence GCC warning.
+          current_color.rgb_1.rgb = (unsigned) (
+              strtoul(arg_start + 1, NULL, 16) & 0xFFFFFF);
           node->args[prop_idx].arg.color.data.rgb.red = current_color.rgb_3.red;
           node->args[prop_idx].arg.color.data.rgb.green
               = current_color.rgb_3.green;
