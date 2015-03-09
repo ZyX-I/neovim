@@ -31,7 +31,6 @@ int write_string_len(const char *const s, size_t len, Writer write,
 {
   if (len) {
     write(s, 1, len, cookie);
-    // TODO Examine errno and write output
   }
   return OK;
 }
@@ -63,7 +62,6 @@ size_t write_escaped_string_len(const void *s, size_t size, size_t nmemb,
       written += arg->write(bslash, 1, 1, arg->cookie);
     }
     written += arg->write(p, 1, 1, arg->cookie);
-    // TODO Examine errno
   }
   return written;
 }
