@@ -183,7 +183,7 @@ int represent_parse0(const char *arg, const bool print_as_expr)
     uint8_t digit = (uint8_t) ((offset >> ((i - 1) * 4)) & 0xF);
     const char s[] = {(digit < 0xA
                        ? (char) ('0' + digit)
-                       : (char) ('A' + (char) (digit - 0xA)))};
+                       : (char) ((char) 'A' + (char) (digit - (uint8_t) 0xA)))};
     if (write(s, 1, 1, cookie) != 1) {
       return FAIL;
     }
