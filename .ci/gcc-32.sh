@@ -20,7 +20,7 @@ CMAKE_EXTRA_FLAGS="-DTRAVIS_CI_BUILD=ON \
 	-DFIND_LIBRARY_USE_LIB64_PATHS=OFF \
 	-DCMAKE_IGNORE_PATH=/lib:/usr/lib:/usr/local/lib \
 	-DCMAKE_TOOLCHAIN_FILE=$TRAVIS_BUILD_DIR/cmake/i386-linux-gnu.toolchain.cmake \
-	-DBUSTED_OUTPUT_TYPE=plainTerminal"
+	-DBUSTED_OUTPUT_TYPE=utfTerminalDetailed"
 
 # Build and output version info.
 $MAKE_CMD DEPS_CMAKE_FLAGS="$CMAKE_EXTRA_FLAGS" \

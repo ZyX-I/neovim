@@ -20,12 +20,12 @@ if [ "$TRAVIS_OS_NAME" = "linux" ]; then
 	export UBSAN_OPTIONS="log_path=$tmpdir/ubsan" # not sure if this works
 	CMAKE_EXTRA_FLAGS="-DTRAVIS_CI_BUILD=ON \
 		-DUSE_GCOV=ON \
-		-DBUSTED_OUTPUT_TYPE=plainTerminal \
+		-DBUSTED_OUTPUT_TYPE=utfTerminalDetailed \
 		-DSANITIZE=ON"
 else
 	CMAKE_EXTRA_FLAGS="-DTRAVIS_CI_BUILD=ON \
 		-DUSE_GCOV=ON \
-		-DBUSTED_OUTPUT_TYPE=plainTerminal"
+		-DBUSTED_OUTPUT_TYPE=utfTerminalDetailed"
 fi
 
 setup_deps x64
