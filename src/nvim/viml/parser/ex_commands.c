@@ -7374,7 +7374,7 @@ static int get_address(const char **pp, Address *address,
     case '8':
     case '9': {
       address->type = kAddrFixed;
-      address->data.lnr = getdigits(&p);
+      address->data.lnr = (linenr_T) getdigits(&p);
       break;
     }
     default: {
