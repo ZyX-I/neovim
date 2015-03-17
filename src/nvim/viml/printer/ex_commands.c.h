@@ -2094,7 +2094,7 @@ static CMD_FDEC(print_write)
     assert(node->args[ARG_W_SHELL].arg.str == NULL);
     WS(" >>");
   }
-  if (node->args[ARG_W_SHELL].arg.str != NULL) {
+  if (node->type != kCmdUpdate && node->args[ARG_W_SHELL].arg.str != NULL) {
     assert(node->glob.pat.type == kPatMissing);
     WS(" !");
     W(node->args[ARG_W_SHELL].arg.str);

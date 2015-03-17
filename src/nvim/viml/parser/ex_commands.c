@@ -2032,11 +2032,13 @@ static int do_parse_menu(CMD_P_ARGS, bool unmenu)
       mb_ptr_adv_(p);
     }
 
-    icon = xmemdupz(s, (size_t) (p - s));
+    if (!unmenu) {
+      icon = xmemdupz(s, (size_t) (p - s));
 
-    str_unescape(icon, false);
+      str_unescape(icon, false);
 
-    node->args[ARG_MENU_ICON].arg.str = icon;
+      node->args[ARG_MENU_ICON].arg.str = icon;
+    }
 
     if (*p != NUL)
       p = skipwhite(p);
