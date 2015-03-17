@@ -2091,7 +2091,7 @@ static CMD_FDEC(print_write)
 {
   FUNCTION_START;
   if (node->args[ARG_W_APPEND].arg.flags) {
-    assert(node->args[ARG_W_SHELL].arg.str == NULL);
+    assert(node->type == kCmdUpdate || node->args[ARG_W_SHELL].arg.str == NULL);
     WS(" >>");
   }
   if (node->type != kCmdUpdate && node->args[ARG_W_SHELL].arg.str != NULL) {
