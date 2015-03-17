@@ -22,10 +22,28 @@ p1ct = function(str, one, flags)
   return ffi.string(result)
 end
 local eqn
+local testnumber = 1
 eqn = function(expected_result, cmd, one, flags)
   if cmd == nil then
     cmd = expected_result
   end
+
+  if false then
+    args_fp = io.open(('./test/args/test-%04u.args'):format(testnumber), 'w')
+    if one then
+      args_fp:write('-1\0')
+    end
+    args_fp:write(cmd .. '\0')
+    if flags and flags ~= 0 then
+      args_fp:write(('%u\0'):format(flags))
+    end
+    args_fp:close()
+    exp_fp = io.open(('./test/args/test-%04u.expected'):format(testnumber), 'w')
+    exp_fp:write(expected_result)
+    exp_fp:close()
+    testnumber = testnumber + 1
+  end
+
   local result = p1ct(cmd, one, flags)
   return eq(expected_result, result)
 end
