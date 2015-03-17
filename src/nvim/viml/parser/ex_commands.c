@@ -426,6 +426,7 @@ static void free_pattern(Pattern *pat)
     }
   }
   free_pattern(pat->next);
+  free(pat->next);
 }
 
 static void free_glob(Glob *glob)
@@ -587,6 +588,7 @@ static void free_cmd_arg(CommandArg *arg, CommandArgType type)
     }
     case kArgPattern: {
       free_pattern(arg->arg.pat);
+      free(arg->arg.pat);
       arg->arg.pat = NULL;
       break;
     }
@@ -724,9 +726,11 @@ void free_cmd(CommandNode *node)
 
   numargs = CMDDEF(node->type).num_args;
 
-  if (node->type != kCmdUnknown)
-    for (i = 0; i < numargs; i++)
+  if (node->type != kCmdUnknown) {
+    for (i = 0; i < numargs; i++) {
       free_cmd_arg(&(node->args[i]), CMDDEF(node->type).arg_types[i]);
+    }
+  }
 
   free_cmd(node->next);
   free_cmd(node->children);
@@ -1284,6 +1288,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
       if (literal_start != NULL) {
         char *s;
         const char *t;
+        assert(*next == NULL);
         *next = pattern_alloc(kPatLiteral);
         (*next)->data.str = xcalloc(literal_length + 1, sizeof(char));
         s = (*next)->data.str;
@@ -1302,6 +1307,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
       }
       if (type == kPatMissing)
         break;
+      assert(*next == NULL);
       *next = pattern_alloc(type);
       bool parse_fmods = false;
       switch (type) {
@@ -1323,7 +1329,6 @@ static int get_pattern(const char **pp, CommandParserError *error,
           break;
         }
         case kGlobShell: {
-          *next = pattern_alloc(kGlobShell);
           const char *const init_p = p;
           p++;
           while (!ENDS_EXCMD(*p) && !(*p == '`' && p[-1] != '\\')) {
@@ -1331,7 +1336,8 @@ static int get_pattern(const char **pp, CommandParserError *error,
           }
           if (*p != '`' || p == init_p + 1) {
             free_pattern(*next);
-            memset(*next, 0, sizeof(**next));
+            free(*next);
+            *next = NULL;
             p = init_p + 1;
             literal_start = init_p;
             literal_length = 1;
@@ -1404,8 +1410,9 @@ static int get_pattern(const char **pp, CommandParserError *error,
             p++;
           } else {
             p = init_p;
-            free_colitem((*next)->data.collection.colitem);
-            memset(*next, 0, sizeof(**next));
+            free_pattern(*next);
+            free(*next);
+            *next = NULL;
             literal_start = p;
             p++;
             literal_length = 1;
@@ -1419,7 +1426,8 @@ static int get_pattern(const char **pp, CommandParserError *error,
           const char *const end = find_env_end(&p);
           if (end == NULL) {
             free_pattern(*next);
-            memset(*next, 0, sizeof(**next));
+            free(*next);
+            *next = NULL;
             literal_start = init_p - 1;
             p = init_p;
             literal_length = 1;
@@ -1441,7 +1449,8 @@ static int get_pattern(const char **pp, CommandParserError *error,
           } else {
             p = init_p;
             free_pattern(*next);
-            memset(*next, 0, sizeof(**next));
+            free(*next);
+            *next = NULL;
             literal_start = p;
             p++;
             literal_length = 1;
@@ -1477,6 +1486,7 @@ static int get_pattern(const char **pp, CommandParserError *error,
 
 get_glob_error_return:
   free_pattern(*pat);
+  free(*pat);
   *pat = NULL;
   return ret;
 }
@@ -2274,7 +2284,7 @@ static CMD_P_DEF(parse_do)
   };
 
   if ((cmd = parse_cmd_sequence(o, new_position, (VimlLineGetter) &do_fgetline,
-                                &arg, false))
+                                &arg, true))
       == NULL) {
     return FAIL;
   }
@@ -3056,6 +3066,7 @@ static CMD_P_DEF(parse_breakadd)
                             (size_t) (p - s) + position.col))
         != OK) {
       free_pattern(pat);
+      free(pat);
       return cret;
     }
     node->args[ARG_BREAK_NAME].arg.pat = pat;
@@ -3144,6 +3155,7 @@ static CMD_P_DEF(parse_regex)
     np += 2;
     assert(*np == NUL);
     regex = regex_alloc(new_regex, (size_t) (np - new_regex));
+    free(new_regex);
   }
   *pp = p;
   node->args[ARG_REG_REG].arg.reg = regex;
@@ -6427,7 +6439,8 @@ int parse_group_list(CommandParserError *error, const char **pp,
     } else if (*name_start == '@') {
       (*next)->type = kSynGroupCluster;
       (*next)->data.name = xmemdupz(name_start + 1, name_len - 1);
-    } else if (strpbrk(name_start, "\\.*^$~[") == NULL) {
+    } else if (strpbrk(name_start, "\\.*^$~[") == NULL
+               || strpbrk(name_start, "\\.*^$~[") < p) {
       (*next)->type = kSynGroupLiteral;
       (*next)->data.name = xmemdupz(name_start, name_len);
     } else {

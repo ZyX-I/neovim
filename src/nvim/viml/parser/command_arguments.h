@@ -85,7 +85,6 @@ typedef enum {
 #define ARGS_MATCH    {kArgString, kArgRegex}
 #define ARGS_MT       {kArgMenuName, kArgString, kArgMenuName, kArgString}
 #define ARGS_NORMAL   {kArgString}
-#define ARGS_PROFILE  {kArgFlags, kArgString, kArgGlob, kArgPattern}
 #define ARGS_W        {kArgFlags, kArgString}
 #define ARGS_UP       {kArgFlags}
 #define ARGS_REDIR    {kArgFlags, kArgString, kArgAssignLhs}
@@ -222,7 +221,7 @@ enum {
   ARG_UNMENU_LHS    = 0,
 };
 
-// :breakadd/:breakdel
+// :breakadd/:breakdel/:profile/:profdel
 // lnum is recorded in range
 enum {
   ARG_BREAK_TYPE    = 0,
@@ -778,21 +777,6 @@ enum {
 enum {
   ARG_NORMAL_STR    = 0,
 };
-
-// :profile/:profdel
-enum {
-  ARG_PROFILE_FLAGS = 0,
-  ARG_PROFILE_EXPR,
-  ARG_PROFILE_FILE,
-  ARG_PROFILE_PAT,
-};
-
-#define FLAG_PROFILE_ACTION_MASK  0x07
-#define VAL_PROFILE_ACTION_START  0x00
-#define VAL_PROFILE_ACTION_PAUSE  0x01
-#define VAL_PROFILE_ACTION_CONT   0x02
-#define VAL_PROFILE_ACTION_FUNC   0x03
-#define VAL_PROFILE_ACTION_FILE   0x04
 
 // :write/:read/:update
 enum {

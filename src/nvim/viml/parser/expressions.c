@@ -135,6 +135,7 @@ void free_expr(Expression *expr)
 
   free(expr->string);
   free_expr_node(expr->node);
+  free(expr);
 }
 
 /// Check whether given character is a valid name character
