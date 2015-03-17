@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
 int do_init(void **);
 
@@ -14,8 +15,16 @@ static char *(*parse_cmd_test)(char *arg, uint_least16_t flags, bool one,
 
 int main(int argc, char **argv, char **env)
 {
-  if (argc <= 1)
+  if (argc <= 1) {
     return 1;
+  }
+
+  bool one = false;
+  if (strcmp(argv[1], "-1") == 0) {
+    argv++;
+    argc--;
+    one = true;
+  }
 
   void *handle;
 
@@ -30,7 +39,7 @@ int main(int argc, char **argv, char **env)
   parse_cmd_test(argv[1], (argc > 2
                            ? (uint_least16_t) atoi(argv[2])
                            : 0),
-                 false, true);
+                 one, true);
   putc('\n', stdout);
   return 0;
 }
