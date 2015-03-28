@@ -337,6 +337,7 @@ static void free_replacement(Replacement *rep)
       break;
     }
   }
+  free_replacement(rep->next);
   free(rep);
 }
 
@@ -528,6 +529,7 @@ static void free_syn_group_list(SynGroupList *group)
   }
   free_syn_group_list(group->next);
   group->next = NULL;
+  free(group);
 }
 
 static void free_syn_pattern_data(SynPattern *syn_pat)
@@ -7017,6 +7019,7 @@ static CMD_SUBP_DEF(parse_syntax_region)
         p = skiptowhite(group_name_start);
         if (p - group_name_start != 4
             || STRNCMP(group_name_start, "NONE", 4) != 0) {
+          free(subargsargs[arg_idx].arg.str);
           subargsargs[arg_idx].arg.str =
               xmemdupz(group_name_start, (size_t) (p - group_name_start));
         }
