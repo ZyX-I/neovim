@@ -12,6 +12,7 @@ int do_init(void **);
 static void (*init_func)(void);
 static char *(*parse_cmd_test)(char *arg, uint_least16_t flags, bool one,
                                bool out);
+static void (*mch_exit)(int code);
 
 int main(int argc, char **argv, char **env)
 {
@@ -41,6 +42,11 @@ int main(int argc, char **argv, char **env)
                            : 0),
                  one, true);
   putc('\n', stdout);
+
+  mch_exit = dlsym(handle, "mch_exit");
+  if (mch_exit == NULL)
+    return 6;
+  mch_exit(0);
   return 0;
 }
 #endif  // COMPILE_TEST_VERSION
