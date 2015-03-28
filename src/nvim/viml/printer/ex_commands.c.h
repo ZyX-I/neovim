@@ -1303,6 +1303,18 @@ static CMD_FDEC(print_breakadd)
       WS(" here");
       FUNCTION_END;
     }
+    case kProfileStart: {
+      WS(" start ");
+      break;
+    }
+    case kProfilePause: {
+      WS(" pause");
+      FUNCTION_END;
+    }
+    case kProfileContinue: {
+      WS(" continue");
+      FUNCTION_END;
+    }
   }
   if (node->range.address.type != kAddrMissing) {
     assert(node->range.address.type == kAddrFixed);

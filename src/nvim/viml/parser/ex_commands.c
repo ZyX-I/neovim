@@ -3016,7 +3016,8 @@ static CMD_P_DEF(parse_breakadd)
   BreakType type;
   const char *p = *pp;
   const char *const s = p;
-  bool profiling = (node->type == kCmdProfile || node->type == kCmdProfdel);
+  bool is_profile = node->type == kCmdProfile;
+  bool profiling = (is_profile || node->type == kCmdProfdel);
 
   if (STRNCMP(p, "func", 4) == 0) {
     type = kBreakInFunction;
@@ -3027,10 +3028,23 @@ static CMD_P_DEF(parse_breakadd)
   } else if (!profiling && STRNCMP(p, "here", 4) == 0) {
     type = kBreakHere;
     p += 4;
+  } else if (is_profile && STRNCMP(p, "start", 5) == 0) {
+    type = kProfileStart;
+    p += 5;
+  } else if (is_profile && STRNCMP(p, "pause", 5) == 0) {
+    type = kProfilePause;
+    p += 5;
+  } else if (is_profile && STRNCMP(p, "continue", 8) == 0) {
+    type = kProfileContinue;
+    p += 8;
   } else {
-    if (profiling) {
+    if (is_profile) {
       error->message =
-          N_("E475: Profile commands only accept `func' and `file' "
+          N_("E475: :profile command only accepts `func', `file', `start', "
+             "`pause' and `continue' as its first argument");
+    } else if (profiling) {
+      error->message =
+          N_("E475: :profdel command only accepts `func' and `file' "
              "as their first argument");
     } else {
       error->message =
@@ -3042,8 +3056,19 @@ static CMD_P_DEF(parse_breakadd)
 
   p = skipwhite(p);
 
-  if (type == kBreakHere) {
+  if (type == kBreakHere || type == kProfilePause || type == kProfileContinue) {
     // Do nothing
+  } else if (type == kProfileStart) {
+    if (*p == NUL) {
+      error->message = N_("E750: Expected file name");
+      error->position = p;
+      return NOTDONE;
+    }
+    Pattern *pat = pattern_alloc(kPatLiteral);
+    size_t file_len = STRLEN(p);
+    pat->data.str = xmemdupz(p, file_len);
+    node->args[ARG_BREAK_NAME].arg.pat = pat;
+    p += file_len;
   } else {
     if (!profiling && VIM_ISDIGIT(*p)) {
       size_t lnr = 0;

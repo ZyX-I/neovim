@@ -231,7 +231,10 @@ enum {
 typedef enum {
   kBreakInFunction,
   kBreakInFile,
-  kBreakHere
+  kBreakHere,
+  kProfileStart,
+  kProfilePause,
+  kProfileContinue,
 } BreakType;
 
 // :[lc](add)?buffer

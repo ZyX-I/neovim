@@ -188,8 +188,8 @@ describe('parse_one_cmd errors', function()
   itn('\\ error: E475: :behave command currently only supports mswin and xterm: !!m!!swi',
       'behave mswi')
   describe('debugging functions', function()
-    itn('\\ error: E475: Profile commands only accept `func\' and `file\' as their first argument: !!h!!ere',
-        'profile here')
+    itn('\\ error: E475: :profile command only accepts `func\', `file\', `start\', `pause\' and `continue\' as its first argument: !!f!!oo', 'profile foo')
+    itn('\\ error: E750: Expected file name: start!!!', 'profile start')
     itn('\\ error: E475: Expecting function name or pattern: func!!!', 'breakadd func')
     itn('\\ error: E475: Expecting function name or pattern: func!!!', 'breakdel func')
     itn('\\ error: E475: Expecting function name or pattern: func13!!!', 'breakadd func13')
