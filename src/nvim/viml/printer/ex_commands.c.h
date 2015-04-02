@@ -915,7 +915,7 @@ static FDEC(print_block_children, const CommandNode *const node,
   if (barnext) {
     WS(" | ");
   } else {
-    WC('\n');
+    W_NL;
   }
   F(print_node, node, indent, barnext);
   FUNCTION_END;
@@ -970,7 +970,8 @@ static CMD_FDEC(print_syntax_error)
   FUNCTION_END;
 }
 
-static FDEC(print_ga_strs, const garray_T *const ga, const char delim,
+static FDEC(print_ga_strs, const garray_T *const ga,
+            const char *const delim, const size_t delim_len,
             const char *const escapes)
 {
   FUNCTION_START;
@@ -978,12 +979,12 @@ static FDEC(print_ga_strs, const garray_T *const ga, const char delim,
 
   if (escapes == NULL) {
     for (int i = 0; i < ga_len ; i++) {
-      WC(delim);
+      W_LEN(delim, delim_len);
       W(((char **)ga->ga_data)[i]);
     }
   } else {
     for (int i = 0; i < ga_len ; i++) {
-      WC(delim);
+      W_LEN(delim, delim_len);
       W_ESCAPED(((char **)ga->ga_data)[i], escapes);
     }
   }
@@ -995,8 +996,8 @@ static CMD_FDEC(print_append)
 {
   FUNCTION_START;
   const garray_T *const ga = &(node->args[ARG_APPEND_LINES].arg.ga_strs);
-  F(print_ga_strs, ga, '\n', NULL);
-  WC('\n');
+  F(print_ga_strs, ga, NEWLINE, NULL);
+  W_NL;
   WC('.');
   FUNCTION_END;
 }
@@ -1039,14 +1040,11 @@ static CMD_FDEC(print_map)
     // FIXME untranslate mappings
     W(node->args[ARG_MAP_LHS].arg.str);
 
+    assert(node->children == NULL);
     if (unmap) {
     } else if (node->args[ARG_MAP_EXPR].arg.expr != NULL) {
       WC(' ');
       F(print_expr, node->args[ARG_MAP_EXPR].arg.expr);
-    } else if (node->children != NULL) {
-      WC('\n');
-      // FIXME untranslate mappings
-      F(print_node, node->children, indent, barnext);
     } else if (node->args[ARG_MAP_RHS].arg.str != NULL) {
       WC(' ');
       // FIXME untranslate mappings
@@ -1719,13 +1717,13 @@ static CMD_FDEC(print_script)
       }
     }
     W(end_pattern);
-    WC('\n');
+    W_NL;
     for (size_t i = 0; i < (size_t) ga_strs->ga_len; i++) {
       W(((char **) (ga_strs->ga_data))[i]);
-      WC('\n');
+      W_NL;
     }
     W(end_pattern);
-    WC('\n');
+    W_NL;
     if (allocated_end_pattern) {
       free(end_pattern);
     }
@@ -2139,7 +2137,7 @@ static CMD_FDEC(print_loadkeymap)
   assert(ga_lhss->ga_len == ga_rhss->ga_len);
   assert(ga_lhss->ga_len == ga_coms->ga_len);
   for (size_t i = 0; i < lines_len; i++) {
-    WC('\n');
+    W_NL;
     const char *const lhs = ((char **)ga_lhss->ga_data)[i];
     const char *const rhs = ((char **)ga_rhss->ga_data)[i];
     const char *const com = ((char **)ga_coms->ga_data)[i];
@@ -2791,7 +2789,7 @@ static CMD_FDEC(print_syntax)
       F(print_syn_options, SYN_ARG_KEYWORD_FLAGS, subargsargs,
         SYN_SCOPE_KEYWORD);
       F(print_ga_strs, &(subargsargs[SYN_ARG_KEYWORD_KEYWORDS].arg.ga_strs),
-        ' ', " \t");
+        " ", 1, " \t");
       break;
     }
     case kSynClear:
@@ -3023,7 +3021,7 @@ static FDEC(print_node, const CommandNode *const node,
     if (barnext) {
       WS(" | ");
     } else {
-      WC('\n');
+      W_NL;
     }
     F(print_node, node->next, indent, barnext);
   }

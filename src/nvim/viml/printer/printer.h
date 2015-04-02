@@ -99,6 +99,10 @@ typedef struct {
     } global;
   } command;
   bool magic;
+  struct {
+    const char *string;
+    size_t len;
+  } newline;
 } StyleOptions;
 
 typedef struct expression_options ExprStyleOptions;

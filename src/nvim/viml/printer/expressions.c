@@ -150,7 +150,11 @@ const StyleOptions default_po = {
       " :"
     },
   },
-  true
+  true,
+  {
+    "\n",
+    1,
+  },
 };
 
 static char *expression_type_string[] = {

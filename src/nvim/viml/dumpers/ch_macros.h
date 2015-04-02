@@ -137,6 +137,13 @@
 /// @param  s         String which will be written.
 /// @param  escchars  Characters that should be escaped.
 
+/// @def W_NL
+/// @brief Write new line.
+///
+/// Is used for writing newline defined in StyleOptions. Unlike most other 
+/// definitions this was created for technical reasons: some newlines may be 
+/// part of some commands.
+
 /// @def FILL
 /// @brief Write some character multiple times
 ///
@@ -415,6 +422,10 @@
     } while (0)
 #define CALL_LEN(f, ...) s##f##_len(o, __VA_ARGS__)
 
+#define _APPLY(a, b) a(b)
+
+#define W_NL _APPLY(W_LEN, NEWLINE)
+
 #define SPACES_BEFORE_SUBSCRIPT2(a1, a2) SPACES(o->a1.a2.before_subscript)
 #define SPACES_BEFORE_TEXT2(a1, a2)      SPACES(o->a1.a2.before_text)
 #define SPACES_BEFORE_ATTRIBUTE2(a1, a2) SPACES(o->a1.a2.before_attribute)
@@ -441,6 +452,8 @@
 #define AU_CMD_SEPARATOR                 o->command.autocmd.cmd_separator
 #define CMD_CMD_SEPARATOR                o->command.command.cmd_separator
 #define G_CMD_SEPARATOR                  o->command.global.cmd_separator
+
+#define NEWLINE                          o->newline.string, o->newline.len
 
 #define IS_MAGIC                         o->magic
 #endif  // NVIM_VIML_DUMPERS_CH_MACROS_H
