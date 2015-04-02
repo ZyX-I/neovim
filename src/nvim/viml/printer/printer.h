@@ -78,7 +78,27 @@ typedef struct {
     struct {
       bool display_short;
     } set;
+    struct {
+      bool use_ampersand;
+    } substitute;
+    struct {
+      const char *cmd_separator;
+    } do_cmd;
+    struct {
+      const char *cmd_separator;
+    } autocmd;
+    struct {
+      bool explicit_nargs;
+      const char *cmd_separator;
+    } command;
+    struct {
+      bool use_character;
+    } history;
+    struct {
+      const char *cmd_separator;
+    } global;
   } command;
+  bool magic;
 } StyleOptions;
 
 typedef struct expression_options ExprStyleOptions;

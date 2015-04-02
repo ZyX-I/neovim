@@ -432,4 +432,15 @@
 #define ADD_TRAILING_COMMA2(a1, a2)      o->a1.a2.trailing_comma
 #define GLOB_AST                         o->command.glob.ast_glob
 #define SET_SHOW_SHORT                   o->command.set.display_short
+
+#define USE_S_AMPERSAND                  o->command.substitute.use_ampersand
+#define USE_EXPLICIT_NARGS               o->command.command.explicit_nargs
+#define USE_HISTCHAR                     o->command.history.use_character
+
+#define DO_CMD_SEPARATOR                 o->command.do_cmd.cmd_separator
+#define AU_CMD_SEPARATOR                 o->command.autocmd.cmd_separator
+#define CMD_CMD_SEPARATOR                o->command.command.cmd_separator
+#define G_CMD_SEPARATOR                  o->command.global.cmd_separator
+
+#define IS_MAGIC                         o->magic
 #endif  // NVIM_VIML_DUMPERS_CH_MACROS_H

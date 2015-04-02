@@ -125,12 +125,32 @@ const StyleOptions default_po = {
       COMMENT_SPACES
     },
     {
-      true
+      false
     },
     {
       false
-    }
-  }
+    },
+    {
+      false
+    },
+    {
+      " "
+    },
+    {
+      " :"
+    },
+    {
+      false,
+      " "
+    },
+    {
+      false,
+    },
+    {
+      " :"
+    },
+  },
+  true
 };
 
 static char *expression_type_string[] = {

@@ -756,6 +756,7 @@ void free_cmd(CommandNode *node)
 ///                          `shell command` `` and `` `=VimL.Expression()` ``
 ///                          are allowed).
 /// @param[in]      col      Column number (for error reporting).
+/// @param[in]      magic    If true, &magic option is considered to be set.
 ///
 /// @return OK if everything is good, NOTDONE if there was an error (in this
 ///         case error structure must be populated), FAIL if there was error
@@ -764,7 +765,8 @@ static int get_comma_separated_patterns(const char **pp,
                                         CommandParserError *error,
                                         Pattern **pat,
                                         const bool is_glob,
-                                        const size_t col)
+                                        const size_t col,
+                                        const bool magic)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
   Pattern **next = pat;
@@ -777,7 +779,7 @@ static int get_comma_separated_patterns(const char **pp,
     Pattern *pat = NULL;
     p++;
     if ((cret = get_pattern(&p, error, &pat, true, is_glob,
-                            col + (size_t) (p - s)))
+                            col + (size_t) (p - s), magic))
         != OK) {
       return cret;
     }
@@ -995,7 +997,7 @@ get_pattern_collection_process_literal_character:
 }
 
 static int parse_filename_modifiers(const char **pp, CommandParserError *error,
-                                    FilenameModifier **mod)
+                                    FilenameModifier **mod, const bool magic)
 {
   FilenameModifier **next = mod;
   const char *p = *pp;
@@ -1083,7 +1085,8 @@ parse_filename_modifiers_repeat:
         int pr_ret;
         if ((pr_ret = parse_replacement(&rep_p, error,
                                         ((CommandPosition) { 0, 0 }),
-                                        &((*next)->rep), NUL, false, true))
+                                        &((*next)->rep), NUL, false,
+                                        magic))
             != OK) {
           if (error->position != NULL) {
             error->position = rep_start + (error->position - rep_copy);
@@ -1125,7 +1128,7 @@ const CmdlineSpecialDescription cmdline_specials[] = {
 
 static int get_pattern(const char **pp, CommandParserError *error,
                        Pattern **pat, const bool is_branch, const bool is_glob,
-                       const size_t col)
+                       const size_t col, const bool magic)
 {
   const char *p = *pp;
   Pattern **next = pat;
@@ -1441,7 +1444,8 @@ static int get_pattern(const char **pp, CommandParserError *error,
         case kPatBranch: {
           const char *const init_p = p;
           int gcsp_ret = get_comma_separated_patterns(&p, error, next, is_glob,
-                                                      col + (size_t) (p - s));
+                                                      col + (size_t) (p - s),
+                                                      magic);
           if (gcsp_ret != OK) {
             ret = gcsp_ret;
             goto get_glob_error_return;
@@ -1474,7 +1478,8 @@ static int get_pattern(const char **pp, CommandParserError *error,
           *next = pattern_alloc(kPatFnameMod);
         }
         if ((pfm_ret = parse_filename_modifiers(&p, error,
-                                                &((*next)->data.mod))) != OK) {
+                                                &((*next)->data.mod), magic))
+            != OK) {
           ret = pfm_ret;
           goto get_glob_error_return;
         }
@@ -2934,7 +2939,8 @@ static CMD_P_DEF(parse_autocmd)
   Pattern *pat = pattern_alloc(kPatAuList);
   p--;
   int gcsp_ret = get_comma_separated_patterns(&p, error, &pat, false,
-                                              position.col + (size_t) (p - s));
+                                              position.col + (size_t) (p - s),
+                                              o.flags & FLAG_POC_MAGIC);
   if (gcsp_ret != OK) {
     return gcsp_ret;
   }
@@ -3090,7 +3096,8 @@ static CMD_P_DEF(parse_breakadd)
     Pattern *pat = NULL;
     int cret;
     if ((cret = get_pattern(&p, error, &pat, false, true,
-                            (size_t) (p - s) + position.col))
+                            (size_t) (p - s) + position.col,
+                            o.flags & FLAG_POC_MAGIC))
         != OK) {
       free_pattern(pat);
       free(pat);
@@ -4083,7 +4090,7 @@ static CMD_P_DEF(parse_vimgrep)
     return NOTDONE;
   }
   int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
-                          &(node->glob));
+                          &(node->glob), o.flags & FLAG_POC_MAGIC);
   if (pfret != OK) {
     return pfret;
   }
@@ -4105,7 +4112,7 @@ static CMD_P_DEF(parse_gui)
     return OK;
   }
   int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
-                          &(node->glob));
+                          &(node->glob), o.flags & FLAG_POC_MAGIC);
   if (pfret != OK) {
     return pfret;
   }
@@ -4766,7 +4773,9 @@ static CMD_P_DEF(parse_sub)
     if ((pr_ret = parse_replacement(&p, error, new_position,
                                     &(node->args[ARG_S_REP].arg.rep),
                                     delim, o.flags & FLAG_POC_CPO_SUBPC,
-                                    o.flags & FLAG_POC_MAGIC))
+                                    (node->type == kCmdSubstitute
+                                     ? o.flags & FLAG_POC_MAGIC
+                                     : node->type == kCmdSmagic)))
         != OK) {
       return pr_ret;
     }
@@ -5262,7 +5271,7 @@ static CMD_P_DEF(parse_helptags)
     return NOTDONE;
   }
   int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
-                          &(node->glob));
+                          &(node->glob), o.flags & FLAG_POC_MAGIC);
   if (pfret != OK) {
     return pfret;
   }
@@ -5282,7 +5291,7 @@ static CMD_P_DEF(parse_mkspell)
     return OK;
   }
   int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
-                          &(node->glob));
+                          &(node->glob), o.flags & FLAG_POC_MAGIC);
   if (pfret != OK) {
     return pfret;
   }
@@ -5339,7 +5348,7 @@ static CMD_P_DEF(parse_write)
     return OK;
   }
   int pfret = parse_files(&p, error, position.col + (size_t) (p - s),
-                          &(node->glob));
+                          &(node->glob), o.flags & FLAG_POC_MAGIC);
   if (pfret != OK) {
     return pfret;
   }
@@ -6595,7 +6604,8 @@ static CMD_SUBP_DEF(parse_syntax_include)
   if ((pret = get_pattern(&p, error,
                           &(subargsargs[SYN_ARG_INCLUDE_FILE].arg.pat),
                           false, false,
-                          (size_t) (p - s) + position.col)) != OK) {
+                          (size_t) (p - s) + position.col,
+                          o.flags & FLAG_POC_MAGIC)) != OK) {
     return pret;
   }
   *pp = p;
@@ -8292,11 +8302,12 @@ static int parse_no_cmd(const char **pp,
 /// @param[out]     error  Address where errors are saved.
 /// @param[in]      col    Column number of the first parsed character.
 /// @param[out]     glob   Address where result will be saved.
+/// @param[in]      magic  If true, &magic option is considered to be set.
 ///
 /// @return FAIL in case of failure, NOTDONE in case of error, OK in case of
 ///         success.
 static int parse_files(const char **pp, CommandParserError *error,
-                       const size_t col, Glob *glob)
+                       const size_t col, Glob *glob, const bool magic)
 {
   const char *p = *pp;
   const char *const s = p;
@@ -8307,7 +8318,7 @@ static int parse_files(const char **pp, CommandParserError *error,
     p = skipwhite(p);
     int pret;
     if ((pret = get_pattern(&p, error, &pat, false, true,
-                            (size_t) (p - s) + col))
+                            (size_t) (p - s) + col, magic))
         == FAIL) {
       return FAIL;
     }
@@ -8616,7 +8627,8 @@ int parse_one_cmd(const char **pp,
   }
 
   if (CMDDEF(type).flags & (XFILE|BUFNAME)) {
-    switch (parse_files(&p, &error, (size_t) (p - s) + position.col, &glob)) {
+    switch (parse_files(&p, &error, (size_t) (p - s) + position.col, &glob,
+                        o.flags & FLAG_POC_MAGIC)) {
       case OK: {
         break;
       }

@@ -172,7 +172,7 @@ static FDEC(print_filename_modifiers, const FilenameModifier *const mod)
       WC(delim);
       F(print_regex, next->reg, NUL);
       WC(delim);
-      F(print_replacement, next->rep);
+      F(print_replacement, next->rep, IS_MAGIC);
       WC(delim);
     }
     if (next->next) {
@@ -377,7 +377,11 @@ static FDEC(print_pattern, const Pattern *const pat)
 #undef IF_AST
 #undef IF_AST_END
 
-static FDEC(print_replacement, const Replacement *rep)
+/// Print :substitute replacement string
+///
+/// @param[in]  rep    Printed replacement AST.
+/// @param[in]  magic  True if 'magic' option is in effect.
+static FDEC(print_replacement, const Replacement *rep, const bool magic)
 {
   FUNCTION_START;
   while (rep != NULL) {
@@ -392,12 +396,20 @@ static FDEC(print_replacement, const Replacement *rep)
       REP_ATOM("\\U", kRepUpCase)
       REP_ATOM("\\L", kRepDownCase)
       REP_ATOM("\\E", kRepCaseEnd)
-      // TODO(ZyX-I): Depending on the option, prefer \0 or &
-      REP_ATOM("\\0", kRepMatched)
       REP_ATOM("\\r", kRepNewLine)
 #undef REP_ATOM
+      case kRepMatched: {
+        if (!USE_S_AMPERSAND) {
+          WS("\\0");
+        } else if (magic) {
+          WC('&');
+        } else {
+          WS("\\&");
+        }
+        break;
+      }
       case kRepPrevSub: {
-        if (p_magic) {
+        if (magic) {
           WC('~');
         } else {
           WS("\\~");
@@ -447,8 +459,11 @@ static FDEC(print_replacement, const Replacement *rep)
         break;
       }
       case kRepLiteral: {
-        // TODO(ZyX-I): Escape
-        W(rep->data.str);
+        if (magic) {
+          W_ESCAPED(rep->data.str, "\\~&\n");
+        } else {
+          W_ESCAPED(rep->data.str, "\\\n");
+        }
         break;
       }
       case kRepExpr: {
@@ -770,7 +785,6 @@ static FDEC(print_auevent, const AuEvent event)
   } else if (event == NO_EVENT) {
     assert(false);
   } else {
-    // TODO(ZyX-I): select whether alias should be printed here
     W_LEN(event_names[event].name, event_names[event].len);
   }
   FUNCTION_END;
@@ -858,8 +872,6 @@ static FDEC(print_args, const CommandType type,
       case kArgRegex: {
         if (arg->arg.reg != NULL) {
           WC(' ');
-          // TODO(ZyX-I): Make it possible to print some patterns without
-          //              surrounding "/"
           F(print_regex, arg->arg.reg, '/');
         }
         break;
@@ -958,15 +970,22 @@ static CMD_FDEC(print_syntax_error)
   FUNCTION_END;
 }
 
-static FDEC(print_ga_strs, const garray_T *const ga, const char delim)
+static FDEC(print_ga_strs, const garray_T *const ga, const char delim,
+            const char *const escapes)
 {
   FUNCTION_START;
   const int ga_len = ga->ga_len;
-  int i;
 
-  for (i = 0; i < ga_len ; i++) {
-    WC(delim);
-    W(((char **)ga->ga_data)[i]);
+  if (escapes == NULL) {
+    for (int i = 0; i < ga_len ; i++) {
+      WC(delim);
+      W(((char **)ga->ga_data)[i]);
+    }
+  } else {
+    for (int i = 0; i < ga_len ; i++) {
+      WC(delim);
+      W_ESCAPED(((char **)ga->ga_data)[i], escapes);
+    }
   }
   FUNCTION_END;
 }
@@ -976,7 +995,7 @@ static CMD_FDEC(print_append)
 {
   FUNCTION_START;
   const garray_T *const ga = &(node->args[ARG_APPEND_LINES].arg.ga_strs);
-  F(print_ga_strs, ga, '\n');
+  F(print_ga_strs, ga, '\n', NULL);
   WC('\n');
   WC('.');
   FUNCTION_END;
@@ -1242,8 +1261,7 @@ static CMD_FDEC(print_do)
 {
   FUNCTION_START;
   if (node->children) {
-    // TODO(ZyX-I): Add an option to control what separator to use here
-    WC(' ');
+    W(DO_CMD_SEPARATOR);
     F(print_node, node->children, indent, true);
   }
   FUNCTION_END;
@@ -1279,8 +1297,7 @@ static CMD_FDEC(print_autocmd)
     WS(" nested");
   }
   if (node->children) {
-    // TODO(ZyX-I): Add an option to control what separator to use here
-    WS(" :");
+    W(AU_CMD_SEPARATOR);
     F(print_node, node->children, indent, true);
   }
   FUNCTION_END;
@@ -1376,8 +1393,9 @@ static CMD_FDEC(print_command)
   }
   switch (flags & FLAG_CMD_NARGS_MASK) {
     case VAL_CMD_NARGS_NO: {
-      // TODO(ZyX-I): Based on some option print `-nargs=0` in this case
-      //              explicitly.
+      if (USE_EXPLICIT_NARGS) {
+        WS(" -nargs=0");
+      }
       break;
     }
     case VAL_CMD_NARGS_ONE: {
@@ -1443,8 +1461,7 @@ static CMD_FDEC(print_command)
     W(node->args[ARG_CMD_NAME].arg.str);
   }
   if (node->args[ARG_CMD_COMMAND].arg.str != NULL) {
-    // TODO(ZyX-I): Add an option to control what separator to use here
-    WC(' ');
+    W(CMD_CMD_SEPARATOR);
     W(node->args[ARG_CMD_COMMAND].arg.str);
   }
   FUNCTION_END;
@@ -1594,17 +1611,18 @@ static CMD_FDEC(print_history)
     // Do nothing
   } else {
     switch (flags & FLAG_HIST_ALL) {
-      // TODO(ZyX-I): Depending on some option print either history name or
-      //              character
 #define HIST_FLAG_TO_STR(flag, str, ch) \
       case flag: { \
-        WS(" " str); \
+        if (USE_HISTCHAR) {\
+          WC(' '); \
+          WC(ch); \
+        } else { \
+          WS(" " str); \
+        } \
         break; \
       }
       HIST_FLAG_TO_STR(FLAG_HIST_CMD, "cmd", ':')
-      // TODO(ZyX-I): Based on some option decide whethe '?' or '/' should be
-      //              used.
-      HIST_FLAG_TO_STR(FLAG_HIST_SEARCH, "search", (0?'?':'/'))
+      HIST_FLAG_TO_STR(FLAG_HIST_SEARCH, "search", '/')
       HIST_FLAG_TO_STR(FLAG_HIST_EXPR, "expr", '=')
       HIST_FLAG_TO_STR(FLAG_HIST_INPUT, "input", '@')
       HIST_FLAG_TO_STR(FLAG_HIST_DEBUG, "debug", '>')
@@ -1729,7 +1747,6 @@ static CMD_FDEC(print_global)
       break;
     }
     case FLAG_G_RE_SEARCH: {
-      // TODO(ZyX-I): Add option to control whether "/" or "?" should be used.
       WS(" \\/");
       break;
     }
@@ -1738,9 +1755,7 @@ static CMD_FDEC(print_global)
     }
   }
   if (node->children) {
-    // TODO(ZyX-I): Add an option to control whether and which separator to use
-    //              here
-    WS(" :");
+    W(G_CMD_SEPARATOR);
     F(print_node, node->children, indent, true);
   }
   FUNCTION_END;
@@ -1855,7 +1870,6 @@ static CMD_FDEC(print_sub)
     delim = '&';
   } else if (flags & FLAG_S_RE_SEARCH) {
     assert(node->args[ARG_S_REP].arg.rep == NULL);
-    // TODO(ZyX-I): Add option to control whether "/" or "?" should be used.
     WS("\\/");
     delim = '/';
   } else if (node->type == kCmdSubstitute
@@ -1879,10 +1893,9 @@ static CMD_FDEC(print_sub)
     assert(rep == NULL);
     WC('%');
   } else {
-    // TODO(ZyX-I): Escape replacement
-    if (rep != NULL) {
-      F(print_replacement, rep);
-    }
+    F(print_replacement, rep, (node->type == kCmdSubstitute
+                               ? IS_MAGIC
+                               : (node->type == kCmdSmagic)));
   }
   WC(delim);
   PRINT_FLAG('&', FLAG_S_KEEP);
@@ -2135,7 +2148,6 @@ static CMD_FDEC(print_loadkeymap)
     } else if (lhs == NULL) {
       W(com);
     } else {
-      // TODO(ZyX-I): Depending on the option align without using tabs
       assert(lhs != NULL && rhs != NULL);
       W(lhs);
       WC('\t');
@@ -2212,8 +2224,6 @@ static CMD_FDEC(print_cscope)
         break;
       }
       case kCscopeFind: {
-        // TODO(ZyX-I): Choose whether cscope_find_chars or numbers will be
-        //              used.
         WC(cscope_find_chars[subargsargs[CSCOPE_ARG_FIND_TYPE].arg.flags]);
         WC(' ');
         W(subargsargs[CSCOPE_ARG_FIND_NAME].arg.str);
@@ -2245,7 +2255,6 @@ static FDEC(print_prop_str_p, const char *const p)
     WC('\'');
     needs_quote = true;
   }
-  // TODO(ZyX-I): Escape argument
   W(p);
   if (needs_quote) {
     WC('\'');
@@ -2781,9 +2790,8 @@ static CMD_FDEC(print_syntax)
       W(subargsargs[SYN_ARG_KEYWORD_GROUP].arg.str);
       F(print_syn_options, SYN_ARG_KEYWORD_FLAGS, subargsargs,
         SYN_SCOPE_KEYWORD);
-      // TODO(ZyX-I): Escape strings
       F(print_ga_strs, &(subargsargs[SYN_ARG_KEYWORD_KEYWORDS].arg.ga_strs),
-        ' ');
+        ' ', " \t");
       break;
     }
     case kSynClear:

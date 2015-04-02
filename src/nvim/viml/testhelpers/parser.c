@@ -60,17 +60,21 @@ char *parse_cmd_test(const char *arg, const uint_least16_t flags,
     }
   }
 
+  StyleOptions po = default_po;
+  po.magic = (bool) (flags & FLAG_POC_MAGIC);
+  po.command.glob.ast_glob = true;
+
   if (out) {
-    print_cmd(&default_po, node, (Writer) fwrite, stdout);
+    print_cmd(&po, node, (Writer) fwrite, stdout);
     repr = (char *) out_str;
   } else {
-    len = sprint_cmd_len(&default_po, node);
+    len = sprint_cmd_len(&po, node);
 
     repr = xcalloc(len + 1, sizeof(char));
 
     r = repr;
 
-    sprint_cmd(&default_po, node, &r);
+    sprint_cmd(&po, node, &r);
   }
 
   free_cmd(node);
