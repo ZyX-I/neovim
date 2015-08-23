@@ -108,6 +108,11 @@ void channel_teardown(void)
   map_foreach_value(channels, channel, {
     close_channel(channel);
   });
+
+  remote_ui_free();
+
+  pmap_free(uint64_t)(channels);
+  pmap_free(cstr_t)(event_strings);
 }
 
 /// Creates an API channel by starting a process and connecting to its

@@ -29,7 +29,7 @@ if os.getenv('VALGRIND') then
   local log_file = os.getenv('VALGRIND_LOG') or 'valgrind-%p.log'
   prepend_argv = {'valgrind', '-q', '--tool=memcheck',
                   '--leak-check=yes', '--track-origins=yes',
-                  '--show-possibly-lost=no',
+                  '--show-leak-kinds=definite,indirect,reachable',
                   '--suppressions=.valgrind.supp',
                   '--log-file='..log_file}
   if os.getenv('GDB') then

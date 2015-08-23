@@ -446,3 +446,9 @@ void msgpack_rpc_validate(uint64_t *response_id,
     return;
   }
 }
+
+void msgpack_rpc_helpers_free(void)
+{
+  msgpack_sbuffer_destroy(&sbuffer);
+  msgpack_zone_destroy(&zone);
+}

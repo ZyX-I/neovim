@@ -156,7 +156,7 @@ void event_teardown(void)
   }
 
   queue_process_events(loop.events);
-  input_stop();
+  input_free();
   channel_teardown();
   process_teardown(&loop);
   server_teardown();
@@ -164,6 +164,8 @@ void event_teardown(void)
   terminal_teardown();
 
   loop_close(&loop);
+  msgpack_rpc_helpers_free();
+  msgpack_rpc_free_method_table();
 }
 
 /// Performs early initialization.

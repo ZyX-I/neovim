@@ -38,6 +38,11 @@ void remote_ui_init(void)
   msgpack_rpc_add_method_handler(method, handler);
 }
 
+void remote_ui_free(void)
+{
+  pmap_free(uint64_t)(connected_uis);
+}
+
 void remote_ui_disconnect(uint64_t channel_id)
 {
   UI *ui = pmap_get(uint64_t)(connected_uis, channel_id);

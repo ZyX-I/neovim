@@ -28,6 +28,14 @@ void fs_init(void)
   uv_loop_init(&fs_loop);
 }
 
+#ifdef EXITFREE
+/// Free loop used in fs module
+void fs_free(void)
+{
+  uv_loop_close(&fs_loop);
+}
+#endif
+
 
 /// Change to the given directory.
 ///

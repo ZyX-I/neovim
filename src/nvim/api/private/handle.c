@@ -39,3 +39,12 @@ void handle_init(void)
   HANDLE_INIT(window);
   HANDLE_INIT(tabpage);
 }
+
+#ifdef EXITFREE
+void handle_free(void)
+{
+  pmap_free(uint64_t)(buffer_handles);
+  pmap_free(uint64_t)(window_handles);
+  pmap_free(uint64_t)(tabpage_handles);
+}
+#endif

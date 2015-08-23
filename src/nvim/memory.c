@@ -442,6 +442,7 @@ void do_outofmem_msg(size_t size)
 
 #if defined(EXITFREE)
 
+#include "nvim/api/private/handle.h"
 #include "nvim/file_search.h"
 #include "nvim/buffer.h"
 #include "nvim/charset.h"
@@ -590,6 +591,9 @@ void free_all_mem(void)
   free_tabpage(first_tabpage);
   first_tabpage = NULL;
 
+  // Free handles. Must go after freeing all buffers, windows and tabpages
+  handle_free();
+
   /* message history */
   for (;; )
     if (delete_first_msg() == FAIL)
@@ -601,7 +605,8 @@ void free_all_mem(void)
   free_screenlines();
 
   clear_hl_tables();
+
+  fs_free();
 }
 
 #endif
-

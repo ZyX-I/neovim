@@ -592,6 +592,8 @@ void eval_clear(void)
   /* functions */
   free_all_functions();
   hash_clear(&func_hashtab);
+
+  pmap_free(uint64_t)(jobs);
 }
 
 #endif

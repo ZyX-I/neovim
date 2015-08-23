@@ -73,6 +73,13 @@ void input_stop(void)
   stream_close(&read_stream, NULL);
 }
 
+/// Stop input stream and free everything
+void input_free(void)
+{
+  input_stop();
+  rbuffer_free(input_buffer);
+}
+
 static void cursorhold_event(void **argv)
 {
   event_T event = State & INSERT ? EVENT_CURSORHOLDI : EVENT_CURSORHOLD;

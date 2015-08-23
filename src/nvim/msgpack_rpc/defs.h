@@ -18,6 +18,9 @@ typedef struct {
 /// Initializes the msgpack-rpc method table
 void msgpack_rpc_init_method_table(void);
 
+/// Frees the msgpack-rpc method table
+void msgpack_rpc_free_method_table(void);
+
 // Add a handler to the method table
 void msgpack_rpc_add_method_handler(String method,
                                     MsgpackRpcRequestHandler handler);

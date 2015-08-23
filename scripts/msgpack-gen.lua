@@ -289,6 +289,11 @@ end
 output:write('\n}\n\n')
 
 output:write([[
+void msgpack_rpc_free_method_table(void)
+{
+  map_free(String, MsgpackRpcRequestHandler)(methods);
+}
+
 MsgpackRpcRequestHandler msgpack_rpc_get_handler_for(const char *name,
                                                      size_t name_len)
 {
