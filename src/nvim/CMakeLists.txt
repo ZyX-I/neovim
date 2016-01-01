@@ -21,6 +21,7 @@ set(HEADER_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/gendeclarations.lua)
 set(GENERATED_INCLUDES_DIR ${PROJECT_BINARY_DIR}/include)
 set(GENERATED_EX_CMDS_ENUM ${GENERATED_INCLUDES_DIR}/ex_cmds_enum.generated.h)
 set(GENERATED_EX_CMDS_DEFS ${GENERATED_DIR}/ex_cmds_defs.generated.h)
+set(GENERATED_FUNCS_HASH_INPUT ${GENERATED_DIR}/funcs.generated.h.hsh)
 set(GENERATED_FUNCS ${GENERATED_DIR}/funcs.generated.h)
 set(GENERATED_EVENTS_ENUM ${GENERATED_INCLUDES_DIR}/auevents_enum.generated.h)
 set(GENERATED_EVENTS_NAMES_MAP ${GENERATED_DIR}/auevents_name_map.generated.h)
@@ -39,6 +40,7 @@ set(UNICODEDATA_FILE ${UNICODE_DIR}/UnicodeData.txt)
 set(CASEFOLDING_FILE ${UNICODE_DIR}/CaseFolding.txt)
 set(EASTASIANWIDTH_FILE ${UNICODE_DIR}/EastAsianWidth.txt)
 set(GENERATED_UNICODE_TABLES ${GENERATED_DIR}/unicode_tables.generated.h)
+set(GENHASH_SOURCE ${PROJECT_SOURCE_DIR}/src/genhash.c)
 
 include_directories(${GENERATED_DIR})
 include_directories(${GENERATED_INCLUDES_DIR})
@@ -202,8 +204,10 @@ add_custom_command(OUTPUT ${GENERATED_EX_CMDS_ENUM} ${GENERATED_EX_CMDS_DEFS}
 
 add_custom_command(OUTPUT ${GENERATED_FUNCS}
   COMMAND ${LUA_PRG} ${FUNCS_GENERATOR}
-      ${PROJECT_SOURCE_DIR}/src/nvim ${GENERATED_DIR}
-  DEPENDS ${FUNCS_GENERATOR} ${EVAL_DEFS_FILE}
+    ${PROJECT_SOURCE_DIR}/src/nvim ${GENERATED_DIR}
+  COMMAND $<TARGET_FILE:genhash>
+    ${GENERATED_FUNCS_HASH_INPUT} ${GENERATED_FUNCS} functions functions VimLFuncDef "NOFUNC"
+  DEPENDS ${FUNCS_GENERATOR} ${EVAL_DEFS_FILE} genhash
 )
 
 add_custom_command(OUTPUT ${GENERATED_EVENTS_ENUM} ${GENERATED_EVENTS_NAMES_MAP}
@@ -257,6 +261,8 @@ add_executable(nvim ${NEOVIM_GENERATED_SOURCES} ${NEOVIM_SOURCES}
   ${NEOVIM_HEADERS})
 target_link_libraries(nvim ${NVIM_EXEC_LINK_LIBRARIES})
 install_helper(TARGETS nvim)
+
+add_executable(genhash ${GENHASH_SOURCE} ${NEOVIM_HEADERS})
 
 if(CLANG_ASAN_UBSAN)
   message(STATUS "Enabling Clang address sanitizer and undefined behavior sanitizer for nvim.")
