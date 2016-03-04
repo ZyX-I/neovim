@@ -92,6 +92,7 @@
 #include "nvim/event/loop.h"
 #include "nvim/lib/queue.h"
 #include "nvim/eval/typval_encode.h"
+#include "nvim/viml/executor/executor.h"
 
 #define DICT_MAXNEST 100        /* maximum nesting of lists and dicts */
 
@@ -6850,6 +6851,7 @@ static struct fst {
   { "localtime",         0, 0, f_localtime },
   { "log",               1, 1, f_log },
   { "log10",             1, 1, f_log10 },
+  { "luaeval",           1, 2, f_luaeval },
   { "map",               2, 2, f_map },
   { "maparg",            1, 4, f_maparg },
   { "mapcheck",          1, 3, f_mapcheck },
@@ -12307,6 +12309,49 @@ static void f_log(typval_T *argvars, typval_T *rettv)
 static void f_log10(typval_T *argvars, typval_T *rettv)
 {
   float_op_wrapper(argvars, rettv, &log10);
+}
+
+
+/// luaeval() function implementation
+static void f_luaeval(typval_T *argvars, typval_T *rettv)
+  FUNC_ATTR_NONNULL_ALL
+{
+  char *const str = (char *) get_tv_string(&argvars[0]);
+  if (str == NULL) {
+    return;
+  }
+
+  Object arg;
+  if (argvars[1].v_type == VAR_UNKNOWN) {
+    arg = NIL;
+  } else {
+    arg = vim_to_object(&argvars[1]);
+  }
+
+  // TODO(ZyX-I): Create function which converts lua objects directly to VimL
+  //              objects, not to API objects.
+  Error err;
+  String err_str;
+  Object ret = executor_eval_lua(cstr_as_string(str), arg, &err, &err_str);
+  if (err.set) {
+    if (err_str.size) {
+      EMSG3(_("E971: Failed to eval lua string: %s (%s)"), err.msg,
+            err_str.data);
+    } else {
+      EMSG2(_("E971: Failed to eval lua string: %s"), err.msg);
+    }
+  }
+
+  api_free_string(err_str);
+
+  if (!err.set) {
+    if (!object_to_vim(ret, rettv, &err)) {
+      EMSG2(_("E972: Failed to convert resulting API object to VimL: %s"),
+            err.msg);
+    }
+  }
+
+  api_free_object(ret);
 }
 
 

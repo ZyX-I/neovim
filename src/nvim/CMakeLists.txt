@@ -11,10 +11,11 @@ endif()
 endif()
 
 set(GENERATED_DIR ${PROJECT_BINARY_DIR}/src/nvim/auto)
-set(DISPATCH_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/msgpack-gen.lua)
+set(MSGPACK_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/msgpack-gen.lua)
 file(GLOB API_HEADERS api/*.h)
 file(GLOB MSGPACK_RPC_HEADERS msgpack_rpc/*.h)
 set(MSGPACK_DISPATCH ${GENERATED_DIR}/msgpack_dispatch.c)
+set(MSGPACK_LUA_C_BINDINGS ${GENERATED_DIR}/msgpack_lua_c_bindings.c)
 set(HEADER_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/gendeclarations.lua)
 set(GENERATED_INCLUDES_DIR ${PROJECT_BINARY_DIR}/include)
 set(GENERATED_EX_CMDS_ENUM ${GENERATED_INCLUDES_DIR}/ex_cmds_enum.generated.h)
@@ -34,6 +35,9 @@ set(UNICODEDATA_FILE ${UNICODE_DIR}/UnicodeData.txt)
 set(CASEFOLDING_FILE ${UNICODE_DIR}/CaseFolding.txt)
 set(EASTASIANWIDTH_FILE ${UNICODE_DIR}/EastAsianWidth.txt)
 set(GENERATED_UNICODE_TABLES ${GENERATED_DIR}/unicode_tables.generated.h)
+set(VIM_MODULE_FILE ${GENERATED_DIR}/viml/executor/vim_module.generated.h)
+set(VIM_MODULE_SOURCE ${PROJECT_SOURCE_DIR}/src/nvim/viml/executor/vim.lua)
+set(VIM_MODULE_GENERATOR ${PROJECT_SOURCE_DIR}/scripts/generate_vim_module.lua)
 
 include_directories(${GENERATED_DIR})
 include_directories(${GENERATED_INCLUDES_DIR})
@@ -51,6 +55,8 @@ foreach(subdir
         tui
         event
         eval
+        viml
+        viml/executor
        )
   if(${subdir} MATCHES "tui" AND NOT FEAT_TUI)
     continue()
@@ -183,12 +189,21 @@ add_custom_command(OUTPUT ${GENERATED_UNICODE_TABLES}
     ${EASTASIANWIDTH_FILE}
 )
 
-add_custom_command(OUTPUT ${MSGPACK_DISPATCH}
-  COMMAND ${LUA_PRG} ${DISPATCH_GENERATOR} ${API_HEADERS} ${MSGPACK_DISPATCH}
+add_custom_command(OUTPUT ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
+  COMMAND ${LUA_PRG} ${MSGPACK_GENERATOR} ${API_HEADERS}
+                     ${MSGPACK_DISPATCH} ${MSGPACK_LUA_C_BINDINGS}
   DEPENDS
     ${API_HEADERS}
     ${MSGPACK_RPC_HEADERS}
-    ${DISPATCH_GENERATOR}
+    ${MSGPACK_GENERATOR}
+)
+
+add_custom_command(OUTPUT ${VIM_MODULE_FILE}
+  COMMAND ${LUA_PRG} ${VIM_MODULE_GENERATOR}
+                                        ${VIM_MODULE_SOURCE} ${VIM_MODULE_FILE}
+  DEPENDS
+    ${VIM_MODULE_GENERATOR}
+    ${VIM_MODULE_SOURCE}
 )
 
 list(APPEND NEOVIM_GENERATED_SOURCES
@@ -200,6 +215,8 @@ list(APPEND NEOVIM_GENERATED_SOURCES
   "${GENERATED_EVENTS_NAMES_MAP}"
   "${GENERATED_OPTIONS}"
   "${GENERATED_UNICODE_TABLES}"
+  "${MSGPACK_LUA_C_BINDINGS}"
+  "${VIM_MODULE_FILE}"
 )
 
 add_custom_command(OUTPUT ${GENERATED_EX_CMDS_ENUM} ${GENERATED_EX_CMDS_DEFS}
