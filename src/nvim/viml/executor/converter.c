@@ -177,6 +177,12 @@ void nlua_push_Array(lua_State *lstate, const Array array)
   }
 }
 
+void nlua_push_Reference(lua_State *lstate, const Reference ref)
+  FUNC_ATTR_NONNULL_ALL
+{
+  // TODO(ZyX-I)
+}
+
 #define GENERATE_INDEX_FUNCTION(type) \
 void nlua_push_##type(lua_State *lstate, const type item) \
   FUNC_ATTR_NONNULL_ALL \
@@ -215,6 +221,7 @@ void nlua_push_Object(lua_State *lstate, const Object obj)
     ADD_TYPE(Tabpage,      tabpage)
     ADD_TYPE(Array,        array)
     ADD_TYPE(Dictionary,   dictionary)
+    ADD_TYPE(Reference,    reference)
 #undef ADD_TYPE
   }
 }

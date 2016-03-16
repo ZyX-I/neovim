@@ -666,6 +666,14 @@ bool object_to_vim(Object obj, typval_T *tv, Error *err)
       }
       tv->vval.v_dict->dv_refcount++;
       break;
+
+    case kObjectTypeReference:
+      obj.data.reference.def->internal.coerce(obj.data.reference, tv, err);
+      if (err->set) {
+        return false;
+      }
+      break;
+
     default:
       abort();
   }
@@ -782,6 +790,7 @@ static void init_type_metadata(Dictionary *metadata)
 Object copy_object(Object obj)
 {
   switch (obj.type) {
+    case kObjectTypeReference:
     case kObjectTypeNil:
     case kObjectTypeBoolean:
     case kObjectTypeInteger:
@@ -807,6 +816,7 @@ Object copy_object(Object obj)
       }
       return DICTIONARY_OBJ(rv);
     }
+
     default:
       abort();
   }
@@ -879,4 +889,43 @@ static void set_option_value_err(char *key,
 
     api_set_error(err, Exception, "%s", errmsg);
   }
+}
+
+/// Convert ReferenceDef structure to a bitflag array
+///
+/// @param[in]  def  Structure to convert.
+/// @param[in,out]  ret_caps  Location where result will be saved. Must have
+///                           exactly #REF_DEF_FLAGS_SIZE bytes.
+///
+/// @return Number of significant bits.
+uint16_t ref_capabilities(const ReferenceDef def, uint8_t *const ret_caps)
+  FUNC_ATTR_NONNULL_ALL
+{
+  size_t idx = 0;
+  size_t subidx = 0;
+  memset(ret_caps, 0, REF_DEF_FLAGS_SIZE);
+#define ADD_CAP(cap) \
+  do { \
+    if (subidx == 8) { \
+      idx++; \
+      subidx = 0; \
+    } \
+    ret_caps[idx] |= (cap != NULL) << (subidx++); \
+  } while (0)
+  // TODO(ZyX-I): Generate this from ReferenceDef, list bitflags in --api-info
+  ADD_CAP(def.container.get_item);
+  // …
+  ADD_CAP(def.container.lock);
+  assert((def.container.lock == NULL) == (def.container.unlock == NULL));
+  assert((def.container.lock == NULL)
+         == (def.container.get_lock_status == NULL));
+  ADD_CAP(def.container.lock_item);
+  assert((def.container.lock_item == NULL)
+         == (def.container.unlock_item == NULL));
+  assert((def.container.lock_item == NULL)
+         == (def.container.get_item_lock_status == NULL));
+  // …
+#undef ADD_CAP
+  assert((idx * 8 + subidx) <= UINT16_MAX);
+  return (uint16_t) (idx * 8 + subidx);
 }

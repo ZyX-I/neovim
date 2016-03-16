@@ -226,7 +226,12 @@ bool msgpack_rpc_to_object(const msgpack_object *const obj, Object *const arg)
             ret = msgpack_rpc_to_tabpage(cur.mobj, &cur.aobj->data.tabpage);
             break;
           }
-        }
+          case kObjectTypeReference:
+            cur.aobj->type = kObjectTypeReference;
+            ret = msgpack_rpc_to_reference(NULL, cur.mobj,
+                                           &cur.aobj->data.reference);
+            break;
+          }
         break;
       }
 #undef STR_CASE
@@ -251,6 +256,28 @@ static bool msgpack_rpc_to_string(const msgpack_object *const obj,
     return true;
   }
   return false;
+}
+
+/// Convert EXT object containing a reference to a reference
+///
+/// @param[in]  ref_tbl  Reference table.
+/// @param[in]  obj  Object to convert.
+/// @param[out]  arg  Location where result is saved.
+///
+/// @return true in case of success, false otherwise.
+bool msgpack_rpc_to_reference(const ReferenceTable *const ref_tbl,
+                              const msgpack_object *const obj,
+                              Reference *const arg)
+  // FUNC_ATTR_NONNULL_ALL
+{
+  if (obj->via.ext.size != (REF_DEF_FLAGS_SIZE + sizeof(arg->data))) {
+    return false;
+  }
+  if (false) { // TODO(ZyX-I): lookup data in table and get ReferenceDef
+    return false;
+  }
+  memcpy(&arg->data, obj->via.ext.ptr + REF_DEF_FLAGS_SIZE, sizeof(arg->data));
+  return true;
 }
 
 bool msgpack_rpc_to_array(const msgpack_object *const obj, Array *const arg)
@@ -326,6 +353,24 @@ void msgpack_rpc_from_string(String result, msgpack_packer *res)
 {
   msgpack_pack_str(res, result.size);
   msgpack_pack_str_body(res, result.data, result.size);
+}
+
+/// Dump Reference as a msgpack string
+///
+/// @param[in,out]  ref_tbl  Table where reference is saved.
+/// @param[in]  ref  Reference to convert.
+/// @param[out]  res  Location where result is saved.
+void msgpack_rpc_from_reference(ReferenceTable *const ref_tbl,
+                                const Reference ref,
+                                msgpack_packer *const res)
+  // FUNC_ATTR_NONNULL_ALL
+{
+  // TODO(ZyX-I): Lookup ref in table and save it there if needed
+  char body[REF_DEF_FLAGS_SIZE + sizeof(ref.data)] = { 0 };
+  msgpack_pack_ext(res, sizeof(body), kObjectTypeReference);
+  // TODO(ZyX-I): Save capabilities
+  memcpy(&body[REF_DEF_FLAGS_SIZE], ref.data, sizeof(ref.data));
+  msgpack_pack_ext_body(res, body, sizeof(body));
 }
 
 typedef struct {
@@ -422,6 +467,10 @@ void msgpack_rpc_from_object(const Object result, msgpack_packer *const res)
           cur.container = true;
           kv_last(stack) = cur;
         }
+        break;
+      }
+      case kObjectTypeReference: {
+        msgpack_rpc_from_reference(NULL, cur.aobj->data.reference, res);
         break;
       }
     }

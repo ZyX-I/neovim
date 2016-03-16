@@ -55,6 +55,12 @@
     .type = kObjectTypeDictionary, \
     .data.dictionary = d })
 
+#define REFERENCE_OBJ(r) \
+    ((Object) { \
+        .type = kObjectTypeReference, \
+        .data.reference = (r), \
+    })
+
 #define NIL ((Object) {.type = kObjectTypeNil})
 
 #define PUT(dict, k, v) \
