@@ -68,17 +68,65 @@ static void input_done_event(void **argv)
   input_done();
 }
 
+static Array string_to_array(const String input)
+{
+  Array ret = { .size = 0, .items = NULL };
+  for (size_t i = 0; i < input.size; i++) {
+    const char *const start = input.data + i;
+    const char *const end = xmemscan(start, NL, input.size - i);
+    i += (size_t) (end - start);
+    ret.size++;
+  }
+  ret.items = xmalloc(ret.size * sizeof(*ret.items));
+  size_t array_idx = 0;
+  for (size_t i = 0; i < input.size; i++) {
+    const char *const start = input.data + i;
+    const size_t line_len
+        = (size_t) ((char *) xmemscan(start, NL, input.size - i)
+                                      - start);
+    i += line_len;
+
+    String item = {
+      .size = line_len,
+      .data = xmemdupz(start, line_len),
+    };
+    memchrsub(item.data, NUL, NL, line_len);
+    ret.items[array_idx++] = STRING_OBJ(item);
+  }
+  ret.capacity = ret.size;
+
+  return ret;
+}
+
 static void wait_input_enqueue(void **argv)
 {
   TermInput *input = argv[0];
   RBUFFER_UNTIL_EMPTY(input->key_buffer, buf, len) {
-    size_t consumed = input_enqueue((String){.data = buf, .size = len});
-    if (consumed) {
-      rbuffer_consumed(input->key_buffer, consumed);
-    }
-    rbuffer_reset(input->key_buffer);
-    if (consumed < len) {
-      break;
+    const String keys = { .data = buf, .size = len };
+    if (input->paste_enabled) {
+      Object keys_array = ARRAY_OBJ(string_to_array(keys));
+      Array args = { .capacity = 1, .size = 1, .items = &keys_array };
+      Error err = ERROR_INIT;
+      Object fret = vim_call_function(STATIC_CSTR_AS_STRING("PasteCallback"),
+                                      args, &err);
+      if ((fret.type == kObjectTypeInteger && fret.data.integer)
+          || (fret.type == kObjectTypeBoolean && fret.data.boolean)
+          || (fret.type == kObjectTypeString && fret.data.string.size)) {
+        input->paste_enabled = false;
+      }
+      api_free_object(fret);
+      api_free_object(keys_array);
+      rbuffer_consumed(input->key_buffer, len);
+      rbuffer_reset(input->key_buffer);
+    } else {
+      const size_t consumed = input_enqueue(keys);
+      if (consumed) {
+        rbuffer_consumed(input->key_buffer, consumed);
+      }
+      rbuffer_reset(input->key_buffer);
+      if (consumed < len) {
+        break;
+      }
     }
   }
   uv_mutex_lock(&input->key_buffer_mutex);
@@ -286,12 +334,18 @@ static bool handle_bracketed_paste(TermInput *input)
       (!rbuffer_cmp(input->read_stream.buffer, "\x1b[200~", 6) ||
        !rbuffer_cmp(input->read_stream.buffer, "\x1b[201~", 6))) {
     bool enable = *rbuffer_get(input->read_stream.buffer, 4) == '0';
+    if (input->paste_enabled && enable) {
+      // Pasting enabling paste literally.
+      return false;
+    }
     // Advance past the sequence
     rbuffer_consumed(input->read_stream.buffer, 6);
     if (input->paste_enabled == enable) {
       return true;
     }
-    enqueue_input(input, PASTETOGGLE_KEY, sizeof(PASTETOGGLE_KEY) - 1);
+    if (!enable) {
+      flush_input(input, true);
+    }
     input->paste_enabled = enable;
     return true;
   }
