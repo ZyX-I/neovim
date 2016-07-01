@@ -321,6 +321,14 @@ struct key_value_pair {
   Object value;
 };
 
+/// One reference in reference table
+typedef struct {
+  /// Zero or channel ID for “external” references.
+  ///
+  /// “External” are references which reference objects on Neovim clients.
+  uint64_t channel_id;
+} ReferenceTableItem;
+
 /// Table where references are saved.
 typedef struct reference_table ReferenceTable;
 

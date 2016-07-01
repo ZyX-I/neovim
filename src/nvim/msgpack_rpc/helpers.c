@@ -366,10 +366,26 @@ void msgpack_rpc_from_reference(ReferenceTable *const ref_tbl,
   // FUNC_ATTR_NONNULL_ALL
 {
   // TODO(ZyX-I): Lookup ref in table and save it there if needed
-  char body[REF_DEF_FLAGS_SIZE + sizeof(ref.data)] = { 0 };
+  char body[REF_DEF_FLAGS_SIZE + sizeof(ref.data) + 1] = { 0 };
+  // TODO(ZyX-I): Actually add external references support
+  // First byte is reserved for “external” references: specifically when
+  // - client communicates with Neovim:
+  //   - 1 means “I define a new reference”,
+  //   - 0 and 2 mean “I want to use reference from Neovim reference table”;
+  // - Neovim communicates with client:
+  //   - 2 means “external reference from Neovim reference table”: for the
+  //             client this means that reference may suddenly become invalid
+  //             even though ref_unref was not called enough times for reference
+  //             to be garbage-collected (e.g. because client crashed and
+  //             channel was thus closed); for all purposes such references
+  //             should be treated exactly as references with 0, though Neovim
+  //             will serve as a proxy here,
+  //   - 0 means “reference from Neovim reference table”,
+  //   - 1 means “reference from *your* reference table”: i.e. the one which was
+  //             previously defined by client connected to this channel.
   msgpack_pack_ext(res, sizeof(body), kObjectTypeReference);
   // TODO(ZyX-I): Save capabilities
-  memcpy(&body[REF_DEF_FLAGS_SIZE], ref.data, sizeof(ref.data));
+  memcpy(&body[REF_DEF_FLAGS_SIZE + 1], ref.data, sizeof(ref.data));
   msgpack_pack_ext_body(res, body, sizeof(body));
 }
 
