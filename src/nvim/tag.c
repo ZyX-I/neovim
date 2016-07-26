@@ -678,7 +678,7 @@ do_tag (
 
         fname = xmalloc(MAXPATHL + 1);
         cmd = xmalloc(CMDBUFFSIZE + 1);
-        list = list_alloc();
+        list = tv_list_alloc();
 
         for (i = 0; i < num_matches; ++i) {
           int len, cmd_len;
@@ -778,7 +778,7 @@ do_tag (
           }
 
           dict = dict_alloc();
-          list_append_dict(list, dict);
+          tv_list_append_dict(list, dict);
 
           dict_add_nr_str(dict, "text", 0L, tag_name);
           dict_add_nr_str(dict, "filename", 0L, fname);
@@ -790,7 +790,7 @@ do_tag (
         vim_snprintf((char *)IObuff, IOSIZE, "ltag %s", tag);
         set_errorlist(curwin, list, ' ', IObuff);
 
-        list_free(list);
+        tv_list_free(list);
         xfree(fname);
         xfree(cmd);
 
@@ -2797,7 +2797,7 @@ int get_tags(list_T *list, char_u *pat)
         continue;
 
       dict = dict_alloc();
-      list_append_dict(list, dict);
+      tv_list_append_dict(list, dict);
 
       full_fname = tag_full_fname(&tp);
       if (add_tag_field(dict, "name", tp.tagname, tp.tagname_end) == FAIL
