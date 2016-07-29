@@ -1841,7 +1841,7 @@ getexmodeline (
     vcol = indent;
     while (indent >= 8) {
       ga_append(&line_ga, TAB);
-      msg_puts((char_u *)"        ");
+      msg_puts("        ");
       indent -= 8;
     }
     while (indent-- > 0) {
@@ -2571,7 +2571,7 @@ static void redrawcmdprompt(void)
   if (ccline.cmdfirstc != NUL)
     msg_putchar(ccline.cmdfirstc);
   if (ccline.cmdprompt != NULL) {
-    msg_puts_attr(ccline.cmdprompt, ccline.cmdattr);
+    msg_puts_attr((const char *)ccline.cmdprompt, ccline.cmdattr);
     ccline.cmdindent = msg_col + (msg_row - cmdline_row) * Columns;
     /* do the reverse of set_cmdspos() */
     if (ccline.cmdfirstc != NUL)
@@ -3280,7 +3280,7 @@ static int showmatches(expand_T *xp, int wildmenu)
           msg_outtrans_attr(files_found[k], hl_attr(HLF_D));
           p = files_found[k] + STRLEN(files_found[k]) + 1;
           msg_advance(maxlen + 1);
-          msg_puts(p);
+          msg_puts((const char *)p);
           msg_advance(maxlen + 3);
           msg_puts_long_attr(p + 2, hl_attr(HLF_D));
           break;
@@ -3694,6 +3694,8 @@ static void cleanup_help_tags(int num_file, char_u **file)
   }
 }
 
+typedef char_u *(*ExpandFunc)(expand_T *, int);
+
 /*
  * Do the expansion based on xp->xp_context and "pat".
  */
@@ -3833,7 +3835,7 @@ ExpandFromContext (
   else {
     static struct expgen {
       int context;
-      char_u      *((*func)(expand_T *, int));
+      ExpandFunc func;
       int ic;
       int escaped;
     } tab[] =
@@ -3854,7 +3856,7 @@ ExpandFromContext (
       {EXPAND_MENUNAMES, get_menu_names, FALSE, TRUE},
       {EXPAND_SYNTAX, get_syntax_name, TRUE, TRUE},
       {EXPAND_SYNTIME, get_syntime_arg, TRUE, TRUE},
-      {EXPAND_HIGHLIGHT, get_highlight_name, TRUE, TRUE},
+      {EXPAND_HIGHLIGHT, (ExpandFunc)get_highlight_name, TRUE, TRUE},
       {EXPAND_EVENTS, get_event_name, TRUE, TRUE},
       {EXPAND_AUGROUP, get_augroup_name, TRUE, TRUE},
       {EXPAND_CSCOPE, get_cscope_name, TRUE, TRUE},
