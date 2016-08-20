@@ -105,10 +105,8 @@ describe('string() function', function()
   end)
 
   describe('used to represent funcrefs', function()
-    local fname = 'Xtest-functional-eval-string_spec-fref-script.vim'
-
     before_each(function()
-      write_file(fname, [[
+      source([[
         function Test1()
         endfunction
 
@@ -120,11 +118,6 @@ describe('string() function', function()
 
         let g:Test2_f = function('s:Test2')
       ]])
-      command('source ' .. fname)
-    end)
-
-    after_each(function()
-      os.remove(fname)
     end)
 
     it('dumps references to built-in functions', function()
