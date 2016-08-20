@@ -167,7 +167,7 @@ Object nvim_eval(String str, Error *err)
   typval_T *expr_result = eval_expr((char_u *) str.data, NULL);
 
   if (!expr_result) {
-    api_set_error(err, Exception, _("Failed to evaluate expression"));
+    api_set_error(err, Exception, "Failed to evaluate expression");
   }
 
   if (!try_end(err)) {
