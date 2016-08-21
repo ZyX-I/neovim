@@ -73,7 +73,7 @@ static char *features[] = {
 };
 
 // clang-format off
-static int included_patches[] = {
+static const int included_patches[] = {
   // 2367,
   // 2366 NA
   // 2365 NA
@@ -2462,15 +2462,16 @@ static char *(extra_patches[]) = {
 /// @param n The patch number.
 ///
 /// @return TRUE if patch "n" has been included.
-int has_patch(int n)
+bool has_patch(int n)
+  FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
   int i;
   for (i = 0; included_patches[i] != 0; ++i) {
     if (included_patches[i] == n) {
-      return TRUE;
+      return true;
     }
   }
-  return FALSE;
+  return false;
 }
 
 void ex_version(exarg_T *eap)
