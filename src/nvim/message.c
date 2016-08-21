@@ -728,8 +728,9 @@ int delete_first_msg(void)
 /*
  * ":messages" command.
  */
-void ex_messages(void *eap)
+void ex_messages(void *eap_)
 {
+  const exarg_T *const eap = (const exarg_T *)eap_;
   struct msg_hist *p;
   int c = 0;
 
