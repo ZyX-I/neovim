@@ -3500,8 +3500,6 @@ static int eval4(char_u **arg, typval_T *rettv, int evaluate)
   int type_is = FALSE;              /* TRUE for "is" and "isnot" */
   int len = 2;
   long n1, n2;
-  char_u      *s1, *s2;
-  char_u buf1[NUMBUFLEN], buf2[NUMBUFLEN];
   int ic;
 
   /*
@@ -3706,31 +3704,33 @@ static int eval4(char_u **arg, typval_T *rettv, int evaluate)
         case TYPE_NOMATCH:  break;              /* avoid gcc warning */
         }
       } else {
-        s1 = get_tv_string_buf(rettv, buf1);
-        s2 = get_tv_string_buf(&var2, buf2);
+        char buf1[NUMBUFLEN];
+        char buf2[NUMBUFLEN];
+        const char *const s1 = tv_get_string_buf(rettv, buf1);
+        const char *const s2 = tv_get_string_buf(&var2, buf2);
         if (type != TYPE_MATCH && type != TYPE_NOMATCH) {
-          i = mb_strcmp_ic((bool)ic, (const char *)s1, (const char *)s2);
+          i = mb_strcmp_ic((bool)ic, s1, s2);
         } else {
           i = 0;
         }
         n1 = false;
         switch (type) {
-        case TYPE_EQUAL:    n1 = (i == 0); break;
-        case TYPE_NEQUAL:   n1 = (i != 0); break;
-        case TYPE_GREATER:  n1 = (i > 0); break;
-        case TYPE_GEQUAL:   n1 = (i >= 0); break;
-        case TYPE_SMALLER:  n1 = (i < 0); break;
-        case TYPE_SEQUAL:   n1 = (i <= 0); break;
+          case TYPE_EQUAL:    n1 = (i == 0); break;
+          case TYPE_NEQUAL:   n1 = (i != 0); break;
+          case TYPE_GREATER:  n1 = (i > 0); break;
+          case TYPE_GEQUAL:   n1 = (i >= 0); break;
+          case TYPE_SMALLER:  n1 = (i < 0); break;
+          case TYPE_SEQUAL:   n1 = (i <= 0); break;
 
-        case TYPE_MATCH:
-        case TYPE_NOMATCH:
-          n1 = pattern_match(s2, s1, ic);
-          if (type == TYPE_NOMATCH) {
-            n1 = !n1;
+          case TYPE_MATCH:
+          case TYPE_NOMATCH: {
+            n1 = pattern_match((char_u *)s2, (char_u *)s1, ic);
+            if (type == TYPE_NOMATCH) {
+              n1 = !n1;
+            }
+            break;
           }
-          break;
-
-        case TYPE_UNKNOWN:  break;              /* avoid gcc warning */
+          case TYPE_UNKNOWN: break;  // Avoid gcc warning.
         }
       }
       tv_clear(rettv);
@@ -3763,8 +3763,6 @@ static int eval5(char_u **arg, typval_T *rettv, int evaluate)
   int op;
   long n1, n2;
   float_T f1 = 0, f2 = 0;
-  char_u      *s1, *s2;
-  char_u buf1[NUMBUFLEN], buf2[NUMBUFLEN];
   char_u      *p;
 
   /*
@@ -3811,14 +3809,17 @@ static int eval5(char_u **arg, typval_T *rettv, int evaluate)
        * Compute the result.
        */
       if (op == '.') {
-        s1 = get_tv_string_buf(rettv, buf1);            /* already checked */
-        s2 = get_tv_string_buf_chk(&var2, buf2);
-        if (s2 == NULL) {               /* type error ? */
+        char buf1[NUMBUFLEN];
+        char_u buf2[NUMBUFLEN];
+        // s1 already checked
+        const char *const s1 = tv_get_string_buf(rettv, buf1);
+        const char *const s2 = (const char *)get_tv_string_buf_chk(&var2, buf2);
+        if (s2 == NULL) {  // Type error?
           tv_clear(rettv);
           tv_clear(&var2);
           return FAIL;
         }
-        p = concat_str(s1, s2);
+        p = concat_str((const char_u *)s1, (const char_u *)s2);
         tv_clear(rettv);
         rettv->v_type = VAR_STRING;
         rettv->vval.v_string = p;
@@ -7117,19 +7118,21 @@ static void f_count(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 static void f_cscope_connection(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
   int num = 0;
-  char_u *dbpath = NULL;
-  char_u *prepend = NULL;
-  char_u buf[NUMBUFLEN];
+  const char *dbpath = NULL;
+  const char *prepend = NULL;
+  char buf[NUMBUFLEN];
 
   if (argvars[0].v_type != VAR_UNKNOWN
       && argvars[1].v_type != VAR_UNKNOWN) {
     num = (int)get_tv_number(&argvars[0]);
-    dbpath = (char_u *)tv_get_string(&argvars[1]);
-    if (argvars[2].v_type != VAR_UNKNOWN)
-      prepend = get_tv_string_buf(&argvars[2], buf);
+    dbpath = tv_get_string(&argvars[1]);
+    if (argvars[2].v_type != VAR_UNKNOWN) {
+      prepend = tv_get_string_buf(&argvars[2], buf);
+    }
   }
 
-  rettv->vval.v_number = cs_connection(num, dbpath, prepend);
+  rettv->vval.v_number = cs_connection(num, (char_u *)dbpath,
+                                       (char_u *)prepend);
 }
 
 /// "cursor(lnum, col)" function, or
@@ -7212,9 +7215,6 @@ static void f_deepcopy(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 // "delete()" function
 static void f_delete(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
-  char_u nbuf[NUMBUFLEN];
-  char_u *flags;
-
   rettv->vval.v_number = -1;
   if (check_restricted() || check_secure()) {
     return;
@@ -7226,19 +7226,21 @@ static void f_delete(typval_T *argvars, typval_T *rettv, FunPtr fptr)
     return;
   }
 
+  char nbuf[NUMBUFLEN];
+  const char *flags;
   if (argvars[1].v_type != VAR_UNKNOWN) {
-    flags = get_tv_string_buf(&argvars[1], nbuf);
+    flags = tv_get_string_buf(&argvars[1], nbuf);
   } else {
-    flags = (char_u *)"";
+    flags = "";
   }
 
   if (*flags == NUL) {
     // delete a file
     rettv->vval.v_number = os_remove(name) == 0 ? 0 : -1;
-  } else if (STRCMP(flags, "d") == 0) {
+  } else if (strcmp(flags, "d") == 0) {
     // delete an empty directory
     rettv->vval.v_number = os_rmdir(name) == 0 ? 0 : -1;
-  } else if (STRCMP(flags, "rf") == 0) {
+  } else if (strcmp(flags, "rf") == 0) {
     // delete a directory recursively
     rettv->vval.v_number = delete_recursive(name);
   } else {
@@ -7460,11 +7462,11 @@ static void f_empty(typval_T *argvars, typval_T *rettv, FunPtr fptr)
  */
 static void f_escape(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
-  char_u buf[NUMBUFLEN];
+  char buf[NUMBUFLEN];
 
   rettv->vval.v_string = vim_strsave_escaped(
       (const char_u *)tv_get_string(&argvars[0]),
-      get_tv_string_buf(&argvars[1], buf));
+      (const char_u *)tv_get_string_buf(&argvars[1], buf));
   rettv->v_type = VAR_STRING;
 }
 
@@ -7807,19 +7809,18 @@ static void f_extend(typval_T *argvars, typval_T *rettv, FunPtr fptr)
  */
 static void f_feedkeys(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
-  char_u nbuf[NUMBUFLEN];
-
-  /* This is not allowed in the sandbox.  If the commands would still be
-   * executed in the sandbox it would be OK, but it probably happens later,
-   * when "sandbox" is no longer set. */
-  if (check_secure())
+  // This is not allowed in the sandbox.  If the commands would still be
+  // executed in the sandbox it would be OK, but it probably happens later,
+  // when "sandbox" is no longer set.
+  if (check_secure()) {
     return;
+  }
 
   const char *const keys = tv_get_string(&argvars[0]);
-
+  char nbuf[NUMBUFLEN];
   const char *flags = NULL;
   if (argvars[1].v_type != VAR_UNKNOWN) {
-    flags = (const char *)get_tv_string_buf(&argvars[1], nbuf);
+    flags = tv_get_string_buf(&argvars[1], nbuf);
   }
 
   nvim_feedkeys(cstr_as_string((char *)keys),
@@ -10197,11 +10198,11 @@ static void f_hasmapto(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   const char *mode;
   const char *const name = tv_get_string(&argvars[0]);
   bool abbr = false;
-  char_u buf[NUMBUFLEN];
+  char buf[NUMBUFLEN];
   if (argvars[1].v_type == VAR_UNKNOWN) {
     mode = "nvo";
   } else {
-    mode = (const char *)get_tv_string_buf(&argvars[1], buf);
+    mode = tv_get_string_buf(&argvars[1], buf);
     if (argvars[2].v_type != VAR_UNKNOWN) {
       abbr = get_tv_number(&argvars[2]);
     }
@@ -10220,17 +10221,16 @@ static void f_hasmapto(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 static void f_histadd(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
   HistoryType histype;
-  char_u      *str;
-  char_u buf[NUMBUFLEN];
 
   rettv->vval.v_number = false;
   if (check_restricted() || check_secure()) {
     return;
   }
-  str = get_tv_string_chk(&argvars[0]);  // NULL on type error
+  char_u *str = get_tv_string_chk(&argvars[0]);  // NULL on type error
   histype = str != NULL ? get_histtype(str, STRLEN(str), false) : HIST_INVALID;
   if (histype != HIST_INVALID) {
-    str = get_tv_string_buf(&argvars[1], buf);
+    char buf[NUMBUFLEN];
+    str = (char_u *)tv_get_string_buf(&argvars[1], buf);
     if (*str != NUL) {
       init_history();
       add_to_history(histype, str, false, NUL);
@@ -10246,7 +10246,6 @@ static void f_histadd(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 static void f_histdel(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
   int n;
-  char_u buf[NUMBUFLEN];
   char_u      *str;
 
   str = get_tv_string_chk(&argvars[0]);  // NULL on type error
@@ -10258,11 +10257,12 @@ static void f_histdel(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   } else if (argvars[1].v_type == VAR_NUMBER) {
     // index given: remove that entry
     n = del_history_idx(get_histtype(str, STRLEN(str), false),
-                        (int) get_tv_number(&argvars[1]));
+                        (int)get_tv_number(&argvars[1]));
   } else {
     // string given: remove all matching entries
+    char buf[NUMBUFLEN];
     n = del_history_entry(get_histtype(str, STRLEN(str), false),
-                          get_tv_string_buf(&argvars[1], buf));
+                          (char_u *)tv_get_string_buf(&argvars[1], buf));
   }
   rettv->vval.v_number = n;
 }
@@ -10352,12 +10352,12 @@ static void f_iconv(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   rettv->vval.v_string = NULL;
 
   const char *const str = tv_get_string(&argvars[0]);
-  char_u buf1[NUMBUFLEN];
+  char buf1[NUMBUFLEN];
   char_u *const from = enc_canonize(enc_skip(
-          get_tv_string_buf(&argvars[1], buf1)));
-  char_u buf2[NUMBUFLEN];
+          (char_u *)tv_get_string_buf(&argvars[1], buf1)));
+  char buf2[NUMBUFLEN];
   char_u *const to = enc_canonize(enc_skip(
-          get_tv_string_buf(&argvars[2], buf2)));
+          (char_u *)tv_get_string_buf(&argvars[2], buf2)));
   vimconv.vc_type = CONV_NONE;
   convert_setup(&vimconv, from, to);
 
@@ -10440,7 +10440,6 @@ static void get_user_input(typval_T *argvars, typval_T *rettv, int inputdialog)
   char_u      *prompt = get_tv_string_chk(&argvars[0]);
   char_u      *p = NULL;
   int c;
-  char_u buf[NUMBUFLEN];
   int cmd_silent_save = cmd_silent;
   char_u      *defstr = (char_u *)"";
   int xp_type = EXPAND_NOTHING;
@@ -10470,9 +10469,11 @@ static void get_user_input(typval_T *argvars, typval_T *rettv, int inputdialog)
     cmdline_row = msg_row;
 
     if (argvars[1].v_type != VAR_UNKNOWN) {
+      char_u buf[NUMBUFLEN];
       defstr = get_tv_string_buf_chk(&argvars[1], buf);
-      if (defstr != NULL)
+      if (defstr != NULL) {
         stuffReadbuffSpec(defstr);
+      }
 
       if (!inputdialog && argvars[2].v_type != VAR_UNKNOWN) {
         char_u  *xp_name;
@@ -10483,8 +10484,9 @@ static void get_user_input(typval_T *argvars, typval_T *rettv, int inputdialog)
         rettv->vval.v_string = NULL;
 
         xp_name = get_tv_string_buf_chk(&argvars[2], buf);
-        if (xp_name == NULL)
+        if (xp_name == NULL) {
           return;
+        }
 
         xp_namelen = (int)STRLEN(xp_name);
 
@@ -10504,9 +10506,11 @@ static void get_user_input(typval_T *argvars, typval_T *rettv, int inputdialog)
     }
     if (inputdialog && rettv->vval.v_string == NULL
         && argvars[1].v_type != VAR_UNKNOWN
-        && argvars[2].v_type != VAR_UNKNOWN)
-      rettv->vval.v_string = vim_strsave(get_tv_string_buf(
+        && argvars[2].v_type != VAR_UNKNOWN) {
+      char buf[NUMBUFLEN];
+      rettv->vval.v_string = (char_u *)xstrdup(tv_get_string_buf(
               &argvars[2], buf));
+    }
 
     xfree(xp_arg);
 
@@ -12006,21 +12010,21 @@ static void f_min(typval_T *argvars, typval_T *rettv, FunPtr fptr)
  */
 static void f_mkdir(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
-  char_u      *dir;
-  char_u buf[NUMBUFLEN];
   int prot = 0755;
 
   rettv->vval.v_number = FAIL;
   if (check_restricted() || check_secure())
     return;
 
-  dir = get_tv_string_buf(&argvars[0], buf);
-  if (*dir == NUL)
+  char buf[NUMBUFLEN];
+  const char *const dir = tv_get_string_buf(&argvars[0], buf);
+  if (*dir == NUL) {
     rettv->vval.v_number = FAIL;
-  else {
-    if (*path_tail(dir) == NUL)
-      /* remove trailing slashes */
-      *path_tail_with_sep(dir) = NUL;
+  } else {
+    if (*path_tail((char_u *)dir) == NUL) {
+      // Remove trailing slashes.
+      *path_tail_with_sep((char_u *)dir) = NUL;
+    }
 
     if (argvars[1].v_type != VAR_UNKNOWN) {
       if (argvars[2].v_type != VAR_UNKNOWN) {
@@ -12028,7 +12032,7 @@ static void f_mkdir(typval_T *argvars, typval_T *rettv, FunPtr fptr)
       }
       if (prot != -1 && strcmp(tv_get_string(&argvars[1]), "p") == 0) {
         char *failed_dir;
-        int ret = os_mkdir_recurse((char *) dir, prot, &failed_dir);
+        int ret = os_mkdir_recurse(dir, prot, &failed_dir);
         if (ret != 0) {
           EMSG3(_(e_mkdir), failed_dir, os_strerror(ret));
           xfree(failed_dir);
@@ -12311,14 +12315,13 @@ static void f_printf(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   rettv->v_type = VAR_STRING;
   rettv->vval.v_string = NULL;
   {
-    char_u buf[NUMBUFLEN];
     int len;
     int saved_did_emsg = did_emsg;
-    char    *fmt;
 
-    /* Get the required length, allocate the buffer and do it for real. */
+    // Get the required length, allocate the buffer and do it for real.
     did_emsg = FALSE;
-    fmt = (char *)get_tv_string_buf(&argvars[0], buf);
+    char buf[NUMBUFLEN];
+    const char *fmt = tv_get_string_buf(&argvars[0], buf);
     len = vim_vsnprintf(NULL, 0, fmt, dummy_ap, argvars + 1);
     if (!did_emsg) {
       char *s = xmalloc(len + 1);
@@ -12739,14 +12742,13 @@ static void f_remove(typval_T *argvars, typval_T *rettv, FunPtr fptr)
  */
 static void f_rename(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 {
-  char_u buf[NUMBUFLEN];
-
   if (check_restricted() || check_secure()) {
     rettv->vval.v_number = -1;
   } else {
+    char buf[NUMBUFLEN];
     rettv->vval.v_number = vim_rename(
-        (char_u *)tv_get_string(&argvars[0]),
-        get_tv_string_buf(&argvars[1], buf));
+        (const char_u *)tv_get_string(&argvars[0]),
+        (const char_u *)tv_get_string_buf(&argvars[1], buf));
   }
 }
 
@@ -15449,8 +15451,7 @@ static void f_synIDattr(typval_T *argvars, typval_T *rettv, FunPtr fptr)
   int modec;
   if (argvars[2].v_type != VAR_UNKNOWN) {
     char modebuf[NUMBUFLEN];
-    const char *const mode = (const char *)get_tv_string_buf(&argvars[2],
-                                                             (char_u *)modebuf);
+    const char *const mode = tv_get_string_buf(&argvars[2], modebuf);
     modec = TOLOWER_ASC(mode[0]);
     if (modec != 'c' && modec != 'g') {
       modec = 0;  // Replace invalid with current.
@@ -17896,14 +17897,6 @@ static linenr_T get_tv_lnum_buf(typval_T *argvars, buf_T *buf)
 
 // TODO(ZyX-I): move to eval/typval
 
-char_u *get_tv_string_buf(const typval_T *varp, char_u *buf)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  char_u *const res = get_tv_string_buf_chk(varp, buf);
-
-  return res != NULL ? res : (char_u *)"";
-}
-
 /// Careful: This uses a single, static buffer.  YOU CAN ONLY USE IT ONCE!
 char_u *get_tv_string_chk(const typval_T *varp)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
@@ -17913,7 +17906,7 @@ char_u *get_tv_string_chk(const typval_T *varp)
   return get_tv_string_buf_chk(varp, mybuf);
 }
 
-static char_u *get_tv_string_buf_chk(const typval_T *varp, char_u *buf)
+char_u *get_tv_string_buf_chk(const typval_T *varp, char_u *buf)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
   switch (varp->v_type) {
