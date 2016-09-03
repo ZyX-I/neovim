@@ -23,6 +23,7 @@ typedef double float_T;
 
 #define VARNUMBER_MAX INT_MAX
 #define VARNUMBER_MIN INT_MIN
+#define PRIdVARNUMBER "d"
 
 typedef struct listvar_S list_T;
 typedef struct dictvar_S dict_T;
