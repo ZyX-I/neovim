@@ -4362,6 +4362,7 @@ void ex_cexpr(exarg_T *eap)
     } else {
       EMSG(_("E777: String or List expected"));
     }
+    tv_clear(&rettv);
   }
 }
 
