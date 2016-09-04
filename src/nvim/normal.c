@@ -2034,13 +2034,12 @@ static void op_colon(oparg_T *oap)
   if (oap->is_VIsual) {
     stuffReadbuff("'<,'>");
   } else {
-    /*
-     * Make the range look nice, so it can be repeated.
-     */
-    if (oap->start.lnum == curwin->w_cursor.lnum)
+    // Make the range look nice, so it can be repeated.
+    if (oap->start.lnum == curwin->w_cursor.lnum) {
       stuffcharReadbuff('.');
-    else
+    } else {
       stuffnumReadbuff((long)oap->start.lnum);
+    }
     if (oap->end.lnum != oap->start.lnum) {
       stuffcharReadbuff(',');
       if (oap->end.lnum == curwin->w_cursor.lnum) {
@@ -2094,7 +2093,7 @@ static void op_function(oparg_T *oap)
     }
 
     const char_u *const argv[1] = {
-      (const char_u *)(((const char *const []) {
+      (const char_u *)(((const char *const[]) {
         [kMTBlockWise] = "block",
         [kMTLineWise] = "line",
         [kMTCharWise] = "char",
@@ -2707,7 +2706,7 @@ do_mouse (
     } else {                                    // location list window
       do_cmdline_cmd(".ll");
     }
-    got_click = false;                  // ignore drag&release now
+    got_click = false;  // Ignore drag&release now.
   }
   /*
    * Ctrl-Mouse click (or double click in a help window) jumps to the tag
@@ -7288,17 +7287,18 @@ static bool unadjust_for_sel(void)
   pos_T       *pp;
 
   if (*p_sel == 'e' && !equalpos(VIsual, curwin->w_cursor)) {
-    if (lt(VIsual, curwin->w_cursor))
+    if (lt(VIsual, curwin->w_cursor)) {
       pp = &curwin->w_cursor;
-    else
+    } else {
       pp = &VIsual;
-    if (pp->coladd > 0)
-      --pp->coladd;
-    else if (pp->col > 0) {
+    }
+    if (pp->coladd > 0) {
+      pp->coladd--;
+    } else if (pp->col > 0) {
       pp->col--;
       mark_mb_adjustpos(curbuf, pp);
     } else if (pp->lnum > 1) {
-      --pp->lnum;
+      pp->lnum--;
       pp->col = (colnr_T)STRLEN(ml_get(pp->lnum));
       return true;
     }

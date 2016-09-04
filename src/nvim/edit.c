@@ -2016,28 +2016,31 @@ int ins_compl_add_infercase(char_u *str, int len, int icase, char_u *fname, int 
     wca = xmalloc(actual_len * sizeof(*wca));
     {
       const char_u *p = str;
-      for (i = 0; i < actual_len; ++i)
+      for (i = 0; i < actual_len; i++) {
         if (has_mbyte) {
           wca[i] = mb_ptr2char_adv(&p);
         } else {
           wca[i] = *(p++);
         }
+      }
     }
 
     // Rule 1: Were any chars converted to lower?
     {
       const char_u *p = compl_orig_text;
-      for (i = 0; i < min_len; ++i) {
-        if (has_mbyte)
+      for (i = 0; i < min_len; i++) {
+        if (has_mbyte) {
           c = mb_ptr2char_adv(&p);
-        else
+        } else {
           c = *(p++);
+        }
         if (vim_islower(c)) {
-          has_lower = TRUE;
+          has_lower = true;
           if (vim_isupper(wca[i])) {
-            /* Rule 1 is satisfied. */
-            for (i = actual_compl_length; i < actual_len; ++i)
+            // Rule 1 is satisfied.
+            for (i = actual_compl_length; i < actual_len; i++) {
               wca[i] = vim_tolower(wca[i]);
+            }
             break;
           }
         }
@@ -2050,7 +2053,7 @@ int ins_compl_add_infercase(char_u *str, int len, int icase, char_u *fname, int 
      */
     if (!has_lower) {
       const char_u *p = compl_orig_text;
-      for (i = 0; i < min_len; ++i) {
+      for (i = 0; i < min_len; i++) {
         if (has_mbyte) {
           c = mb_ptr2char_adv(&p);
         } else {
@@ -2070,16 +2073,17 @@ int ins_compl_add_infercase(char_u *str, int len, int icase, char_u *fname, int 
     // Copy the original case of the part we typed.
     {
       const char_u *p = compl_orig_text;
-      for (i = 0; i < min_len; ++i) {
+      for (i = 0; i < min_len; i++) {
         if (has_mbyte) {
           c = mb_ptr2char_adv(&p);
         } else {
           c = *(p++);
         }
-        if (vim_islower(c))
+        if (vim_islower(c)) {
           wca[i] = vim_tolower(wca[i]);
-        else if (vim_isupper(c))
+        } else if (vim_isupper(c)) {
           wca[i] = vim_toupper(wca[i]);
+        }
       }
     }
 
@@ -3515,10 +3519,12 @@ expand_by_function (
     ins_compl_add_dict(matchdict);
 
 theend:
-  if (matchdict != NULL)
+  if (matchdict != NULL) {
     tv_dict_unref(matchdict);
-  if (matchlist != NULL)
+  }
+  if (matchlist != NULL) {
     tv_list_unref(matchlist);
+  }
 }
 
 /*
@@ -3548,7 +3554,7 @@ static void ins_compl_add_dict(dict_T *dict)
   dictitem_T  *di_words;
 
   // Check for optional "refresh" item.
-  compl_opt_refresh_always = FALSE;
+  compl_opt_refresh_always = false;
   di_refresh = tv_dict_find(dict, S_LEN("refresh"));
   if (di_refresh != NULL && di_refresh->di_tv.v_type == VAR_STRING) {
     const char *v = (const char *)di_refresh->di_tv.vval.v_string;
@@ -8379,7 +8385,7 @@ static int ins_digraph(void)
       edit_unputchar();
     if (cc != ESC) {
       AppendToRedobuff(CTRL_V_STR);
-      c = getdigraph(c, cc, TRUE);
+      c = getdigraph(c, cc, true);
       clear_showcmd();
       return c;
     }
