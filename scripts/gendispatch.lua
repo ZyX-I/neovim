@@ -46,8 +46,8 @@ grammar = Ct((c_proto + c_comment + c_preproc + ws) ^ 1)
 assert(#arg >= 3)
 functions = {}
 
-local nvimsrcdir = arg[1]
-package.path = nvimsrcdir .. '/?.lua;' .. package.path
+local libdir = arg[1]
+package.path = libdir .. '/?.lua;' .. package.path
 
 -- names of all headers relative to the source root (for inclusion in the
 -- generated file)
@@ -108,7 +108,7 @@ end
 
 -- Export functions under older deprecated names.
 -- These will be removed eventually.
-local deprecated_aliases = require("api.dispatch_deprecated")
+local deprecated_aliases = require("dispatch_deprecated")
 for i,f in ipairs(shallowcopy(functions)) do
   local ismethod = false
   if startswith(f.name, "nvim_buf_") then
