@@ -12,6 +12,7 @@ local null_string = {[true]='NULL string'}
 local null_list = {[true]='NULL list'}
 local null_dict = {[true]='NULL dict'}
 local type_key = {[true]='type key'}
+local locks_key = {[true]='locks key'}
 local list_type = {[true]='list type'}
 local dict_type = {[true]='dict type'}
 local func_type = {[true]='func type'}
@@ -23,9 +24,9 @@ local nil_value = {[true]='nil'}
 local lua2typvalt
 
 local function li_alloc(nogc)
-  local gcfunc = eval.listitem_free
+  local gcfunc = eval.tv_list_item_free
   if nogc then gcfunc = nil end
-  local li = ffi.gc(eval.listitem_alloc(), gcfunc)
+  local li = ffi.gc(eval.tv_list_item_alloc(), gcfunc)
   li.li_next = nil
   li.li_prev = nil
   li.li_tv = {v_type=eval.VAR_UNKNOWN, v_lock=eval.VAR_UNLOCKED}
@@ -295,7 +296,7 @@ local lua2typvalt_type_tab = {
         argv = ffi.gc(ffi.cast('typval_T*', eval.xmalloc(ffi.sizeof('typval_T') * #l.args)), nil)
         for i, arg in ipairs(l.args) do
           local arg_tv = ffi.gc(lua2typvalt(arg, processed), nil)
-          eval.copy_tv(arg_tv, argv[i - 1])
+          eval.tv_copy(arg_tv, argv[i - 1])
           eval.tv_clear(arg_tv)
         end
       end
@@ -365,8 +366,9 @@ lua2typvalt = function(l, processed)
   end
 end
 
+local void_ptr = ffi.typeof('void *')
 local function void(ptr)
-  return ffi.cast('void*', ptr)
+  return ffi.cast(void_ptr, ptr)
 end
 
 local alloc_logging_helpers = {
@@ -378,7 +380,7 @@ local alloc_logging_helpers = {
   end,
   str = function(s, size) return {func='malloc', args={size + 1}, ret=void(s)} end,
 
-  freed = function(p) return {func='free', args={p and void(p)}} end,
+  freed = function(p) return {func='free', args={type(p) == 'table' and p or void(p)}} end,
 }
 
 return {
@@ -394,6 +396,7 @@ return {
   nil_value=nil_value,
 
   type_key=type_key,
+  locks_key=locks_key,
 
   list=list,
   lst2tbl=lst2tbl,
