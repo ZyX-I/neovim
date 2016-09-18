@@ -366,11 +366,10 @@ static inline void typval_encode_list_start(EncodedData *const edata,
                                             const size_t len)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_NONNULL_ALL
 {
-  const Object obj = OBJECT_INIT;
   kv_push(edata->stack, ARRAY_OBJ(((Array) {
     .capacity = len,
     .size = 0,
-    .items = xmalloc(len * sizeof(*obj.data.array.items)),
+    .items = xmalloc(len * sizeof(*((Object)OBJECT_INIT).data.array.items)),
   })));
 }
 
@@ -407,11 +406,11 @@ static inline void typval_encode_dict_start(EncodedData *const edata,
                                             const size_t len)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_NONNULL_ALL
 {
-  const Object obj = OBJECT_INIT;
   kv_push(edata->stack, DICTIONARY_OBJ(((Dictionary) {
     .capacity = len,
     .size = 0,
-    .items = xmalloc(len * sizeof(*obj.data.dictionary.items)),
+    .items = xmalloc(len * sizeof(
+        *((Object)OBJECT_INIT).data.dictionary.items)),
   })));
 }
 
