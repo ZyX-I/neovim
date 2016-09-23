@@ -5,7 +5,6 @@ local OK = helpers.OK
 local eq = helpers.eq
 local neq = helpers.neq
 local ffi = helpers.ffi
-local NULL = helpers.NULL
 local cimport = helpers.cimport
 local to_cstr = helpers.to_cstr
 local alloc_log_new = helpers.alloc_log_new
@@ -22,16 +21,13 @@ local dict_type  = eval_helpers.dict_type
 local list_type  = eval_helpers.list_type
 local null_list  = eval_helpers.null_list
 local null_dict  = eval_helpers.null_dict
+local empty_list  = eval_helpers.empty_list
 local lua2typvalt  = eval_helpers.lua2typvalt
 local typvalt2lua  = eval_helpers.typvalt2lua
 local null_string  = eval_helpers.null_string
 
 local lib = cimport('./src/nvim/eval/typval.h', './src/nvim/memory.h',
                     './src/nvim/mbyte.h')
-
-local function list_index(l, idx)
-  return tv_list_find(l, idx)
-end
 
 local function list_items(l)
   local lis = {}
@@ -59,7 +55,7 @@ local function get_alloc_rets(exp_log, res)
       res[#res + 1] = exp_log[i].ret
     end
   end
-  res.freed = function(res, n) return {func='free', args={res[n]}} end
+  res.freed = function(r, n) return {func='free', args={r[n]}} end
   return exp_log
 end
 
@@ -296,8 +292,8 @@ describe('typval.c', function()
     describe('alloc()/free()', function()
       it('recursively frees list with recurse=true', function()
         local l1 = ffi.gc(list(1, 'abc'), nil)
-        local l2 = ffi.gc(list({[type_key]=dict_type}), nil)
-        local l3 = ffi.gc(list({[type_key]=list_type}), nil)
+        local l2 = ffi.gc(list({}), nil)
+        local l3 = ffi.gc(list(empty_list), nil)
         local alloc_rets = {}
         alloc_log:check(get_alloc_rets({
           a.list(l1),
@@ -332,7 +328,7 @@ describe('typval.c', function()
         })
       end)
       it('does not free container items with recurse=false', function()
-        local l1 = ffi.gc(list('abc', {[type_key]=dict_type}, {[type_key]=list_type}), nil)
+        local l1 = ffi.gc(list('abc', {}, empty_list), nil)
         local alloc_rets = {}
         alloc_log:check(get_alloc_rets({
           a.list(l1),
@@ -357,7 +353,7 @@ describe('typval.c', function()
     end)
     describe('unref()', function()
       it('recursively frees list when reference count goes to 0', function()
-        local l = ffi.gc(list({[type_key]=list_type}), nil)
+        local l = ffi.gc(list(empty_list), nil)
         local alloc_rets = {}
         alloc_log:check(get_alloc_rets({
           a.list(l),
@@ -401,7 +397,7 @@ describe('typval.c', function()
         eq({lis[4], lis[9], nil}, {lws[1].lw_item, lws[2].lw_item, lws[3].lw_item == nil and nil})
 
         lib.tv_list_remove_items(l, lis[4], lis[10])
-        eq({[type_key]=list_type}, typvalt2lua(l_tv))
+        eq(empty_list, typvalt2lua(l_tv))
         eq({true, true, true}, {lws[1].lw_item == nil, lws[2].lw_item == nil, lws[3].lw_item == nil})
 
         alloc_log:check({})
@@ -434,7 +430,7 @@ describe('typval.c', function()
           eq({0, 1, 2, 3, 4, 4.5, 5, 6, 7, 100500}, typvalt2lua(l_tv))
         end)
         it('works with an empty list', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
           eq(nil, l.lv_first)
@@ -449,10 +445,10 @@ describe('typval.c', function()
       end)
       describe('tv()', function()
         it('works', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
-          local l_l_tv = lua2typvalt({[type_key]=list_type})
+          local l_l_tv = lua2typvalt(empty_list)
           alloc_log:clear()
           local l_l = l_l_tv.vval.v_list
           eq(1, l_l.lv_refcount)
@@ -473,14 +469,14 @@ describe('typval.c', function()
             a.str(l.lv_first.li_tv.vval.v_string, 4),
           })
 
-          eq({'test', {[type_key]=list_type}}, typvalt2lua(l_tv))
+          eq({'test', empty_list}, typvalt2lua(l_tv))
         end)
       end)
     end)
     describe('append', function()
       describe('list()', function()
         it('works', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
           local l_l = list(1)
@@ -503,7 +499,7 @@ describe('typval.c', function()
       end)
       describe('dict()', function()
         it('works', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
           local l_d_tv = lua2typvalt({test=1})
@@ -527,7 +523,7 @@ describe('typval.c', function()
       end)
       describe('string()', function()
         it('works', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
           alloc_log:clear()
@@ -558,7 +554,7 @@ describe('typval.c', function()
       end)
       describe('allocated string()', function()
         it('works', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
           local s = lib.xstrdup('test')
@@ -583,7 +579,7 @@ describe('typval.c', function()
       end)
       describe('number()', function()
         it('works', function()
-          local l_tv = lua2typvalt({[type_key]=list_type})
+          local l_tv = lua2typvalt(empty_list)
           local l = l_tv.vval.v_list
 
           alloc_log:clear()
@@ -716,7 +712,7 @@ describe('typval.c', function()
         })
       end)
       it('returns different/same containers with(out) copyID', function()
-        local l_inner_tv = lua2typvalt({[type_key]=list_type})
+        local l_inner_tv = lua2typvalt(empty_list)
         local l_tv = lua2typvalt({l_inner_tv, l_inner_tv})
         eq(3, l_inner_tv.vval.v_list.lv_refcount)
         local l = l_tv.vval.v_list
@@ -724,16 +720,16 @@ describe('typval.c', function()
 
         local l_copy1 = tv_list_copy(nil, l, true, 0)
         neq(l_copy1.lv_first.li_tv.vval.v_list, l_copy1.lv_last.li_tv.vval.v_list)
-        eq({{[type_key]=list_type}, {[type_key]=list_type}}, lst2tbl(l_copy1))
+        eq({empty_list, empty_list}, lst2tbl(l_copy1))
 
         local l_copy2 = tv_list_copy(nil, l, true, 2)
         eq(l_copy2.lv_first.li_tv.vval.v_list, l_copy2.lv_last.li_tv.vval.v_list)
-        eq({{[type_key]=list_type}, {[type_key]=list_type}}, lst2tbl(l_copy2))
+        eq({empty_list, empty_list}, lst2tbl(l_copy2))
 
         eq(3, l_inner_tv.vval.v_list.lv_refcount)
       end)
       it('works with self-referencing list with copyID', function()
-        local l_tv = lua2typvalt({[type_key]=list_type})
+        local l_tv = lua2typvalt(empty_list)
         local l = l_tv.vval.v_list
         eq(1, l.lv_refcount)
         lib.tv_list_append_list(l, l)
@@ -752,6 +748,139 @@ describe('typval.c', function()
         local lis_copy1 = list_items(l_copy1)
         lib.tv_list_item_remove(l_copy1, lis_copy1[1])
         eq(1, l_copy1.lv_refcount)
+      end)
+    end)
+    describe('extend()', function()
+      it('can extend list with itself', function()
+        local l
+
+        l = list(1, {})
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        lib.tv_list_extend(l, l, nil)
+        check_alloc_log({
+          a.li(l.lv_last.li_prev),
+          a.li(l.lv_last),
+        })
+        eq(1, l.lv_refcount)
+        eq(2, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+        eq({1, {}, 1, {}}, lst2tbl(l))
+
+        l = list(1, {})
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        lib.tv_list_extend(l, l, l.lv_last)
+        check_alloc_log({
+          a.li(l.lv_last.li_prev.li_prev),
+          a.li(l.lv_last.li_prev),
+        })
+        eq({1, 1, {}, {}}, lst2tbl(l))
+        eq(1, l.lv_refcount)
+        eq(2, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        l = list(1, {})
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        lib.tv_list_extend(l, l, l.lv_first)
+        check_alloc_log({
+          a.li(l.lv_first),
+          a.li(l.lv_first.li_next),
+        })
+        eq({1, {}, 1, {}}, lst2tbl(l))
+        eq(1, l.lv_refcount)
+        eq(2, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+      end)
+      it('can extend list with an empty list', function()
+        local l = list(1, {})
+        local el = list()
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+        eq(1, el.lv_refcount)
+
+        lib.tv_list_extend(l, el, nil)
+        check_alloc_log({
+        })
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+        eq(1, el.lv_refcount)
+        eq({1, {}}, lst2tbl(l))
+
+        lib.tv_list_extend(l, el, l.lv_first)
+        check_alloc_log({
+        })
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+        eq(1, el.lv_refcount)
+        eq({1, {}}, lst2tbl(l))
+
+        lib.tv_list_extend(l, el, l.lv_last)
+        check_alloc_log({
+        })
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+        eq(1, el.lv_refcount)
+        eq({1, {}}, lst2tbl(l))
+      end)
+      it('can extend list with another non-empty list', function()
+        local l
+        local l2 = list(42, empty_list)
+        eq(1, l2.lv_refcount)
+        eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
+
+        l = ffi.gc(list(1, {}), nil)
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        lib.tv_list_extend(l, l2, nil)
+        check_alloc_log({
+          a.li(l.lv_last.li_prev),
+          a.li(l.lv_last),
+        })
+        eq(1, l2.lv_refcount)
+        eq(2, l2.lv_last.li_tv.vval.v_list.lv_refcount)
+        eq({1, {}, 42, empty_list}, lst2tbl(l))
+        lib.tv_list_free(l, true)
+        eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
+
+        l = ffi.gc(list(1, {}), nil)
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        lib.tv_list_extend(l, l2, l.lv_first)
+        check_alloc_log({
+          a.li(l.lv_first),
+          a.li(l.lv_first.li_next),
+        })
+        eq(1, l2.lv_refcount)
+        eq(2, l2.lv_last.li_tv.vval.v_list.lv_refcount)
+        eq({42, empty_list, 1, {}}, lst2tbl(l))
+        lib.tv_list_free(l, true)
+        eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
+
+        l = ffi.gc(list(1, {}), nil)
+        clear_alloc_log()
+        eq(1, l.lv_refcount)
+        eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
+
+        lib.tv_list_extend(l, l2, l.lv_last)
+        check_alloc_log({
+          a.li(l.lv_first.li_next),
+          a.li(l.lv_first.li_next.li_next),
+        })
+        eq(1, l2.lv_refcount)
+        eq(2, l2.lv_last.li_tv.vval.v_list.lv_refcount)
+        eq({1, 42, empty_list, {}}, lst2tbl(l))
+        lib.tv_list_free(l, true)
+        eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
       end)
     end)
     describe('concat()', function()
@@ -795,7 +924,7 @@ describe('typval.c', function()
       end)
       it('works with two different lists', function()
         local l1 = list(1, {})
-        local l2 = list(3, {[type_key]=list_type})
+        local l2 = list(3, empty_list)
         eq(1, l1.lv_refcount)
         eq(1, l1.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, l2.lv_refcount)
@@ -815,7 +944,7 @@ describe('typval.c', function()
           a.li(rettv.vval.v_list.lv_last.li_prev),
           a.li(rettv.vval.v_list.lv_last),
         })
-        eq({1, {}, 3, {[type_key]=list_type}}, typvalt2lua(rettv))
+        eq({1, {}, 3, empty_list}, typvalt2lua(rettv))
       end)
       it('can concatenate list with itself', function()
         local l = list(1, {})
@@ -881,7 +1010,7 @@ describe('typval.c', function()
         check_alloc_log({
           a.list(rettv3.vval.v_list),
         })
-        eq({[type_key]=list_type}, typvalt2lua(rettv3))
+        eq(empty_list, typvalt2lua(rettv3))
 
         local rettv4 = typvalt()
         eq(OK, lib.tv_list_concat(le, le2, rettv4))
@@ -892,7 +1021,7 @@ describe('typval.c', function()
         check_alloc_log({
           a.list(rettv4.vval.v_list),
         })
-        eq({[type_key]=list_type}, typvalt2lua(rettv4))
+        eq(empty_list, typvalt2lua(rettv4))
       end)
     end)
   end)
