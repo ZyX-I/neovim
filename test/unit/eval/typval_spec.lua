@@ -609,63 +609,66 @@ describe('typval.c', function()
         eq(nil, lib.tv_list_copy(nil, nil, false, 1))
       end)
       it('copies list correctly without converting items', function()
-        local v = {{['«']='»'}, {'„'}, 1, '“', null_string, null_list, null_dict}
-        local l_tv = lua2typvalt(v)
-        local l = l_tv.vval.v_list
-        local lis = list_items(l)
-        alloc_log:clear()
+        do
+          local v = {{['«']='»'}, {'„'}, 1, '“', null_string, null_list, null_dict}
+          local l_tv = lua2typvalt(v)
+          local l = l_tv.vval.v_list
+          local lis = list_items(l)
+          alloc_log:clear()
 
-        eq(1, lis[1].li_tv.vval.v_dict.dv_refcount)
-        eq(1, lis[2].li_tv.vval.v_list.lv_refcount)
-        local l_copy1 = tv_list_copy(nil, l, false, 0)
-        eq(2, lis[1].li_tv.vval.v_dict.dv_refcount)
-        eq(2, lis[2].li_tv.vval.v_list.lv_refcount)
-        local lis_copy1 = list_items(l_copy1)
-        eq(lis[1].li_tv.vval.v_dict, lis_copy1[1].li_tv.vval.v_dict)
-        eq(lis[2].li_tv.vval.v_list, lis_copy1[2].li_tv.vval.v_list)
-        eq(v, lst2tbl(l_copy1))
-        alloc_log:check({
-          a.list(l_copy1),
-          a.li(lis_copy1[1]),
-          a.li(lis_copy1[2]),
-          a.li(lis_copy1[3]),
-          a.li(lis_copy1[4]),
-          a.str(lis_copy1[4].li_tv.vval.v_string, #v[4]),
-          a.li(lis_copy1[5]),
-          a.li(lis_copy1[6]),
-          a.li(lis_copy1[7]),
-        })
-        lib.tv_list_free(ffi.gc(l_copy1, nil))
-        alloc_log:clear()
+          eq(1, lis[1].li_tv.vval.v_dict.dv_refcount)
+          eq(1, lis[2].li_tv.vval.v_list.lv_refcount)
+          local l_copy1 = tv_list_copy(nil, l, false, 0)
+          eq(2, lis[1].li_tv.vval.v_dict.dv_refcount)
+          eq(2, lis[2].li_tv.vval.v_list.lv_refcount)
+          local lis_copy1 = list_items(l_copy1)
+          eq(lis[1].li_tv.vval.v_dict, lis_copy1[1].li_tv.vval.v_dict)
+          eq(lis[2].li_tv.vval.v_list, lis_copy1[2].li_tv.vval.v_list)
+          eq(v, lst2tbl(l_copy1))
+          alloc_log:check({
+            a.list(l_copy1),
+            a.li(lis_copy1[1]),
+            a.li(lis_copy1[2]),
+            a.li(lis_copy1[3]),
+            a.li(lis_copy1[4]),
+            a.str(lis_copy1[4].li_tv.vval.v_string, #v[4]),
+            a.li(lis_copy1[5]),
+            a.li(lis_copy1[6]),
+            a.li(lis_copy1[7]),
+          })
+          lib.tv_list_free(ffi.gc(l_copy1, nil), true)
+          alloc_log:clear()
 
-        eq(1, lis[1].li_tv.vval.v_dict.dv_refcount)
-        eq(1, lis[2].li_tv.vval.v_list.lv_refcount)
-        local l_deepcopy1 = tv_list_copy(nil, l, true, 0)
-        neq(nil, l_deepcopy1)
-        eq(1, lis[1].li_tv.vval.v_dict.dv_refcount)
-        eq(1, lis[2].li_tv.vval.v_list.lv_refcount)
-        local lis_deepcopy1 = list_items(l_deepcopy1)
-        neq(lis[1].li_tv.vval.v_dict, lis_deepcopy1[1].li_tv.vval.v_dict)
-        neq(lis[2].li_tv.vval.v_list, lis_deepcopy1[2].li_tv.vval.v_list)
-        eq(v, lst2tbl(l_deepcopy1))
-        local di_deepcopy1 = first_di(lis_deepcopy1[1].li_tv.vval.v_dict)
-        alloc_log:check({
-          a.list(l_deepcopy1),
-          a.li(lis_deepcopy1[1]),
-          a.dict(lis_deepcopy1[1].li_tv.vval.v_dict),
-          a.di(di_deepcopy1, #('«')),
-          a.str(di_deepcopy1.di_tv.vval.v_string, #v[1]['«']),
-          a.li(lis_deepcopy1[2]),
-          a.list(lis_deepcopy1[2].li_tv.vval.v_list),
-          a.li(lis_deepcopy1[2].li_tv.vval.v_list.lv_first),
-          a.str(lis_deepcopy1[2].li_tv.vval.v_list.lv_first.li_tv.vval.v_string, #v[2][1]),
-          a.li(lis_deepcopy1[3]),
-          a.li(lis_deepcopy1[4]),
-          a.str(lis_deepcopy1[4].li_tv.vval.v_string, #v[4]),
-          a.li(lis_deepcopy1[5]),
-          a.li(lis_deepcopy1[6]),
-          a.li(lis_deepcopy1[7]),
-        })
+          eq(1, lis[1].li_tv.vval.v_dict.dv_refcount)
+          eq(1, lis[2].li_tv.vval.v_list.lv_refcount)
+          local l_deepcopy1 = tv_list_copy(nil, l, true, 0)
+          neq(nil, l_deepcopy1)
+          eq(1, lis[1].li_tv.vval.v_dict.dv_refcount)
+          eq(1, lis[2].li_tv.vval.v_list.lv_refcount)
+          local lis_deepcopy1 = list_items(l_deepcopy1)
+          neq(lis[1].li_tv.vval.v_dict, lis_deepcopy1[1].li_tv.vval.v_dict)
+          neq(lis[2].li_tv.vval.v_list, lis_deepcopy1[2].li_tv.vval.v_list)
+          eq(v, lst2tbl(l_deepcopy1))
+          local di_deepcopy1 = first_di(lis_deepcopy1[1].li_tv.vval.v_dict)
+          alloc_log:check({
+            a.list(l_deepcopy1),
+            a.li(lis_deepcopy1[1]),
+            a.dict(lis_deepcopy1[1].li_tv.vval.v_dict),
+            a.di(di_deepcopy1, #('«')),
+            a.str(di_deepcopy1.di_tv.vval.v_string, #v[1]['«']),
+            a.li(lis_deepcopy1[2]),
+            a.list(lis_deepcopy1[2].li_tv.vval.v_list),
+            a.li(lis_deepcopy1[2].li_tv.vval.v_list.lv_first),
+            a.str(lis_deepcopy1[2].li_tv.vval.v_list.lv_first.li_tv.vval.v_string, #v[2][1]),
+            a.li(lis_deepcopy1[3]),
+            a.li(lis_deepcopy1[4]),
+            a.str(lis_deepcopy1[4].li_tv.vval.v_string, #v[4]),
+            a.li(lis_deepcopy1[5]),
+            a.li(lis_deepcopy1[6]),
+            a.li(lis_deepcopy1[7]),
+          })
+        end
+        collectgarbage()
       end)
       it('copies list correctly and converts items', function()
         local vc = ffi.gc(ffi.new('vimconv_T[1]'), function(vc)
@@ -755,12 +758,12 @@ describe('typval.c', function()
         local l
 
         l = list(1, {})
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         lib.tv_list_extend(l, l, nil)
-        check_alloc_log({
+        alloc_log:check({
           a.li(l.lv_last.li_prev),
           a.li(l.lv_last),
         })
@@ -769,12 +772,12 @@ describe('typval.c', function()
         eq({1, {}, 1, {}}, lst2tbl(l))
 
         l = list(1, {})
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         lib.tv_list_extend(l, l, l.lv_last)
-        check_alloc_log({
+        alloc_log:check({
           a.li(l.lv_last.li_prev.li_prev),
           a.li(l.lv_last.li_prev),
         })
@@ -783,12 +786,12 @@ describe('typval.c', function()
         eq(2, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         l = list(1, {})
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         lib.tv_list_extend(l, l, l.lv_first)
-        check_alloc_log({
+        alloc_log:check({
           a.li(l.lv_first),
           a.li(l.lv_first.li_next),
         })
@@ -799,13 +802,13 @@ describe('typval.c', function()
       it('can extend list with an empty list', function()
         local l = list(1, {})
         local el = list()
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, el.lv_refcount)
 
         lib.tv_list_extend(l, el, nil)
-        check_alloc_log({
+        alloc_log:check({
         })
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
@@ -813,7 +816,7 @@ describe('typval.c', function()
         eq({1, {}}, lst2tbl(l))
 
         lib.tv_list_extend(l, el, l.lv_first)
-        check_alloc_log({
+        alloc_log:check({
         })
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
@@ -821,7 +824,7 @@ describe('typval.c', function()
         eq({1, {}}, lst2tbl(l))
 
         lib.tv_list_extend(l, el, l.lv_last)
-        check_alloc_log({
+        alloc_log:check({
         })
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
@@ -835,12 +838,12 @@ describe('typval.c', function()
         eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
 
         l = ffi.gc(list(1, {}), nil)
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         lib.tv_list_extend(l, l2, nil)
-        check_alloc_log({
+        alloc_log:check({
           a.li(l.lv_last.li_prev),
           a.li(l.lv_last),
         })
@@ -851,12 +854,12 @@ describe('typval.c', function()
         eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
 
         l = ffi.gc(list(1, {}), nil)
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         lib.tv_list_extend(l, l2, l.lv_first)
-        check_alloc_log({
+        alloc_log:check({
           a.li(l.lv_first),
           a.li(l.lv_first.li_next),
         })
@@ -867,12 +870,12 @@ describe('typval.c', function()
         eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
 
         l = ffi.gc(list(1, {}), nil)
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
         lib.tv_list_extend(l, l2, l.lv_last)
-        check_alloc_log({
+        alloc_log:check({
           a.li(l.lv_first.li_next),
           a.li(l.lv_first.li_next.li_next),
         })
@@ -886,7 +889,7 @@ describe('typval.c', function()
     describe('concat()', function()
       it('works with NULL lists', function()
         local l = list(1, {})
-        clear_alloc_log()
+        alloc_log:clear()
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
 
@@ -896,7 +899,7 @@ describe('typval.c', function()
         eq(tonumber(lib.VAR_LIST), tonumber(rettv1.v_type))
         eq({1, {}}, typvalt2lua(rettv1))
         eq(1, rettv1.vval.v_list.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv1.vval.v_list),
           a.li(rettv1.vval.v_list.lv_first),
           a.li(rettv1.vval.v_list.lv_last),
@@ -909,7 +912,7 @@ describe('typval.c', function()
         eq(tonumber(lib.VAR_LIST), tonumber(rettv2.v_type))
         eq({1, {}}, typvalt2lua(rettv2))
         eq(1, rettv2.vval.v_list.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv2.vval.v_list),
           a.li(rettv2.vval.v_list.lv_first),
           a.li(rettv2.vval.v_list.lv_last),
@@ -920,7 +923,7 @@ describe('typval.c', function()
         eq(OK, lib.tv_list_concat(nil, nil, rettv3))
         eq(tonumber(lib.VAR_LIST), tonumber(rettv3.v_type))
         eq(null_list, typvalt2lua(rettv3))
-        check_alloc_log({})
+        alloc_log:check({})
       end)
       it('works with two different lists', function()
         local l1 = list(1, {})
@@ -929,7 +932,7 @@ describe('typval.c', function()
         eq(1, l1.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, l2.lv_refcount)
         eq(1, l2.lv_last.li_tv.vval.v_list.lv_refcount)
-        clear_alloc_log()
+        alloc_log:clear()
 
         local rettv = typvalt()
         eq(OK, lib.tv_list_concat(l1, l2, rettv))
@@ -937,7 +940,7 @@ describe('typval.c', function()
         eq(2, l1.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, l2.lv_refcount)
         eq(2, l2.lv_last.li_tv.vval.v_list.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv.vval.v_list),
           a.li(rettv.vval.v_list.lv_first),
           a.li(rettv.vval.v_list.lv_first.li_next),
@@ -950,13 +953,13 @@ describe('typval.c', function()
         local l = list(1, {})
         eq(1, l.lv_refcount)
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
-        clear_alloc_log()
+        alloc_log:clear()
 
         local rettv = typvalt()
         eq(OK, lib.tv_list_concat(l, l, rettv))
         eq(1, l.lv_refcount)
         eq(3, l.lv_last.li_tv.vval.v_dict.dv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv.vval.v_list),
           a.li(rettv.vval.v_list.lv_first),
           a.li(rettv.vval.v_list.lv_first.li_next),
@@ -973,7 +976,7 @@ describe('typval.c', function()
         eq(1, l.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, le.lv_refcount)
         eq(1, le2.lv_refcount)
-        clear_alloc_log()
+        alloc_log:clear()
 
         local rettv1 = typvalt()
         eq(OK, lib.tv_list_concat(l, le, rettv1))
@@ -981,7 +984,7 @@ describe('typval.c', function()
         eq(2, l.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, le.lv_refcount)
         eq(1, le2.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv1.vval.v_list),
           a.li(rettv1.vval.v_list.lv_first),
           a.li(rettv1.vval.v_list.lv_last),
@@ -994,7 +997,7 @@ describe('typval.c', function()
         eq(3, l.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, le.lv_refcount)
         eq(1, le2.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv2.vval.v_list),
           a.li(rettv2.vval.v_list.lv_first),
           a.li(rettv2.vval.v_list.lv_last),
@@ -1007,7 +1010,7 @@ describe('typval.c', function()
         eq(3, l.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, le.lv_refcount)
         eq(1, le2.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv3.vval.v_list),
         })
         eq(empty_list, typvalt2lua(rettv3))
@@ -1018,7 +1021,7 @@ describe('typval.c', function()
         eq(3, l.lv_last.li_tv.vval.v_dict.dv_refcount)
         eq(1, le.lv_refcount)
         eq(1, le2.lv_refcount)
-        check_alloc_log({
+        alloc_log:check({
           a.list(rettv4.vval.v_list),
         })
         eq(empty_list, typvalt2lua(rettv4))
