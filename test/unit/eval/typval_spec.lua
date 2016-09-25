@@ -18,7 +18,6 @@ local li_alloc  = eval_helpers.li_alloc
 local int_type  = eval_helpers.int_type
 local first_di  = eval_helpers.first_di
 local dict_type  = eval_helpers.dict_type
-local list_type  = eval_helpers.list_type
 local null_list  = eval_helpers.null_list
 local null_dict  = eval_helpers.null_dict
 local empty_list  = eval_helpers.empty_list
@@ -58,9 +57,6 @@ local function get_alloc_rets(exp_log, res)
   res.freed = function(r, n) return {func='free', args={r[n]}} end
   return exp_log
 end
-
-local alloc_log
-local restore_allocators
 
 local to_cstr_nofree = function(v) return lib.xstrdup(v) end
 

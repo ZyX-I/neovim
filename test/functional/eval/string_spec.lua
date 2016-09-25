@@ -9,6 +9,7 @@ local funcs = helpers.funcs
 local NIL = helpers.NIL
 local source = helpers.source
 local dedent = helpers.dedent
+local command = helpers.command
 
 describe('string() function', function()
   before_each(clear)
