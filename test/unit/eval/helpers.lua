@@ -321,6 +321,12 @@ local lua2typvalt_type_tab = {
   end,
 }
 
+local function typvalt_copy(tv)
+  local ret = typvalt(eval.VAR_UNKNOWN)
+  eval.tv_copy(tv, ret)
+  return ret
+end
+
 local special_vals = {
   [null_string] = {eval.VAR_STRING, {v_string=ffi.cast('char_u*', nil)}},
   [null_list] = {eval.VAR_LIST, {v_list=ffi.cast('list_T*', nil)}},
@@ -360,9 +366,7 @@ lua2typvalt = function(l, processed)
   elseif type(l) == 'string' then
     return typvalt(eval.VAR_STRING, {v_string=eval.xmemdupz(to_cstr(l), #l)})
   elseif type(l) == 'cdata' then
-    local tv = typvalt(eval.VAR_UNKNOWN)
-    eval.tv_copy(l, tv)
-    return tv
+    return typvalt_copy(l)
   end
 end
 
