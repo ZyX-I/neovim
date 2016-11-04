@@ -5203,7 +5203,7 @@ void forward_slash(char_u *fname)
 {
   char_u      *p;
 
-  if (path_with_url(fname)) {
+  if (path_with_url((const char *)fname)) {
     return;
   }
   for (p = fname; *p != NUL; p++) {
