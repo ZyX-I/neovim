@@ -1415,9 +1415,9 @@ char_u *make_filter_cmd(char_u *cmd, char_u *itmp, char_u *otmp)
 #else
   // For shells that don't understand braces around commands, at least allow
   // the use of commands in a pipe.
-  strncpy(buf, cmd, len);
+  strncpy(buf, (const char *)cmd, len);
   if (itmp != NULL) {
-    char_u  *p;
+    char *p;
 
     // If there is a pipe, we have to put the '<' in front of it.
     // Don't do this when 'shellquote' is not empty, otherwise the
@@ -1431,7 +1431,7 @@ char_u *make_filter_cmd(char_u *cmd, char_u *itmp, char_u *otmp)
     strncat(buf, " < ", len);
     strncat(buf, (char *) itmp, len);
     if (*p_shq == NUL) {
-      p = strchr(cmd, '|');
+      p = strchr((const char *)cmd, '|');
       if (p != NULL) {
         strncat(buf, " ", len);  // Insert a space before the '|' for DOS
         strncat(buf, p, len);
