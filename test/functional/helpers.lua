@@ -553,6 +553,10 @@ local curbufmeths = create_callindex(curbuf)
 local curwinmeths = create_callindex(curwin)
 local curtabmeths = create_callindex(curtab)
 
+local function get_pathsep()
+  return funcs.fnamemodify('.', ':p'):sub(-1)
+end
+
 local M = {
   prepend_argv = prepend_argv,
   clear = clear,
@@ -615,6 +619,7 @@ local M = {
   set_shell_powershell = set_shell_powershell,
   tmpname = tmpname,
   NIL = mpack.NIL,
+  get_pathsep = get_pathsep,
 }
 
 return function(after_each)
