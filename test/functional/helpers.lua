@@ -545,6 +545,10 @@ local curbufmeths = create_callindex(curbuf)
 local curwinmeths = create_callindex(curwin)
 local curtabmeths = create_callindex(curtab)
 
+local function get_pathsep()
+  return funcs.fnamemodify('.', ':p'):sub(-1)
+end
+
 return function(after_each)
   if after_each then
     after_each(check_logs)
@@ -606,5 +610,6 @@ return function(after_each)
     pending_win32 = pending_win32,
     tmpname = tmpname,
     NIL = mpack.NIL,
+    get_pathsep = get_pathsep,
   }
 end
