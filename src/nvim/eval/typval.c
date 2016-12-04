@@ -880,7 +880,7 @@ static bool tv_dict_watcher_matches(DictWatcher *watcher, const char *const key)
   // of the string means it should match everything up to the '*' instead of the
   // whole string.
   const size_t len = watcher->key_pattern_len;
-  if (watcher->key_pattern[len - 1] == '*') {
+  if (len && watcher->key_pattern[len - 1] == '*') {
     return strncmp(key, watcher->key_pattern, len - 1) == 0;
   } else {
     return strcmp(key, watcher->key_pattern) == 0;
