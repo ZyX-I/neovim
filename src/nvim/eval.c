@@ -7323,11 +7323,7 @@ static void f_dictwatcheradd(typval_T *argvars, typval_T *rettv, FunPtr fptr)
     return;
   }
 
-  DictWatcher *watcher = xmalloc(sizeof(DictWatcher));
-  watcher->key_pattern = xmemdupz(key_pattern, key_len);
-  watcher->callback = callback;
-  watcher->busy = false;
-  QUEUE_INSERT_TAIL(&argvars[0].vval.v_dict->watchers, &watcher->node);
+  tv_dict_watcher_add(argvars[0].vval.v_dict, key_pattern, key_len, callback);
 }
 
 // dictwatcherdel(dict, key, funcref) function
@@ -7363,28 +7359,10 @@ static void f_dictwatcherdel(typval_T *argvars, typval_T *rettv, FunPtr fptr)
     return;
   }
 
-  dict_T *dict = argvars[0].vval.v_dict;
-  QUEUE *w = NULL;
-  DictWatcher *watcher = NULL;
-  bool matched = false;
-  QUEUE_FOREACH(w, &dict->watchers) {
-    watcher = tv_dict_watcher_node_data(w);
-    if (callback_equal(&watcher->callback, &callback)
-        && !strcmp(watcher->key_pattern, key_pattern)) {
-      matched = true;
-      break;
-    }
-  }
-
-  callback_free(&callback);
-
-  if (!matched) {
+  if (!tv_dict_watcher_remove(argvars[0].vval.v_dict, key_pattern,
+                              key_len, callback)) {
     EMSG("Couldn't find a watcher matching key and callback");
-    return;
   }
-
-  QUEUE_REMOVE(w);
-  tv_dict_watcher_free(watcher);
 }
 
 /*
