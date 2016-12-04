@@ -255,6 +255,16 @@ describe('dictionary change notifications', function()
     end)
   end)
 
+  it('silently ignores adds to v:_null_dict', function()
+    nvim_command([[
+    function! g:Watcher1(dict, key, value)
+      call rpcnotify(g:channel, '1', a:key, a:value)
+    endfunction
+    ]])
+    eq(0,
+       exc_exec('call dictwatcheradd(v:_null_dict, "x", "g:Watcher1")'))
+  end)
+
   describe('errors', function()
     before_each(function()
       source([[
@@ -276,6 +286,11 @@ describe('dictionary change notifications', function()
     it('fails to remove if no watcher with matching key is found', function()
       eq("Vim(call):Couldn't find a watcher matching key and callback",
         exc_exec('call dictwatcherdel(g:, "invalid_key", "g:Watcher2")'))
+    end)
+
+    it('fails to remove watcher from v:_null_dict', function()
+      eq("Vim(call):Couldn't find a watcher matching key and callback",
+         exc_exec('call dictwatcherdel(v:_null_dict, "x", "g:Watcher2")'))
     end)
 
     it("fails to add/remove if the callback doesn't exist", function()
