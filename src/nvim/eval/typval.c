@@ -759,15 +759,84 @@ long tv_list_idx_of_item(const list_T *const l, const listitem_T *const item)
 //{{{1 Dictionaries
 //{{{2 Dictionary watchers
 
+/// Compute the `DictWatcher` address from a QUEUE node.
+///
+/// This only exists for .asan-blacklist (ASAN doesn't handle QUEUE_DATA pointer
+/// arithmetic).
+static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_PURE
+  FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return QUEUE_DATA(q, DictWatcher, node);
+}
+
 /// Perform all necessary cleanup for a `DictWatcher` instance
 ///
 /// @param  watcher  Watcher to free.
-void tv_dict_watcher_free(DictWatcher *watcher)
+static void tv_dict_watcher_free(DictWatcher *watcher)
   FUNC_ATTR_NONNULL_ALL
 {
   user_func_unref(watcher->callback);
   xfree(watcher->key_pattern);
   xfree(watcher);
+}
+
+/// Add watcher to a dictionary
+///
+/// @param[in]  dict  Dictionary to add watcher to.
+/// @param[in]  key_pattern  Pattern to watch for.
+/// @param[in]  key_pattern_len  Key pattern length.
+/// @param  callback  Function to be called on events.
+void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
+                         const size_t key_pattern_len, ufunc_T *const callback)
+  FUNC_ATTR_NONNULL_ARG(2, 4)
+{
+  DictWatcher *const watcher = xmalloc(sizeof(DictWatcher));
+  watcher->key_pattern = xmemdupz(key_pattern, key_pattern_len);
+  watcher->key_pattern_len = key_pattern_len;
+  watcher->callback = callback;
+  watcher->busy = false;
+  callback->uf_refcount++;
+  QUEUE_INSERT_TAIL(&dict->watchers, &watcher->node);
+}
+
+/// Remove watcher from a dictionary
+///
+/// @param  dict  Dictionary to remove watcher from.
+/// @param[in]  key_pattern  Pattern to remove watcher for.
+/// @param[in]  key_pattern_len  Pattern length.
+/// @param  callback  Callback to remove watcher for.
+///
+/// @return True on success, false if relevant watcher was not found.
+bool tv_dict_watcher_remove(dict_T *const dict, const char *const key_pattern,
+                            const size_t key_pattern_len,
+                            ufunc_T *const callback)
+  FUNC_ATTR_NONNULL_ARG(2, 4)
+{
+  if (dict == NULL) {
+    return false;
+  }
+
+  QUEUE *w = NULL;
+  DictWatcher *watcher = NULL;
+  bool matched = false;
+  QUEUE_FOREACH(w, &dict->watchers) {
+    watcher = tv_dict_watcher_node_data(w);
+    if (callback == watcher->callback
+        && watcher->key_pattern_len == key_pattern_len
+        && memcmp(watcher->key_pattern, key_pattern, key_pattern_len) == 0) {
+      matched = true;
+      break;
+    }
+  }
+
+  if (!matched) {
+    return false;
+  }
+
+  QUEUE_REMOVE(w);
+  tv_dict_watcher_free(watcher);
+  return true;
 }
 
 /// Test if `key` matches with with `watcher->key_pattern`
@@ -782,7 +851,7 @@ static bool tv_dict_watcher_matches(DictWatcher *watcher, const char *const key)
   // For now only allow very simple globbing in key patterns: a '*' at the end
   // of the string means it should match everything up to the '*' instead of the
   // whole string.
-  const size_t len = strlen(watcher->key_pattern);
+  const size_t len = watcher->key_pattern_len;
   if (watcher->key_pattern[len - 1] == '*') {
     return strncmp(key, watcher->key_pattern, len - 1) == 0;
   } else {

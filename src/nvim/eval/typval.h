@@ -31,6 +31,7 @@ typedef double float_T;
 typedef struct dict_watcher {
   ufunc_T *callback;
   char *key_pattern;
+  size_t key_pattern_len;
   QUEUE node;
   bool busy;  // prevent recursion if the dict is changed in the callback
 } DictWatcher;
@@ -223,19 +224,6 @@ static inline bool tv_dict_is_watched(const dict_T *const d)
 static inline bool tv_dict_is_watched(const dict_T *const d)
 {
   return d && !QUEUE_EMPTY(&d->watchers);
-}
-
-static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
-  REAL_FATTR_NONNULL_ALL REAL_FATTR_NONNULL_RET REAL_FATTR_PURE
-  REAL_FATTR_WARN_UNUSED_RESULT;
-
-/// Compute the `DictWatcher` address from a QUEUE node.
-///
-/// This only exists for .asan-blacklist (ASAN doesn't handle QUEUE_DATA pointer
-/// arithmetic).
-static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
-{
-  return QUEUE_DATA(q, DictWatcher, node);
 }
 
 /// Initialize VimL object
