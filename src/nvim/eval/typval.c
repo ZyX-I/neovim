@@ -1753,7 +1753,7 @@ void tv_free(typval_T *tv)
   if (tv != NULL) {
     switch (tv->v_type) {
       case VAR_PARTIAL: {
-        partial_unref(varp->vval.v_partial);
+        partial_unref(tv->vval.v_partial);
         break;
       }
       case VAR_FUNC: {
