@@ -318,6 +318,21 @@ static inline bool tv_get_float_chk(const typval_T *const tv,
   return false;
 }
 
+static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_PURE
+  FUNC_ATTR_WARN_UNUSED_RESULT;
+
+/// Compute the `DictWatcher` address from a QUEUE node.
+///
+/// This only exists for .asan-blacklist (ASAN doesn't handle QUEUE_DATA pointer
+/// arithmetic).
+static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
+  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_PURE
+  FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return QUEUE_DATA(q, DictWatcher, node);
+}
+
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "eval/typval.h.generated.h"
 #endif

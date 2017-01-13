@@ -787,17 +787,6 @@ long tv_list_idx_of_item(const list_T *const l, const listitem_T *const item)
 //{{{1 Dictionaries
 //{{{2 Dictionary watchers
 
-/// Compute the `DictWatcher` address from a QUEUE node.
-///
-/// This only exists for .asan-blacklist (ASAN doesn't handle QUEUE_DATA pointer
-/// arithmetic).
-static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET FUNC_ATTR_PURE
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return QUEUE_DATA(q, DictWatcher, node);
-}
-
 /// Perform all necessary cleanup for a `DictWatcher` instance
 ///
 /// @param  watcher  Watcher to free.
@@ -817,7 +806,7 @@ static void tv_dict_watcher_free(DictWatcher *watcher)
 /// @param  callback  Function to be called on events.
 void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
                          const size_t key_pattern_len, Callback callback)
-  FUNC_ATTR_NONNULL_ARG(2, 4)
+  FUNC_ATTR_NONNULL_ARG(2)
 {
   if (dict == NULL) {
     return;
@@ -827,7 +816,6 @@ void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
   watcher->key_pattern_len = key_pattern_len;
   watcher->callback = callback;
   watcher->busy = false;
-  callback->uf_refcount++;
   QUEUE_INSERT_TAIL(&dict->watchers, &watcher->node);
 }
 
@@ -842,7 +830,7 @@ void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
 bool tv_dict_watcher_remove(dict_T *const dict, const char *const key_pattern,
                             const size_t key_pattern_len,
                             Callback callback)
-  FUNC_ATTR_NONNULL_ARG(2, 4)
+  FUNC_ATTR_NONNULL_ARG(2)
 {
   if (dict == NULL) {
     return false;
