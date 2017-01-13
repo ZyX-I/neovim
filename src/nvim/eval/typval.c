@@ -877,6 +877,8 @@ bool tv_dict_watcher_remove(dict_T *const dict, const char *const key_pattern,
     }
   }
 
+  callback_free(&callback);
+
   if (!matched) {
     return false;
   }
