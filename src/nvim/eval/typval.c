@@ -2315,7 +2315,7 @@ varnumber_T tv_get_number_chk(const typval_T *const tv, bool *const ret_error)
     case VAR_DICT:
     case VAR_FLOAT: {
       EMSG(_(num_errors[tv->v_type]));
-      return false;
+      break;
     }
     case VAR_NUMBER: {
       return tv->vval.v_number;
