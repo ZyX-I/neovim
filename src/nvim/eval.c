@@ -16026,7 +16026,6 @@ bool callback_from_typval(Callback *callback, typval_T *arg)
   return true;
 }
 
-
 /// Unref/free callback
 void callback_free(Callback *const callback)
   FUNC_ATTR_NONNULL_ALL
@@ -16051,7 +16050,7 @@ void callback_free(Callback *const callback)
   callback->type = kCallbackNone;
 }
 
-static bool callback_equal(Callback *cb1, Callback *cb2)
+bool callback_equal(Callback *const cb1, Callback *const cb2)
 {
   if (cb1->type != cb2->type) {
     return false;
