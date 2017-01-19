@@ -256,7 +256,7 @@ describe('dictionary change notifications', function()
   end)
 
   it('silently ignores adds to v:_null_dict', function()
-    nvim_command([[
+    command([[
     function! g:Watcher1(dict, key, value)
       call rpcnotify(g:channel, '1', a:key, a:value)
     endfunction
