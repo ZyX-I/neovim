@@ -2015,28 +2015,22 @@ bool tv_islocked(const typval_T *const tv)
 ///
 /// @param[in]  lock  Lock status.
 /// @param[in]  name  Variable name, used in the error message.
-/// @param[in]  use_gettext  True if variable name also is to be translated.
+/// @param[in]  name_len  Variable name length.
 ///
 /// @return true if variable is locked, false otherwise.
-bool tv_check_lock(const VarLockStatus lock, const char *const name,
-                   const bool use_gettext)
-  FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
+bool tv_check_lock(const VarLockStatus lock, const char *name,
+                   size_t name_len)
+  FUNC_ATTR_WARN_UNUSED_RESULT
 {
+  if (name == NULL) {
+    name = _("Unknown");
+    name_len = strlen(name);
+  }
   if (lock == VAR_LOCKED) {
-    EMSG2(_("E741: Value is locked: %s"),
-          (name == NULL
-           ? _("Unknown")
-           : (use_gettext
-              ? _(name)
-              : name)));
+    emsgf(_("E741: Value is locked: %.*s"), (int)name_len, name);
     return true;
   } else if (lock == VAR_FIXED) {
-    EMSG2(_("E742: Cannot change value of %s"),
-          (name == NULL
-           ? _("Unknown")
-           : (use_gettext
-              ? _(name)
-              : name)));
+    emsgf(_("E742: Cannot change value of %.*s"), (int)name_len, name);
     return true;
   }
   return false;
