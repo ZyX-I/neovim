@@ -2812,14 +2812,13 @@ int get_tags(list_T *list, char_u *pat)
 
       full_fname = tag_full_fname(&tp);
       if (add_tag_field(dict, "name", tp.tagname, tp.tagname_end) == FAIL
-          || add_tag_field(dict, "filename", full_fname,
-              NULL) == FAIL
-          || add_tag_field(dict, "cmd", tp.command,
-              tp.command_end) == FAIL
+          || add_tag_field(dict, "filename", full_fname, NULL) == FAIL
+          || add_tag_field(dict, "cmd", tp.command, tp.command_end) == FAIL
           || add_tag_field(dict, "kind", tp.tagkind,
-              tp.tagkind ? tp.tagkind_end : NULL) == FAIL
-          || tv_dict_add_nr(dict, S_LEN("static"), is_static) == FAIL)
+                           tp.tagkind ? tp.tagkind_end : NULL) == FAIL
+          || tv_dict_add_nr(dict, S_LEN("static"), is_static) == FAIL) {
         ret = FAIL;
+      }
 
       xfree(full_fname);
 
