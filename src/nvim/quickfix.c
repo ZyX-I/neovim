@@ -3881,24 +3881,24 @@ int get_errorlist(win_T *wp, list_T *list)
     buf[0] = qfp->qf_type;
     buf[1] = NUL;
     if (tv_dict_add_nr(dict, S_LEN("bufnr"), (varnumber_T)bufnum) == FAIL
-         || (tv_dict_add_nr(dict, S_LEN("lnum"), (varnumber_T)qfp->qf_lnum)
-             == FAIL)
-         || (tv_dict_add_nr(dict, S_LEN("col"), (varnumber_T)qfp->qf_col)
-             == FAIL)
-         || (tv_dict_add_nr(dict, S_LEN("vcol"), (varnumber_T)qfp->qf_viscol)
-             == FAIL)
-         || (tv_dict_add_nr(dict, S_LEN("nr"), (varnumber_T)qfp->qf_nr) == FAIL)
-         || tv_dict_add_str(dict, S_LEN("pattern"),
-                            (qfp->qf_pattern == NULL
-                             ? ""
-                             : (const char *)qfp->qf_pattern)) == FAIL
-         || tv_dict_add_str(dict, S_LEN("text"),
-                            (qfp->qf_text == NULL
-                             ? ""
-                             : (const char *)qfp->qf_text)) == FAIL
-         || tv_dict_add_str(dict, S_LEN("type"), (const char *)buf) == FAIL
-         || (tv_dict_add_nr(dict, S_LEN("valid"), (varnumber_T)qfp->qf_valid)
-             == FAIL)) {
+        || (tv_dict_add_nr(dict, S_LEN("lnum"), (varnumber_T)qfp->qf_lnum)
+            == FAIL)
+        || (tv_dict_add_nr(dict, S_LEN("col"), (varnumber_T)qfp->qf_col)
+            == FAIL)
+        || (tv_dict_add_nr(dict, S_LEN("vcol"), (varnumber_T)qfp->qf_viscol)
+            == FAIL)
+        || (tv_dict_add_nr(dict, S_LEN("nr"), (varnumber_T)qfp->qf_nr) == FAIL)
+        || tv_dict_add_str(dict, S_LEN("pattern"),
+                           (qfp->qf_pattern == NULL
+                            ? ""
+                            : (const char *)qfp->qf_pattern)) == FAIL
+        || tv_dict_add_str(dict, S_LEN("text"),
+                           (qfp->qf_text == NULL
+                            ? ""
+                            : (const char *)qfp->qf_text)) == FAIL
+        || tv_dict_add_str(dict, S_LEN("type"), (const char *)buf) == FAIL
+        || (tv_dict_add_nr(dict, S_LEN("valid"), (varnumber_T)qfp->qf_valid)
+            == FAIL)) {
       // tv_dict_add* fail only if key already exist, but this is a newly
       // allocated dictionary which is thus guaranteed to have no existing keys.
       assert(false);
