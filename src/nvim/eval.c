@@ -12215,7 +12215,7 @@ static void find_some_match(typval_T *argvars, typval_T *rettv, int type)
         if (l != NULL) {
           tv_copy(&li->li_tv, rettv);
         } else {
-          rettv->vval.v_string = xmemdupz(
+          rettv->vval.v_string = (char_u *)xmemdupz(
               (const char *)regmatch.startp[0],
               (size_t)(regmatch.endp[0] - regmatch.startp[0]));
         }
