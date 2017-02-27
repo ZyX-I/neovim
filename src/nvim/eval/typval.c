@@ -755,7 +755,7 @@ const char *tv_list_find_str(list_T *const l, const int n)
 {
   const listitem_T *const li = tv_list_find(l, n);
   if (li == NULL) {
-    emsgf(_(e_listidx), n);
+    EMSGN(_(e_listidx), n);
     return NULL;
   }
   return tv_get_string(&li->li_tv);
