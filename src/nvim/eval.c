@@ -12211,22 +12211,24 @@ static void find_some_match(typval_T *argvars, typval_T *rettv, int type)
           }
         }
       } else if (type == 2) {
-        /* return matched string */
+        // Return matched string.
         if (l != NULL) {
           tv_copy(&li->li_tv, rettv);
         } else {
-          rettv->vval.v_string = xmemdupz((const char *)regmatch.startp[0],
+          rettv->vval.v_string = xmemdupz(
+              (const char *)regmatch.startp[0],
               (size_t)(regmatch.endp[0] - regmatch.startp[0]));
         }
-      } else if (l != NULL)
+      } else if (l != NULL) {
         rettv->vval.v_number = idx;
-      else {
-        if (type != 0)
+      } else {
+        if (type != 0) {
           rettv->vval.v_number =
             (varnumber_T)(regmatch.startp[0] - str);
-        else
+        } else {
           rettv->vval.v_number =
             (varnumber_T)(regmatch.endp[0] - str);
+        }
         rettv->vval.v_number += (varnumber_T)(str - expr);
       }
     }
