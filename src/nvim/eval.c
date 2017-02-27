@@ -16489,7 +16489,6 @@ bool callback_from_typval(Callback *const callback, typval_T *const arg)
   return true;
 }
 
-
 /// Unref/free callback
 void callback_free(Callback *const callback)
   FUNC_ATTR_NONNULL_ALL

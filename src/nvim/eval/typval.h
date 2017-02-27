@@ -393,7 +393,6 @@ static inline DictWatcher *tv_dict_watcher_node_data(QUEUE *q)
   return QUEUE_DATA(q, DictWatcher, node);
 }
 
-
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "eval/typval.h.generated.h"
 #endif

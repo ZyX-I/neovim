@@ -806,7 +806,7 @@ static void tv_dict_watcher_free(DictWatcher *watcher)
 /// @param  callback  Function to be called on events.
 void tv_dict_watcher_add(dict_T *const dict, const char *const key_pattern,
                          const size_t key_pattern_len, Callback callback)
-  FUNC_ATTR_NONNULL_ARG(1, 2)
+  FUNC_ATTR_NONNULL_ARG(2)
 {
   if (dict == NULL) {
     return;
