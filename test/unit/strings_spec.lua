@@ -4,6 +4,7 @@ local cimport = helpers.cimport
 local eq = helpers.eq
 local ffi = helpers.ffi
 local to_cstr = helpers.to_cstr
+local command = helpers.command
 
 local strings = cimport('stdlib.h', './src/nvim/strings.h',
                         './src/nvim/memory.h')
