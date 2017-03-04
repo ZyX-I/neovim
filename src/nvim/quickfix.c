@@ -4106,15 +4106,15 @@ int get_errorlist_properties(win_T *wp, dict_T *what, dict_T *retdict)
     if (t == NULL) {
       t = (char_u *)"";
     }
-    status = dict_add_nr_str(retdict, "title", 0L, t);
+    status = tv_dict_add_str(retdict, S_LEN("title"), (const char *)t);
   }
   if ((status == OK) && (flags & QF_GETLIST_NR)) {
-    status = dict_add_nr_str(retdict, "nr", qf_idx + 1, NULL);
+    status = tv_dict_add_nr(retdict, S_LEN("nr"), qf_idx + 1);
   }
   if ((status == OK) && (flags & QF_GETLIST_WINID)) {
     win_T *win = qf_find_win(qi);
     if (win != NULL) {
-      status = dict_add_nr_str(retdict, "winid", win->handle, NULL);
+      status = tv_dict_add_nr(retdict, S_LEN("winid"), win->handle);
     }
   }
 
