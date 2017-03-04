@@ -6855,9 +6855,9 @@ static void f_assert_fails(typval_T *argvars, typval_T *rettv, FunPtr fptr)
 void assert_inrange(typval_T *argvars)
 {
   bool error = false;
-  const varnumber_T lower = get_tv_number_chk(&argvars[0], &error);
-  const varnumber_T upper = get_tv_number_chk(&argvars[1], &error);
-  const varnumber_T actual = get_tv_number_chk(&argvars[2], &error);
+  const varnumber_T lower = tv_get_number_chk(&argvars[0], &error);
+  const varnumber_T upper = tv_get_number_chk(&argvars[1], &error);
+  const varnumber_T actual = tv_get_number_chk(&argvars[2], &error);
 
   if (error) {
     return;
