@@ -5,7 +5,7 @@
 #include <stdbool.h>
 #include <time.h>
 
-typedef uint64_t Timestamp;
+#include "nvim/os/time_defs.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS
 # include "os/time.h.generated.h"

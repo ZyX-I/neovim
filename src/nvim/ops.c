@@ -630,12 +630,14 @@ void op_reindent(oparg_T *oap, Indenter how)
   /* Mark changed lines so that they will be redrawn.  When Visual
    * highlighting was present, need to continue until the last line.  When
    * there is no change still need to remove the Visual highlighting. */
-  if (last_changed != 0)
+  if (last_changed != 0) {
     changed_lines(first_changed, 0,
-        oap->is_VIsual ? start_lnum + oap->line_count :
-        last_changed + 1, 0L);
-  else if (oap->is_VIsual)
+                  (oap->is_visual
+                   ? start_lnum + oap->line_count
+                   : last_changed + 1), 0L);
+  } else if (oap->is_visual) {
     redraw_curbuf_later(INVERTED);
+  }
 
   if (oap->line_count > p_report) {
     i = oap->line_count - (i + 1);
@@ -1335,7 +1337,7 @@ int op_delete(oparg_T *oap)
    * delete linewise.  Don't do this for the change command or Visual mode.
    */
   if (oap->motion_type == kMTCharWise
-      && !oap->is_VIsual
+      && !oap->is_visual
       && oap->line_count > 1
       && oap->motion_force == NUL
       && oap->op_type == OP_DELETE) {
@@ -1524,12 +1526,12 @@ int op_delete(oparg_T *oap)
         return FAIL;
 
       /* if 'cpoptions' contains '$', display '$' at end of change */
-      if (           vim_strchr(p_cpo, CPO_DOLLAR) != NULL
-                     && oap->op_type == OP_CHANGE
-                     && oap->end.lnum == curwin->w_cursor.lnum
-                     && !oap->is_VIsual
-                     )
+      if (vim_strchr(p_cpo, CPO_DOLLAR) != NULL
+          && oap->op_type == OP_CHANGE
+          && oap->end.lnum == curwin->w_cursor.lnum
+          && !oap->is_visual) {
         display_dollar(oap->end.col - !oap->inclusive);
+      }
 
       n = oap->end.col - oap->start.col + 1 - !oap->inclusive;
 
@@ -1554,7 +1556,7 @@ int op_delete(oparg_T *oap)
       }
 
       (void)del_bytes((colnr_T)n, !virtual_op,
-                      oap->op_type == OP_DELETE && !oap->is_VIsual);
+                      oap->op_type == OP_DELETE && !oap->is_visual);
     } else {
       // delete characters between lines
       pos_T curpos;
@@ -1574,7 +1576,7 @@ int op_delete(oparg_T *oap)
       n = (oap->end.col + 1 - !oap->inclusive);
       curwin->w_cursor.col = 0;
       (void)del_bytes((colnr_T)n, !virtual_op,
-                      oap->op_type == OP_DELETE && !oap->is_VIsual);
+                      oap->op_type == OP_DELETE && !oap->is_visual);
       curwin->w_cursor = curpos;  // restore curwin->w_cursor
       (void)do_join(2, false, false, false, false);
     }
@@ -1878,9 +1880,10 @@ void op_tilde(oparg_T *oap)
     }
   }
 
-  if (!did_change && oap->is_VIsual)
-    /* No change: need to remove the Visual selection */
+  if (!did_change && oap->is_visual) {
+    // No change: need to remove the Visual selection.
     redraw_curbuf_later(INVERTED);
+  }
 
   /*
    * Set '[ and '] marks.
@@ -2351,7 +2354,7 @@ static void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append)
   if (oap->motion_type == kMTCharWise
       && oap->start.col == 0
       && !oap->inclusive
-      && (!oap->is_VIsual || *p_sel == 'o')
+      && (!oap->is_visual || *p_sel == 'o')
       && oap->end.col == 0
       && yanklines > 1) {
     yank_type = kMTLineWise;
@@ -3779,9 +3782,10 @@ op_format (
     return;
   curwin->w_cursor = oap->start;
 
-  if (oap->is_VIsual)
-    /* When there is no change: need to remove the Visual selection */
+  if (oap->is_visual) {
+    // When there is no change: need to remove the Visual selection.
     redraw_curbuf_later(INVERTED);
+  }
 
   /* Set '[ mark at the start of the formatted area */
   curbuf->b_op_start = oap->start;
@@ -3812,7 +3816,7 @@ op_format (
     saved_cursor.lnum = 0;
   }
 
-  if (oap->is_VIsual) {
+  if (oap->is_visual) {
     FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
       if (wp->w_old_cursor_lnum != 0) {
         /* When lines have been inserted or deleted, adjust the end of
@@ -3832,9 +3836,10 @@ op_format (
  */
 void op_formatexpr(oparg_T *oap)
 {
-  if (oap->is_VIsual)
-    /* When there is no change: need to remove the Visual selection */
+  if (oap->is_visual) {
+    // When there is no change: need to remove the Visual selection.
     redraw_curbuf_later(INVERTED);
+  }
 
   if (fex_format(oap->start.lnum, oap->line_count, NUL) != 0)
     /* As documented: when 'formatexpr' returns non-zero fall back to
@@ -4398,7 +4403,7 @@ void op_addsub(oparg_T *oap, linenr_T Prenum1, bool g_cmd)
       changed_lines(oap->start.lnum, 0, oap->end.lnum + 1, 0L);
     }
 
-    if (!change_cnt && oap->is_VIsual) {
+    if (!change_cnt && oap->is_visual) {
       // No change: need to remove the Visual selection
       redraw_curbuf_later(INVERTED);
     }
@@ -5319,7 +5324,7 @@ void cursor_pos_info(dict_T *dict)
 
         /* Make 'sbr' empty for a moment to get the correct size. */
         p_sbr = empty_option;
-        oparg.is_VIsual = true;
+        oparg.is_visual = true;
         oparg.motion_type = kMTBlockWise;
         oparg.op_type = OP_NOP;
         getvcols(curwin, &min_pos, &max_pos,

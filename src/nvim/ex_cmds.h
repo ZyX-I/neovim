@@ -4,7 +4,7 @@
 #include <stdbool.h>
 
 #include "nvim/os/time.h"
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 #include "nvim/eval/typval.h"
 
 // flags for do_ecmd()

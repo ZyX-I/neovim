@@ -6,7 +6,7 @@
 #include "nvim/buffer_defs.h"
 #include "nvim/mark_defs.h"
 #include "nvim/memory.h"
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 #include "nvim/os/time.h"
 
 /// Set fmark using given value

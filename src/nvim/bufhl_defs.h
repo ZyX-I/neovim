@@ -1,7 +1,7 @@
 #ifndef NVIM_BUFHL_DEFS_H
 #define NVIM_BUFHL_DEFS_H
 
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 #include "nvim/lib/kvec.h"
 // bufhl: buffer specific highlighting
 

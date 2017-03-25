@@ -18,7 +18,7 @@ typedef struct {
 // for garray_T
 #include "nvim/garray.h"
 // for pos_T, lpos_T and linenr_T
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 // for the number window-local and buffer-local options
 #include "nvim/option_defs.h"
 // for jump list and tag stack sizes in a buffer and mark types

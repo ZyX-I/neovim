@@ -4,7 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "nvim/pos.h"      // for linenr_T
+#include "nvim/pos_defs.h"      // for linenr_T
 #include "nvim/normal.h"
 
 #ifdef INCLUDE_GENERATED_DECLARATIONS

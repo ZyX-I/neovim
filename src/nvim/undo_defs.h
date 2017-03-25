@@ -3,7 +3,7 @@
 
 #include <time.h>  // for time_t
 
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 #include "nvim/buffer_defs.h"
 #include "nvim/mark_defs.h"
 

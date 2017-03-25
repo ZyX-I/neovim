@@ -1,7 +1,7 @@
 #ifndef NVIM_MARK_DEFS_H
 #define NVIM_MARK_DEFS_H
 
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 #include "nvim/os/time.h"
 #include "nvim/eval/typval.h"
 

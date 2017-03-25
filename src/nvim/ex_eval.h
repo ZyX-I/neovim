@@ -1,7 +1,7 @@
 #ifndef NVIM_EX_EVAL_H
 #define NVIM_EX_EVAL_H
 
-#include "nvim/pos.h"           // for linenr_T
+#include "nvim/pos_defs.h"           // for linenr_T
 #include "nvim/ex_cmds_defs.h"  // for exarg_T
 
 /*

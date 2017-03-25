@@ -14,7 +14,7 @@
 #include "nvim/func_attr.h"
 #include "nvim/lib/queue.h"
 #include "nvim/profile.h"  // for proftime_T
-#include "nvim/pos.h"      // for linenr_T
+#include "nvim/pos_defs.h"      // for linenr_T
 #include "nvim/gettext.h"
 #include "nvim/message.h"
 

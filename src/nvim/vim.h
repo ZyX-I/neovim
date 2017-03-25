@@ -2,7 +2,7 @@
 #define NVIM_VIM_H
 
 #include "nvim/types.h"
-#include "nvim/pos.h"  // for linenr_T, MAXCOL, etc...
+#include "nvim/pos_defs.h"  // for linenr_T, MAXCOL, etc...
 
 /* Some defines from the old feature.h */
 #define SESSION_FILE "Session.vim"

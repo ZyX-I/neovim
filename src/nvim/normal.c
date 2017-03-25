@@ -1423,7 +1423,7 @@ void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
       curwin->w_valid &= ~VALID_VIRTCOL;
     }
     curwin->w_p_lbr = false;
-    oap->is_VIsual = VIsual_active;
+    oap->is_visual = VIsual_active;
     if (oap->motion_force == 'V') {
       oap->motion_type = kMTLineWise;
     } else if (oap->motion_force == 'v') {
@@ -1737,9 +1737,8 @@ void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
 
     /* Force a redraw when operating on an empty Visual region, when
      * 'modifiable is off or creating a fold. */
-    if (oap->is_VIsual && (oap->empty || !MODIFIABLE(curbuf)
-                           || oap->op_type == OP_FOLD
-                           )) {
+    if (oap->is_visual && (oap->empty || !MODIFIABLE(curbuf)
+                           || oap->op_type == OP_FOLD)) {
       curwin->w_p_lbr = lbr_saved;
       redraw_curbuf_later(INVERTED);
     }
@@ -1755,7 +1754,7 @@ void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
         && oap->inclusive == false
         && !(cap->retval & CA_NO_ADJ_OP_END)
         && oap->end.col == 0
-        && (!oap->is_VIsual || *p_sel == 'o')
+        && (!oap->is_visual || *p_sel == 'o')
         && oap->line_count > 1) {
       oap->end_adjusted = true;  // remember that we did this
       oap->line_count--;
@@ -1775,9 +1774,7 @@ void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
     switch (oap->op_type) {
     case OP_LSHIFT:
     case OP_RSHIFT:
-      op_shift(oap, true,
-          oap->is_VIsual ? (int)cap->count1 :
-          1);
+      op_shift(oap, true, oap->is_visual ? (int)cap->count1 : 1);
       auto_format(false, true);
       break;
 
@@ -1971,20 +1968,19 @@ void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
     case OP_FOLDOPENREC:
     case OP_FOLDCLOSE:
     case OP_FOLDCLOSEREC:
-      VIsual_reselect = false;          /* don't reselect now */
+      VIsual_reselect = false;  // Don't reselect now.
       opFoldRange(oap->start.lnum, oap->end.lnum,
-          oap->op_type == OP_FOLDOPEN
-          || oap->op_type == OP_FOLDOPENREC,
-          oap->op_type == OP_FOLDOPENREC
-          || oap->op_type == OP_FOLDCLOSEREC,
-          oap->is_VIsual);
+                  oap->op_type == OP_FOLDOPEN || oap->op_type == OP_FOLDOPENREC,
+                  (oap->op_type == OP_FOLDOPENREC
+                   || oap->op_type == OP_FOLDCLOSEREC),
+                  oap->is_visual);
       break;
 
     case OP_FOLDDEL:
     case OP_FOLDDELREC:
-      VIsual_reselect = false;          /* don't reselect now */
+      VIsual_reselect = false;  // Don't reselect now.
       deleteFold(oap->start.lnum, oap->end.lnum,
-          oap->op_type == OP_FOLDDELREC, oap->is_VIsual);
+                 oap->op_type == OP_FOLDDELREC, oap->is_visual);
       break;
 
     case OP_NR_ADD:
@@ -2028,7 +2024,7 @@ void do_pending_operator(cmdarg_T *cap, int old_col, bool gui_yank)
 static void op_colon(oparg_T *oap)
 {
   stuffcharReadbuff(':');
-  if (oap->is_VIsual) {
+  if (oap->is_visual) {
     stuffReadbuff("'<,'>");
   } else {
     // Make the range look nice, so it can be repeated.

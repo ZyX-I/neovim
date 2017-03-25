@@ -2,7 +2,7 @@
 #define NVIM_BUFFER_H
 
 #include "nvim/window.h"
-#include "nvim/pos.h"  // for linenr_T
+#include "nvim/pos_defs.h"  // for linenr_T
 #include "nvim/ex_cmds_defs.h"  // for exarg_T
 #include "nvim/screen.h"  // for StlClickRecord
 #include "nvim/func_attr.h"

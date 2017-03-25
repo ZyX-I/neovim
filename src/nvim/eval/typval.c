@@ -18,7 +18,7 @@
 #include "nvim/hashtab.h"
 #include "nvim/vim.h"
 #include "nvim/ascii.h"
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 #include "nvim/charset.h"
 #include "nvim/garray.h"
 #include "nvim/gettext.h"

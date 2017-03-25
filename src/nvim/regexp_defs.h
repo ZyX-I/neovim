@@ -14,7 +14,7 @@
 
 #include <stdbool.h>
 
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 
 /*
  * The number of sub-matches is limited to 10.

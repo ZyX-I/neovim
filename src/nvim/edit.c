@@ -53,6 +53,7 @@
 #include "nvim/window.h"
 #include "nvim/event/loop.h"
 #include "nvim/mark.h"
+#include "nvim/event/multiqueue.h"
 #include "nvim/os/input.h"
 #include "nvim/os/time.h"
 

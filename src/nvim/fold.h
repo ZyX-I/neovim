@@ -1,7 +1,7 @@
 #ifndef NVIM_FOLD_H
 #define NVIM_FOLD_H
 
-#include "nvim/pos.h"
+#include "nvim/pos_defs.h"
 
 /*
  * Info used to pass info about a fold from the fold-detection code to the
