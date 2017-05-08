@@ -330,6 +330,18 @@ void tv_list_append_tv(list_T *const l, typval_T *const tv)
   tv_list_append(l, li);
 }
 
+/// Append VimL value to the end of list without copying it
+///
+/// @param[out]  l  List to append to.
+/// @param[in,out]  tv  Value to append.
+void tv_list_append_moved_tv(list_T *const l, typval_T *const tv)
+  FUNC_ATTR_NONNULL_ALL
+{
+  listitem_T *const li = tv_list_item_alloc();
+  li->li_tv = *tv;
+  tv_list_append(l, li);
+}
+
 /// Append a list to a list as one item
 ///
 /// @param[out]  l  List to append to.
@@ -673,7 +685,7 @@ listitem_T *tv_list_find(list_T *const l, int n)
   }
 
   int idx;
-  listitem_T  *item;
+  listitem_T *item;
 
   // When there is a cached index may start search from there.
   if (l->lv_idx_item != NULL) {
@@ -719,6 +731,19 @@ listitem_T *tv_list_find(list_T *const l, int n)
   l->lv_idx_item = item;
 
   return item;
+}
+
+/// Get list item l[n] as typval_T*
+///
+/// @param[in]  l  List to index.
+/// @param[in]  n  Index in a list.
+///
+/// @return Pointer to the typval_T inside the list item or NULL.
+typval_T *tv_list_find_tv(list_T *const l, const int n)
+  FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  const listitem_T *const li = tv_list_find(l, n);
+  return (li == NULL ? NULL : (typval_T *)&li->li_tv);
 }
 
 /// Get list item l[n] as a number
@@ -1721,7 +1746,7 @@ static inline int _nothing_conv_real_list_after_start(
   if (tv->vval.v_list->lv_refcount > 1) {
     tv->vval.v_list->lv_refcount--;
     tv->vval.v_list = NULL;
-    mpsv->data.l.li = NULL;
+    tv_list_end_iter(mpsv->data.l.list, &mpsv->data.l.iter);
     return OK;
   }
   return NOTDONE;

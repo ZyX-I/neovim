@@ -126,6 +126,9 @@ describe('NULL', function()
     null_expr_test('is equal to itself', 'L == L', 0, 1)
     null_expr_test('is not not equal to itself', 'L != L', 0, 0)
     null_expr_test('counts correctly', 'count([L], L)', 0, 1)
+    null_expr_test('does not crash on converting special map with NULL list in place of pair',
+                   'msgpackdump([{"_TYPE": v:msgpack_types.map, "_VAL": [v:_null_list]}]) is# ' ..
+                   'msgpackdump([{"_TYPE": []                 , "_VAL": [[]          ]}])', 0, 0)
   end)
   describe('dict', function()
     it('does not crash when indexing NULL dict', function()

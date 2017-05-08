@@ -53,17 +53,17 @@ int encode_list_write(void *const data, const char *const buf, const size_t len)
   list_T *const list = (list_T *) data;
   const char *const end = buf + len;
   const char *line_end = buf;
-  listitem_T *li = list->lv_last;
+  typval_T *last_tv = tv_list_last(list);
 
   // Continue the last list element
-  if (li != NULL) {
+  if (last_tv != NULL) {
     line_end = xmemscan(buf, NL, len);
     if (line_end != buf) {
       const size_t line_length = (size_t)(line_end - buf);
-      char *str = (char *)li->li_tv.vval.v_string;
+      char *str = (char *)last_tv->vval.v_string;
       const size_t li_len = (str == NULL ? 0 : strlen(str));
-      li->li_tv.vval.v_string = xrealloc(str, li_len + line_length + 1);
-      str = (char *)li->li_tv.vval.v_string + li_len;
+      last_tv->vval.v_string = xrealloc(str, li_len + line_length + 1);
+      str = (char *)last_tv->vval.v_string + li_len;
       memcpy(str, buf, line_length);
       str[line_length] = 0;
       memchrsub(str, NUL, NL, line_length);
@@ -135,23 +135,14 @@ static int conv_error(const char *const msg, const MPConvStack *const mpstack,
       }
       case kMPConvPairs:
       case kMPConvList: {
-        int idx = 0;
-        const listitem_T *li;
-        for (li = v.data.l.list->lv_first;
-             li != NULL && li->li_next != v.data.l.li;
-             li = li->li_next) {
-          idx++;
-        }
-        if (v.type == kMPConvList
-            || li == NULL
-            || (li->li_tv.v_type != VAR_LIST
-                && li->li_tv.vval.v_list->lv_len <= 0)) {
-          vim_snprintf((char *) IObuff, IOSIZE, idx_msg, idx);
+        const int idx = v.data.l.idx;
+        if (v.type == kMPConvList) {
+          vim_snprintf((char *)IObuff, IOSIZE, idx_msg, idx);
           ga_concat(&msg_ga, IObuff);
         } else {
-          typval_T key_tv = li->li_tv.vval.v_list->lv_first->li_tv;
-          char *const key = encode_tv2echo(&key_tv, NULL);
-          vim_snprintf((char *) IObuff, IOSIZE, key_pair_msg, key, idx);
+          typval_T *key_tv = tv_list_find_tv(v.data.l.list, v.data.l.idx);
+          char *const key = encode_tv2echo(key_tv, NULL);
+          vim_snprintf((char *)IObuff, IOSIZE, key_pair_msg, key, idx);
           xfree(key);
           ga_concat(&msg_ga, IObuff);
         }
@@ -203,17 +194,15 @@ bool encode_vim_list_to_buf(const list_T *const list, size_t *const ret_len,
 {
   size_t len = 0;
   if (list != NULL) {
-    for (const listitem_T *li = list->lv_first;
-         li != NULL;
-         li = li->li_next) {
-      if (li->li_tv.v_type != VAR_STRING) {
+    TV_LIST_ITER(list, tv, const, {
+      if (tv->v_type != VAR_STRING) {
         return false;
       }
       len++;
-      if (li->li_tv.vval.v_string != 0) {
-        len += STRLEN(li->li_tv.vval.v_string);
+      if (tv->vval.v_string != 0) {
+        len += STRLEN(tv->vval.v_string);
       }
-    }
+    });
     if (len) {
       len--;
     }
@@ -250,34 +239,38 @@ int encode_read_from_list(ListReaderState *const state, char *const buf,
                           const size_t nbuf, size_t *const read_bytes)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+  if (nbuf == 0) {
+    return NOTDONE;
+  }
   char *const buf_end = buf + nbuf;
   char *p = buf;
   while (p < buf_end) {
     for (size_t i = state->offset; i < state->li_length && p < buf_end; i++) {
-      const char ch = (char) state->li->li_tv.vval.v_string[state->offset++];
+      const char ch = (char) state->tv->vval.v_string[state->offset++];
       *p++ = (char) ((char) ch == (char) NL ? (char) NUL : (char) ch);
     }
     if (p < buf_end) {
-      state->li = state->li->li_next;
-      if (state->li == NULL) {
+      const bool just_started = (state->iter == NULL);
+      state->tv = tv_list_iter(state->list, &state->iter);
+      if (state->tv == NULL) {
         *read_bytes = (size_t) (p - buf);
         return OK;
       }
-      *p++ = NL;
-      if (state->li->li_tv.v_type != VAR_STRING) {
-        *read_bytes = (size_t) (p - buf);
+      if (!just_started) {
+        *p++ = NL;
+      }
+      if (state->tv->v_type != VAR_STRING) {
+        *read_bytes = (size_t)(p - buf);
         return FAIL;
       }
       state->offset = 0;
-      state->li_length = (state->li->li_tv.vval.v_string == NULL
+      state->li_length = (state->tv->vval.v_string == NULL
                           ? 0
-                          : STRLEN(state->li->li_tv.vval.v_string));
+                          : STRLEN(state->tv->vval.v_string));
     }
   }
   *read_bytes = nbuf;
-  return (state->offset < state->li_length || state->li->li_next != NULL
-          ? NOTDONE
-          : OK);
+  return (state->tv != NULL ? NOTDONE : OK);
 }
 
 #define TYPVAL_ENCODE_CONV_STRING(tv, buf, len) \

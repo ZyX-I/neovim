@@ -126,9 +126,7 @@ static inline int json_decoder_pop(ValuesStackItem obj,
       return FAIL;
     }
     assert(last_container.special_val == NULL);
-    listitem_T *obj_li = tv_list_item_alloc();
-    obj_li->li_tv = obj.val;
-    tv_list_append(last_container.container.vval.v_list, obj_li);
+    tv_list_append_moved_tv(last_container.container.vval.v_list, &obj.val);
   } else if (last_container.stack_index == kv_size(*stack) - 2) {
     if (!obj.didcolon) {
       EMSG2(_("E474: Expected colon before dictionary value: %s"),
@@ -153,12 +151,8 @@ static inline int json_decoder_pop(ValuesStackItem obj,
     } else {
       list_T *const kv_pair = tv_list_alloc();
       tv_list_append_list(last_container.special_val, kv_pair);
-      listitem_T *const key_li = tv_list_item_alloc();
-      key_li->li_tv = key.val;
-      tv_list_append(kv_pair, key_li);
-      listitem_T *const val_li = tv_list_item_alloc();
-      val_li->li_tv = obj.val;
-      tv_list_append(kv_pair, val_li);
+      tv_list_append_moved_tv(kv_pair, &key.val);
+      tv_list_append_moved_tv(kv_pair, &obj.val);
     }
   } else {
     // Object with key only
@@ -1068,18 +1062,19 @@ msgpack_to_vim_generic_map: {}
       for (size_t i = 0; i < mobj.via.map.size; i++) {
         list_T *const kv_pair = tv_list_alloc();
         tv_list_append_list(list, kv_pair);
-        listitem_T *const key_li = tv_list_item_alloc();
-        key_li->li_tv.v_type = VAR_UNKNOWN;
-        tv_list_append(kv_pair, key_li);
-        listitem_T *const val_li = tv_list_item_alloc();
-        val_li->li_tv.v_type = VAR_UNKNOWN;
-        tv_list_append(kv_pair, val_li);
-        if (msgpack_to_vim(mobj.via.map.ptr[i].key, &key_li->li_tv) == FAIL) {
+        typval_T key_tv = {
+          .v_type = VAR_UNKNOWN,
+          .v_lock = VAR_UNLOCKED,
+        };
+        typval_T val_tv = key_tv;
+        if (msgpack_to_vim(mobj.via.map.ptr[i].key, &key_tv) == FAIL) {
           return FAIL;
         }
-        if (msgpack_to_vim(mobj.via.map.ptr[i].val, &val_li->li_tv) == FAIL) {
+        tv_list_append_moved_tv(kv_pair, &key_tv);
+        if (msgpack_to_vim(mobj.via.map.ptr[i].val, &val_tv) == FAIL) {
           return FAIL;
         }
+        tv_list_append_moved_tv(kv_pair, &val_tv);
       }
       break;
     }

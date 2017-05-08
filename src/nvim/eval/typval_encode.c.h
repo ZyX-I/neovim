@@ -375,7 +375,8 @@ static int _TYPVAL_ENCODE_CONVERT_ONE_VALUE(
         .data = {
           .l = {
             .list = tv->vval.v_list,
-            .li = tv->vval.v_list->lv_first,
+            .iter = NULL,
+            .idx = 0,
           },
         },
       }));
@@ -513,7 +514,8 @@ static int _TYPVAL_ENCODE_CONVERT_ONE_VALUE(
               .data = {
                 .l = {
                   .list = val_di->di_tv.vval.v_list,
-                  .li = val_di->di_tv.vval.v_list->lv_first,
+                  .iter = NULL,
+                  .idx = 0,
                 },
               },
             }));
@@ -528,13 +530,11 @@ static int _TYPVAL_ENCODE_CONVERT_ONE_VALUE(
               TYPVAL_ENCODE_CONV_EMPTY_DICT(tv, TYPVAL_ENCODE_NODICT_VAR);
               break;
             }
-            for (const listitem_T *li = val_list->lv_first; li != NULL;
-                 li = li->li_next) {
-              if (li->li_tv.v_type != VAR_LIST
-                  || li->li_tv.vval.v_list->lv_len != 2) {
+            TV_LIST_ITER(val_list, tv, const, {
+              if (tv->v_type != VAR_LIST || tv_list_len(tv->vval.v_list) != 2) {
                 goto _convert_one_value_regular_dict;
               }
-            }
+            });
             const int saved_copyID = val_di->di_tv.vval.v_list->lv_copyID;
             _TYPVAL_ENCODE_DO_CHECK_SELF_REFERENCE(val_list, lv_copyID, copyID,
                                                    kMPConvPairs);
@@ -548,7 +548,8 @@ static int _TYPVAL_ENCODE_CONVERT_ONE_VALUE(
               .data = {
                 .l = {
                   .list = val_list,
-                  .li = val_list->lv_first,
+                  .iter = NULL,
+                  .idx = 0,
                 },
               },
             }));
@@ -673,42 +674,59 @@ typval_encode_stop_converting_one_item:
         break;
       }
       case kMPConvList: {
-        if (cur_mpsv->data.l.li == NULL) {
+        if (cur_mpsv->data.l.iter != NULL) {
+          cur_mpsv->data.l.idx++;
+        }
+        tv = tv_list_iter(cur_mpsv->data.l.list, &cur_mpsv->data.l.iter);
+        if (cur_mpsv->data.l.idx != 0
+            && cur_mpsv->data.l.idx != tv_list_len(cur_mpsv->data.l.list)) {
+          TYPVAL_ENCODE_CONV_LIST_BETWEEN_ITEMS(cur_mpsv->tv);
+        }
+        if (tv == NULL) {
           (void)_mp_pop(mpstack);
           cur_mpsv->data.l.list->lv_copyID = cur_mpsv->saved_copyID;
           TYPVAL_ENCODE_CONV_LIST_END(cur_mpsv->tv);
           continue;
-        } else if (cur_mpsv->data.l.li != cur_mpsv->data.l.list->lv_first) {
-          TYPVAL_ENCODE_CONV_LIST_BETWEEN_ITEMS(cur_mpsv->tv);
         }
-        tv = &cur_mpsv->data.l.li->li_tv;
-        cur_mpsv->data.l.li = cur_mpsv->data.l.li->li_next;
         break;
       }
       case kMPConvPairs: {
-        if (cur_mpsv->data.l.li == NULL) {
+        if (cur_mpsv->data.l.iter != NULL) {
+          cur_mpsv->data.l.idx++;
+        }
+        typval_T *const kv_pair_tv = tv_list_iter(cur_mpsv->data.l.list,
+                                                  &cur_mpsv->data.l.iter);
+        if (cur_mpsv->data.l.idx != 0
+            && cur_mpsv->data.l.idx != tv_list_len(cur_mpsv->data.l.list)) {
+          TYPVAL_ENCODE_CONV_LIST_BETWEEN_ITEMS(cur_mpsv->tv);
+        }
+        if (kv_pair_tv == NULL) {
           (void)_mp_pop(mpstack);
           cur_mpsv->data.l.list->lv_copyID = cur_mpsv->saved_copyID;
           TYPVAL_ENCODE_CONV_DICT_END(cur_mpsv->tv, TYPVAL_ENCODE_NODICT_VAR);
           continue;
-        } else if (cur_mpsv->data.l.li != cur_mpsv->data.l.list->lv_first) {
-          TYPVAL_ENCODE_CONV_DICT_BETWEEN_ITEMS(
-              cur_mpsv->tv, TYPVAL_ENCODE_NODICT_VAR);
         }
-        const list_T *const kv_pair = cur_mpsv->data.l.li->li_tv.vval.v_list;
-        TYPVAL_ENCODE_SPECIAL_DICT_KEY_CHECK(
-            encode_vim_to__error_ret, kv_pair->lv_first->li_tv);
+        list_T *const kv_pair = kv_pair_tv->vval.v_list;
+        typval_T *key_tv = NULL;
+        typval_T *val_tv = NULL;
+        TV_LIST_ITER(kv_pair, tv, , {
+          if (key_tv == NULL) {
+            key_tv = tv;
+          } else {
+            val_tv = tv;
+          }
+        });
+        TYPVAL_ENCODE_SPECIAL_DICT_KEY_CHECK(encode_vim_to__error_ret, *key_tv);
         if (_TYPVAL_ENCODE_CONVERT_ONE_VALUE(TYPVAL_ENCODE_FIRST_ARG_NAME,
                                              &mpstack, cur_mpsv,
-                                             &kv_pair->lv_first->li_tv,
+                                             key_tv,
                                              copyID,
                                              objname) == FAIL) {
           goto encode_vim_to__error_ret;
         }
         TYPVAL_ENCODE_CONV_DICT_AFTER_KEY(cur_mpsv->tv,
                                           TYPVAL_ENCODE_NODICT_VAR);
-        tv = &kv_pair->lv_last->li_tv;
-        cur_mpsv->data.l.li = cur_mpsv->data.l.li->li_next;
+        tv = val_tv;
         break;
       }
       case kMPConvPartial: {

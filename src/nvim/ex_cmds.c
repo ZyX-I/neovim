@@ -6216,28 +6216,30 @@ char_u *skip_vimgrep_pat(char_u *p, char_u **s, int *flags)
 /// List v:oldfiles in a nice way.
 void ex_oldfiles(exarg_T *eap)
 {
-  list_T      *l = get_vim_var_list(VV_OLDFILES);
-  listitem_T  *li;
-  long nr = 0;
+  list_T *const l = get_vim_var_list(VV_OLDFILES);
 
   if (l == NULL) {
     msg((char_u *)_("No old files"));
   } else {
     msg_start();
     msg_scroll = true;
-    for (li = l->lv_first; li != NULL && !got_int; li = li->li_next) {
+    long nr = 0;
+    TV_LIST_ITER(l, tv, const, {
+      if (got_int) {
+        break;
+      }
       nr++;
-      const char *fname = tv_get_string(&li->li_tv);
+      const char *const fname = tv_get_string(tv);
       if (!message_filtered((char_u *)fname)) {
         msg_outnum(nr);
         MSG_PUTS(": ");
-        msg_outtrans((char_u *)tv_get_string(&li->li_tv));
+        msg_outtrans((char_u *)fname);
         msg_clr_eos();
         msg_putchar('\n');
-        ui_flush();                  // output one line at a time
+        ui_flush();
         os_breakcheck();
       }
-    }
+    });
 
     // Assume "got_int" was set to truncate the listing.
     got_int = false;

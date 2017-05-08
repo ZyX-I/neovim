@@ -366,6 +366,22 @@ extern bool tv_in_free_unref_items;
       } \
     })
 
+/// Iterate over a list
+///
+/// @param[in]  l  List to iterate over.
+/// @param  tv  Name of the variable with current typval_T* entry.
+/// @param  mod  `const` for constant lists.
+/// @param  code  Cycle body.
+#define TV_LIST_ITER(l, tv, mod, code) \
+    do { \
+      for (mod listitem_T *tv##li_ = l->lv_first \
+           ; tv##li_ != NULL \
+           ; tv##li_ = tv##li_->li_next) { \
+        mod typval_T *const tv = &tv##li_->li_tv; \
+        code \
+      } \
+    } while (0)
+
 static inline bool tv_get_float_chk(const typval_T *const tv,
                                     float_T *const ret_f)
   REAL_FATTR_NONNULL_ALL REAL_FATTR_WARN_UNUSED_RESULT;
@@ -422,6 +438,74 @@ static inline bool tv_is_func(const typval_T tv)
 static inline bool tv_is_func(const typval_T tv)
 {
   return tv.v_type == VAR_FUNC || tv.v_type == VAR_PARTIAL;
+}
+
+static inline typval_T *tv_list_iter(const list_T *const list,
+                                     const void **const iter)
+  REAL_FATTR_WARN_UNUSED_RESULT REAL_FATTR_ALWAYS_INLINE
+  REAL_FATTR_NONNULL_ARG(2);
+
+/// Iterate over a list
+///
+/// If possible, use #TV_LIST_ITER instead.
+///
+/// @param[in]  list  List to iterate over.
+/// @param[in]  iter  Pointer to the iterator, `*iter == NULL` at start.
+///
+/// @return Pointer to the typval_T stored in the list, NULL when iteration is
+///         over.
+static inline typval_T *tv_list_iter(const list_T *const list,
+                                     const void **const iter)
+{
+  if (*iter == NULL) {
+    if (tv_list_len(list) == 0) {
+      return NULL;
+    }
+    *iter = (const void *)list->lv_first;
+  } else {
+    *iter = ((const listitem_T *)(*iter))->li_next;
+  }
+  if (*iter == NULL) {
+    return NULL;
+  } else {
+    return (typval_T *)&(((const listitem_T *)(*iter))->li_tv);
+  }
+}
+
+static inline void tv_list_end_iter(const list_T *const list,
+                                    const void **const iter)
+  REAL_FATTR_ALWAYS_INLINE REAL_FATTR_NONNULL_ARG(2);
+
+/// Set iter to a state so that next tv_list_iter() will return NULL
+///
+/// Needed to end iteration prematurely.
+///
+/// @param[in]  list  List iterated over.
+/// @param[in]  iter  Pointer to the iterator, `*iter == NULL` at start.
+static inline void tv_list_end_iter(const list_T *const list,
+                                    const void **const iter)
+{
+  if (list == NULL) {
+    return;
+  }
+  *iter = (const void *)list->lv_last;
+}
+
+static inline typval_T *tv_list_last(const list_T *const list)
+  REAL_FATTR_PURE REAL_FATTR_ALWAYS_INLINE REAL_FATTR_WARN_UNUSED_RESULT;
+
+/// Get last element of the list
+///
+/// @param[in]  list  List to get element from.
+///
+/// @return Pointer to the typval_T stored in the list, NULL when there is no
+///         last element.
+static inline typval_T *tv_list_last(const list_T *const list)
+{
+  if (tv_list_len(list) == 0) {
+    return NULL;
+  }
+  return &list->lv_last->li_tv;
 }
 
 /// Specify that argument needs to be translated

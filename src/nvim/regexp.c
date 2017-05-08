@@ -6432,10 +6432,6 @@ static int submatch_line_lbr;
 /// vim_regsub_both().
 static int fill_submatch_list(int argc, typval_T *argv, int argcount)
 {
-  listitem_T *li;
-  int        i;
-  char_u     *s;
-
   if (argcount == 0) {
     // called function doesn't take an argument
     return 0;
@@ -6445,18 +6441,18 @@ static int fill_submatch_list(int argc, typval_T *argv, int argcount)
   init_static_list((staticList10_T *)(argv->vval.v_list));
 
   // There are always 10 list items in staticList10_T.
-  li = argv->vval.v_list->lv_first;
-  for (i = 0; i < 10; i++) {
-    s = submatch_match->startp[i];
+  int i = 0;
+  TV_LIST_ITER(argv->vval.v_list, tv, , {
+    char *s = (char *)submatch_match->startp[i];
     if (s == NULL || submatch_match->endp[i] == NULL) {
       s = NULL;
     } else {
-      s = vim_strnsave(s, (int)(submatch_match->endp[i] - s));
+      s = xmemdupz(s, (size_t)((char *)submatch_match->endp[i] - s));
     }
-    li->li_tv.v_type = VAR_STRING;
-    li->li_tv.vval.v_string = s;
-    li = li->li_next;
-  }
+    tv->v_type = VAR_STRING;
+    tv->vval.v_string = (char_u *)s;
+    i++;
+  });
   return 1;
 }
 

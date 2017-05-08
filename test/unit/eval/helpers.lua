@@ -177,22 +177,31 @@ typvalt2lua = function(t, processed)
   end)(t, processed or {}))
 end
 
-local function list_iter(l)
+local function list_tv_iter(l)
   local init_s = {
-    idx=0,
-    li=l.lv_first,
+    idx = 0,
+    l = l,
+    iter = ffi.new('void *[1]', {0}),
   }
   local function f(s, _)
-    -- (listitem_T *) NULL is equal to nil, but yet it is not false.
-    if s.li == nil then
+    local tv = tv_list_iter(s.l, s.iter)
+    if tv == nil then
       return nil
     end
-    local ret_li = s.li
-    s.li = s.li.li_next
     s.idx = s.idx + 1
-    return s.idx, ret_li
+    return s.idx, tv
   end
   return f, init_s, nil
+end
+
+local function list_iter(l)
+  local f, init_s = list_tv_iter(l)
+  local function f2(s, _)
+    local idx, tv = f(s)
+    local li = ffi.cast('listitem_T *', (
+      ffi.cast('char *', tv) - ffi.offsetof('listitem_T', 'li_tv')))
+    return idx, li
+  end
 end
 
 local function list_items(l)

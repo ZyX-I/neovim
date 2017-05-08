@@ -33,7 +33,9 @@ int encode_vim_to_echo(garray_T *const packer,
 
 /// Structure defining state for read_from_list()
 typedef struct {
-  const listitem_T *li;  ///< Item currently read.
+  const list_T *list;    ///< List iterated over.
+  const void *iter;      ///< List iterator.
+  const typval_T *tv;    ///< Item currently read.
   size_t offset;         ///< Byte offset inside the read item.
   size_t li_length;      ///< Length of the string inside the read item.
 } ListReaderState;
@@ -42,13 +44,14 @@ typedef struct {
 static inline ListReaderState encode_init_lrstate(const list_T *const list)
   FUNC_ATTR_NONNULL_ALL
 {
-  return (ListReaderState) {
-    .li = list->lv_first,
+  ListReaderState ret = {
+    .list = list,
+    .iter = NULL,
+    .tv = NULL,
     .offset = 0,
-    .li_length = (list->lv_first->li_tv.vval.v_string == NULL
-                  ? 0
-                  : STRLEN(list->lv_first->li_tv.vval.v_string)),
+    .li_length = 0,
   };
+  return ret;
 }
 
 /// Array mapping values from SpecialVarValue enum to names

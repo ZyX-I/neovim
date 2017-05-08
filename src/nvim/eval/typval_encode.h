@@ -33,8 +33,8 @@ typedef enum {
 /// Structure representing current VimL to messagepack conversion state
 typedef struct {
   MPConvStackValType type;  ///< Type of the stack entry.
-  typval_T *tv;  ///< Currently converted typval_T.
   int saved_copyID;  ///< copyID item used to have.
+  typval_T *tv;  ///< Currently converted typval_T.
   union {
     struct {
       dict_T *dict;    ///< Currently converted dictionary.
@@ -45,8 +45,9 @@ typedef struct {
       size_t todo;     ///< Amount of items left to process.
     } d;  ///< State of dictionary conversion.
     struct {
-      list_T *list;    ///< Currently converted list.
-      listitem_T *li;  ///< Currently converted list item.
+      list_T *list;  ///< Currently converted list.
+      const void *iter;  ///< Currently converted list item, see tv_list_iter().
+      int idx;  ///< Currently converted list item index (cast to (intptr_t)).
     } l;  ///< State of list or generic mapping conversion.
     struct {
       MPConvPartialStage stage;  ///< Stage at which partial is being converted.
