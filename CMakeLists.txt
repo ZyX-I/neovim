@@ -356,6 +356,9 @@ endif()
 find_package(LibVterm REQUIRED)
 include_directories(SYSTEM ${LIBVTERM_INCLUDE_DIRS})
 
+find_package(LibMpack REQUIRED)
+include_directories(SYSTEM ${LIBMPACK_INCLUDE_DIRS})
+
 option(CLANG_ASAN_UBSAN "Enable Clang address & undefined behavior sanitizer for nvim binary." OFF)
 option(CLANG_MSAN "Enable Clang memory sanitizer for nvim binary." OFF)
 option(CLANG_TSAN "Enable Clang thread sanitizer for nvim binary." OFF)

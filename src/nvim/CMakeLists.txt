@@ -352,6 +352,7 @@ endif()
 
 # Put these last on the link line, since multiple things may depend on them.
 list(APPEND NVIM_LINK_LIBRARIES
+  ${LIBMPACK_LIBRARIES}
   ${LIBUV_LIBRARIES}
   ${MSGPACK_LIBRARIES}
   ${LIBVTERM_LIBRARIES}
