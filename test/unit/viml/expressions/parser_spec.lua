@@ -77,6 +77,7 @@ make_enum_conv_tab(lib, {
   'kExprNodeNested',
   'kExprNodeCall',
   'kExprNodePlainIdentifier',
+  'kExprNodePlainKey',
   'kExprNodeComplexIdentifier',
   'kExprNodeUnknownFigure',
   'kExprNodeLambda',
@@ -86,6 +87,10 @@ make_enum_conv_tab(lib, {
   'kExprNodeColon',
   'kExprNodeArrow',
   'kExprNodeComparison',
+  'kExprNodeConcat',
+  'kExprNodeConcatOrSubscript',
+  'kExprNodeInteger',
+  'kExprNodeFloat',
 }, 'kExprNode', function(ret) east_node_type_tab = ret end)
 
 local function conv_east_node_type(typ)
@@ -118,6 +123,9 @@ local function eastnode2lua(pstate, eastnode, checked_nodes)
     typ = typ .. ('(scope=%s,ident=%s)'):format(
       tostring(intchar2lua(eastnode.data.var.scope)),
       ffi.string(eastnode.data.var.ident, eastnode.data.var.ident_len))
+  elseif typ == 'PlainKey' then
+    typ = typ .. ('(key=%s)'):format(
+      ffi.string(eastnode.data.var.ident, eastnode.data.var.ident_len))
   elseif (typ == 'UnknownFigure' or typ == 'DictLiteral'
           or typ == 'CurlyBracesIdentifier' or typ == 'Lambda') then
     typ = typ .. ('(%s)'):format(
@@ -128,6 +136,10 @@ local function eastnode2lua(pstate, eastnode, checked_nodes)
     typ = typ .. ('(type=%s,inv=%u,ccs=%s)'):format(
       conv_cmp_type(eastnode.data.cmp.type), eastnode.data.cmp.inv and 1 or 0,
       conv_ccs(eastnode.data.cmp.ccs))
+  elseif typ == 'Integer' then
+    typ = typ .. ('(val=%u)'):format(tonumber(eastnode.data.num.value))
+  elseif typ == 'Float' then
+    typ = typ .. ('(val=%e)'):format(tonumber(eastnode.data.flt.value))
   end
   ret_str = typ .. ':' .. ret_str
   local can_simplify = true
@@ -190,6 +202,8 @@ end)
 
 describe('Expressions parser', function()
   local function check_parsing(str, flags, exp_ast, exp_highlighting_fs)
+    flags = flags or 0
+
     local pstate = new_pstate({str})
     local east = lib.viml_pexpr_parse(pstate, flags)
     local ast = east2lua(pstate, east)
@@ -3647,6 +3661,146 @@ describe('Expressions parser', function()
       hl('ComparisonOperator', '==', 1),
       hl('UnaryPlus', '+', 1),
       hl('Identifier', 'b', 1),
+    })
+  end)
+  itp('works with concat/subscript', function()
+    check_parsing('.', 0, {
+      --           0
+      ast = {
+        {
+          'ConcatOrSubscript:0:0:.',
+          children = {
+            'Missing:0:0:',
+          },
+        },
+      },
+      err = {
+        arg = '.',
+        msg = 'E15: Unexpected dot: %.*s',
+      },
+    }, {
+      hl('InvalidConcatOrSubscript', '.'),
+    })
+
+    check_parsing('a.', 0, {
+      --           01
+      ast = {
+        {
+          'ConcatOrSubscript:0:1:.',
+          children = {
+            'PlainIdentifier(scope=0,ident=a):0:0:a',
+          },
+        },
+      },
+      err = {
+        arg = '',
+        msg = 'E15: Expected value, got EOC: %.*s',
+      },
+    }, {
+      hl('Identifier', 'a'),
+      hl('ConcatOrSubscript', '.'),
+    })
+
+    check_parsing('a.b', 0, {
+      --           012
+      ast = {
+        {
+          'ConcatOrSubscript:0:1:.',
+          children = {
+            'PlainIdentifier(scope=0,ident=a):0:0:a',
+            'PlainKey(key=b):0:2:b',
+          },
+        },
+      },
+    }, {
+      hl('Identifier', 'a'),
+      hl('ConcatOrSubscript', '.'),
+      hl('IdentifierKey', 'b'),
+    })
+
+    -- FIXME This must resolve to float
+    check_parsing('1.2')
+
+    check_parsing('1.2.3', 0, {
+      --           01234
+      ast = {
+        {
+          'ConcatOrSubscript:0:3:.',
+          children = {
+            {
+              'ConcatOrSubscript:0:1:.',
+              children = {
+                'Integer(val=1):0:0:1',
+                'PlainKey(key=2):0:2:2',
+              },
+            },
+            'PlainKey(key=3):0:4:3',
+          },
+        },
+      },
+    }, {
+      hl('Number', '1'),
+      hl('ConcatOrSubscript', '.'),
+      hl('IdentifierKey', '2'),
+      hl('ConcatOrSubscript', '.'),
+      hl('IdentifierKey', '3'),
+    })
+
+    check_parsing('a.1.2', 0, {
+      --           01234
+      ast = {
+        {
+          'ConcatOrSubscript:0:3:.',
+          children = {
+            {
+              'ConcatOrSubscript:0:1:.',
+              children = {
+                'PlainIdentifier(scope=0,ident=a):0:0:a',
+                'PlainKey(key=1):0:2:1',
+              },
+            },
+            'PlainKey(key=2):0:4:2',
+          },
+        },
+      },
+    }, {
+      hl('Identifier', 'a'),
+      hl('ConcatOrSubscript', '.'),
+      hl('IdentifierKey', '1'),
+      hl('ConcatOrSubscript', '.'),
+      hl('IdentifierKey', '2'),
+    })
+
+    -- FIXME
+    check_parsing('a . 1.2')
+
+    check_parsing('+a . +b', 0, {
+      --           0123456
+      ast = {
+        {
+          'Concat:0:2: .',
+          children = {
+            {
+              'UnaryPlus:0:0:+',
+              children = {
+                'PlainIdentifier(scope=0,ident=a):0:1:a',
+              },
+            },
+            {
+              'UnaryPlus:0:4: +',
+              children = {
+                'PlainIdentifier(scope=0,ident=b):0:6:b',
+              },
+            },
+          },
+        },
+      },
+    }, {
+      hl('UnaryPlus', '+'),
+      hl('Identifier', 'a'),
+      hl('Concat', '.', 1),
+      hl('UnaryPlus', '+', 1),
+      hl('Identifier', 'b'),
     })
   end)
 end)
