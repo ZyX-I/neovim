@@ -1741,10 +1741,12 @@ ExprAST viml_pexpr_parse(ParserState *const pstate, const int flags)
         kELFlagPeek
         | ((flags & kExprFlagsDisallowEOC) ? kELFlagForbidEOC : 0)
         | ((want_node == kENodeValue
-            && kv_size(ast_stack) > 1
-            && ((*kv_Z(ast_stack, 1))->type != kExprNodeConcat)
-            && ((*kv_Z(ast_stack, 1))->type
-                != kExprNodeConcatOrSubscript)) ? kELFlagAllowFloat : 0));
+            && (kv_size(ast_stack) == 1
+                || ((*kv_Z(ast_stack, 1))->type != kExprNodeConcat
+                    && ((*kv_Z(ast_stack, 1))->type
+                        != kExprNodeConcatOrSubscript))))
+            ? kELFlagAllowFloat
+            : 0));
     LexExprToken cur_token = viml_pexpr_next_token(
         pstate, want_node_to_lexer_flags[want_node] | lexer_additional_flags);
     if (cur_token.type == kExprLexEOC) {
