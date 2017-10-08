@@ -3804,8 +3804,35 @@ describe('Expressions parser', function()
       hl('IdentifierKey', 'b'),
     })
 
-    -- FIXME This must resolve to float
-    check_parsing('1.2')
+    check_parsing('1.2', 0, {
+      --           012
+      ast = {
+        'Float(val=1.200000e+00):0:0:1.2',
+      },
+    }, {
+      hl('Float', '1.2'),
+    })
+
+    check_parsing('1.2 + 1.3e-5', 0, {
+      --           012345678901
+      --           0         1
+      ast = {
+        {
+          'BinaryPlus:0:3: +',
+          children = {
+            'Float(val=1.200000e+00):0:0:1.2',
+            'Float(val=1.300000e-05):0:5: 1.3e-5',
+          },
+        },
+      },
+    }, {
+      hl('Float', '1.2'),
+      hl('BinaryPlus', '+', 1),
+      hl('Float', '1.3e-5', 1),
+    })
+    check_parsing('a . 1.2 + 1.3e-5')
+    check_parsing('1.3e-5 + 1.2 . a')
+    check_parsing('1.3e-5 + a . 1.2')
 
     check_parsing('1.2.3', 0, {
       --           01234
