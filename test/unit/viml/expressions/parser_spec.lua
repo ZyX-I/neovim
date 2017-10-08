@@ -3857,8 +3857,30 @@ describe('Expressions parser', function()
       hl('IdentifierKey', '2'),
     })
 
-    -- FIXME
-    check_parsing('a . 1.2')
+    check_parsing('a . 1.2', 0, {
+      --           0123456
+      ast = {
+        {
+          'Concat:0:1: .',
+          children = {
+            'PlainIdentifier(scope=0,ident=a):0:0:a',
+            {
+              'ConcatOrSubscript:0:5:.',
+              children = {
+                'Integer(val=1):0:3: 1',
+                'PlainKey(key=2):0:6:2',
+              },
+            },
+          },
+        },
+      },
+    }, {
+      hl('Identifier', 'a'),
+      hl('Concat', '.', 1),
+      hl('Number', '1', 1),
+      hl('ConcatOrSubscript', '.'),
+      hl('IdentifierKey', '2'),
+    })
 
     check_parsing('+a . +b', 0, {
       --           0123456
