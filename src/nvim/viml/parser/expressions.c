@@ -1434,16 +1434,15 @@ ExprAST viml_pexpr_parse(ParserState *const pstate, const int flags)
     const bool is_concat_or_subscript = (
         want_node == kENodeValue
         && kv_size(ast_stack) > 1
-        && ((*kv_A(ast_stack, kv_size(ast_stack) - 2))->type
+        && ((*kv_Z(ast_stack, 1))->type
             == kExprNodeConcatOrSubscript));
     const int lexer_additional_flags = (
         kELFlagPeek
         | ((flags & kExprFlagsDisallowEOC) ? kELFlagForbidEOC : 0)
         | ((want_node == kENodeValue
             && kv_size(ast_stack) > 1
-            && ((*kv_A(ast_stack, kv_size(ast_stack) - 2))->type
-                != kExprNodeConcat)
-            && ((*kv_A(ast_stack, kv_size(ast_stack) - 2))->type
+            && ((*kv_Z(ast_stack, 1))->type != kExprNodeConcat)
+            && ((*kv_Z(ast_stack, 1))->type
                 != kExprNodeConcatOrSubscript)) ? kELFlagAllowFloat : 0));
     LexExprToken cur_token = viml_pexpr_next_token(
         pstate, want_node_to_lexer_flags[want_node] | lexer_additional_flags);
@@ -1506,7 +1505,7 @@ viml_pexpr_parse_process_token:
       // so it turns kExprNodeConcatOrSubscript into kExprNodeConcat instead,
       // which will yield different errors then Vim does in a number of
       // circumstances, and in any case runtime and not parse time errors.
-      (*kv_A(ast_stack, kv_size(ast_stack) - 2))->type = kExprNodeConcat;
+      (*kv_Z(ast_stack, 1))->type = kExprNodeConcat;
     }
     if ((want_node == kENodeArgumentSeparator
          && tok_type != kExprLexComma
@@ -1628,7 +1627,7 @@ viml_pexpr_parse_process_token:
         }
         for (size_t i = 1; i < kv_size(ast_stack); i++) {
           ExprASTNode *const *const eastnode_p =
-              (ExprASTNode *const *)kv_A(ast_stack, kv_size(ast_stack) - i - 1);
+              (ExprASTNode *const *)kv_Z(ast_stack, i);
           const ExprASTNodeType eastnode_type = (*eastnode_p)->type;
           const ExprOpLvl eastnode_lvl = node_lvl(**eastnode_p);
           if (eastnode_type == kExprNodeLambda) {
@@ -1667,7 +1666,7 @@ viml_pexpr_parse_invalid_comma:
         bool can_be_ternary = true;
         for (size_t i = 1; i < kv_size(ast_stack); i++) {
           ExprASTNode *const *const eastnode_p =
-              (ExprASTNode *const *)kv_A(ast_stack, kv_size(ast_stack) - i - 1);
+              (ExprASTNode *const *)kv_Z(ast_stack, i);
           const ExprASTNodeType eastnode_type = (*eastnode_p)->type;
           const ExprOpLvl eastnode_lvl = node_lvl(**eastnode_p);
           STATIC_ASSERT(kEOpLvlTernary > kEOpLvlComma,
@@ -1980,8 +1979,7 @@ viml_pexpr_parse_figure_brace_closing_error:
         if (cur_token.data.brc.closing) {
           if (want_node == kENodeValue) {
             if (kv_size(ast_stack) > 1) {
-              const ExprASTNode *const prev_top_node = *(
-                  kv_A(ast_stack, kv_size(ast_stack) - 2));
+              const ExprASTNode *const prev_top_node = *kv_Z(ast_stack, 1);
               if (prev_top_node->type == kExprNodeCall) {
                 // Function call without arguments, this is not an error.
                 // But further code does not expect NULL nodes.
