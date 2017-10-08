@@ -142,6 +142,13 @@ local function eastnode2lua(pstate, eastnode, checked_nodes)
     typ = typ .. ('(val=%u)'):format(tonumber(eastnode.data.num.value))
   elseif typ == 'Float' then
     typ = typ .. ('(val=%e)'):format(tonumber(eastnode.data.flt.value))
+  elseif typ == 'SingleQuotedString' or typ == 'DoubleQuotedString' then
+    if eastnode.data.str.value == nil then
+      typ = typ .. '(val=NULL)'
+    else
+      local s = ffi.string(eastnode.data.str.value, eastnode.data.str.size)
+      typ = format_string('%s(val=%r)', typ, s)
+    end
   end
   ret_str = typ .. ':' .. ret_str
   local can_simplify = true
@@ -4338,4 +4345,15 @@ describe('Expressions parser', function()
       hl('InvalidSubscript', ']'),
     })
   end)
+  itp('works with strings', function()
+    check_parsing('\'abc\'')
+    -- FIXME
+    -- check_parsing('"abc"')
+    -- check_parsing('""')
+    -- check_parsing('"a"')
+    -- check_parsing('"abc')
+    -- check_parsing('"')
+    -- check_parsing('"a')
+  end)
+  -- FIXME check {a}{b}{c}[d][e][f]
 end)
